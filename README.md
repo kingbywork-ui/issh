@@ -33,8 +33,7 @@ This README is also available in: <a  href="./README.es-ES.md">:es: Spanish</a> 
 
 [**Tabby**](https://tabby.sh) (formerly **Terminus**) is a highly configurable terminal emulator, SSH and serial client for Windows, macOS and Linux
 
-* Integrated SSH and Telnet client and connection manager
-* Integrated serial terminal
+* Integrated SSH client with connection manager
 * Theming and color schemes
 * Fully configurable shortcuts and multi-chord shortcuts
 * Split panes
@@ -45,17 +44,15 @@ This README is also available in: <a  href="./README.es-ES.md">:es: Spanish</a> 
 * Doesn't choke on fast-flowing outputs
 * Proper shell experience on Windows including tab completion (via Clink)
 * Integrated encrypted container for SSH secrets and configuration
-* SSH, SFTP and Telnet client available as a [web app](https://tabby.sh/app) (also [self-hosted](https://github.com/Eugeny/tabby-web)).
+* URL, IP and file path linkification in terminal
+* Automatic sudo password assistance in SSH sessions
 
 # Contents <!-- omit in toc -->
 
 - [What Tabby is and isn't](#what-tabby-is-and-isnt)
 - [Terminal features](#terminal-features)
 - [SSH Client](#ssh-client)
-- [Serial Terminal](#serial-terminal)
 - [Portable](#portable)
-- [Plugins](#plugins)
-- [Themes](#themes)
 - [Contributing](#contributing)
 
 <a name="about"></a>
@@ -90,74 +87,19 @@ This README is also available in: <a  href="./README.es-ES.md">:es: Spanish</a> 
 ![](docs/readme-ssh.png)
 
 * SSH2 client with a connection manager
-* X11 and port forwarding
-* Automatic jump host management
+* X11 and port forwarding (local, remote, dynamic/SOCKS)
+* Jump host / bastion support
 * Agent forwarding (incl. Pageant and Windows native OpenSSH Agent)
 * Login scripts
-
-<a name="serial"></a>
-
-# Serial Terminal
-
-* Saved connections
-* Readline input support
-* Optional hex byte-by-byte input and hexdump output
-* Newline conversion
-* Automatic reconnection
+* SFTP file transfer via Zmodem
+* RSA-SHA2 / ECDSA key authentication with passphrase support
+* HTTP / SOCKS proxy support
 
 <a name="portable"></a>
 
 # Portable
 
 Tabby will run as a portable app on Windows, if you create a `data` folder in the same location where `Tabby.exe` lives.
-
-<a name="plugins"></a>
-
-# Plugins
-
-Plugins and themes can be installed directly from the Settings view inside Tabby.
-
-* [docker](https://github.com/Eugeny/tabby-docker) - connect to Docker containers
-* [title-control](https://github.com/kbjr/terminus-title-control) - allows modifying the title of the terminal tabs by providing a prefix, suffix, and/or strings to be removed
-* [quick-cmds](https://github.com/minyoad/tabby-quick-cmds) - quickly send commands to one or all terminal tabs
-* [save-output](https://github.com/Eugeny/tabby-save-output) - record terminal output into a file
-* [sync-config](https://github.com/starxg/terminus-sync-config) - sync the config to Gist or Gitee
-* [clippy](https://github.com/Eugeny/tabby-clippy) - an example plugin which annoys you all the time
-* [workspace-manager](https://github.com/composer404/tabby-workspace-manager) - allows creating custom workspace profiles based on the given config
-* [search-in-browser](https://github.com/composer404/tabby-search-in-browser) - opens default system browser with a text selected from the Tabby's tab
-* [sftp-tab](https://github.com/wljince007/tabby-sftp-tab) - open sftp tab for ssh connection like SecureCRT
-* [background](https://github.com/moemoechu/tabby-background) - change Tabby background image and more...
-* [highlight](https://github.com/moemoechu/tabby-highlight) - Tabby terminal keyword highlight plugin
-* [web-auth-handler](https://github.com/Jazzmoon/tabby-web-auth-handler) - In-app web authentication popups (Built primarily for warpgate in-browser auth)
-* [mcp-server](https://github.com/thuanpham582002/tabby-mcp-server) - Powerful Model Context Protocol server integration for Tabby that seamlessly connects with AI assistants through MCP clients like Cursor and Windsurf, enhancing your terminal workflow with intelligent AI capabilities.
-* [ssh-keymap](https://github.com/mathys-lopinto/tabby-ssh-keymap) - lets your synced Tabby SSH profiles reference private keys by name instead of by absolute file path. A local mapping file (never synced) translates each name to the real path on that machine * [serial-timestamp](https://github.com/WoodenNautilus/tabby-serial-timestamp) - adds timestamps to serial terminal sessions
-
-<a name="themes"></a>
-
-# Themes
-
-* [hype](https://github.com/Eugeny/tabby-theme-hype) - a Hyper inspired theme
-* [relaxed](https://github.com/Relaxed-Theme/relaxed-terminal-themes#terminus) - the Relaxed theme for Tabby
-* [gruvbox](https://github.com/porkloin/terminus-theme-gruvbox)
-* [windows10](https://www.npmjs.com/package/terminus-theme-windows10)
-* [altair](https://github.com/yxuko/terminus-altair)
-* [catppuccin](https://github.com/catppuccin/tabby) - Soothing pastel theme for Tabby
-* [noctis](https://github.com/aaronhuggins/tabby-colors-noctis) - color themes inspired by Noctis VS Code theme
-
-# Sponsors <!-- omit in toc -->
-
-<a href="https://packagecloud.io"><img src="https://assets-production.packagecloud.io/assets/logo_v1-d5895e7b89b2dee19030e85515fd0f91d8f3b37c82d218a6531fc89c2b1b613c.png" width="200"></a>
-
-[**packagecloud**](https://packagecloud.io) has provided free Debian/RPM repository hosting
-
-[![](https://user-images.githubusercontent.com/161476/200423885-7aba2202-fea7-4409-95b9-3a062ce902c7.png)](https://keygen.sh/?via=eugene)
-
-[**keygen**](https://keygen.sh/?via=eugene) has provided free release & auto-update hosting
-
-<a href="https://iqhive.com/"><img src="https://iqhive.com/img/icons/logo.svg" width="200"></a>
-
-[**IQ Hive**](https://iqhive.com) is providing financial support for the project development
-
 
 <a name="contributing"></a>
 # Contributing
