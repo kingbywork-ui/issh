@@ -28,8 +28,7 @@
 
 [**Tabby**](https://tabby.sh) (前身是 **Terminus**) 是一个可高度配置的终端模拟器和 SSH 或串口客户端，支持 Windows，macOS 和 Linux
 
-* 集成 SSH，Telnet 客户端和连接管理器
-* 集成串行终端
+* 集成 SSH 客户端和连接管理器
 * 定制主题和配色方案
 * 完全可配置的快捷键和多键快捷键
 * 分体式窗格
@@ -40,17 +39,15 @@
 * 不会因快速的输出而卡住
 * Windows 上舒适的 shell 体验，包括 tab 自动补全（通过 Clink）
 * 为 SSH secrets 和设置集成了加密容器
-* SSH、SFTP 和 Telnet 客户端可用作 [Web 应用](https://tabby.sh/app)（也可[托管](https://github.com/Eugeny/tabby-web)）
+* 终端内 URL / IP / 文件路径自动链接化
+* SSH 会话中自动粘贴保存的 sudo 密码
 
 # 目录 <!-- omit in toc -->
 
 - [Tabby是什么](#tabby是什么)
 - [终端特性](#终端特性)
 - [SSH 客户端](#ssh-客户端)
-- [串行终端](#串行终端)
 - [便携式应用](#便携式应用)
-- [插件](#插件)
-- [主题](#主题)
 - [贡献](#贡献)
 
 <a name="about"></a>
@@ -83,56 +80,18 @@
 ![](docs/readme-ssh.png)
 
 * 带有连接管理器的 SSH2 客户端
-* X11和端口转发
-* 自动跳转主机管理
+* X11 和端口转发（本地/远程/动态 SOCKS）
+* 跳板机 / 堡垒机支持
 * 代理转发（包括 Pageant 和 Windows 原生 OpenSSH 代理）
 * 登录脚本
-
-<a name="serial"></a>
-# 串行终端
-
-* 保存连接
-* 逐行读取的输入支持
-* 可选的十六进制逐字节输入和十六进制转储输出
-* 换行转换
-* 自动重连
+* 通过 Zmodem 进行 SFTP 文件传输
+* RSA-SHA2 / ECDSA 私钥认证，支持口令
+* HTTP / SOCKS 代理支持
 
 <a name="portable"></a>
 # 便携式应用
 
 如果在 Tabby.exe 所在的目录创建一个名为`data`文件夹，Tabby 将可以在 Windows 上作为便携式的应用程序运行。
-
-<a name="plugins"></a>
-# 插件
-
-插件和主题可以直接在 Tabby 设置中安装。
-
-* [clickable-links](https://github.com/Eugeny/tabby-clickable-links) - 使终端中的路径和 URL 可点击
-* [docker](https://github.com/Eugeny/tabby-docker) - 连接 Docker 容器
-* [title-control](https://github.com/kbjr/terminus-title-control) - 允许通过提供要删除的前缀、后缀和/或字符串来修改标签页的标题
-* [quick-cmds](https://github.com/Domain/terminus-quick-cmds) - 快速向一个或所有标签页发送命令
-* [save-output](https://github.com/Eugeny/tabby-save-output) - 将终端输出记录到文件中
-* [sync-config](https://github.com/starxg/terminus-sync-config) - 将配置同步到 Gist 或 Gitee
-* [clippy](https://github.com/Eugeny/tabby-clippy) - 一个可以一直烦你的示例插件
-* [workspace-manager](https://github.com/composer404/tabby-workspace-manager) - 允许根据给定的配置创建自定义工作区配置文件
-* [search-in-browser](https://github.com/composer404/tabby-search-in-browser) - 从 Tabby 标签页带有选中的文本来打开系统默认浏览器
-* [sftp-tab](https://github.com/wljince007/tabby-sftp-tab) - 为ssh连接打开类似SecureCRT的sftp标签页
-* [web-auth-handler](https://github.com/Jazzmoon/tabby-web-auth-handler) - 应用内网页认证弹出窗口（主要为warpgate浏览器认证而建）
-* [mcp-server](https://github.com/thuanpham582002/tabby-mcp-server) - 为 Tabby 提供强大的模型上下文协议服务器集成，可通过 Cursor 和 Windsurf 等 MCP 客户端无缝连接 AI 助手，利用智能 AI 功能增强您的终端工作流程。
-<a name="themes"></a>
-# 主题
-
-* [hype](https://github.com/Eugeny/tabby-theme-hype) - 受 Hyper 启发的主题
-* [relaxed](https://github.com/Relaxed-Theme/relaxed-terminal-themes#terminus) - 为 Tabby 打造的 Relaxed 主题
-* [gruvbox](https://github.com/porkloin/terminus-theme-gruvbox)
-* [windows10](https://www.npmjs.com/package/terminus-theme-windows10)
-* [altair](https://github.com/yxuko/terminus-altair)
-
-# Sponsors <!-- omit in toc -->
-
-[![](https://assets-production.packagecloud.io/assets/packagecloud-logo-light-scaled-26ce8e96060fddf74afbd4445e63ba35590d4aaa56edc98495bb390ef3cae0ae.png)](https://packagecloud.io)
-
-[**packagecloud**](https://packagecloud.io) 提供了免费的 Debian/RPM 存储库托管
 
 <a name="contributing"></a>
 # 贡献
