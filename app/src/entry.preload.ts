@@ -1,4 +1,27 @@
-import 'v8-compile-cache'
+import * as fs from 'fs'
+import * as path from 'path'
+
+const preloadDebugLogPath = path.join(process.env.TABBY_CONFIG_DIRECTORY || process.cwd(), 'bootstrap-debug.log')
+
+function debugLog (message: string, extra?: unknown): void {
+    const line = `${new Date().toISOString()} [preload] ${message}${extra === undefined ? '' : ` ${JSON.stringify(extra)}`}\n`
+    try {
+        fs.appendFileSync(preloadDebugLogPath, line)
+    } catch {
+        console.warn(line)
+    }
+}
+
+try {
+    require('v8-compile-cache')
+    debugLog('v8-compile-cache-loaded')
+} catch (error) {
+    debugLog('v8-compile-cache-skipped', error instanceof Error ? {
+        message: error.message,
+        stack: error.stack,
+    } : String(error))
+}
+
 import '../lib/lru'
 import 'source-sans-pro/source-sans-pro.css'
 import 'source-code-pro/source-code-pro.css'
@@ -7,3 +30,5 @@ import '@fortawesome/fontawesome-free/css/brands.css'
 import '@fortawesome/fontawesome-free/css/regular.css'
 import '@fortawesome/fontawesome-free/css/fontawesome.css'
 import './preload.scss'
+
+debugLog('preload-entry-loaded')

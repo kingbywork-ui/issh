@@ -1,4 +1,3 @@
-import * as glasstron from 'glasstron'
 import * as fs from 'fs'
 import { autoUpdater } from 'electron-updater'
 import { Subject, Observable, debounceTime } from 'rxjs'
@@ -16,21 +15,24 @@ import { parseTabbyURL, isTabbyURL } from './urlHandler'
 
 let DwmEnableBlurBehindWindow: any = null
 if (process.platform === 'win32') {
-    DwmEnableBlurBehindWindow = require('@tabby-gang/windows-blurbehind').DwmEnableBlurBehindWindow
+    try {
+        DwmEnableBlurBehindWindow = require('@tabby-gang/windows-blurbehind').DwmEnableBlurBehindWindow
+    } catch (error) {
+        console.warn('Windows blurbehind module is unavailable, disabling legacy vibrancy:', error)
+    }
 }
 
 export interface WindowOptions {
     hidden?: boolean
 }
 
-abstract class GlasstronWindow extends BrowserWindow {
-    blurType: string
-    abstract setBlur (_: boolean)
-}
-
 const macOSVibrancyType: any = process.platform === 'darwin' ? compareVersions(macOSRelease().version || '0.0', '10.14', '>=') ? 'fullscreen-ui' : 'dark' : null
 
 const activityIcon = nativeImage.createFromPath(`${app.getAppPath()}/assets/activity.png`)
+type TabbyBrowserWindow = BrowserWindow & {
+    blurType?: string | null
+    setBlur?: (_: boolean) => void
+}
 
 export class Window {
     ready: Promise<void>
@@ -38,7 +40,7 @@ export class Window {
     webContents: WebContents
     private visible = new Subject<boolean>()
     private closed = new Subject<void>()
-    private window?: GlasstronWindow
+    private window?: TabbyBrowserWindow
     private windowConfig: ElectronConfig
     private windowBounds?: Rectangle
     private closing = false
@@ -57,6 +59,14 @@ export class Window {
 
         this.windowConfig = new ElectronConfig({ name: 'window' })
         this.windowBounds = this.windowConfig.get('windowBoundaries')
+        const glasstron = process.platform !== 'darwin' ? (() => {
+            try {
+                return require('glasstron')
+            } catch (error) {
+                console.warn('Glasstron is unavailable, falling back to native BrowserWindow:', error)
+                return null
+            }
+        })() : null
 
         const maximized = this.windowConfig.get('maximized')
         const bwOptions: BrowserWindowConstructorOptions = {
@@ -73,7 +83,7 @@ export class Window {
             },
             maximizable: true,
             frame: false,
-            show: false,
+            show: !options.hidden,
             backgroundColor: '#00000000',
             acceptFirstMouse: true,
         }
@@ -106,18 +116,55 @@ export class Window {
             bwOptions.visualEffectState = 'active'
         }
 
-        if (process.platform === 'darwin') {
-            this.window = new BrowserWindow(bwOptions) as GlasstronWindow
-        } else {
-            this.window = new glasstron.BrowserWindow(bwOptions)
-        }
+        this.window = process.platform === 'darwin' || !glasstron?.BrowserWindow ? new BrowserWindow(bwOptions) : new glasstron.BrowserWindow(bwOptions)
 
         this.webContents = this.window.webContents
 
+        const startupDebugLogPath = path.join(process.env.TABBY_CONFIG_DIRECTORY ?? app.getPath('userData'), 'startup-debug.log')
+        const debugLog = (message: string): void => {
+            try {
+                fs.appendFileSync(startupDebugLogPath, `${new Date().toISOString()} [main] ${message}\n`)
+            } catch {
+                // Startup logging must never block the first visible window.
+            }
+        }
+        const showInitialWindow = (reason: string): void => {
+            debugLog(`window-show-requested:${reason}`)
+            if (options.hidden || !this.window || this.window.isDestroyed() || this.window.isVisible()) {
+                return
+            }
+            if (maximized) {
+                this.window.maximize()
+            } else {
+                this.window.show()
+            }
+            this.window.focus()
+            this.window.moveTop()
+            application.focus()
+        }
+
+        this.setupWindowManagement()
+        this.setupUpdater()
+
+        this.ready = new Promise(resolve => {
+            const listener = event => {
+                if (event.sender === this.window.webContents) {
+                    debugLog('ipc-app-ready-received')
+                    ipcMain.removeListener('app:ready', listener as any)
+                    resolve()
+                }
+            }
+            ipcMain.on('app:ready', listener)
+        })
+
+        this.window.once('ready-to-show', () => {
+            debugLog('window-ready-to-show')
+            showInitialWindow('ready-to-show')
+        })
+
         this.window.webContents.once('did-finish-load', () => {
             console.log('[window] did-finish-load')
-            const startupDebugLogPath = path.join(process.env.TABBY_CONFIG_DIRECTORY ?? app.getPath('userData'), 'startup-debug.log')
-            fs.appendFileSync(startupDebugLogPath, `${new Date().toISOString()} [main] window-did-finish-load\n`)
+            debugLog('window-did-finish-load')
             if (process.platform === 'darwin') {
                 this.window.setVibrancy(macOSVibrancyType)
             } else if (process.platform === 'win32' && this.configStore.appearance?.vibrancy) {
@@ -126,17 +173,27 @@ export class Window {
 
             this.setDarkMode(this.configStore.appearance?.colorSchemeMode ?? 'dark')
 
-            if (!options.hidden) {
-                if (maximized) {
-                    this.window.maximize()
-                } else {
-                    this.window.show()
-                }
-                this.window.focus()
-                this.window.moveTop()
-                application.focus()
-            }
+            showInitialWindow('did-finish-load')
         })
+
+        this.window.webContents.once('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+            debugLog(`window-did-fail-load:${errorCode}:${errorDescription}:${validatedURL}`)
+            showInitialWindow('did-fail-load')
+        })
+
+        this.window.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+            debugLog(`renderer-console:${level}:${sourceId}:${line}:${message}`)
+        })
+
+        this.window.webContents.on('render-process-gone', (_event, details) => {
+            debugLog(`renderer-process-gone:${JSON.stringify(details)}`)
+        })
+
+        this.window.webContents.on('did-stop-loading', () => {
+            debugLog('window-did-stop-loading')
+        })
+
+        setTimeout(() => showInitialWindow('startup-timeout'), 3000)
 
         this.window.on('blur', () => {
             if (
@@ -170,20 +227,6 @@ export class Window {
             this.window.setMenu(null)
         }
 
-        this.setupWindowManagement()
-        this.setupUpdater()
-
-        this.ready = new Promise(resolve => {
-            const listener = event => {
-                if (event.sender === this.window.webContents) {
-                    const startupDebugLogPath = path.join(process.env.TABBY_CONFIG_DIRECTORY ?? app.getPath('userData'), 'startup-debug.log')
-                    fs.appendFileSync(startupDebugLogPath, `${new Date().toISOString()} [main] ipc-app-ready-received\n`)
-                    ipcMain.removeListener('app:ready', listener as any)
-                    resolve()
-                }
-            }
-            ipcMain.on('app:ready', listener)
-        })
     }
 
     makeMain (): void {
@@ -205,7 +248,7 @@ export class Window {
                     console.error('Failed to set window blur', error)
                 }
             } else {
-                DwmEnableBlurBehindWindow(this.window.getNativeWindowHandle(), enabled)
+                DwmEnableBlurBehindWindow?.(this.window.getNativeWindowHandle(), enabled)
             }
         } else if (process.platform === 'linux') {
             this.window.setBackgroundColor(enabled ? '#00000000' : '#131d27')

@@ -37,12 +37,7 @@ const config = {
     },
     externals: {
         'v8-compile-cache': 'commonjs v8-compile-cache',
-        'any-promise': 'commonjs any-promise',
         electron: 'commonjs electron',
-        'electron-config': 'commonjs electron-config',
-        'electron-debug': 'commonjs electron-debug',
-        'electron-promise-ipc': 'commonjs electron-promise-ipc',
-        'electron-updater': 'commonjs electron-updater',
         fs: 'commonjs fs',
         glasstron: 'commonjs glasstron',
         mz: 'commonjs mz',

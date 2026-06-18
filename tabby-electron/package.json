@@ -21,12 +21,18 @@
     "@angular/core": "^15",
     "tabby-local": "*"
   },
-  "devDependencies": {
+  "dependencies": {
     "electron-promise-ipc": "^2.2.4",
     "ps-node": "^0.1.6",
     "ssh-config": "^5.0.0",
     "tmp-promise": "^3.0.2",
     "which": "^3.0.0",
     "winston": "^3.3.3"
+  },
+  "optionalDependencies": {
+    "@tabby-gang/windows-process-tree": "^0.6.1",
+    "fontmanager-redux": "1.1.0",
+    "native-process-working-directory": "^1.0.2",
+    "windows-native-registry": "^3.2.1"
   }
 }

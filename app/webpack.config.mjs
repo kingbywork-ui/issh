@@ -36,7 +36,7 @@ export default () => ({
         path: path.join(__dirname, 'dist'),
         pathinfo: true,
         filename: '[name].js',
-        publicPath: 'auto',
+        publicPath: './',
     },
     resolve: {
         modules: ['src/', 'node_modules', '../node_modules', 'assets/'].map(x => path.join(__dirname, x)),
@@ -71,7 +71,6 @@ export default () => ({
         ],
     },
     externals: {
-        '@electron/remote': 'commonjs @electron/remote',
         'v8-compile-cache': 'commonjs v8-compile-cache',
         child_process: 'commonjs child_process',
         electron: 'commonjs electron',

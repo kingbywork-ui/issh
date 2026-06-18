@@ -2,29 +2,13 @@ import { app, ipcMain, Menu, dialog } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
 
-// set userData Path on portable version
-import './portable'
-
-// set defaults of environment variables
-import 'dotenv/config'
+// Static imports execute before this module body. Keep startup-sensitive modules
+// as controlled runtime requires so config paths and logging are initialized first.
+require('dotenv/config')
+require('./portable')
 process.env.TABBY_PLUGINS ??= ''
 process.env.TABBY_CONFIG_DIRECTORY ??= app.getPath('userData')
 
-
-import 'v8-compile-cache'
-import 'source-map-support/register'
-import './sentry'
-import './lru'
-import { parseArgs } from './cli'
-import { Application } from './app'
-import electronDebug from 'electron-debug'
-import { loadConfig } from './config'
-
-
-const argv = parseArgs(process.argv, process.cwd())
-
-// eslint-disable-next-line @typescript-eslint/init-declarations
-let configStore: any
 const startupDebugLogPath = path.join(process.env.TABBY_CONFIG_DIRECTORY ?? app.getPath('userData'), 'startup-debug.log')
 
 function debugLog (message: string, extra?: unknown): void {
@@ -36,7 +20,73 @@ function debugLog (message: string, extra?: unknown): void {
     }
 }
 
+function serializeError (error: any): any {
+    return {
+        message: error?.message,
+        stack: error?.stack,
+        code: error?.code,
+    }
+}
+
+function loadStartupModule<T> (name: string, loader: () => T): T {
+    try {
+        debugLog(`module-load-begin:${name}`)
+        const result = loader()
+        debugLog(`module-load-done:${name}`)
+        return result
+    } catch (error) {
+        debugLog(`module-load-failed:${name}`, serializeError(error))
+        dialog.showErrorBox('Startup error', `${name}: ${error?.message ?? error}`)
+        app.exit(1)
+        throw error
+    }
+}
+
+function loadOptionalStartupModule (name: string, loader: () => unknown): void {
+    try {
+        debugLog(`module-load-begin:${name}`)
+        loader()
+        debugLog(`module-load-done:${name}`)
+    } catch (error) {
+        debugLog(`module-load-skipped:${name}`, serializeError(error))
+    }
+}
+
+loadOptionalStartupModule('v8-compile-cache', () => require('v8-compile-cache'))
+loadStartupModule('source-map-support/register', () => require('source-map-support/register'))
+loadStartupModule('sentry', () => require('./sentry'))
+loadStartupModule('lru', () => require('./lru'))
+
+const { parseArgs } = loadStartupModule('cli', () => require('./cli'))
+const { Application } = loadStartupModule('app', () => require('./app'))
+const electronDebug = loadStartupModule('electron-debug', () => require('electron-debug').default ?? require('electron-debug'))
+const { loadConfig } = loadStartupModule('config', () => require('./config'))
+
+function parseStartupArgs (): any {
+    debugLog('args-parse-begin', process.argv)
+    if (!process.env.TABBY_DEV) {
+        const args = process.argv.slice(1)
+        const parsed = {
+            d: args.includes('-d') || args.includes('--debug'),
+            debug: args.includes('-d') || args.includes('--debug'),
+            hidden: args.includes('--hidden'),
+            _: args.filter(x => !x.startsWith('-')),
+        }
+        debugLog('args-parse-done:packaged', parsed)
+        return parsed
+    }
+    const parsed = parseArgs(process.argv, process.cwd())
+    debugLog('args-parse-done:dev', parsed)
+    return parsed
+}
+
+const argv = parseStartupArgs()
+
+// eslint-disable-next-line @typescript-eslint/init-declarations
+let configStore: any
+
 try {
+    debugLog('config-load-begin')
     configStore = loadConfig()
     debugLog('config-loaded', {
         hasAppearance: !!configStore?.appearance,
@@ -48,7 +98,9 @@ try {
 
 process.mainModule = module
 
+debugLog('application-constructor-begin')
 const application = new Application(configStore)
+debugLog('application-constructor-done')
 
 // Register tabby:// URL scheme
 if (process.defaultApp) {
@@ -100,12 +152,13 @@ app.on('second-instance', async (_event, newArgv, cwd) => {
     application.handleSecondInstance(newArgv, cwd)
 })
 
-if (!app.requestSingleInstanceLock()) {
+const isPortable = !!process.env.PORTABLE_EXECUTABLE_FILE
+if (!isPortable && !app.requestSingleInstanceLock()) {
     app.quit()
     app.exit(0)
 }
 
-app.on('ready', async () => {
+app.whenReady().then(async () => {
     debugLog('app-ready')
     if (process.platform === 'darwin') {
         app.dock.setMenu(Menu.buildFromTemplate([

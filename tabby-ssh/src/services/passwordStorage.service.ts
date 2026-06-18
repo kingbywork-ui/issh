@@ -1,10 +1,36 @@
-import * as keytar from 'keytar'
 import { Injectable } from '@angular/core'
 import { VaultService } from 'tabby-core'
 import { SSHProfile } from '../api'
 
 export const VAULT_SECRET_TYPE_PASSWORD = 'ssh:password'
 export const VAULT_SECRET_TYPE_PASSPHRASE = 'ssh:key-passphrase'
+
+type KeytarModule = {
+    setPassword: (service: string, account: string, password: string) => Promise<void>
+    getPassword: (service: string, account: string) => Promise<string | null>
+    deletePassword: (service: string, account: string) => Promise<boolean>
+}
+
+let keytar: KeytarModule | null = null
+let keytarLoadFailed = false
+
+function getKeytar (): KeytarModule | null {
+    if (keytar) {
+        return keytar
+    }
+    if (keytarLoadFailed) {
+        return null
+    }
+    try {
+        const runtimeRequire = eval('require') as NodeRequire
+        keytar = runtimeRequire('keytar')
+        return keytar
+    } catch (error) {
+        keytarLoadFailed = true
+        console.warn('Keytar is unavailable, password storage will be disabled unless the vault is enabled', error)
+        return null
+    }
+}
 
 @Injectable({ providedIn: 'root' })
 export class PasswordStorageService {
@@ -17,6 +43,10 @@ export class PasswordStorageService {
             this.vault.addSecret({ type: VAULT_SECRET_TYPE_PASSWORD, key, value: password })
         } else {
             if (!account) {
+                return
+            }
+            const keytar = getKeytar()
+            if (!keytar) {
                 return
             }
             const key = this.getKeytarKeyForConnection(profile)
@@ -33,6 +63,10 @@ export class PasswordStorageService {
             if (!account) {
                 return
             }
+            const keytar = getKeytar()
+            if (!keytar) {
+                return
+            }
             const key = this.getKeytarKeyForConnection(profile)
             await keytar.deletePassword(key, account)
         }
@@ -45,6 +79,10 @@ export class PasswordStorageService {
             return (await this.vault.getSecret(VAULT_SECRET_TYPE_PASSWORD, key))?.value ?? null
         } else {
             if (!account) {
+                return null
+            }
+            const keytar = getKeytar()
+            if (!keytar) {
                 return null
             }
             const key = this.getKeytarKeyForConnection(profile)
@@ -62,6 +100,10 @@ export class PasswordStorageService {
             const key = this.getVaultKeyForPrivateKey(id)
             this.vault.addSecret({ type: VAULT_SECRET_TYPE_PASSPHRASE, key, value: password })
         } else {
+            const keytar = getKeytar()
+            if (!keytar) {
+                return
+            }
             const key = this.getKeytarKeyForPrivateKey(id)
             return keytar.setPassword(key, 'user', password)
         }
@@ -72,6 +114,10 @@ export class PasswordStorageService {
             const key = this.getVaultKeyForPrivateKey(id)
             this.vault.removeSecret(VAULT_SECRET_TYPE_PASSPHRASE, key)
         } else {
+            const keytar = getKeytar()
+            if (!keytar) {
+                return
+            }
             const key = this.getKeytarKeyForPrivateKey(id)
             await keytar.deletePassword(key, 'user')
         }
@@ -82,6 +128,10 @@ export class PasswordStorageService {
             const key = this.getVaultKeyForPrivateKey(id)
             return (await this.vault.getSecret(VAULT_SECRET_TYPE_PASSPHRASE, key))?.value ?? null
         } else {
+            const keytar = getKeytar()
+            if (!keytar) {
+                return null
+            }
             const key = this.getKeytarKeyForPrivateKey(id)
             return keytar.getPassword(key, 'user')
         }

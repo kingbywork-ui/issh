@@ -11,16 +11,19 @@ import { ElectronHostWindow } from './hostWindow.service'
 import { ShellIntegrationService } from './shellIntegration.service'
 import { ElectronHostAppService } from './hostApp.service'
 import { configPath } from '../../../app/lib/config'
-const fontManager = require('fontmanager-redux') // eslint-disable-line
 
-/* eslint-disable block-scoped-var */
+function optionalRuntimeRequire (query: string): any {
+    try {
+        const runtimeRequire = eval('require') // eslint-disable-line no-eval
+        return runtimeRequire(query)
+    } catch {
+        return null
+    }
+}
 
-try {
-    // eslint-disable-next-line no-var
-    var windowsProcessTreeNative = require('@tabby-gang/windows-process-tree/build/Release/windows_process_tree.node')
-    // eslint-disable-next-line no-var
-    var wnr = require('windows-native-registry')
-} catch { }
+const windowsProcessTreeNative = optionalRuntimeRequire('@tabby-gang/windows-process-tree/build/Release/windows_process_tree.node')
+const wnr = optionalRuntimeRequire('windows-native-registry')
+const fontManager = optionalRuntimeRequire('fontmanager-redux')
 
 @Injectable({ providedIn: 'root' })
 export class ElectronPlatformService extends PlatformService {
@@ -81,8 +84,11 @@ export class ElectronPlatformService extends PlatformService {
 
     async isProcessRunning (name: string): Promise<boolean> {
         if (this.hostApp.platform === Platform.Windows) {
+            if (!windowsProcessTreeNative?.getProcessList) {
+                return false
+            }
             return new Promise<boolean>(resolve => {
-                windowsProcessTreeNative.getProcessList(list => { // eslint-disable-line block-scoped-var
+                windowsProcessTreeNative.getProcessList(list => {
                     resolve(list.some(x => x.name === name))
                 }, 0)
             })
@@ -198,6 +204,9 @@ export class ElectronPlatformService extends PlatformService {
 
     async listFonts (): Promise<string[]> {
         if (this.hostApp.platform === Platform.Windows || this.hostApp.platform === Platform.macOS) {
+            if (!fontManager?.getAvailableFonts) {
+                return []
+            }
             let fonts = await new Promise<any[]>(resolve => fontManager.getAvailableFonts(resolve))
             fonts = fonts.map(x => x.family.trim())
             return fonts

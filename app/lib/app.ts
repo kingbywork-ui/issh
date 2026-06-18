@@ -18,6 +18,14 @@ try {
     var wnr = require('windows-native-registry') // eslint-disable-line @typescript-eslint/no-var-requires, no-var
 } catch (_) { }
 
+function debugLog (message: string): void {
+    try {
+        fs.appendFileSync(path.join(app.getPath('userData'), 'startup-debug.log'), `${new Date().toISOString()} [main] ${message}\n`)
+    } catch {
+        // Startup diagnostics must never block the app.
+    }
+}
+
 export class Application {
     private tray?: Tray
     private ptyManager = new PTYManager()
@@ -29,14 +37,26 @@ export class Application {
 
     // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
     constructor (private configStore: any) {
+        debugLog('application-ctor:remote-initialize-begin')
         remote.initialize()
-        this.useBuiltinGraphics()
+        debugLog('application-ctor:remote-initialize-done')
+        debugLog('application-ctor:graphics-begin')
+        try {
+            this.useBuiltinGraphics()
+        } catch (error) {
+            debugLog(`application-ctor:graphics-skipped ${JSON.stringify({ message: error?.message, stack: error?.stack })}`)
+        }
+        debugLog('application-ctor:graphics-done')
+        debugLog('application-ctor:pty-init-begin')
         this.ptyManager.init(this)
+        debugLog('application-ctor:pty-init-done')
 
+        debugLog('application-ctor:ipc-save-config-begin')
         ipcMain.handle('app:save-config', async (event, config) => {
             await saveConfig(config)
             this.broadcastExcept('host:config-change', event.sender, config)
         })
+        debugLog('application-ctor:ipc-save-config-done')
 
         ipcMain.on('app:register-global-hotkey', (_event, specs) => {
             globalShortcut.unregisterAll()
@@ -48,10 +68,13 @@ export class Application {
             }
         })
 
+        debugLog('application-ctor:hotkey-subscription-begin')
         this.globalHotkey$.pipe(throttleTime(100)).subscribe(() => {
             this.onGlobalHotkey()
         })
+        debugLog('application-ctor:hotkey-subscription-done')
 
+        debugLog('application-ctor:promise-ipc-begin')
         ;(promiseIpc as any).on('plugin-manager:install', (name, version) => {
             return pluginManager.install(this.userPluginsPath, name, version)
         })
@@ -67,6 +90,7 @@ export class Application {
                 return '/bin/bash'
             }
         })
+        debugLog('application-ctor:promise-ipc-done')
 
         if (process.platform === 'linux') {
             app.commandLine.appendSwitch('no-sandbox')
@@ -84,6 +108,7 @@ export class Application {
             app.getPath('userData'),
             'plugins',
         )
+        debugLog(`application-ctor:user-plugins-path:${this.userPluginsPath}`)
 
         if (!fs.existsSync(this.userPluginsPath)) {
             fs.mkdirSync(this.userPluginsPath)

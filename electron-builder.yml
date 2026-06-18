@@ -34,6 +34,8 @@ files:
 extraResources:
 - builtin-plugins
 - extras
+- from: node_modules/math-intrinsics
+  to: app.asar.unpacked/node_modules/math-intrinsics
 asarUnpack:
 - 'dist/*.map'
 - node_modules/keytar/build/Release/*.node
@@ -44,6 +46,9 @@ win:
   signAndEditExecutable: false
   signtoolOptions:
     rfc3161TimeStampServer: http://timestamp.sectigo.com
+portable:
+  unpackDirName: tabby-portable-runtime
+  splashImage: "./build/windows/portable-splash.bmp"
 nsis:
   oneClick: false
   artifactName: tabby-${version}-setup-${env.ARCH}.${ext}

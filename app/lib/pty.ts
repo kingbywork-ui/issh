@@ -1,9 +1,28 @@
-import * as nodePTY from 'node-pty'
+import type * as NodePTY from 'node-pty'
 import { v4 as uuidv4 } from 'uuid'
 import { ipcMain } from 'electron'
 import { Application } from './app'
 import { UTF8Splitter } from './utfSplitter'
 import { Subject, debounceTime } from 'rxjs'
+
+function optionalRuntimeRequire (query: string): any {
+    try {
+        const runtimeRequire = eval('require') // eslint-disable-line no-eval
+        return runtimeRequire(query)
+    } catch (error) {
+        console.warn(`${query} is unavailable, PTY support is disabled:`, error)
+        return null
+    }
+}
+
+let nodePTY: typeof NodePTY | null | undefined
+
+function getNodePTY (): typeof NodePTY | null {
+    if (nodePTY === undefined) {
+        nodePTY = optionalRuntimeRequire('node-pty')
+    }
+    return nodePTY
+}
 
 class PTYDataQueue {
     private buffers: Buffer[] = []
@@ -14,7 +33,7 @@ class PTYDataQueue {
     private decoder = new UTF8Splitter()
     private output$ = new Subject<Buffer>()
 
-    constructor (private pty: nodePTY.IPty, private onData: (data: Buffer) => void) {
+    constructor (private pty: NodePTY.IPty, private onData: (data: Buffer) => void) {
         this.output$.pipe(debounceTime(500)).subscribe(() => {
             const remainder = this.decoder.flush()
             if (remainder.length) {
@@ -88,12 +107,16 @@ class PTYDataQueue {
 }
 
 export class PTY {
-    private pty: nodePTY.IPty
+    private pty: NodePTY.IPty
     private outputQueue: PTYDataQueue
     exited = false
 
     constructor (private id: string, private app: Application, ...args: any[]) {
-        this.pty = (nodePTY as any).spawn(...args)
+        const ptyModule = getNodePTY()
+        if (!ptyModule) {
+            throw new Error('node-pty is not available in this build')
+        }
+        this.pty = (ptyModule as any).spawn(...args)
         for (const key of ['close', 'exit']) {
             (this.pty as any).on(key, (...eventArgs) => this.emit(key, ...eventArgs))
         }
@@ -143,8 +166,13 @@ export class PTYManager {
     init (app: Application): void {
         ipcMain.on('pty:spawn', (event, ...options) => {
             const id = uuidv4().toString()
-            event.returnValue = id
-            this.ptys[id] = new PTY(id, app, ...options)
+            try {
+                this.ptys[id] = new PTY(id, app, ...options)
+                event.returnValue = id
+            } catch (error) {
+                console.error('Failed to spawn PTY:', error)
+                event.returnValue = null
+            }
         })
 
         ipcMain.on('pty:exists', (event, id) => {

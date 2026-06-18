@@ -1,17 +1,19 @@
 import * as psNode from 'ps-node'
 import { ipcRenderer } from 'electron'
 import { ChildProcess, PTYInterface, PTYProxy } from 'tabby-local'
-import { getWorkingDirectoryFromPID } from 'native-process-working-directory'
 
-/* eslint-disable block-scoped-var */
+function optionalRuntimeRequire (query: string): any {
+    try {
+        const runtimeRequire = eval('require') // eslint-disable-line no-eval
+        return runtimeRequire(query)
+    } catch {
+        return null
+    }
+}
 
-try {
-    var macOSNativeProcessList = require('macos-native-processlist')  // eslint-disable-line @typescript-eslint/no-var-requires, no-var
-} catch { }
-
-try {
-    var windowsProcessTree = require('@tabby-gang/windows-process-tree')  // eslint-disable-line @typescript-eslint/no-var-requires, no-var
-} catch { }
+const macOSNativeProcessList = optionalRuntimeRequire('macos-native-processlist')
+const nativeProcessWorkingDirectory = optionalRuntimeRequire('native-process-working-directory')
+const windowsProcessTree = optionalRuntimeRequire('@tabby-gang/windows-process-tree')
 
 export class ElectronPTYInterface extends PTYInterface {
     async spawn (...options: any[]): Promise<PTYProxy> {
@@ -104,6 +106,9 @@ export class ElectronPTYProxy extends PTYProxy {
 
     async getChildProcessesInternal (truePID: number): Promise<ChildProcess[]> {
         if (process.platform === 'darwin') {
+            if (!macOSNativeProcessList?.getProcessList) {
+                return []
+            }
             const processes = await macOSNativeProcessList.getProcessList()
             return processes.filter(x => x.ppid === truePID).map(p => ({
                 pid: p.pid,
@@ -112,6 +117,9 @@ export class ElectronPTYProxy extends PTYProxy {
             }))
         }
         if (process.platform === 'win32') {
+            if (!windowsProcessTree?.getProcessTree) {
+                return []
+            }
             return new Promise<ChildProcess[]>(resolve => {
                 windowsProcessTree.getProcessTree(truePID, tree => {
                     resolve(tree ? tree.children.map(child => ({
@@ -134,7 +142,10 @@ export class ElectronPTYProxy extends PTYProxy {
     }
 
     async getWorkingDirectory (): Promise<string|null> {
-        return getWorkingDirectoryFromPID(await this.getTruePID())
+        if (!nativeProcessWorkingDirectory?.getWorkingDirectoryFromPID) {
+            return null
+        }
+        return nativeProcessWorkingDirectory.getWorkingDirectoryFromPID(await this.getTruePID())
     }
 
 }
