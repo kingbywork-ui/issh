@@ -8,6 +8,7 @@ dist
 */dist
 */typings
 *.tsbuildinfo
+*/builtin-plugins/
 
 *.xcworkspacedata
 *.xcuserstate
@@ -25,6 +26,12 @@ package-lock.json
 yarn-error.log
 
 docs/api
+# IDE
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
 .travis.ssh.key
 *.code-workspace
 .idea/
@@ -37,3 +44,7 @@ sentry-symbols.js
 
 crowdin.yml
 .crowdin.env
+
+# OS Files
+Thumbs.db
+desktop.ini
