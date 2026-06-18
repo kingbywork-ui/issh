@@ -20,6 +20,10 @@ export class ProfilesService {
         name: '',
         group: '',
         options: {},
+        tags: [],
+        environment: null,
+        remark: null,
+        favorite: false,
         icon: '',
         color: '',
         disableDynamicTitle: false,
@@ -86,7 +90,7 @@ export class ProfilesService {
             ]
         }
 
-        const sortKey = p => `${this.resolveProfileGroupName(p.group ?? '')} / ${p.name}`
+        const sortKey = p => `${this.resolveProfileGroupPath(p.group ?? '').join(' / ')} / ${p.name}`
         list.sort((a, b) => sortKey(a).localeCompare(sortKey(b)))
         list.sort((a, b) => (a.isBuiltin ? 1 : 0) - (b.isBuiltin ? 1 : 0))
         return options?.clone ? deepClone(list) : list
@@ -192,7 +196,12 @@ export class ProfilesService {
 
         let recentProfiles: PartialProfile<Profile>[] = JSON.parse(window.localStorage['recentProfiles'] ?? '[]')
         if (this.config.store.terminal.showRecentProfiles > 0) {
-            recentProfiles = recentProfiles.filter(x => x.group !== profile.group || x.name !== profile.name)
+            recentProfiles = recentProfiles.filter(x => {
+                if (profile.id && x.id) {
+                    return x.id !== profile.id
+                }
+                return x.group !== profile.group || x.name !== profile.name
+            })
             recentProfiles.unshift(profile)
             recentProfiles = recentProfiles.slice(0, this.config.store.terminal.showRecentProfiles)
         } else {
@@ -217,10 +226,14 @@ export class ProfilesService {
             ...profile,
             icon: profile.icon ?? undefined,
             color: profile.color ?? undefined,
-            group: this.resolveProfileGroupName(profile.group ?? ''),
+            group: this.resolveProfileGroupPath(profile.group ?? '').join(' / '),
             freeInputEquivalent,
             description: provider?.getDescription(fullProfile),
         }
+    }
+
+    getFavoriteProfiles (): PartialProfile<Profile>[] {
+        return this.config.store.profiles.filter(profile => !!profile.favorite)
     }
 
     showProfileSelector (): Promise<PartialProfile<Profile>|null> {
@@ -447,6 +460,32 @@ export class ProfilesService {
         return groups
     }
 
+    buildGroupTree (groups: PartialProfileGroup<ProfileGroup & { children: any }>[]): PartialProfileGroup<ProfileGroup & { children: any }>[] {
+        const map = new Map<string, PartialProfileGroup<ProfileGroup & { children: any }>>()
+
+        for (const group of groups) {
+            group.children = []
+            map.set(group.id, group)
+        }
+
+        const roots: PartialProfileGroup<ProfileGroup & { children: any }>[] = []
+
+        for (const group of groups) {
+            if (group.parentGroupId) {
+                const parent = map.get(group.parentGroupId)
+                if (parent) {
+                    parent.children.push(group)
+                } else {
+                    roots.push(group)
+                }
+            } else {
+                roots.push(group)
+            }
+        }
+
+        return roots
+    }
+
     /**
     * Insert a new ProfileGroup in config
     * arg: genId (default: true) -> generate uuid in before pushing Profile into config
@@ -501,7 +540,39 @@ export class ProfilesService {
     * Resolve and return ProfileGroup Name from ProfileGroup ID
     */
     resolveProfileGroupName (groupId: string): string {
-        return this.config.store.groups.find(g => g.id === groupId)?.name ?? groupId
+        const group = this.resolveProfileGroup(groupId)
+        return group?.name ?? groupId
+    }
+
+    resolveProfileGroupPath (groupId: string): string[] {
+        const groupNames: string[] = []
+        let currentGroupId: string | undefined = groupId
+        let depth = 0
+
+        while (currentGroupId && depth <= 30) {
+            const group = this.resolveProfileGroup(currentGroupId)
+            if (!group) {
+                groupNames.unshift(currentGroupId)
+                break
+            }
+
+            if (group.name) {
+                groupNames.unshift(group.name)
+            }
+
+            if (!group.parentGroupId) {
+                break
+            }
+
+            currentGroupId = group.parentGroupId
+            depth++
+        }
+
+        return groupNames
+    }
+
+    resolveProfileGroup (groupId: string): PartialProfileGroup<ProfileGroup> | null {
+        return this.config.store.groups.find(g => g.id === groupId) ?? null
     }
 
     /**

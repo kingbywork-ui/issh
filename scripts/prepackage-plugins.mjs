@@ -9,8 +9,8 @@ import log from 'npmlog'
 import * as url from 'url'
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url))
 
-
 let target = path.resolve(__dirname, '../builtin-plugins')
+sh.rm('-rf', target)
 sh.mkdir('-p', target)
 fs.writeFileSync(path.join(target, 'package.json'), '{}')
 sh.cd(target)
@@ -19,6 +19,7 @@ vars.builtinPlugins.forEach(plugin => {
         return
     }
     log.info('install', plugin)
+    sh.rm('-rf', plugin)
     sh.cp('-r', path.join('..', plugin), '.')
     sh.rm('-rf', path.join(plugin, 'node_modules'))
     sh.cd(plugin)

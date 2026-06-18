@@ -2,10 +2,19 @@
 /* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
 import { build as builder } from 'electron-builder'
 import * as vars from './vars.mjs'
+import { execFileSync } from 'child_process'
 
 const isTag = (process.env.GITHUB_REF || '').startsWith('refs/tags/')
 
 process.env.ARCH = (process.env.ARCH || process.arch) === 'arm' ? 'armv7l' : process.env.ARCH || process.arch
+
+if (process.env.TABBY_SKIP_PREPACKAGE !== '1') {
+    console.log('Refreshing builtin plugins...')
+    execFileSync(process.execPath, ['scripts/prepackage-plugins.mjs'], {
+        cwd: new URL('..', import.meta.url),
+        stdio: 'inherit',
+    })
+}
 
 builder({
     dir: true,

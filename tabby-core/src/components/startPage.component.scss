@@ -5,27 +5,138 @@
     overflow-y: auto;
 }
 
-:host > div {
-    flex: none;
-    margin: auto;
-    width: 300px;
-    max-width: 100vw;
+.start-page-shell {
     display: flex;
     flex-direction: column;
+    gap: 24px;
+    width: min(1120px, calc(100vw - 32px));
+    margin: 28px auto;
+}
+
+.start-page-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
 }
 
 .tabby-title {
-    margin: 0 0 60px;
+    margin: 0;
+}
+
+.start-page-subtitle {
+    margin: 0;
+    color: var(--bs-secondary-color);
+}
+
+.start-page-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.start-page-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 18px;
+    background: var(--theme-bg-less);
+    border: 1px solid var(--theme-bg-less-2);
+    border-radius: 14px;
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.panel-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.command-list {
+    gap: 10px;
+}
+
+.command-list .list-group-item {
+    border-radius: 10px;
+}
+
+.host-card-grid {
+    display: grid;
+    gap: 12px;
+}
+
+.host-card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    text-align: left;
+    padding: 14px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    color: inherit;
+    transition: transform 150ms ease, border-color 150ms ease, background-color 150ms ease;
+}
+
+.host-card:hover {
+    transform: translateY(-1px);
+    border-color: rgba(124, 227, 160, 0.45);
+    background: rgba(124, 227, 160, 0.08);
+}
+
+.host-card-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.host-card-title {
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.host-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    color: var(--bs-secondary-color);
+    font-size: 0.88rem;
+}
+
+.host-card-remark {
+    color: var(--theme-fg);
+    opacity: 0.86;
+    line-height: 1.4;
+}
+
+.host-card-tags {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
 }
 
 footer {
     flex: none;
     padding: 20px 30px;
-    background: rgba(0,0,0,.5);
+    background: rgba(0, 0, 0, .5);
 }
 
 .list-group-item ::ng-deep svg {
     width: 16px;
     height: 16px;
     margin-right: 10px;
+}
+
+@media (max-width: 960px) {
+    .start-page-grid {
+        grid-template-columns: 1fr;
+    }
 }

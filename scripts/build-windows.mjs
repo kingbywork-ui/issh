@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
 import { build as builder } from 'electron-builder'
 import * as vars from './vars.mjs'
-import { execSync } from 'child_process'
+import { execFileSync, execSync } from 'child_process'
 
 const isTag = (process.env.GITHUB_REF || process.env.BUILD_SOURCEBRANCH || '').startsWith('refs/tags/')
 const keypair = process.env.SM_KEYPAIR_ALIAS
@@ -10,6 +10,13 @@ const keypair = process.env.SM_KEYPAIR_ALIAS
 process.env.ARCH = process.env.ARCH || process.arch
 
 console.log('Signing enabled:', !!keypair)
+if (process.env.TABBY_SKIP_PREPACKAGE !== '1') {
+    console.log('Refreshing builtin plugins...')
+    execFileSync(process.execPath, ['scripts/prepackage-plugins.mjs'], {
+        cwd: new URL('..', import.meta.url),
+        stdio: 'inherit',
+    })
+}
 
 builder({
     dir: true,

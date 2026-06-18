@@ -2,6 +2,7 @@
 /* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
 import { build as builder } from 'electron-builder'
 import * as vars from './vars.mjs'
+import { execFileSync } from 'child_process'
 
 const isTag = (process.env.GITHUB_REF || '').startsWith('refs/tags/')
 
@@ -15,6 +16,14 @@ if (process.env.GITHUB_HEAD_REF) {
 
 process.env.APPLE_ID ??= process.env.APPSTORE_USERNAME
 process.env.APPLE_APP_SPECIFIC_PASSWORD ??= process.env.APPSTORE_PASSWORD
+
+if (process.env.TABBY_SKIP_PREPACKAGE !== '1') {
+    console.log('Refreshing builtin plugins...')
+    execFileSync(process.execPath, ['scripts/prepackage-plugins.mjs'], {
+        cwd: new URL('..', import.meta.url),
+        stdio: 'inherit',
+    })
+}
 
 builder({
     dir: true,

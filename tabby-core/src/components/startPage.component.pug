@@ -1,16 +1,82 @@
+.start-page-shell
+    .start-page-hero
+        .tabby-logo
+        h1.tabby-title Tabby
+            sup 伪
+        p.start-page-subtitle 面向 SSH 主机工作流的连接工作台
 
-.mt-auto.mb-auto
-    .tabby-logo
-    h1.tabby-title Tabby
-        sup α
+    .start-page-grid
+        .start-page-panel
+            .panel-header
+                h2.panel-title 常用入口
 
-    .list-group.mb-4
-        a.list-group-item.list-group-item-action.d-flex.pt-3.pb-3(
-            *ngFor='let command of commands; trackBy: buttonsTrackBy',
-            (click)='command.run()',
-        )
-            .d-flex.align-self-center([innerHTML]='sanitizeIcon(command.icon)')
-            span {{command.label}}
+            .list-group.command-list
+                a.list-group-item.list-group-item-action.d-flex.pt-3.pb-3(
+                    *ngFor='let command of commands; trackBy: buttonsTrackBy',
+                    (click)='command.run()',
+                )
+                    .d-flex.align-self-center([innerHTML]='sanitizeIcon(command.icon)')
+                    span {{command.label}}
+
+        .start-page-panel(*ngIf='favoriteProfiles.length > 0')
+            .panel-header
+                h2.panel-title 收藏主机
+            .host-card-grid
+                button.host-card(
+                    *ngFor='let profile of favoriteProfiles; trackBy: profilesTrackBy',
+                    (click)='launchProfile(profile)'
+                )
+                    .host-card-title-row
+                        .host-card-title {{profile.name}}
+                        span.badge(
+                            *ngIf='profile.environment',
+                            [class]='getEnvironmentBadgeClass(profile.environment)'
+                        ) {{profile.environment}}
+
+                    .host-card-meta(*ngIf='getProfileConnectionInfo(profile) as info')
+                        span(*ngIf='info.user')
+                            i.fas.fa-user.fa-fw.me-1
+                            | {{info.user}}
+                        span(*ngIf='info.host')
+                            i.fas.fa-globe.fa-fw.me-1
+                            | {{info.host}}
+                        span(*ngIf='info.port')
+                            i.fas.fa-plug.fa-fw.me-1
+                            | {{info.port}}
+
+                    .host-card-remark(*ngIf='profile.remark') {{profile.remark}}
+                    .host-card-tags(*ngIf='(profile.tags?.length ?? 0) > 0')
+                        span.badge.text-bg-secondary(*ngFor='let tag of profile.tags') {{tag}}
+
+        .start-page-panel(*ngIf='recentProfiles.length > 0')
+            .panel-header
+                h2.panel-title 最近主机
+            .host-card-grid
+                button.host-card(
+                    *ngFor='let profile of recentProfiles; trackBy: profilesTrackBy',
+                    (click)='launchProfile(profile)'
+                )
+                    .host-card-title-row
+                        .host-card-title {{profile.name}}
+                        span.badge(
+                            *ngIf='profile.environment',
+                            [class]='getEnvironmentBadgeClass(profile.environment)'
+                        ) {{profile.environment}}
+
+                    .host-card-meta(*ngIf='getProfileConnectionInfo(profile) as info')
+                        span(*ngIf='info.user')
+                            i.fas.fa-user.fa-fw.me-1
+                            | {{info.user}}
+                        span(*ngIf='info.host')
+                            i.fas.fa-globe.fa-fw.me-1
+                            | {{info.host}}
+                        span(*ngIf='info.port')
+                            i.fas.fa-plug.fa-fw.me-1
+                            | {{info.port}}
+
+                    .host-card-remark(*ngIf='profile.remark') {{profile.remark}}
+                    .host-card-tags(*ngIf='(profile.tags?.length ?? 0) > 0')
+                        span.badge.text-bg-secondary(*ngFor='let tag of profile.tags') {{tag}}
 
 footer.d-flex.align-items-center
     .btn-group.me-auto

@@ -45,6 +45,10 @@ sentry-symbols.js
 crowdin.yml
 .crowdin.env
 
+# Build & Cache
+.electron-builder-cache/
+.npm-cache/
+
 # OS Files
 Thumbs.db
 desktop.ini

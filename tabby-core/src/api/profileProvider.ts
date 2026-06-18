@@ -11,6 +11,10 @@ export interface Profile {
     name: string
     group: string
     options: any
+    tags?: string[]
+    environment?: string | null
+    remark?: string | null
+    favorite?: boolean
 
     icon: string | null
     color: string | null
@@ -38,6 +42,9 @@ export type PartialProfile<T extends Profile> = Omit<Omit<Omit<{
 
 export interface ProfileGroup {
     id: string
+    parentGroupId?: string
+    icon?: string
+    color?: string
     name: string
     profiles: PartialProfile<Profile>[]
     defaults: any

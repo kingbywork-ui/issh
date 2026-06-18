@@ -18,6 +18,7 @@ export class SSHProfileSettingsComponent implements ProfileSettingsComponent<SSH
     Platform = Platform
     profile: ProxifiedConfig<FullyDefined<SSHProfile>>
     hasSavedPassword: boolean
+    tagsInput = ''
 
     connectionMode: 'direct'|'proxyCommand'|'jumpHost'|'socksProxy'|'httpProxy' = 'direct'
 
@@ -37,6 +38,7 @@ export class SSHProfileSettingsComponent implements ProfileSettingsComponent<SSH
     async ngOnInit () {
         this.jumpHosts = (await this.profilesService.getProfiles({ includeBuiltin: false })).filter(x => x.type === 'ssh' && x !== this.profile)
         this.jumpHosts.sort(firstBy(x => this.getJumpHostLabel(x)))
+        this.tagsInput = (this.profile.tags ?? []).join(', ')
 
         for (const k of Object.values(SSHAlgorithmType)) {
             this.algorithms[k] = {}
@@ -101,6 +103,11 @@ export class SSHProfileSettingsComponent implements ProfileSettingsComponent<SSH
     }
 
     save () {
+        this.profile.tags = this.tagsInput
+            .split(',')
+            .map(x => x.trim())
+            .filter(x => !!x)
+
         for (const k of Object.values(SSHAlgorithmType)) {
             this.profile.options.algorithms[k] = Object.entries(this.algorithms[k])
                 .filter(([_, v]) => !!v)

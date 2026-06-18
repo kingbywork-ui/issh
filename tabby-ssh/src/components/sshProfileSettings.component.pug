@@ -104,6 +104,35 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                     [(ngModel)]='profile.options.user',
                 )
 
+            .form-line
+                .header
+                    .title(translate) Favorite
+                    .description(translate) Pin this host to favorites and prioritize it in host manager views
+                toggle([(ngModel)]='profile.favorite')
+
+            .mb-3
+                label(translate) Environment
+                input.form-control(
+                    type='text',
+                    placeholder='prod / test / dev',
+                    [(ngModel)]='profile.environment',
+                )
+
+            .mb-3
+                label(translate) Tags
+                input.form-control(
+                    type='text',
+                    placeholder='Comma-separated tags',
+                    [(ngModel)]='tagsInput',
+                )
+
+            .mb-3
+                label(translate) Remark
+                textarea.form-control(
+                    rows='3',
+                    [(ngModel)]='profile.remark',
+                )
+
             .mb-3
                 label(translate) Authentication method
 

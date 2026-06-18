@@ -2,7 +2,14 @@ import { Component } from '@angular/core'
 import { DomSanitizer } from '@angular/platform-browser'
 import { HomeBaseService } from '../services/homeBase.service'
 import { CommandService } from '../services/commands.service'
-import { Command, CommandLocation } from '../api/commands'
+import { ProfilesService } from '../services/profiles.service'
+import { Command, CommandLocation, PartialProfile, Profile } from '../api'
+
+interface ConnectionInfo {
+    user?: string
+    host?: string
+    port?: number
+}
 
 /** @hidden */
 @Component({
@@ -13,23 +20,87 @@ import { Command, CommandLocation } from '../api/commands'
 export class StartPageComponent {
     version: string
     commands: Command[] = []
+    favoriteProfiles: PartialProfile<Profile>[] = []
+    recentProfiles: PartialProfile<Profile>[] = []
 
     constructor (
         private domSanitizer: DomSanitizer,
         public homeBase: HomeBaseService,
+        private profilesService: ProfilesService,
         commands: CommandService,
     ) {
         commands.getCommands({}).then(c => {
             this.commands = c.filter(x => x.locations?.includes(CommandLocation.StartPage))
         })
+
+        this.refreshHostCards().catch(err => console.error('Could not load host cards', err))
     }
 
     sanitizeIcon (icon?: string): any {
         return this.domSanitizer.bypassSecurityTrustHtml(icon ?? '')
     }
 
+    async launchProfile (profile: PartialProfile<Profile>): Promise<void> {
+        await this.profilesService.launchProfile(profile)
+        await this.refreshHostCards()
+    }
+
+    getProfileConnectionInfo (profile: PartialProfile<Profile>): ConnectionInfo | null {
+        if (profile.type !== 'ssh') {
+            return null
+        }
+        return {
+            user: profile.options?.user,
+            host: profile.options?.host,
+            port: profile.options?.port,
+        }
+    }
+
+    getEnvironmentBadgeClass (environment?: string | null): string {
+        const value = (environment ?? '').toLowerCase()
+        if (value.includes('prod')) {
+            return 'text-bg-danger'
+        }
+        if (value.includes('stage')) {
+            return 'text-bg-primary'
+        }
+        if (value.includes('test')) {
+            return 'text-bg-warning'
+        }
+        if (value.includes('dev')) {
+            return 'text-bg-success'
+        }
+        return 'text-bg-dark'
+    }
+
     // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
     buttonsTrackBy (_, btn: Command): any {
         return btn.label + btn.icon
+    }
+
+    // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
+    profilesTrackBy (_, profile: PartialProfile<Profile>): any {
+        return profile.id ?? `${profile.type}:${profile.name}`
+    }
+
+    private async refreshHostCards (): Promise<void> {
+        const profiles = await this.profilesService.getProfiles()
+        const customProfiles = profiles.filter(profile => !profile.isBuiltin && !profile.isTemplate)
+        const recentProfiles = this.profilesService.getRecentProfiles()
+        const recentIds = new Set(recentProfiles.map(profile => profile.id).filter((id): id is string => !!id))
+
+        this.favoriteProfiles = customProfiles
+            .filter(profile => !!profile.favorite)
+            .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+            .slice(0, 8)
+
+        this.recentProfiles = customProfiles
+            .filter(profile => !!profile.id && recentIds.has(profile.id))
+            .sort((a, b) => {
+                const aIndex = recentProfiles.findIndex(profile => profile.id === a.id)
+                const bIndex = recentProfiles.findIndex(profile => profile.id === b.id)
+                return aIndex - bIndex
+            })
+            .slice(0, 8)
     }
 }

@@ -3,12 +3,15 @@ import * as fs from 'fs'
 import * as semver from 'semver'
 import * as childProcess from 'child_process'
 
-process.env.ARCH = ((process.env.ARCH || process.arch) === 'arm') ? 'armv7l' : (process.env.ARCH || process.arch)
+process.env.ARCH = (((process.env.ARCH || process.arch).trim()) === 'arm')
+    ? 'armv7l'
+    : (process.env.ARCH || process.arch).trim()
 
 import * as url from 'url'
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url))
 
 const electronInfo = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../node_modules/electron/package.json')))
+const appPackageInfo = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../app/package.json')))
 
 export let version
 try {
@@ -20,7 +23,7 @@ try {
         version = semver.inc(version, 'prepatch').replace('-0', `-nightly.${process.env.REV ?? 0}`)
     }
 } catch {
-    version = '1.0.1'
+    version = appPackageInfo.version
 }
 
 export const builtinPlugins = [
