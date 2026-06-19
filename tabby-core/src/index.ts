@@ -137,6 +137,7 @@ const PROVIDERS = [
         CheckboxComponent,
         ToggleComponent,
         PromptModalComponent,
+        StartPageComponent,
         AutofocusDirective,
         DropZoneDirective,
         FastHtmlBindDirective,
@@ -268,6 +269,7 @@ export default class AppModule { // eslint-disable-line @typescript-eslint/no-ex
 export { AppRootComponent as bootstrap }
 export * from './api'
 export { AppHotkeyProvider }
+export { StartPageComponent }
 
 // Deprecations
 export { ToolbarButton as IToolbarButton } from './api'
