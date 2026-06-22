@@ -15,7 +15,7 @@
                     *ngFor='let command of commands; trackBy: buttonsTrackBy',
                     (click)='command.run()',
                 )
-                    .d-flex.align-self-center([innerHTML]='sanitizeIcon(command.icon)')
+                    i.fa-fw.me-2([ngClass]='getCommandIconClass(command)')
                     span {{command.label}}
 
         .start-page-panel(*ngIf='favoriteProfiles.length > 0')

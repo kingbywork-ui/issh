@@ -1,5 +1,4 @@
 import { Component } from '@angular/core'
-import { DomSanitizer } from '@angular/platform-browser'
 import { HomeBaseService } from '../services/homeBase.service'
 import { CommandService } from '../services/commands.service'
 import { ProfilesService } from '../services/profiles.service'
@@ -24,7 +23,6 @@ export class StartPageComponent {
     recentProfiles: PartialProfile<Profile>[] = []
 
     constructor (
-        private domSanitizer: DomSanitizer,
         public homeBase: HomeBaseService,
         private profilesService: ProfilesService,
         commands: CommandService,
@@ -36,8 +34,27 @@ export class StartPageComponent {
         this.refreshHostCards().catch(err => console.error('Could not load host cards', err))
     }
 
-    sanitizeIcon (icon?: string): any {
-        return this.domSanitizer.bypassSecurityTrustHtml(icon ?? '')
+    getCommandIconClass (command: Command): string {
+        if (command.id === 'core:profile-selector') {
+            return 'fas fa-window-restore'
+        }
+        if (command.id?.startsWith('core:recent-profile-')) {
+            return 'fas fa-history'
+        }
+        if (command.touchBarNSImage === 'NSTouchBarAddDetailTemplate') {
+            return 'fas fa-plus'
+        }
+        if (command.touchBarNSImage === 'NSTouchBarComposeTemplate') {
+            return 'fas fa-cog'
+        }
+        return this.getSafeIconClass(command.icon) ?? 'fas fa-circle'
+    }
+
+    private getSafeIconClass (icon?: string): string|null {
+        if (!icon || !/^(fa[rsb]?|fas|far|fab)(\s+fa[-\w]+)*$/.test(icon)) {
+            return null
+        }
+        return icon
     }
 
     async launchProfile (profile: PartialProfile<Profile>): Promise<void> {

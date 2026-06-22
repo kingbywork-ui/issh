@@ -12,6 +12,14 @@ import deepClone from 'clone-deep'
 import { v4 as uuidv4 } from 'uuid'
 import slugify from 'slugify'
 
+interface RecentProfileRecord {
+    id?: string
+    type: string
+    name: string
+    group?: string
+    quickConnect?: string
+}
+
 @Injectable({ providedIn: 'root' })
 export class ProfilesService {
     private profileDefaults = {
@@ -119,12 +127,13 @@ export class ProfilesService {
     async writeProfile (profile: PartialProfile<Profile>): Promise<void> {
         const cProfile = this.config.store.profiles.find(p => p.id === profile.id)
         if (cProfile) {
+            const nextProfile = deepClone(profile)
             // Fully replace the config
             for (const k in cProfile) {
                 // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
                 delete cProfile[k]
             }
-            Object.assign(cProfile, profile)
+            Object.assign(cProfile, nextProfile)
         }
     }
 
@@ -194,7 +203,7 @@ export class ProfilesService {
     async launchProfile (profile: PartialProfile<Profile>): Promise<void> {
         await this.openNewTabForProfile(profile)
 
-        let recentProfiles: PartialProfile<Profile>[] = JSON.parse(window.localStorage['recentProfiles'] ?? '[]')
+        let recentProfiles = this.getRecentProfileRecords()
         if (this.config.store.terminal.showRecentProfiles > 0) {
             recentProfiles = recentProfiles.filter(x => {
                 if (profile.id && x.id) {
@@ -202,7 +211,7 @@ export class ProfilesService {
                 }
                 return x.group !== profile.group || x.name !== profile.name
             })
-            recentProfiles.unshift(profile)
+            recentProfiles.unshift(this.serializeRecentProfile(profile))
             recentProfiles = recentProfiles.slice(0, this.config.store.terminal.showRecentProfiles)
         } else {
             recentProfiles = []
@@ -328,9 +337,98 @@ export class ProfilesService {
     }
 
     getRecentProfiles (): PartialProfile<Profile>[] {
-        let recentProfiles: PartialProfile<Profile>[] = JSON.parse(window.localStorage['recentProfiles'] ?? '[]')
-        recentProfiles = recentProfiles.slice(0, this.config.store.terminal.showRecentProfiles)
-        return recentProfiles
+        return this.getRecentProfileRecords()
+            .slice(0, this.config.store.terminal.showRecentProfiles)
+            .map(record => this.resolveRecentProfileRecord(record))
+            .filter((profile): profile is PartialProfile<Profile> => !!profile)
+    }
+
+    private getRecentProfileRecords (): RecentProfileRecord[] {
+        let raw: unknown
+        try {
+            raw = JSON.parse(window.localStorage['recentProfiles'] ?? '[]')
+        } catch {
+            window.localStorage.removeItem('recentProfiles')
+            return []
+        }
+
+        if (!Array.isArray(raw)) {
+            window.localStorage.removeItem('recentProfiles')
+            return []
+        }
+
+        const records: RecentProfileRecord[] = []
+        for (const item of raw) {
+            const record = this.normalizeRecentProfileRecord(item)
+            if (!record) {
+                window.localStorage.removeItem('recentProfiles')
+                return []
+            }
+            records.push(record)
+        }
+        window.localStorage['recentProfiles'] = JSON.stringify(records)
+        return records
+    }
+
+    private normalizeRecentProfileRecord (record: unknown): RecentProfileRecord|null {
+        if (!record || typeof record !== 'object') {
+            return null
+        }
+
+        const value = record as Partial<RecentProfileRecord>
+        if (typeof value.type !== 'string' || typeof value.name !== 'string') {
+            return null
+        }
+
+        const normalized: RecentProfileRecord = {
+            type: value.type,
+            name: value.name,
+        }
+        if (typeof value.id === 'string' && value.id) {
+            normalized.id = value.id
+        }
+        if (typeof value.group === 'string' && value.group) {
+            normalized.group = value.group
+        }
+        if (typeof value.quickConnect === 'string' && value.quickConnect) {
+            normalized.quickConnect = value.quickConnect
+        }
+        return normalized
+    }
+
+    private serializeRecentProfile (profile: PartialProfile<Profile>): RecentProfileRecord {
+        const record: RecentProfileRecord = {
+            id: profile.id,
+            type: profile.type,
+            name: profile.name,
+            group: profile.group,
+        }
+        const provider = this.providerForProfile(profile)
+        if (!profile.id && provider instanceof QuickConnectProfileProvider) {
+            const quickConnect = provider.intoQuickConnectString(this.getConfigProxyForProfile(profile))
+            if (quickConnect) {
+                record.quickConnect = quickConnect
+            }
+        }
+        return record
+    }
+
+    private resolveRecentProfileRecord (record: RecentProfileRecord): PartialProfile<Profile>|null {
+        if (record.id) {
+            const profile = this.config.store.profiles.find(x => x.id === record.id)
+            if (profile) {
+                return profile
+            }
+        }
+
+        if (record.quickConnect) {
+            const provider = this.getProviders().find(x => x.id === record.type)
+            if (provider instanceof QuickConnectProfileProvider) {
+                return provider.quickConnect(record.quickConnect)
+            }
+        }
+
+        return null
     }
 
     async quickConnect (query: string): Promise<PartialProfile<Profile>|null> {
