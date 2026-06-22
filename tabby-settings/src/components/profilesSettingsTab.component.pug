@@ -6,29 +6,24 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
         ng-template(ngbNavContent)
             .host-manager-layout
                 .host-sidebar
-                    .host-sidebar-header
-                        button.btn.btn-link.p-0((click)='showAllHosts()')
+                    .host-sidebar-nav
+                        button.btn.btn-sm.btn-link((click)='showAllHosts()', [class.active]='!activeGroupId && !favoritesOnly && !recentOnly')
                             i.fas.fa-fw.fa-bars
                             span.ms-2(translate) All
-
-                    .host-sidebar-actions
-                        button.btn.btn-sm.btn-outline-secondary((click)='showFavorites()')
+                        button.btn.btn-sm.btn-link((click)='showFavorites()', [class.active]='favoritesOnly')
                             i.fas.fa-fw.fa-star
                             span(translate) Favorites
-                        button.btn.btn-sm.btn-outline-secondary((click)='showRecentHosts()')
+                        button.btn.btn-sm.btn-link((click)='showRecentHosts()', [class.active]='recentOnly')
                             i.fas.fa-fw.fa-history
                             span(translate) Recent
-                        button.btn.btn-sm.btn-primary((click)='newProfileGroup()')
+
+                    .host-sidebar-actions
+                        button.btn.btn-sm.btn-outline-secondary((click)='newProfileGroup()')
                             i.fas.fa-fw.fa-folder-plus
                             span(translate) New group
                         button.btn.btn-sm.btn-success((click)='newProfile()')
                             i.fas.fa-fw.fa-plus
                             span(translate) New SSH
-
-                    .host-tree-toolbar
-                        button.btn.btn-sm.btn-link((click)='showAllHosts()', [class.active]='!activeGroupId && !favoritesOnly && !recentOnly') 全部
-                        button.btn.btn-sm.btn-link((click)='showFavorites()', [class.active]='favoritesOnly') 收藏
-                        button.btn.btn-sm.btn-link((click)='showRecentHosts()', [class.active]='recentOnly') 最近
 
                     .host-tree
                         .host-tree-item.root-item(
@@ -90,28 +85,34 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                                 span(translate) New profile
 
                     .bulk-toolbar(*ngIf='selectedProfileIds.size > 0')
-                        .bulk-title 已选择 {{selectedProfileIds.size}} 台主机
+                        .bulk-info
+                            .bulk-title 已选择 {{selectedProfileIds.size}} 台主机
+                            .bulk-quick-actions
+                                button.btn.btn-sm.btn-outline-secondary((click)='selectVisibleProfiles()') 全选可见
+                                button.btn.btn-sm.btn-outline-secondary((click)='clearSelection()') 清空选择
                         .bulk-actions
-                            button.btn.btn-sm.btn-outline-secondary((click)='selectVisibleProfiles()') 全选可见
-                            button.btn.btn-sm.btn-outline-secondary((click)='clearSelection()') 清空选择
-                            button.btn.btn-sm.btn-outline-warning((click)='bulkSetFavorite(true)') 批量收藏
-                            button.btn.btn-sm.btn-outline-dark((click)='bulkSetFavorite(false)') 取消收藏
-                            select.form-control.form-control-sm.bulk-select([(ngModel)]='bulkGroupId')
-                                option(value='') 移动到未分组
-                                option(*ngFor='let group of profileGroups', [value]='group.id') {{group.name || ("Ungrouped"|translate)}}
-                            button.btn.btn-sm.btn-outline-primary((click)='bulkMoveToGroup()') 应用分组
-                            input.form-control.form-control-sm.bulk-input(
-                                type='text',
-                                [placeholder]='"Comma-separated tags"|translate',
-                                [(ngModel)]='bulkTagsInput'
-                            )
-                            button.btn.btn-sm.btn-outline-primary((click)='bulkReplaceTags()') {{'Apply tags'|translate}}
-                            input.form-control.form-control-sm.bulk-input(
-                                type='text',
-                                [placeholder]='"Apply environment"|translate',
-                                [(ngModel)]='bulkEnvironmentInput'
-                            )
-                            button.btn.btn-sm.btn-outline-primary((click)='bulkReplaceEnvironment()') {{'Apply environment'|translate}}
+                            .bulk-actions-group
+                                button.btn.btn-sm.btn-outline-warning((click)='bulkSetFavorite(true)') 批量收藏
+                                button.btn.btn-sm.btn-outline-dark((click)='bulkSetFavorite(false)') 取消收藏
+                            .bulk-actions-group
+                                select.form-control.form-control-sm.bulk-select([(ngModel)]='bulkGroupId')
+                                    option(value='') 移动到未分组
+                                    option(*ngFor='let group of profileGroups', [value]='group.id') {{group.name || ("Ungrouped"|translate)}}
+                                button.btn.btn-sm.btn-outline-primary((click)='bulkMoveToGroup()') 应用分组
+                            .bulk-actions-group
+                                input.form-control.form-control-sm.bulk-input(
+                                    type='text',
+                                    [placeholder]='"Comma-separated tags"|translate',
+                                    [(ngModel)]='bulkTagsInput'
+                                )
+                                button.btn.btn-sm.btn-outline-primary((click)='bulkReplaceTags()') {{'Apply tags'|translate}}
+                            .bulk-actions-group
+                                input.form-control.form-control-sm.bulk-input(
+                                    type='text',
+                                    [placeholder]='"Apply environment"|translate',
+                                    [(ngModel)]='bulkEnvironmentInput'
+                                )
+                                button.btn.btn-sm.btn-outline-primary((click)='bulkReplaceEnvironment()') {{'Apply environment'|translate}}
 
                     .host-list
                         ng-container(*ngFor='let group of rootGroups')
@@ -213,12 +214,15 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                                         span.badge.text-bg-secondary(*ngFor='let tag of profile.tags') {{tag}}
 
                                 .host-item-actions
-                                    button.btn.btn-sm.btn-success(*ngIf='!profile.isTemplate', (click)='launchProfile(profile)')
+                                    button.btn.btn-sm.btn-success.host-connect-btn(*ngIf='!profile.isTemplate', (click)='launchProfile(profile)')
+                                        i.fas.fa-fw.fa-plug.me-1
                                         span(translate) Connect
-                                    button.btn.btn-sm.btn-outline-secondary(
+                                    button.btn.btn-sm.btn-outline-secondary.host-edit-btn(
                                         *ngIf='!profile.isBuiltin',
                                         (click)='editProfile(profile)'
-                                    ) 编辑
+                                    )
+                                        i.fas.fa-fw.fa-pencil-alt.me-1
+                                        span 编辑
                                     .hover-reveal(ngbDropdown, placement='bottom-right top-right auto')
                                         button.btn.btn-sm.btn-link(ngbDropdownToggle)
                                             i.fas.fa-fw.fa-ellipsis-vertical

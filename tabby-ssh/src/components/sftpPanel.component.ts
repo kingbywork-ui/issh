@@ -1,6 +1,6 @@
 import * as C from 'constants'
 import { posix as path } from 'path'
-import { Component, Input, Output, EventEmitter, Inject, Optional } from '@angular/core'
+import { Component, Input, Output, EventEmitter, Inject, Optional, ChangeDetectorRef, NgZone } from '@angular/core'
 import { FileUpload, DirectoryUpload, DirectoryDownload, MenuItemOptions, NotificationsService, PlatformService } from 'tabby-core'
 import { SFTPSession, SFTPFile } from '../session/sftp'
 import { SSHSession } from '../session/ssh'
@@ -31,11 +31,15 @@ export class SFTPPanelComponent {
     editingPath: string|null = null
     showFilter = false
     filterText = ''
+    uploading = false
+    activeUploads: {name: string, transfer: FileUpload, progress: number}[] = []
 
     constructor (
         private ngbModal: NgbModal,
         private notifications: NotificationsService,
         public platform: PlatformService,
+        private cd: ChangeDetectorRef,
+        private ngZone: NgZone,
         @Optional() @Inject(SFTPContextMenuItemProvider) protected contextMenuProviders: SFTPContextMenuItemProvider[],
     ) {
         this.contextMenuProviders.sort((a, b) => a.weight - b.weight)
@@ -205,12 +209,37 @@ export class SFTPPanelComponent {
 
     async upload (): Promise<void> {
         const transfers = await this.platform.startUpload({ multiple: true })
-        await Promise.all(transfers.map(t => this.uploadOne(t)))
+        this.uploading = true
+        this.ngZone.runOutsideAngular(async () => {
+            await Promise.all(transfers.map(t => this.uploadOne(t)))
+            this.ngZone.run(() => {
+                this.uploading = false
+                this.cd.detectChanges()
+            })
+        })
     }
 
     async uploadFolder (): Promise<void> {
         const transfer = await this.platform.startUploadDirectory()
-        await this.uploadOneFolder(transfer)
+        this.uploading = true
+        this.ngZone.runOutsideAngular(async () => {
+            await this.uploadOneFolder(transfer)
+            this.ngZone.run(() => {
+                this.uploading = false
+                this.cd.detectChanges()
+            })
+        })
+    }
+
+    async onDropUpload (transfer: DirectoryUpload): Promise<void> {
+        this.uploading = true
+        this.ngZone.runOutsideAngular(async () => {
+            await this.uploadOneFolder(transfer)
+            this.ngZone.run(() => {
+                this.uploading = false
+                this.cd.detectChanges()
+            })
+        })
     }
 
     async uploadOneFolder (transfer: DirectoryUpload, accumPath = ''): Promise<void> {
@@ -224,19 +253,44 @@ export class SFTPPanelComponent {
                 }
                 await this.uploadOneFolder(t, path.posix.join(accumPath, t.getName()))
             } else {
-                await this.sftp.upload(path.posix.join(this.path, accumPath, t.getName()), t)
+                await this.uploadOneInner(t, path.posix.join(this.path, accumPath, t.getName()))
             }
         }
         if (this.path === savedPath) {
-            await this.navigate(this.path)
+            this.ngZone.run(() => {
+                this.navigate(this.path)
+                this.cd.detectChanges()
+            })
         }
     }
 
     async uploadOne (transfer: FileUpload): Promise<void> {
-        const savedPath = this.path
-        await this.sftp.upload(path.join(this.path, transfer.getName()), transfer)
-        if (this.path === savedPath) {
-            await this.navigate(this.path)
+        await this.uploadOneInner(transfer, path.join(this.path, transfer.getName()))
+    }
+
+    private async uploadOneInner (transfer: FileUpload, remotePath: string): Promise<void> {
+        const entry = { name: transfer.getName(), transfer, progress: 0 }
+        this.ngZone.run(() => {
+            this.activeUploads.push(entry)
+            this.cd.detectChanges()
+        })
+
+        const progressTimer = setInterval(() => {
+            const size = transfer.getSize()
+            if (size > 0) {
+                entry.progress = Math.min(100, Math.round(100 * transfer.getCompletedBytes() / size))
+            }
+            this.ngZone.run(() => { this.cd.detectChanges() })
+        }, 200)
+
+        try {
+            await this.sftp.upload(remotePath, transfer)
+        } finally {
+            clearInterval(progressTimer)
+            this.ngZone.run(() => {
+                this.activeUploads = this.activeUploads.filter(x => x !== entry)
+                this.cd.detectChanges()
+            })
         }
     }
 

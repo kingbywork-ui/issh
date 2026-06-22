@@ -4,6 +4,7 @@ import { BaseTabComponent, TabContextMenuItemProvider, NotificationsService, Men
 import { BaseTerminalTabComponent } from './api/baseTerminalTab.component'
 import { TerminalContextMenuItemProvider } from './api/contextMenuProvider'
 import { MultifocusService } from './services/multifocus.service'
+import { BatchInputService } from './services/batchInput.service'
 import { ConnectableTerminalTabComponent } from './api/connectableTerminalTab.component'
 import { v4 as uuidv4 } from 'uuid'
 import slugify from 'slugify'
@@ -53,6 +54,7 @@ export class MiscContextMenu extends TabContextMenuItemProvider {
     constructor (
         private translate: TranslateService,
         private multifocus: MultifocusService,
+        private batchInput: BatchInputService,
     ) { super() }
 
     async getItems (tab: BaseTabComponent): Promise<MenuItemOptions[]> {
@@ -69,6 +71,12 @@ export class MiscContextMenu extends TabContextMenuItemProvider {
             items.push({
                 label: this.translate.instant('Copy current path'),
                 click: () => tab.copyCurrentPath(),
+            })
+        }
+        if (tab instanceof BaseTerminalTabComponent) {
+            items.push({
+                label: this.translate.instant('Send input to multiple tabs'),
+                click: () => this.batchInput.open(tab),
             })
         }
         items.push({

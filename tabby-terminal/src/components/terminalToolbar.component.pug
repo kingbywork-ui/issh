@@ -12,6 +12,15 @@
 
     ng-content
 
+    button.btn.btn-sm.btn-link.me-2(
+        *ngIf='tab.enableToolbar',
+        (click)='openBatchInput()',
+        (mouseenter)='tab.showToolbar()',
+        (mouseleave)='tab.hideToolbar()'
+    )
+        i.fas.fa-paper-plane
+        span(translate) Send
+
     button.btn.btn-sm.btn-link(
         *ngIf='tab.enableToolbar',
         (click)='tab.togglePinToolbar()',

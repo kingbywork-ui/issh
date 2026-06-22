@@ -2,6 +2,7 @@
 import { Component, HostListener, Input } from '@angular/core'
 import { AppService, SplitTabComponent } from 'tabby-core'
 import { BaseTerminalTabComponent } from '../api/baseTerminalTab.component'
+import { BatchInputService } from '../services/batchInput.service'
 
 /** @hidden */
 @Component({
@@ -15,6 +16,7 @@ export class TerminalToolbarComponent {
     // eslint-disable-next-line @typescript-eslint/no-useless-constructor
     constructor (
         private app: AppService,
+        private batchInput: BatchInputService,
     ) { }
 
     onTabDragStart (): void {
@@ -30,6 +32,10 @@ export class TerminalToolbarComponent {
 
     get shouldShowDragHandle (): boolean {
         return this.tab.topmostParent instanceof SplitTabComponent && this.tab.topmostParent.getAllTabs().length > 1
+    }
+
+    openBatchInput (): void {
+        this.batchInput.open(this.tab)
     }
 
     @HostListener('mouseenter') onMouseEnter () {

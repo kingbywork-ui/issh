@@ -52,7 +52,17 @@
         button.btn.btn-secondary((click)='clearFilter()')
             i.fas.fa-times
 
-.body(dropZone, (transfer)='uploadOneFolder($event)')
+.upload-progress(*ngIf='activeUploads.length > 0')
+    .upload-item(*ngFor='let item of activeUploads')
+        .upload-name {{item.name}}
+        .upload-bar
+            .upload-bar-fill([style.width]='item.progress + "%"')
+        .upload-percent {{item.progress}}%
+        .upload-speed(*ngIf='item.transfer.getSpeed()') {{item.transfer.getSpeed()|filesize}}/s
+    .upload-total(*ngIf='uploading && activeUploads.length > 1')
+        span(translate) Uploading {{activeUploads.length}} files...
+
+.body(dropZone, (transfer)='onDropUpload($event)')
     a.alert.alert-info.d-flex.align-items-center(
         *ngIf='shouldShowCWDTip && !cwdDetectionAvailable',
         (click)='platform.openExternal("https://tabby.sh/go/cwd-detection")'
