@@ -53,3 +53,5 @@ crowdin.yml
 Thumbs.db
 desktop.ini
 "main.js"  
+"*.jpg"  
+"*.png"  

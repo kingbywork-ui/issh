@@ -1,8 +1,15 @@
 import { Component } from '@angular/core'
 import { HomeBaseService } from '../services/homeBase.service'
-import { CommandService } from '../services/commands.service'
 import { ProfilesService } from '../services/profiles.service'
-import { Command, CommandLocation, PartialProfile, Profile } from '../api'
+import { ConfigService } from '../services/config.service'
+import { AppService } from '../services/app.service'
+import { BaseComponent } from './base.component'
+import { PartialProfile, PartialProfileGroup, Profile, ProfileGroup } from '../api'
+
+interface CollapsableProfileGroup extends ProfileGroup {
+    collapsed: boolean
+    children: PartialProfileGroup<CollapsableProfileGroup>[]
+}
 
 interface ConnectionInfo {
     user?: string
@@ -16,50 +23,192 @@ interface ConnectionInfo {
     templateUrl: './startPage.component.pug',
     styleUrls: ['./startPage.component.scss'],
 })
-export class StartPageComponent {
-    version: string
-    commands: Command[] = []
-    favoriteProfiles: PartialProfile<Profile>[] = []
-    recentProfiles: PartialProfile<Profile>[] = []
+export class StartPageComponent extends BaseComponent {
+    // Sidebar state
+    activeGroupId: string | null = null
+    favoritesOnly = false
+    recentOnly = false
+    rootGroups: PartialProfileGroup<CollapsableProfileGroup>[] = []
+    profileGroups: PartialProfileGroup<CollapsableProfileGroup>[] = []
+    customProfiles: PartialProfile<Profile>[] = []
+    recentProfileIds = new Set<string>()
 
     constructor (
         public homeBase: HomeBaseService,
         private profilesService: ProfilesService,
-        commands: CommandService,
+        private config: ConfigService,
+        private app: AppService,
     ) {
-        commands.getCommands({}).then(c => {
-            this.commands = c.filter(x => x.locations?.includes(CommandLocation.StartPage))
-        })
-
-        this.refreshHostCards().catch(err => console.error('Could not load host cards', err))
+        super()
     }
 
-    getCommandIconClass (command: Command): string {
-        if (command.id === 'core:profile-selector') {
-            return 'fas fa-window-restore'
-        }
-        if (command.id?.startsWith('core:recent-profile-')) {
-            return 'fas fa-history'
-        }
-        if (command.touchBarNSImage === 'NSTouchBarAddDetailTemplate') {
-            return 'fas fa-plus'
-        }
-        if (command.touchBarNSImage === 'NSTouchBarComposeTemplate') {
-            return 'fas fa-cog'
-        }
-        return this.getSafeIconClass(command.icon) ?? 'fas fa-circle'
+    async ngOnInit (): Promise<void> {
+        await this.refreshAll()
+        this.subscribeUntilDestroyed(this.config.changed$, () => this.refreshAll())
     }
 
-    private getSafeIconClass (icon?: string): string|null {
-        if (!icon || !/^(fa[rsb]?|fas|far|fab)(\s+fa[-\w]+)*$/.test(icon)) {
-            return null
+    async refreshAll (): Promise<void> {
+        await this.refreshProfiles()
+        await this.refreshProfileGroups()
+    }
+
+    async refreshProfiles (): Promise<void> {
+        const allProfiles = await this.profilesService.getProfiles()
+        this.customProfiles = allProfiles.filter(x => !x.isBuiltin && !x.isTemplate)
+
+        const recent = this.profilesService.getRecentProfiles()
+        this.recentProfileIds = new Set(recent.map(x => x.id).filter((id): id is string => !!id))
+    }
+
+    async refreshProfileGroups (): Promise<void> {
+        const profileGroupCollapsed = JSON.parse(window.localStorage.profileGroupCollapsed ?? '{}')
+        const groups = await this.profilesService.getProfileGroups({ includeNonUserGroup: true, includeProfiles: true })
+        this.profileGroups = groups
+            .map(group => ({
+                ...StartPageComponent.intoPartialCollapsableProfileGroup(group, profileGroupCollapsed[group.id] ?? false),
+                profiles: (group.profiles ?? []).filter(p => !p.isTemplate),
+            }))
+            .sort((a, b) => this.compareGroups(a, b))
+        this.rootGroups = this.profilesService.buildGroupTree(this.profileGroups)
+    }
+
+    // Sidebar navigation
+    showAllHosts (): void {
+        this.activeGroupId = null
+        this.favoritesOnly = false
+        this.recentOnly = false
+    }
+
+    showFavorites (): void {
+        this.activeGroupId = null
+        this.recentOnly = false
+        this.favoritesOnly = true
+    }
+
+    showRecentHosts (): void {
+        this.activeGroupId = null
+        this.favoritesOnly = false
+        this.recentOnly = true
+    }
+
+    selectGroupView (group: PartialProfileGroup<CollapsableProfileGroup>): void {
+        this.activeGroupId = group.id
+        this.favoritesOnly = false
+        this.recentOnly = false
+    }
+
+    isGroupActive (group: PartialProfileGroup<CollapsableProfileGroup>): boolean {
+        return this.activeGroupId === group.id
+    }
+
+    toggleGroupCollapse (group: PartialProfileGroup<CollapsableProfileGroup>): void {
+        group.collapsed = !group.collapsed
+        const profileGroupCollapsed = JSON.parse(window.localStorage.profileGroupCollapsed ?? '{}')
+        profileGroupCollapsed[group.id] = group.collapsed
+        window.localStorage.profileGroupCollapsed = JSON.stringify(profileGroupCollapsed)
+    }
+
+    isSidebarGroupVisible (group: PartialProfileGroup<CollapsableProfileGroup>): boolean {
+        return this.getSidebarVisibleProfiles(group).length > 0 || (group.children ?? []).some(child => this.isSidebarGroupVisible(child))
+    }
+
+    getSidebarVisibleProfiles (group: PartialProfileGroup<ProfileGroup>): PartialProfile<Profile>[] {
+        return (group.profiles ?? []).filter(profile => !profile.isTemplate)
+    }
+
+    getGroupVisibleProfileCount (group: PartialProfileGroup<CollapsableProfileGroup>): number {
+        return this.getSidebarVisibleProfiles(group).length + (group.children ?? []).reduce((count, child) => count + this.getGroupVisibleProfileCount(child), 0)
+    }
+
+    getVisibleCustomProfilesCount (): number {
+        return this.customProfiles.filter(p => !p.isTemplate).length
+    }
+
+    getFavoriteVisibleCount (): number {
+        return this.customProfiles.filter(profile => !!profile.favorite).length
+    }
+
+    getRecentVisibleCount (): number {
+        return this.customProfiles.filter(profile => !!profile.id && this.recentProfileIds.has(profile.id)).length
+    }
+
+    // Right panel: filtered host list
+    getRightPanelProfiles (): PartialProfile<Profile>[] {
+        if (this.favoritesOnly) {
+            return this.customProfiles.filter(p => !!p.favorite && !p.isTemplate)
+                .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
         }
-        return icon
+        if (this.recentOnly) {
+            return this.customProfiles.filter(p => !!p.id && this.recentProfileIds.has(p.id) && !p.isTemplate)
+                .sort((a, b) => {
+                    const recent = this.profilesService.getRecentProfiles()
+                    const aIndex = recent.findIndex(r => r.id === a.id)
+                    const bIndex = recent.findIndex(r => r.id === b.id)
+                    return aIndex - bIndex
+                })
+        }
+        if (this.activeGroupId) {
+            const group = this.findGroupById(this.activeGroupId, this.rootGroups)
+            if (group) {
+                return this.collectProfilesFromGroup(group)
+            }
+            return []
+        }
+        // Default: show all
+        return this.customProfiles.filter(p => !p.isTemplate)
+            .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+    }
+
+    getRightPanelTitle (): string {
+        if (this.favoritesOnly) {
+            return '收藏主机'
+        }
+        if (this.recentOnly) {
+            return '最近主机'
+        }
+        if (this.activeGroupId) {
+            const group = this.findGroupById(this.activeGroupId, this.rootGroups)
+            return group?.name ?? '分组'
+        }
+        return '全部主机'
+    }
+
+    private findGroupById (id: string, groups: PartialProfileGroup<CollapsableProfileGroup>[]): PartialProfileGroup<CollapsableProfileGroup> | null {
+        for (const group of groups) {
+            if (group.id === id) {
+                return group
+            }
+            const found = this.findGroupById(id, group.children ?? [])
+            if (found) {
+                return found
+            }
+        }
+        return null
+    }
+
+    private collectProfilesFromGroup (group: PartialProfileGroup<CollapsableProfileGroup>): PartialProfile<Profile>[] {
+        const profiles = (group.profiles ?? []).filter(p => !p.isTemplate)
+        const childProfiles = (group.children ?? []).reduce<PartialProfile<Profile>[]>((acc, child) => {
+            return acc.concat(this.collectProfilesFromGroup(child))
+        }, [])
+        return [...profiles, ...childProfiles].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+    }
+
+    // Open settings page HOSTMANAGER
+    openSettingsProfiles (): void {
+        try {
+            const { SettingsTabComponent } = window['nodeRequire']('tabby-settings')
+            this.app.openNewTabRaw({
+                type: SettingsTabComponent,
+                inputs: { activeTab: 'profiles' },
+            })
+        } catch {
+            // tabby-settings not available
+        }
     }
 
     async launchProfile (profile: PartialProfile<Profile>): Promise<void> {
         await this.profilesService.launchProfile(profile)
-        await this.refreshHostCards()
     }
 
     getProfileConnectionInfo (profile: PartialProfile<Profile>): ConnectionInfo | null {
@@ -91,33 +240,32 @@ export class StartPageComponent {
     }
 
     // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
-    buttonsTrackBy (_, btn: Command): any {
-        return btn.label + btn.icon
-    }
-
-    // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
     profilesTrackBy (_, profile: PartialProfile<Profile>): any {
         return profile.id ?? `${profile.type}:${profile.name}`
     }
 
-    private async refreshHostCards (): Promise<void> {
-        const profiles = await this.profilesService.getProfiles()
-        const customProfiles = profiles.filter(profile => !profile.isBuiltin && !profile.isTemplate)
-        const recentProfiles = this.profilesService.getRecentProfiles()
-        const recentIds = new Set(recentProfiles.map(profile => profile.id).filter((id): id is string => !!id))
+    // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
+    groupTrackBy (_, group: PartialProfileGroup<CollapsableProfileGroup>): any {
+        return group.id
+    }
 
-        this.favoriteProfiles = customProfiles
-            .filter(profile => !!profile.favorite)
-            .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
-            .slice(0, 8)
+    private compareGroups (a: PartialProfileGroup<CollapsableProfileGroup>, b: PartialProfileGroup<CollapsableProfileGroup>): number {
+        const ungroupedDelta = Number(a.id === 'ungrouped') - Number(b.id === 'ungrouped')
+        if (ungroupedDelta !== 0) {
+            return ungroupedDelta
+        }
+        const builtinEditableDelta = Number(a.id === 'built-in' || !a.editable) - Number(b.id === 'built-in' || !b.editable)
+        if (builtinEditableDelta !== 0) {
+            return builtinEditableDelta
+        }
+        return (a.name ?? '').localeCompare(b.name ?? '')
+    }
 
-        this.recentProfiles = customProfiles
-            .filter(profile => !!profile.id && recentIds.has(profile.id))
-            .sort((a, b) => {
-                const aIndex = recentProfiles.findIndex(profile => profile.id === a.id)
-                const bIndex = recentProfiles.findIndex(profile => profile.id === b.id)
-                return aIndex - bIndex
-            })
-            .slice(0, 8)
+    private static intoPartialCollapsableProfileGroup (group: PartialProfileGroup<ProfileGroup>, collapsed: boolean): PartialProfileGroup<CollapsableProfileGroup> {
+        return {
+            ...group,
+            collapsed,
+            children: [],
+        }
     }
 }

@@ -1,39 +1,69 @@
-.start-page-shell
-    .start-page-hero
-        .tabby-logo
-        h1.tabby-title Tabby
-            sup 伪
-        p.start-page-subtitle 面向 SSH 主机工作流的连接工作台
+.start-page-layout
+    .start-page-sidebar
+        .sidebar-header
+            .tabby-logo
+            h1.sidebar-title Tabby
 
-    .start-page-grid
-        .start-page-panel
-            .panel-header
-                h2.panel-title 常用入口
+        .sidebar-nav
+            button.btn.btn-sm.btn-link((click)='showAllHosts()', [class.active]='!activeGroupId && !favoritesOnly && !recentOnly')
+                i.fas.fa-fw.fa-bars
+                span.ms-2 All
+            button.btn.btn-sm.btn-link((click)='showFavorites()', [class.active]='favoritesOnly')
+                i.fas.fa-fw.fa-star
+                span Favorites
+            button.btn.btn-sm.btn-link((click)='showRecentHosts()', [class.active]='recentOnly')
+                i.fas.fa-fw.fa-history
+                span Recent
 
-            .list-group.command-list
-                a.list-group-item.list-group-item-action.d-flex.pt-3.pb-3(
-                    *ngFor='let command of commands; trackBy: buttonsTrackBy',
-                    (click)='command.run()',
-                )
-                    i.fa-fw.me-2([ngClass]='getCommandIconClass(command)')
-                    span {{command.label}}
+        .sidebar-actions
+            button.btn.btn-sm.btn-outline-secondary((click)='openSettingsProfiles()')
+                i.fas.fa-fw.fa-folder-plus
+                span New group
+            button.btn.btn-sm.btn-success((click)='openSettingsProfiles()')
+                i.fas.fa-fw.fa-plus
+                span New SSH
 
-        .start-page-panel(*ngIf='favoriteProfiles.length > 0')
-            .panel-header
-                h2.panel-title 收藏主机
-            .host-card-grid
-                button.host-card(
-                    *ngFor='let profile of favoriteProfiles; trackBy: profilesTrackBy',
-                    (click)='launchProfile(profile)'
-                )
-                    .host-card-title-row
-                        .host-card-title {{profile.name}}
-                        span.badge(
-                            *ngIf='profile.environment',
-                            [class]='getEnvironmentBadgeClass(profile.environment)'
-                        ) {{profile.environment}}
+        .sidebar-tree
+            .sidebar-tree-item.root-item(
+                (click)='showAllHosts()',
+                [class.active]='!activeGroupId && !favoritesOnly && !recentOnly'
+            )
+                i.fas.fa-fw.fa-server
+                span.ms-2 全部
+                span.count.ms-auto {{getVisibleCustomProfilesCount()}}
 
-                    .host-card-meta(*ngIf='getProfileConnectionInfo(profile) as info')
+            .sidebar-tree-item.root-item(
+                (click)='showFavorites()',
+                [class.active]='favoritesOnly'
+            )
+                i.fas.fa-fw.fa-star
+                span.ms-2 收藏
+                span.count.ms-auto {{getFavoriteVisibleCount()}}
+
+            .sidebar-tree-item.root-item(
+                (click)='showRecentHosts()',
+                [class.active]='recentOnly'
+            )
+                i.fas.fa-fw.fa-history
+                span.ms-2 最近
+                span.count.ms-auto {{getRecentVisibleCount()}}
+
+            ng-container(*ngFor='let group of rootGroups')
+                ng-container(*ngTemplateOutlet='sidebarGroup; context: {$implicit: group, level: 0}')
+
+    .start-page-main
+        .main-header
+            h2.main-title {{getRightPanelTitle()}}
+            span.main-count {{getRightPanelProfiles().length}} 台主机
+
+        .host-list(*ngIf='getRightPanelProfiles().length > 0')
+            button.host-list-item(
+                *ngFor='let profile of getRightPanelProfiles(); trackBy: profilesTrackBy',
+                (click)='launchProfile(profile)'
+            )
+                .host-item-info
+                    .host-item-name {{profile.name}}
+                    .host-item-meta(*ngIf='getProfileConnectionInfo(profile) as info')
                         span(*ngIf='info.user')
                             i.fas.fa-user.fa-fw.me-1
                             | {{info.user}}
@@ -43,40 +73,23 @@
                         span(*ngIf='info.port')
                             i.fas.fa-plug.fa-fw.me-1
                             | {{info.port}}
-
-                    .host-card-remark(*ngIf='profile.remark') {{profile.remark}}
-                    .host-card-tags(*ngIf='(profile.tags?.length ?? 0) > 0')
+                    .host-item-remark(*ngIf='profile.remark') {{profile.remark}}
+                    .host-item-tags(*ngIf='(profile.tags?.length ?? 0) > 0')
                         span.badge.text-bg-secondary(*ngFor='let tag of profile.tags') {{tag}}
 
-        .start-page-panel(*ngIf='recentProfiles.length > 0')
-            .panel-header
-                h2.panel-title 最近主机
-            .host-card-grid
-                button.host-card(
-                    *ngFor='let profile of recentProfiles; trackBy: profilesTrackBy',
-                    (click)='launchProfile(profile)'
-                )
-                    .host-card-title-row
-                        .host-card-title {{profile.name}}
-                        span.badge(
-                            *ngIf='profile.environment',
-                            [class]='getEnvironmentBadgeClass(profile.environment)'
-                        ) {{profile.environment}}
+                .host-item-actions
+                    span.badge.env-badge(
+                        *ngIf='profile.environment',
+                        [class]='getEnvironmentBadgeClass(profile.environment)'
+                    ) {{profile.environment}}
+                    button.btn.btn-sm.btn-outline-success.connect-btn((click)='$event.stopPropagation(); launchProfile(profile)')
+                        i.fas.fa-plug
+                        span Connect
 
-                    .host-card-meta(*ngIf='getProfileConnectionInfo(profile) as info')
-                        span(*ngIf='info.user')
-                            i.fas.fa-user.fa-fw.me-1
-                            | {{info.user}}
-                        span(*ngIf='info.host')
-                            i.fas.fa-globe.fa-fw.me-1
-                            | {{info.host}}
-                        span(*ngIf='info.port')
-                            i.fas.fa-plug.fa-fw.me-1
-                            | {{info.port}}
-
-                    .host-card-remark(*ngIf='profile.remark') {{profile.remark}}
-                    .host-card-tags(*ngIf='(profile.tags?.length ?? 0) > 0')
-                        span.badge.text-bg-secondary(*ngFor='let tag of profile.tags') {{tag}}
+        .host-list-empty(*ngIf='getRightPanelProfiles().length === 0')
+            .empty-icon
+                i.fas.fa-server
+            .empty-text 当前分组没有主机
 
 footer.d-flex.align-items-center
     .btn-group.me-auto
@@ -91,3 +104,23 @@ footer.d-flex.align-items-center
         translate='Version: {version}',
         [translateParams]='{ version: this.homeBase.appVersion }'
     )
+
+ng-template(#sidebarGroup let-group let-level='level')
+    ng-container(*ngIf='isSidebarGroupVisible(group)')
+        .sidebar-tree-item(
+            [style.paddingLeft.rem]='0.75 + (level * 1.1)',
+            [class.active]='isGroupActive(group)',
+            (click)='selectGroupView(group)'
+        )
+            button.btn.btn-link.tree-toggle(
+                *ngIf='group.children && group.children.length > 0',
+                (click)='$event.stopPropagation(); toggleGroupCollapse(group)'
+            )
+                i.fas.fa-fw([class.fa-chevron-right]='group.collapsed', [class.fa-chevron-down]='!group.collapsed')
+            i.far.fa-fw([class.fa-folder]='group.collapsed', [class.fa-folder-open]='!group.collapsed')
+            span.ms-2 {{group.name || "Ungrouped"}}
+            span.count.ms-auto {{getGroupVisibleProfileCount(group)}}
+
+        ng-container(*ngIf='!group.collapsed')
+            ng-container(*ngFor='let child of group.children')
+                ng-container(*ngTemplateOutlet='sidebarGroup; context: {$implicit: child, level: level + 1}')

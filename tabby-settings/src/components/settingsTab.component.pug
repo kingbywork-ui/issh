@@ -6,57 +6,30 @@
                 span(translate) Application
             ng-template(ngbNavContent)
                 .content-box
-                    .row
-                        .col-12.col-md-6
-                            .logo-area
-                                .tabby-logo.mt-3
+                    .list-group.list-group-light.mb-5
+                        button.list-group-item.list-group-item-action.link-card((click)='homeBase.reportBug()')
+                            i.fas.fa-fw.fa-bug
+                            div
+                                div(translate) Report a problem
+                                small.text-muted(translate) Generate a pre-filled GitHub issue
 
-                                h1.tabby-title Tabby
-                                    sup α
-                                .text-muted {{homeBase.appVersion}}
+                        button.list-group-item.list-group-item-action.link-card((click)='homeBase.openDiscord()')
+                            i.fab.fa-fw.fa-discord
+                            div
+                                div(translate) Community
+                                small.text-muted(translate) On Discord
 
-                                button.btn.btn-secondary.mt-3.mb-2(
-                                    *ngIf='!updateAvailable && hostApp.platform !== Platform.Web',
-                                    (click)='checkForUpdates()',
-                                    [disabled]='checkingForUpdate'
-                                )
-                                    i.fas.fa-sync(
-                                        [class.fa-spin]='checkingForUpdate'
-                                    )
-                                    span(translate) Check for updates
+                        button.list-group-item.list-group-item-action.link-card((click)='homeBase.openGitHub()')
+                            i.fab.fa-fw.fa-github
+                            div
+                                div GitHub
+                                small.text-muted(translate) Source code
 
-                                button.btn.btn-info.mt-3.mb-2(
-                                    *ngIf='updateAvailable',
-                                    (click)='updater.update()',
-                                )
-                                    i.fas.fa-sync
-                                    span(translate) Update
-
-                        .col-12.col-md-6
-                            .list-group.list-group-light.mb-5
-                                button.list-group-item.list-group-item-action.link-card((click)='homeBase.reportBug()')
-                                    i.fas.fa-fw.fa-bug
-                                    div
-                                        div(translate) Report a problem
-                                        small.text-muted(translate) Generate a pre-filled GitHub issue
-
-                                button.list-group-item.list-group-item-action.link-card((click)='homeBase.openDiscord()')
-                                    i.fab.fa-fw.fa-discord
-                                    div
-                                        div(translate) Community
-                                        small.text-muted(translate) On Discord
-
-                                button.list-group-item.list-group-item-action.link-card((click)='homeBase.openGitHub()')
-                                    i.fab.fa-fw.fa-github
-                                    div
-                                        div GitHub
-                                        small.text-muted(translate) Source code
-
-                                button.list-group-item.list-group-item-action.link-card((click)='showReleaseNotes()')
-                                    i.fas.fa-fw.fa-book
-                                    div
-                                        div(translate) What's new
-                                        small.text-muted(translate) Show release notes
+                        button.list-group-item.list-group-item-action.link-card((click)='showReleaseNotes()')
+                            i.fas.fa-fw.fa-book
+                            div
+                                div(translate) What's new
+                                small.text-muted(translate) Show release notes
 
 
                     h3(translate) Application settings
