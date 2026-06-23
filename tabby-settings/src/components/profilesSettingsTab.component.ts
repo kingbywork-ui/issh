@@ -48,6 +48,7 @@ export class ProfilesSettingsTabComponent extends BaseComponent {
     environmentFilter = ''
     activeGroupId = ''
     selectedProfileIds = new Set<string>()
+    selectedTags: string[] = []
     bulkGroupId = ''
     bulkTagsInput = ''
     bulkEnvironmentInput = ''
@@ -427,6 +428,7 @@ export class ProfilesSettingsTabComponent extends BaseComponent {
         this.environmentFilter = ''
         this.sshOnly = true
         this.activeGroupId = ''
+        this.selectedTags = []
     }
 
     showAllHosts (): void {
@@ -522,6 +524,29 @@ export class ProfilesSettingsTabComponent extends BaseComponent {
             return 'text-bg-success'
         }
         return 'text-bg-dark'
+    }
+
+    getAvailableTags (): string[] {
+        return [...new Set(
+            this.customProfiles
+                .flatMap(profile => profile.tags ?? [])
+                .map(tag => tag.trim())
+                .filter((x): x is string => !!x),
+        )].sort((a, b) => a.localeCompare(b))
+    }
+
+    toggleTag (tag: string): void {
+        const idx = this.selectedTags.indexOf(tag)
+        if (idx >= 0) {
+            this.selectedTags.splice(idx, 1)
+        } else {
+            this.selectedTags.push(tag)
+        }
+        this.selectedTags = [...this.selectedTags]
+    }
+
+    isTagSelected (tag: string): boolean {
+        return this.selectedTags.includes(tag)
     }
 
     getAvailableEnvironments (): string[] {
@@ -703,6 +728,7 @@ export class ProfilesSettingsTabComponent extends BaseComponent {
             ignoreActiveGroup?: boolean
             ignoreFavoritesOnly?: boolean
             ignoreRecentOnly?: boolean
+            ignoreTags?: boolean
         },
     ): boolean {
         if (profile.isTemplate) {
@@ -723,6 +749,12 @@ export class ProfilesSettingsTabComponent extends BaseComponent {
         if (this.environmentFilter) {
             const environment = (profile.environment ?? '').toLowerCase()
             if (environment !== this.environmentFilter.toLowerCase()) {
+                return false
+            }
+        }
+        if (!options?.ignoreTags && this.selectedTags.length > 0) {
+            const profileTags = (profile.tags ?? []).map(t => t.toLowerCase())
+            if (!this.selectedTags.some(selected => profileTags.includes(selected.toLowerCase()))) {
                 return false
             }
         }

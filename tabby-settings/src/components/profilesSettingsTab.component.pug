@@ -55,7 +55,7 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
 
                 .host-main
                     .host-toolbar
-                        .host-toolbar-left
+                        .host-toolbar-top
                             .input-group.search-group
                                 .input-group-text
                                     i.fas.fa-fw.fa-search
@@ -65,24 +65,34 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                                     [(ngModel)]='filter'
                                 )
 
-                            .host-filter-toggle
-                                checkbox([text]='"SSH only"|translate', [(ngModel)]='sshOnly')
-
-                            .host-filter-toggle
-                                checkbox([text]='"Favorites"|translate', [(ngModel)]='favoritesOnly')
-
-                            select.form-control.environment-filter([(ngModel)]='environmentFilter')
-                                option(value='') {{'All environments'|translate}}
-                                option(*ngFor='let environment of getAvailableEnvironments()', [value]='environment') {{environment}}
+                            .host-tag-filters(*ngIf='getAvailableTags().length > 0')
+                                button.tag-btn(
+                                    *ngFor='let tag of getAvailableTags()',
+                                    (click)='toggleTag(tag)',
+                                    [class.active]='isTagSelected(tag)',
+                                    [class]='getEnvironmentBadgeClass(tag)'
+                                ) {{tag}}
 
                             button.btn.btn-sm.btn-outline-secondary((click)='clearFilters()')
                                 i.fas.fa-fw.fa-rotate-left
                                 span(translate) Clear
 
-                        .host-toolbar-right
-                            button.btn.btn-sm.btn-primary((click)='newProfile()')
-                                i.fas.fa-fw.fa-plus
-                                span(translate) New profile
+                        .host-toolbar-bottom
+                            .host-toolbar-filters
+                                .host-filter-toggle
+                                    checkbox([text]='"SSH only"|translate', [(ngModel)]='sshOnly')
+
+                                .host-filter-toggle
+                                    checkbox([text]='"Favorites"|translate', [(ngModel)]='favoritesOnly')
+
+                                select.form-control.environment-filter([(ngModel)]='environmentFilter')
+                                    option(value='') {{'All environments'|translate}}
+                                    option(*ngFor='let environment of getAvailableEnvironments()', [value]='environment') {{environment}}
+
+                            .host-toolbar-actions
+                                button.btn.btn-sm.btn-primary((click)='newProfile()')
+                                    i.fas.fa-fw.fa-plus
+                                    span(translate) New profile
 
                     .bulk-toolbar(*ngIf='selectedProfileIds.size > 0')
                         .bulk-info
@@ -115,8 +125,9 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                                 button.btn.btn-sm.btn-outline-primary((click)='bulkReplaceEnvironment()') {{'Apply environment'|translate}}
 
                     .host-list
-                        ng-container(*ngFor='let group of rootGroups')
-                            ng-container(*ngTemplateOutlet='hostGroup; context: {$implicit: group}')
+                        .host-grid-wrapper
+                            ng-container(*ngFor='let group of rootGroups')
+                                ng-container(*ngTemplateOutlet='hostGroup; context: {$implicit: group}')
 
             ng-template(#sidebarGroup let-group let-level='level')
                 ng-container(*ngIf='isSidebarGroupVisible(group)')
@@ -140,7 +151,7 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
 
             ng-template(#hostGroup let-group)
                 ng-container(*ngIf='isGroupVisible(group)')
-                    .host-group-card
+                    .host-group-section
                         .host-group-header((click)='toggleGroupCollapse(group)')
                             .host-group-title
                                 i.fas.fa-fw([class.fa-chevron-right]='group.collapsed', [class.fa-chevron-down]='!group.collapsed')
@@ -160,100 +171,99 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                                     i.fas.fa-trash-alt
 
                         ng-container(*ngIf='!group.collapsed')
-                            .host-item(
-                                *ngFor='let profile of getVisibleProfiles(group)',
-                                [class.selected]='isSelected(profile)'
-                            )
-                                .host-item-leading
-                                    checkbox(
-                                        *ngIf='!profile.isBuiltin',
-                                        [ngModel]='isSelected(profile)',
-                                        (ngModelChange)='setSelection(profile, $event)'
+                            table.host-table
+                                thead
+                                    tr
+                                        th.col-check
+                                        th.col-fav
+                                        th.col-system 系统
+                                        th.col-name 名称
+                                        th.col-address 地址
+                                        th.col-info 信息
+                                        th.col-env 环境
+                                        th.col-actions 操作
+                                tbody
+                                    tr.host-row(
+                                        *ngFor='let profile of getVisibleProfiles(group)',
+                                        [class.selected]='isSelected(profile)',
+                                        [class.is-builtin]='profile.isBuiltin'
                                     )
-                                    button.btn.btn-link.favorite-toggle(
-                                        *ngIf='!profile.isBuiltin',
-                                        (click)='toggleFavorite(profile); $event.stopPropagation()'
-                                    )
-                                        i.far.fa-star(*ngIf='!profile.favorite')
-                                        i.fas.fa-star.text-warning(*ngIf='profile.favorite')
-                                    profile-icon([icon]='profile.icon', [color]='profile.color')
-
-                                .host-card-content(
-                                    [class.clickable]='!profile.isBuiltin',
-                                    (click)='profile.isBuiltin ? null : editProfile(profile)'
-                                )
-                                    .host-title-row
-                                        .host-title {{profile.name}}
-                                        .host-title-badges
-                                            span.badge.text-bg-warning(*ngIf='isRecentProfile(profile)')
+                                        td.col-check
+                                            checkbox(
+                                                *ngIf='!profile.isBuiltin',
+                                                [ngModel]='isSelected(profile)',
+                                                (ngModelChange)='setSelection(profile, $event)'
+                                            )
+                                        td.col-fav
+                                            button.btn.btn-link.favorite-toggle(
+                                                *ngIf='!profile.isBuiltin',
+                                                (click)='toggleFavorite(profile); $event.stopPropagation()'
+                                            )
+                                                i.far.fa-star(*ngIf='!profile.favorite')
+                                                i.fas.fa-star.text-warning(*ngIf='profile.favorite')
+                                        td.col-system
+                                            profile-icon([icon]='profile.icon', [color]='profile.color')
+                                        td.col-name(
+                                            [class.clickable]='!profile.isBuiltin',
+                                            (click)='profile.isBuiltin ? null : editProfile(profile)'
+                                        )
+                                            span.host-name {{profile.name}}
+                                            span.badge.badge-recent(*ngIf='isRecentProfile(profile)')
                                                 i.fas.fa-clock.me-1
                                                 | Recent
+                                        td.col-address
+                                            span.host-address(*ngIf='getProfileConnectionInfo(profile) as info') {{info.host}}
+                                            button.btn.btn-link.btn-copy(
+                                                *ngIf='getProfileConnectionInfo(profile) as info',
+                                                (click)='$event.stopPropagation()',
+                                                title='Copy'
+                                            )
+                                                i.far.fa-copy
+                                        td.col-info
+                                            span.info-text(*ngIf='getProfileConnectionInfo(profile) as info')
+                                                span(*ngIf='info.user') {{info.user}}
+                                                span(*ngIf='info.port') :{{info.port}}
+                                        td.col-env
                                             span.badge(
                                                 *ngIf='profile.environment',
                                                 [class]='getEnvironmentBadgeClass(profile.environment)'
                                             ) {{profile.environment}}
-                                            span.badge(
-                                                *ngIf='getTypeLabel(profile)',
-                                                class='text-bg-{{getTypeColorClass(profile)}}'
-                                            ) {{getTypeLabel(profile)}}
-
-                                    .host-meta(*ngIf='getProfileConnectionInfo(profile) as info')
-                                        span.meta-pill(*ngIf='info.user')
-                                            i.fas.fa-user.fa-fw
-                                            span {{info.user}}
-                                        span.meta-pill(*ngIf='info.host')
-                                            i.fas.fa-globe.fa-fw
-                                            span {{info.host}}
-                                        span.meta-pill(*ngIf='info.port')
-                                            i.fas.fa-plug.fa-fw
-                                            span {{info.port}}
-
-                                    .host-description.text-muted(*ngIf='getProfileDescriptionDisplay(profile)') {{getProfileDescriptionDisplay(profile)}}
-                                    .host-remark(*ngIf='profile.remark') {{profile.remark}}
-                                    .host-tags(*ngIf='(profile.tags?.length ?? 0) > 0')
-                                        span.badge.text-bg-secondary(*ngFor='let tag of profile.tags') {{tag}}
-
-                                .host-item-actions
-                                    button.btn.btn-sm.btn-success.host-connect-btn(*ngIf='!profile.isTemplate', (click)='launchProfile(profile)')
-                                        i.fas.fa-fw.fa-plug.me-1
-                                        span(translate) Connect
-                                    button.btn.btn-sm.btn-outline-secondary.host-edit-btn(
-                                        *ngIf='!profile.isBuiltin',
-                                        (click)='editProfile(profile)'
-                                    )
-                                        i.fas.fa-fw.fa-pencil-alt.me-1
-                                        span 编辑
-                                    .hover-reveal(ngbDropdown, placement='bottom-right top-right auto')
-                                        button.btn.btn-sm.btn-link(ngbDropdownToggle)
-                                            i.fas.fa-fw.fa-ellipsis-vertical
-                                        div(ngbDropdownMenu)
-                                            button.dropdown-item(ngbDropdownItem, (click)='newProfile(profile)')
-                                                i.fas.fa-fw.fa-copy
-                                                span(translate) Duplicate
-                                            button.dropdown-item(
-                                                ngbDropdownItem,
-                                                *ngIf='profile.id && !isProfileBlacklisted(profile)',
-                                                (click)='blacklistProfile(profile)'
-                                            )
-                                                i.fas.fa-fw.fa-eye-slash
-                                                span(translate) Hide
-                                            button.dropdown-item(
-                                                ngbDropdownItem,
-                                                *ngIf='profile.id && isProfileBlacklisted(profile)',
-                                                (click)='unblacklistProfile(profile)'
-                                            )
-                                                i.fas.fa-fw.fa-eye
-                                                span(translate) Show
-                                            button.dropdown-item(
+                                        td.col-actions
+                                            button.btn.btn-sm.btn-success.host-connect-btn(*ngIf='!profile.isTemplate', (click)='launchProfile(profile)') 连接
+                                            button.btn.btn-sm.btn-link.host-edit-btn(
                                                 *ngIf='!profile.isBuiltin',
-                                                (click)='deleteProfile(profile)'
-                                            )
-                                                i.fas.fa-fw.fa-trash-alt
-                                                span(translate) Delete
+                                                (click)='editProfile(profile)'
+                                            ) 编辑
+                                            .hover-reveal(ngbDropdown, placement='bottom-right top-right auto')
+                                                button.btn.btn-sm.btn-link(ngbDropdownToggle) 更多
+                                                    i.fas.fa-fw.fa-ellipsis-vertical.ms-1
+                                                div(ngbDropdownMenu)
+                                                    button.dropdown-item(ngbDropdownItem, (click)='newProfile(profile)')
+                                                        i.fas.fa-fw.fa-copy
+                                                        span(translate) Duplicate
+                                                    button.dropdown-item(
+                                                        ngbDropdownItem,
+                                                        *ngIf='profile.id && !isProfileBlacklisted(profile)',
+                                                        (click)='blacklistProfile(profile)'
+                                                    )
+                                                        i.fas.fa-fw.fa-eye-slash
+                                                        span(translate) Hide
+                                                    button.dropdown-item(
+                                                        ngbDropdownItem,
+                                                        *ngIf='profile.id && isProfileBlacklisted(profile)',
+                                                        (click)='unblacklistProfile(profile)'
+                                                    )
+                                                        i.fas.fa-fw.fa-eye
+                                                        span(translate) Show
+                                                    button.dropdown-item(
+                                                        *ngIf='!profile.isBuiltin',
+                                                        (click)='deleteProfile(profile)'
+                                                    )
+                                                        i.fas.fa-fw.fa-trash-alt
+                                                        span(translate) Delete
 
                             ng-container(*ngFor='let child of group.children')
-                                .host-group-children
-                                    ng-container(*ngTemplateOutlet='hostGroup; context: {$implicit: child}')
+                                ng-container(*ngTemplateOutlet='hostGroup; context: {$implicit: child}')
 
     li(ngbNavItem)
         a(ngbNavLink, translate) Advanced
