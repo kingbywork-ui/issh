@@ -1,4 +1,4 @@
-import { Component, EventEmitter, HostBinding, Input, Output } from '@angular/core'
+import { AfterViewChecked, Component, ElementRef, EventEmitter, HostBinding, Input, Output, ViewChild } from '@angular/core'
 
 /** @hidden */
 @Component({
@@ -6,7 +6,7 @@ import { Component, EventEmitter, HostBinding, Input, Output } from '@angular/co
     templateUrl: './nl2CommandPanel.component.pug',
     styleUrls: ['./nl2CommandPanel.component.scss'],
 })
-export class NL2CommandPanelComponent {
+export class NL2CommandPanelComponent implements AfterViewChecked {
     @Input() visible = false
     @Input() loading = false
     @Input() inputText = ''
@@ -21,8 +21,24 @@ export class NL2CommandPanelComponent {
     @Output() insertOnly = new EventEmitter<void>()
     @Output() dismiss = new EventEmitter<void>()
 
+    @ViewChild('inputField') inputField?: ElementRef<HTMLInputElement>
+
     @HostBinding('class.visible') get isVisible () {
         return this.visible
+    }
+
+    private wasVisible = false
+
+    ngAfterViewChecked (): void {
+        if (this.visible && !this.wasVisible) {
+            this.wasVisible = true
+            setTimeout(() => {
+                this.inputField?.nativeElement.focus()
+            })
+        }
+        if (!this.visible) {
+            this.wasVisible = false
+        }
     }
 
     onInput (value: string): void {

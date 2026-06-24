@@ -6,13 +6,13 @@
 
     .input-row
         input.form-control.form-control-sm(
+            #inputField,
             type='text',
             [value]='inputText',
             (input)='onInput($event.target.value)',
             (keydown.enter)='convert.emit()',
             (keydown.esc)='dismiss.emit()',
-            [placeholder]='"Describe what you want to do..."|translate',
-            autofocus
+            [placeholder]='"Describe what you want to do..."|translate'
         )
         button.btn.btn-sm.btn-primary.ms-2(
             (click)='convert.emit()',

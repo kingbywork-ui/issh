@@ -120,13 +120,13 @@ export class TabLLMController {
         if (!this.showAutocomplete && !this.showNL2) {
             return false
         }
-        if (this.showNL2 && !this.nl2ResultCommand) {
-            return false
-        }
         if (event.key === 'Escape') {
             this.hideAutocomplete()
             this.hideNL2()
             event.preventDefault()
+            return true
+        }
+        if (this.showNL2) {
             return true
         }
         if (this.showAutocomplete) {
