@@ -23,6 +23,13 @@
     font-size: 0.75rem;
     opacity: 0.7;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    gap: 8px;
+}
+
+.ai-loading {
+    margin-left: auto;
+    font-size: 0.7rem;
+    opacity: 0.8;
 }
 
 .suggestion-list {
@@ -35,9 +42,38 @@
     cursor: pointer;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 
-    &:hover,
+    &:hover {
+        background: rgba(255, 255, 255, 0.06);
+    }
+
     &.selected {
         background: rgba(255, 255, 255, 0.08);
+        scroll-margin: 4px;
+    }
+
+    .suggestion-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .category-tag {
+        font-size: 0.65rem;
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-weight: 600;
+        text-transform: uppercase;
+        flex-shrink: 0;
+
+        &.history {
+            background: rgba(0, 150, 200, 0.3);
+            color: #4db8ff;
+        }
+
+        &.ai {
+            background: rgba(120, 60, 200, 0.3);
+            color: #c084fc;
+        }
     }
 
     .command {
@@ -50,6 +86,7 @@
         font-size: 0.75rem;
         opacity: 0.65;
         margin-top: 2px;
+        margin-left: 0;
     }
 }
 

@@ -6,12 +6,14 @@ import { AutocompleteSuggestion } from './api'
 import { LLMTerminalHostComponent } from './components/llmTerminalHost.component'
 import { LLMService } from './services/llm.service'
 import { TerminalContextService } from './services/terminalContext.service'
+import { HistoryCommandService } from './services/historyCommand.service'
 
 /** @hidden */
 export class TabLLMController {
     showAutocomplete = false
     showNL2 = false
     autocompleteLoading = false
+    aiLoading = false
     nl2Loading = false
     suggestions: AutocompleteSuggestion[] = []
     selectedIndex = 0
@@ -29,11 +31,14 @@ export class TabLLMController {
     private hostRef: ComponentRef<LLMTerminalHostComponent> | null = null
     private notifyChange: (() => void) | null = null
     private keyHandlerAttached = false
+    private lastAutocompletePartial = ''
+    private pendingFetchGeneration = 0
 
     constructor (
         private tab: BaseTerminalTabComponent<any>,
         private llm: LLMService,
         private context: TerminalContextService,
+        private history: HistoryCommandService,
         private config: ConfigService,
         private notifications: NotificationsService,
         private translate: TranslateService,
@@ -82,25 +87,39 @@ export class TabLLMController {
 
     start (): void {
         this.attachKeyHandler()
+        setTimeout(() => this.history.bootstrapFromTerminal(this.tab), 500)
         this.inputSubscription = this.tab.input$.subscribe(data => {
             this.handleInput(data)
         })
     }
 
     handleHotkey (hotkey: string): boolean {
-        if (!this.llm.isConfigured()) {
-            return false
-        }
         switch (hotkey) {
             case 'llm-autocomplete':
                 void this.triggerAutocomplete()
                 return true
             case 'llm-nl2command':
+                if (!this.llm.isConfigured()) {
+                    this.notifications.notice(this.translate.instant('Configure AI assistant in Settings first'))
+                    return false
+                }
                 this.openNL2()
                 return true
             case 'llm-accept-suggestion':
                 if (this.showAutocomplete && this.suggestions[this.selectedIndex]) {
                     this.acceptSuggestion(this.suggestions[this.selectedIndex])
+                    return true
+                }
+                return false
+            case 'llm-next-suggestion':
+                if (this.showAutocomplete) {
+                    this.moveSelection(1)
+                    return true
+                }
+                return false
+            case 'llm-prev-suggestion':
+                if (this.showAutocomplete) {
+                    this.moveSelection(-1)
                     return true
                 }
                 return false
@@ -120,6 +139,9 @@ export class TabLLMController {
         if (!this.showAutocomplete && !this.showNL2) {
             return false
         }
+        if (event.type !== 'keydown') {
+            return false
+        }
         if (event.key === 'Escape') {
             this.hideAutocomplete()
             this.hideNL2()
@@ -127,42 +149,20 @@ export class TabLLMController {
             return true
         }
         if (this.showNL2) {
-            return true
-        }
-        if (this.showAutocomplete) {
-            if (event.key === 'ArrowDown') {
-                this.moveSelection(1)
-                event.preventDefault()
-                return true
-            }
-            if (event.key === 'ArrowUp') {
-                this.moveSelection(-1)
-                event.preventDefault()
-                return true
-            }
-            if (event.key === 'Tab' || event.key === 'Enter') {
-                const suggestion = this.suggestions[this.selectedIndex]
-                if (suggestion) {
-                    this.acceptSuggestion(suggestion)
-                    event.preventDefault()
-                    return true
-                }
-            }
+            return false
         }
         return false
     }
 
     async triggerAutocomplete (): Promise<void> {
-        if (!this.llm.isConfigured()) {
-            this.notifications.notice(this.translate.instant('Configure AI assistant in Settings first'))
-            return
-        }
         await this.fetchAutocomplete(true)
     }
 
     hideAutocomplete (): void {
         this.showAutocomplete = false
         this.autocompleteLoading = false
+        this.aiLoading = false
+        this.pendingFetchGeneration++
         this.llm.cancelPending()
         this.refresh()
     }
@@ -245,8 +245,9 @@ export class TabLLMController {
     }
 
     acceptSuggestion (suggestion: AutocompleteSuggestion): void {
-        const partial = this.lineBuffer || this.context.getCurrentLine(this.tab)
+        const partial = this.getPartial()
         this.insertCommand(suggestion.command, false, partial)
+        this.history.addCommand(suggestion.command)
         this.hideAutocomplete()
         this.lineBuffer = suggestion.command
         this.refresh()
@@ -256,69 +257,171 @@ export class TabLLMController {
         if (!this.suggestions.length) {
             return
         }
-        this.selectedIndex = (this.selectedIndex + delta + this.suggestions.length) % this.suggestions.length
+        const next = this.selectedIndex + delta
+        this.selectedIndex = Math.max(0, Math.min(this.suggestions.length - 1, next))
         this.refresh()
     }
 
+    private preserveSelection (previousIndex: number, previousSuggestions: AutocompleteSuggestion[]): void {
+        if (!this.suggestions.length) {
+            this.selectedIndex = 0
+            return
+        }
+        const previous = previousIndex < previousSuggestions.length ? previousSuggestions[previousIndex] : null
+        if (previous) {
+            const sameIndex = this.suggestions.findIndex(
+                s => s.id === previous.id && s.command === previous.command,
+            )
+            if (sameIndex >= 0) {
+                this.selectedIndex = sameIndex
+                return
+            }
+        }
+        this.selectedIndex = Math.min(previousIndex, this.suggestions.length - 1)
+    }
+
+    private getPartial (): string {
+        const fromBuffer = this.lineBuffer.trim()
+        if (fromBuffer) {
+            return fromBuffer
+        }
+        return this.context.getPartialCommand(this.tab)
+    }
+
     private async fetchAutocomplete (force = false): Promise<void> {
-        const partial = this.lineBuffer || this.context.getCurrentLine(this.tab)
+        const partial = this.getPartial()
         if (!partial.trim() || partial.trim().length < 2) {
             this.hideAutocomplete()
+            this.lastAutocompletePartial = ''
             return
         }
         if (!force && !this.config.store.llm.autoCompleteOnType) {
             return
         }
+
+        const partialChanged = partial !== this.lastAutocompletePartial
+        this.lastAutocompletePartial = partial
+        const previousIndex = this.selectedIndex
+        const previousSuggestions = [...this.suggestions]
+        const fetchGeneration = ++this.pendingFetchGeneration
+
         this.updatePanelPosition()
         this.showAutocomplete = true
-        this.autocompleteLoading = true
+        this.aiLoading = this.llm.isConfigured()
+        this.autocompleteLoading = false
+        if (partialChanged) {
+            this.selectedIndex = 0
+        }
+
+        const historyResults = this.history.search(partial, 3)
+        const historySuggestions: AutocompleteSuggestion[] = historyResults.map((r, i) => ({
+            id: `history-${i}`,
+            command: r.command,
+            description: 'History',
+            category: 'history' as const,
+            confidence: Math.min(1, r.score / 200),
+        }))
+        this.suggestions = historySuggestions
+        if (!partialChanged) {
+            this.preserveSelection(previousIndex, previousSuggestions)
+        }
         this.refresh()
+
+        if (!this.llm.isConfigured()) {
+            if (!historySuggestions.length) {
+                this.showAutocomplete = false
+            }
+            return
+        }
 
         try {
             const ctx = await this.context.collectContext(this.tab)
             const recentOutput = this.llm.redactOutput(
                 this.context.getRecentOutput(this.tab, this.config.store.llm.maxContextLines ?? 20),
             )
-            const suggestions = await this.llm.getAutocompleteSuggestions({
+            const aiSuggestions = await this.llm.getAutocompleteSuggestions({
                 partialCommand: partial,
                 cwd: ctx.cwd,
                 shell: ctx.shell,
                 os: ctx.os,
                 recentOutput,
+                excludeCommands: historySuggestions.map(s => s.command),
             })
-            this.suggestions = suggestions
-            this.selectedIndex = 0
-            if (!suggestions.length && !force) {
+            if (fetchGeneration !== this.pendingFetchGeneration) {
+                return
+            }
+            const historySet = new Set(historySuggestions.map(s => s.command))
+            const deduped = aiSuggestions.filter(s => !historySet.has(s.command))
+            const indexBeforeMerge = this.selectedIndex
+            const suggestionsBeforeMerge = [...this.suggestions]
+            this.suggestions = [...historySuggestions, ...deduped]
+            if (partialChanged) {
+                this.selectedIndex = 0
+            } else {
+                this.preserveSelection(indexBeforeMerge, suggestionsBeforeMerge)
+            }
+            if (!this.suggestions.length && !force) {
                 this.showAutocomplete = false
             }
         } catch (e) {
+            if (fetchGeneration !== this.pendingFetchGeneration) {
+                return
+            }
             if (force) {
                 this.notifications.error(this.translate.instant('AI request failed: {error}', {
                     error: e instanceof Error ? e.message : String(e),
                 }))
             }
-            this.showAutocomplete = false
+            if (!historySuggestions.length) {
+                this.showAutocomplete = false
+            }
         } finally {
-            this.autocompleteLoading = false
-            this.refresh()
+            if (fetchGeneration === this.pendingFetchGeneration) {
+                this.aiLoading = false
+                this.refresh()
+            }
         }
     }
 
     private handleInput (data: Buffer): void {
         const text = data.toString('utf-8')
+
+        if (text.startsWith('\x1b')) {
+            this.lineBuffer = this.context.getPartialCommand(this.tab)
+            if (!this.lineBuffer) {
+                this.hideAutocomplete()
+            }
+            return
+        }
+
+        if (text === '\r' || text === '\n') {
+            if (this.lineBuffer.trim()) {
+                this.history.addCommand(this.lineBuffer.trim())
+            }
+            this.lineBuffer = ''
+            this.hideAutocomplete()
+            return
+        }
+
         for (const char of text) {
             if (char === '\r' || char === '\n') {
+                if (this.lineBuffer.trim()) {
+                    this.history.addCommand(this.lineBuffer.trim())
+                }
                 this.lineBuffer = ''
                 this.hideAutocomplete()
                 continue
             }
             if (char === '\x7f' || char === '\b') {
                 this.lineBuffer = this.lineBuffer.slice(0, -1)
+            } else if (char === '\x1b') {
+                this.lineBuffer = this.context.getPartialCommand(this.tab)
+                return
             } else if (char >= ' ' || char === '\t') {
                 this.lineBuffer += char
             }
         }
-        if (this.config.store.llm.enabled && this.config.store.llm.autoCompleteOnType && this.llm.isConfigured()) {
+        if (this.config.store.llm.enabled && this.config.store.llm.autoCompleteOnType) {
             this.debounceSubject.next()
         }
     }

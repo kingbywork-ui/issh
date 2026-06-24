@@ -11,6 +11,7 @@ export class AutocompletePanelComponent {
     @Input() suggestions: AutocompleteSuggestion[] = []
     @Input() visible = false
     @Input() loading = false
+    @Input() aiLoading = false
     @Input() position: { x: number, y: number } = { x: 0, y: 0 }
     @Input() selectedIndex = 0
 
@@ -18,15 +19,15 @@ export class AutocompletePanelComponent {
     @Output() dismiss = new EventEmitter<void>()
     @Output() selectedIndexChange = new EventEmitter<number>()
 
-    @HostBinding('class.visible') get isVisible () {
+    @HostBinding('class.visible') get isVisible (): boolean {
         return this.visible
     }
 
-    @HostBinding('style.left.px') get left () {
+    @HostBinding('style.left.px') get left (): number {
         return this.position.x
     }
 
-    @HostBinding('style.top.px') get top () {
+    @HostBinding('style.top.px') get top (): number {
         return this.position.y
     }
 
@@ -38,7 +39,10 @@ export class AutocompletePanelComponent {
         if (!this.suggestions.length) {
             return
         }
-        const next = (this.selectedIndex + delta + this.suggestions.length) % this.suggestions.length
+        const next = Math.max(0, Math.min(this.suggestions.length - 1, this.selectedIndex + delta))
+        if (next === this.selectedIndex) {
+            return
+        }
         this.selectedIndex = next
         this.selectedIndexChange.emit(next)
     }

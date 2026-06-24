@@ -46,6 +46,67 @@ Pre-built Windows artifacts (located in `dist/` after building):
 - Enhanced host management interface with card-based layout
 - Improved profile settings tab with streamlined configuration flow
 
+### AI Assistant (tabby-llm)
+
+LLM-powered command autocomplete and natural language to command, built directly into the terminal.
+
+#### Features
+
+- **Smart Autocomplete**: As you type, suggests commands from both local history and AI. History matches appear instantly, AI suggestions stream in via OpenAI-compatible API.
+- **Natural Language to Command**: Describe what you want in plain language (e.g. "list all files larger than 100MB"), get an executable command with explanation.
+- **Dangerous Command Guard**: Automatically detects potentially destructive commands (`rm -rf`, `dd`, `mkfs`, `chmod 777`, `curl | sh`, etc.) and shows a warning dialog before execution.
+- **Sensitive Data Redaction**: API keys, tokens, passwords, and private keys in terminal output are redacted locally before being sent to the LLM.
+- **Command History with Fuzzy Search**: Tracks up to 500 commands with usage frequency and recency scoring. Persists to `llm-command-history.json` across sessions.
+- **Suggestion Cache**: Autocomplete results cached for 5 minutes to reduce API calls.
+
+#### Configuration
+
+Open **Settings → AI assistant** to configure:
+
+| Setting | Default | Description |
+|---|---|---|
+| Enable AI features | Off | Master toggle for all AI functionality |
+| API base URL | `https://api.openai.com/v1` | Any OpenAI-compatible endpoint |
+| API key | — | Stored locally in `config.yaml` |
+| Model | `gpt-4o-mini` | Model name for chat completions |
+| Autocomplete debounce (ms) | `300` | Delay before triggering autocomplete while typing |
+| Autocomplete while typing | On | Auto-trigger suggestions as you type |
+| Send terminal context to API | On | Send recent terminal output for better context (sensitive patterns redacted) |
+| Max context lines | `20` | Number of recent terminal lines included in AI requests |
+| Execute on confirm | Off | Auto-run commands from NL-to-Command without pressing Enter |
+
+Click **Test connection** after entering your API key to verify connectivity.
+
+#### Compatible API Providers
+
+Any provider that implements the OpenAI Chat Completions API (`/chat/completions`):
+
+- **OpenAI** — `https://api.openai.com/v1`
+- **Azure OpenAI** — `https://<resource>.openai.azure.com/openai/deployments/<deployment>/v1`
+- **Ollama** — `http://localhost:11434/v1`
+- **LM Studio** — `http://localhost:1234/v1`
+- **DeepSeek** — `https://api.deepseek.com/v1`
+- **Moonshot (Kimi)** — `https://api.moonshot.cn/v1`
+
+#### Hotkeys
+
+| Hotkey | Action |
+|---|---|
+| `Ctrl+Shift+Space` | Trigger autocomplete manually |
+| `Ctrl+Shift+N` | Open natural language to command panel |
+| `Ctrl+Y` | Accept selected suggestion |
+| `Ctrl+N` | Next suggestion |
+| `Ctrl+U` | Previous suggestion |
+| `Esc` | Dismiss AI panel |
+
+All hotkeys are customizable in **Settings → Hotkeys**.
+
+#### How It Works
+
+1. **Autocomplete**: When enabled and typing, the plugin reads the current partial command from the xterm.js buffer, collects terminal context (OS, shell, working directory, recent output), and sends a request to the LLM. History matches are shown immediately; AI suggestions stream in and are merged with deduplication.
+2. **NL to Command**: Opens a floating panel where you type a natural language request. The LLM returns a single command with explanation. Dangerous commands trigger a confirmation dialog. You can choose to run the command directly or insert it into the terminal for editing.
+3. **Privacy**: When "Send terminal context to API" is enabled, recent terminal output is included to improve suggestion quality. Sensitive patterns (API keys, tokens, passwords, private keys) are redacted locally before sending. Disable this option to send only the partial command with no context.
+
 ## Portable
 
 Tabby will run as a portable app on Windows if you create a `data` folder in the same location where `Tabby.exe` lives.
@@ -97,6 +158,7 @@ set TABBY_SKIP_PREPACKAGE=1&&node scripts/build-windows.mjs
 - **Redesigned start page**: Quick-connect shortcuts with improved layout
 - **Enhanced host manager**: Card-based host management with streamlined profile configuration
 - **Private key fix**: Resolved RSA-SHA2 private key authentication failures
+- **AI Assistant (tabby-llm)**: LLM-powered command autocomplete, natural language to command, dangerous command detection, and sensitive data redaction
 
 ## Acknowledgements
 

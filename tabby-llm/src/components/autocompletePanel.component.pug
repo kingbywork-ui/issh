@@ -3,22 +3,34 @@
     (mousedown)='$event.preventDefault()'
 )
     .panel-header
-        span(translate) AI suggestions
+        span(translate) Suggestions
+        .ai-loading(*ngIf='aiLoading')
+            i.fas.fa-circle-notch.fa-spin.me-1
+            span(translate) AI...
         button.btn.btn-sm.btn-link((click)='dismiss.emit()')
             i.fas.fa-times
 
-    .loading-row(*ngIf='loading')
-        i.fas.fa-circle-notch.fa-spin.me-2
-        span(translate) Thinking...
-
-    .suggestion-list(*ngIf='!loading && suggestions.length')
+    .suggestion-list(*ngIf='suggestions.length')
         .suggestion-item(
             *ngFor='let item of suggestions; let i = index',
             [class.selected]='i === selectedIndex',
             (click)='select(item)'
         )
-            .command {{ item.command }}
-            .description(*ngIf='item.description') {{ item.description }}
+            .suggestion-row
+                span.category-tag(
+                    *ngIf='item.category === "history"',
+                    class='history'
+                ) History
+                span.category-tag(
+                    *ngIf='item.category === "ai"',
+                    class='ai'
+                ) AI
+                .command {{ item.command }}
+            .description(*ngIf='item.description && item.category !== "history"') {{ item.description }}
 
-    .empty-row(*ngIf='!loading && !suggestions.length')
+    .loading-row(*ngIf='aiLoading && !suggestions.length')
+        i.fas.fa-circle-notch.fa-spin.me-2
+        span(translate) Thinking...
+
+    .empty-row(*ngIf='!aiLoading && !suggestions.length')
         span(translate) No suggestions

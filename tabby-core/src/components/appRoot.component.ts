@@ -167,6 +167,10 @@ export class AppRootComponent {
             this.app.emitTabDragEnded()
         })
 
+        this.app.tabsChanged$.subscribe(() => {
+            this.noTabs = app.tabs.length === 0 && !app.showStartPage
+        })
+
         platform.fileTransferStarted$.subscribe(transfer => {
             this.activeTransfers.push(transfer)
             this.activeTransfersDropdown.open()

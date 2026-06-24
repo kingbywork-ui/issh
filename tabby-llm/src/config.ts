@@ -17,7 +17,9 @@ export class LLMConfigProvider extends ConfigProvider {
         hotkeys: {
             'llm-autocomplete': ['Ctrl-Shift-Space'],
             'llm-nl2command': ['Ctrl-Shift-N'],
-            'llm-accept-suggestion': [],
+            'llm-accept-suggestion': ['Ctrl-Y'],
+            'llm-next-suggestion': ['Ctrl-N'],
+            'llm-prev-suggestion': ['Ctrl-U'],
             'llm-dismiss': [],
         },
     }

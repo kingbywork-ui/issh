@@ -46,6 +46,17 @@ class CompletionObserver {
 @Injectable({ providedIn: 'root' })
 export class AppService {
     tabs: BaseTabComponent[] = []
+    showStartPage = false
+
+    showHomePage (): void {
+        this.showStartPage = true
+        this.emitTabsChanged()
+    }
+
+    hideHomePage (): void {
+        this.showStartPage = false
+        this.emitTabsChanged()
+    }
 
     get activeTab (): BaseTabComponent|null { return this._activeTab ?? null }
 
@@ -218,6 +229,10 @@ export class AppService {
     }
 
     selectTab (tab: BaseTabComponent|null): void {
+        if (this.showStartPage) {
+            this.showStartPage = false
+            this.emitTabsChanged()
+        }
         if (tab && this._activeTab === tab) {
             this._activeTab.emitFocused()
             return

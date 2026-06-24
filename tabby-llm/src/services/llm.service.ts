@@ -108,6 +108,9 @@ export class LLMService {
         if (this.config.store.llm.sendContextToCloud && request.recentOutput.length) {
             parts.push(`Recent terminal output:\n${request.recentOutput.slice(-10).join('\n')}`)
         }
+        if (request.excludeCommands.length) {
+            parts.push(`Commands to exclude (already shown from history):\n${request.excludeCommands.map(c => `- ${c}`).join('\n')}`)
+        }
         parts.push(`Partial command: ${request.partialCommand}`)
         return parts.join('\n')
     }
@@ -178,26 +181,9 @@ export class LLMService {
                 buffer += decoder.decode(value, { stream: true })
                 const lines = buffer.split('\n')
                 buffer = lines.pop() ?? ''
-                for (const line of lines) {
-                    const trimmed = line.trim()
-                    if (!trimmed.startsWith('data:')) {
-                        continue
-                    }
-                    const payload = trimmed.substring(5).trim()
-                    if (payload === '[DONE]') {
-                        continue
-                    }
-                    try {
-                        const chunk = JSON.parse(payload)
-                        const delta = chunk.choices?.[0]?.delta?.content
-                        if (delta) {
-                            content += delta
-                        }
-                    } catch {
-                        // ignore malformed chunks
-                    }
-                }
+                content += this.parseStreamLines(lines)
             }
+            content += this.parseStreamLines([buffer])
 
             return content.trim()
         } catch (error) {
@@ -239,7 +225,7 @@ export class LLMService {
             return response.data.choices[0]?.message?.content?.trim() ?? ''
         } catch (error) {
             if (axios.isCancel(error)) {
-                throw error
+                throw new Error('Request cancelled')
             }
             const axiosError = error as AxiosError
             const detail = (axiosError.response?.data as any)?.error?.message ?? axiosError.message
@@ -285,7 +271,7 @@ export class LLMService {
     }
 
     private extractJSON (content: string): string {
-        const fence = content.match(/```(?:json)?\s*([\s\S]*?)```/)
+        const fence = /```(?:json)?\s*([\s\S]*?)```/.exec(content)
         if (fence) {
             return fence[1].trim()
         }
@@ -304,5 +290,29 @@ export class LLMService {
             }
         }
         return content.trim()
+    }
+
+    private parseStreamLines (lines: string[]): string {
+        let content = ''
+        for (const line of lines) {
+            const trimmed = line.trim()
+            if (!trimmed.startsWith('data:')) {
+                continue
+            }
+            const payload = trimmed.substring(5).trim()
+            if (payload === '[DONE]') {
+                continue
+            }
+            try {
+                const chunk = JSON.parse(payload)
+                const delta = chunk.choices?.[0]?.delta?.content
+                if (delta) {
+                    content += delta
+                }
+            } catch {
+                // ignore malformed chunks
+            }
+        }
+        return content
     }
 }

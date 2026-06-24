@@ -2,7 +2,7 @@ export interface AutocompleteSuggestion {
     id: string
     command: string
     description: string
-    category: 'ai'
+    category: 'history' | 'ai'
     confidence?: number
 }
 
@@ -12,6 +12,7 @@ export interface AutocompleteRequest {
     shell: string
     os: string
     recentOutput: string[]
+    excludeCommands: string[]
 }
 
 export interface NL2CommandRequest {

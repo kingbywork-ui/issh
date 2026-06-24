@@ -1,5 +1,4 @@
 import { Injectable } from '@angular/core'
-import { Terminal } from '@xterm/xterm'
 import { ConfigService } from 'tabby-core'
 import { BaseTerminalTabComponent, XTermFrontend } from 'tabby-terminal'
 
@@ -7,6 +6,7 @@ import { BaseTerminalTabComponent, XTermFrontend } from 'tabby-terminal'
 @Injectable({ providedIn: 'root' })
 export class TerminalContextService {
     constructor (private config: ConfigService) {}
+
     async collectContext (tab: BaseTerminalTabComponent<any>): Promise<{
         cwd: string | null
         shell: string
@@ -17,13 +17,18 @@ export class TerminalContextService {
         const cwd = await tab.session?.getWorkingDirectory() ?? null
         const shell = this.detectShell(tab)
         const os = process.platform
-        const partialCommand = this.getCurrentLine(tab)
+        const partialCommand = this.getPartialCommand(tab)
         const recentOutput = this.getRecentOutput(tab, this.config.store.llm?.maxContextLines ?? 20)
 
         return { cwd, shell, os, partialCommand, recentOutput }
     }
 
     getCurrentLine (tab: BaseTerminalTabComponent<any>, lineBuffer?: string): string {
+        return this.getPartialCommand(tab, lineBuffer)
+    }
+
+    /** Command text on the current line, with shell prompt stripped */
+    getPartialCommand (tab: BaseTerminalTabComponent<any>, lineBuffer?: string): string {
         if (lineBuffer !== undefined && lineBuffer.length > 0) {
             return lineBuffer
         }
@@ -31,7 +36,37 @@ export class TerminalContextService {
         if (!xterm) {
             return ''
         }
-        return this.readLineFromBuffer(xterm)
+        return this.readInputFromBuffer(xterm)
+    }
+
+    stripPrompt (line: string): string {
+        const trimmed = line.trimEnd()
+        if (!trimmed) {
+            return ''
+        }
+
+        // PowerShell: PS C:\path> command
+        const psMatch = /^PS(?: [^>]+)?>\s*(.*)$/i.exec(trimmed)
+        if (psMatch) {
+            return psMatch[1]
+        }
+
+        // Find the last common prompt marker and take input after it
+        const markers = ['$ ', '# ', '% ', '> ']
+        let bestIndex = -1
+        let bestLength = 0
+        for (const marker of markers) {
+            const idx = trimmed.lastIndexOf(marker)
+            if (idx > bestIndex) {
+                bestIndex = idx
+                bestLength = marker.length
+            }
+        }
+        if (bestIndex >= 0) {
+            return trimmed.substring(bestIndex + bestLength)
+        }
+
+        return trimmed
     }
 
     getRecentOutput (tab: BaseTerminalTabComponent<any>, maxLines: number): string[] {
@@ -72,28 +107,29 @@ export class TerminalContextService {
         return { x, y }
     }
 
-    private getXterm (tab: BaseTerminalTabComponent<any>): Terminal | null {
+    private getXterm (tab: BaseTerminalTabComponent<any>): XTermFrontend['xterm'] | null {
         if (!(tab.frontend instanceof XTermFrontend)) {
             return null
         }
         return tab.frontend.xterm
     }
 
-    private readLineFromBuffer (xterm: Terminal): string {
+    private readInputFromBuffer (xterm: XTermFrontend['xterm']): string {
         const buffer = xterm.buffer.active
         const line = buffer.getLine(buffer.cursorY + buffer.viewportY)
         if (!line) {
             return ''
         }
         let text = ''
-        for (let i = 0; i < line.length; i++) {
+        const endCol = Math.min(buffer.cursorX + 1, line.length)
+        for (let i = 0; i < endCol; i++) {
             text += line.getCell(i)?.getChars() ?? ''
         }
-        return text.trimEnd()
+        return this.stripPrompt(text)
     }
 
     private detectShell (tab: BaseTerminalTabComponent<any>): string {
-        const profile = tab.profile as any
+        const profile = tab.profile
         if (profile?.type === 'ssh') {
             return profile.options?.runCommand ? 'custom' : 'bash'
         }

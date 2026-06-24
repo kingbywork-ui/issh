@@ -9,7 +9,7 @@ import { TabLLMController } from '../tabLLMController'
     styleUrls: ['./llmTerminalHost.component.scss'],
 })
 export class LLMTerminalHostComponent implements OnDestroy {
-    @Input() controller: TabLLMController
+    @Input() controller?: TabLLMController
 
     constructor (private cdr: ChangeDetectorRef) {}
 
@@ -31,15 +31,11 @@ export class LLMTerminalHostComponent implements OnDestroy {
     }
 
     onSelectedIndexChange (index: number): void {
-        if (this.controller) {
-            this.controller.selectedIndex = index
-        }
+        this.controller!.selectedIndex = index
     }
 
     onNL2Input (text: string): void {
-        if (this.controller) {
-            this.controller.nl2Input = text
-        }
+        this.controller!.nl2Input = text
     }
 
     onNL2Convert (): void {

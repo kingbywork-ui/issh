@@ -1,7 +1,7 @@
 autocomplete-panel(
     [visible]='controller?.showAutocomplete',
     [suggestions]='controller?.suggestions ?? []',
-    [loading]='controller?.autocompleteLoading',
+    [aiLoading]='controller?.aiLoading',
     [position]='controller?.panelPosition ?? {x:0,y:0}',
     [selectedIndex]='controller?.selectedIndex ?? 0',
     (selectSuggestion)='onSelectSuggestion($event)',

@@ -15,7 +15,15 @@ export class LLMHotkeyProvider extends HotkeyProvider {
         },
         {
             id: 'llm-accept-suggestion',
-            name: this.translate.instant('Accept AI suggestion'),
+            name: this.translate.instant('Accept AI suggestion (Ctrl+Y)'),
+        },
+        {
+            id: 'llm-next-suggestion',
+            name: this.translate.instant('Next suggestion (Ctrl+N)'),
+        },
+        {
+            id: 'llm-prev-suggestion',
+            name: this.translate.instant('Previous suggestion (Ctrl+U)'),
         },
         {
             id: 'llm-dismiss',

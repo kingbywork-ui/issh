@@ -23,7 +23,7 @@ export class NL2CommandPanelComponent implements AfterViewChecked {
 
     @ViewChild('inputField') inputField?: ElementRef<HTMLInputElement>
 
-    @HostBinding('class.visible') get isVisible () {
+    @HostBinding('class.visible') get isVisible (): boolean {
         return this.visible
     }
 

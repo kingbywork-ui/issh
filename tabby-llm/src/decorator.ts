@@ -4,6 +4,7 @@ import { BaseTerminalTabComponent, TerminalDecorator, XTermFrontend } from 'tabb
 import { TabLLMController } from './tabLLMController'
 import { LLMService } from './services/llm.service'
 import { TerminalContextService } from './services/terminalContext.service'
+import { HistoryCommandService } from './services/historyCommand.service'
 
 /** @hidden */
 @Injectable()
@@ -13,6 +14,7 @@ export class LLMDecorator extends TerminalDecorator {
     constructor (
         private llm: LLMService,
         private context: TerminalContextService,
+        private history: HistoryCommandService,
         private config: ConfigService,
         private hotkeys: HotkeysService,
         private notifications: NotificationsService,
@@ -42,6 +44,7 @@ export class LLMDecorator extends TerminalDecorator {
                 tab,
                 this.llm,
                 this.context,
+                this.history,
                 this.config,
                 this.notifications,
                 this.translate,

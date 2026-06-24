@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "teamName": "tabby-llm-integration",
+  "description": "在tabby中对接大模型，实现自动补全命令和白话描述命令功能",
+  "createdAt": 1782205524590,
+  "updatedAt": 1782210357960,
+  "entries": [
+    {
+      "taskId": "cf4ylqLT",
+      "subject": "产品经理：制定大模型集成产品方案",
+      "description": "分析tabby项目结构和大模型集成需求，制定整体产品方案。需要：1)了解tabby当前架构；2)明确大模型集成目标（自动补全命令、白话描述命令）；3)梳理用户需求和使用场景；4)输出产品需求文档(PRD)",
+      "owner": null,
+      "status": "completed",
+      "reportPath": "D:\\vibecoding\\ssh\\new-ssh\\.psacowork\\team-memory\\tabby-llm-integration-ZF1NYIRkEZ1W\\reports\\task-cf4ylqLT-teammate.md",
+      "summary": "任务完成报告：Tabby 大模型集成产品需求文档(PRD) 已完成工作",
+      "highlights": [
+        "任务完成报告：Tabby 大模型集成产品需求文档(PRD)",
+        "已完成工作",
+        "阅读并分析团队已有成果**",
+        "前端交互方案 (`frontend_design.md`)：Bob 已完成 Angular 15 + xterm.js 的 UI/UX 设计，包含 AutocompletePanel、NL2CommandPanel、AIInputBar 三个核心组件"
+      ],
+      "tags": [
+        "产品经理",
+        "制定大模型集成产品方案",
+        "分析",
+        "tabby",
+        "项目结构和大模型集成需求",
+        "制定整体产品方案",
+        "需要",
+        "了解",
+        "当前架构",
+        "明确大模型集成目标",
+        "自动补全命令",
+        "白话描述命令"
+      ],
+      "excerpt": "任务完成报告：Tabby 大模型集成产品需求文档(PRD) 已完成工作 阅读并分析团队已有成果** 前端交互方案 (`frontend_design.md`)：Bob 已完成 Angular 15 + xterm.js 的 UI/UX 设计，包含 AutocompletePanel、NL2CommandPanel、AIInputBar 三个核心组件 后端对接方案 (`backend_design.md`)：已完成分层架构、API 设计、模型选型、性能优化、安全隐私策略 综合分析报告：了解当前进度和待确认问题",
+      "completedAt": 1782210357947,
+      "updatedAt": 1782210357947
+    },
+    {
+      "taskId": "JjR76HJP",
+      "subject": "后端工程师：设计后端大模型对接方案",
+      "description": "分析tabby后端架构，设计大模型API对接方案。需要：1)了解tabby后端技术栈；2)分析命令解析和执行流程；3)设计大模型API调用、命令补全生成、白话描述转换的后端逻辑；4)输出后端技术方案文档",
+      "owner": null,
+      "status": "completed",
+      "reportPath": "D:\\vibecoding\\ssh\\new-ssh\\.psacowork\\team-memory\\tabby-llm-integration-ZF1NYIRkEZ1W\\reports\\task-JjR76HJP-teammate.md",
+      "summary": "后端大模型对接方案 - 完成报告 完成工作",
+      "highlights": [
+        "后端大模型对接方案 - 完成报告",
+        "完成工作",
+        "已成功设计并输出完整的 Tabby 终端模拟器大模型集成后端技术方案，文档路径：",
+        "`D:\\vibecoding\\ssh\\new-ssh\\.psacowork\\team-memory\\tabby-llm-integration-ZF1NYIRkEZ1W\\reports\\backend_design.md`"
+      ],
+      "tags": [
+        "后端工程师",
+        "设计后端大模型对接方案",
+        "分析",
+        "tabby",
+        "后端架构",
+        "设计大模型",
+        "api",
+        "对接方案",
+        "需要",
+        "了解",
+        "后端技术栈",
+        "分析命令解析和执行流程"
+      ],
+      "excerpt": "后端大模型对接方案 - 完成报告 完成工作 已成功设计并输出完整的 Tabby 终端模拟器大模型集成后端技术方案，文档路径： `D:\\vibecoding\\ssh\\new-ssh\\.psacowork\\team-memory\\tabby-llm-integration-ZF1NYIRkEZ1W\\reports\\backend_design.md` 文档内容概览 文档共约 1800 行，包含以下 6 大核心模块：",
+      "completedAt": 1782210058904,
+      "updatedAt": 1782210058904
+    },
+    {
+      "taskId": "Xa32Ec-G",
+      "subject": "前端工程师：设计前端交互方案",
+      "description": "分析tabby前端架构，设计大模型集成的前端交互方案。需要：1)了解tabby前端技术栈和UI框架；2)分析命令输入界面和展示方式；3)设计自动补全UI交互和白话描述的展示方式；4)输出前端技术方案文档",
+      "owner": "Bob 前端工程师",
+      "status": "completed",
+      "reportPath": "D:\\vibecoding\\ssh\\new-ssh\\.psacowork\\team-memory\\tabby-llm-integration-ZF1NYIRkEZ1W\\reports\\task-Xa32Ec-G-Bob-前端工程师.md",
+      "summary": "前端交互方案设计完成 已完成工作",
+      "highlights": [
+        "前端交互方案设计完成",
+        "已完成工作",
+        "项目架构调研**",
+        "分析了 tabby 项目的整体结构，确认其为 monorepo 架构"
+      ],
+      "tags": [
+        "前端工程师",
+        "设计前端交互方案",
+        "分析",
+        "tabby",
+        "前端架构",
+        "设计大模型集成的前端交互方案",
+        "需要",
+        "了解",
+        "前端技术栈和",
+        "ui",
+        "框架",
+        "分析命令输入界面和展示方式"
+      ],
+      "excerpt": "前端交互方案设计完成 已完成工作 项目架构调研** 分析了 tabby 项目的整体结构，确认其为 monorepo 架构 确认了前端技术栈：Angular 15 + TypeScript 4.9 + ng-bootstrap 14 + xterm.js 深入分析了 tabby-core、tabby-terminal、tabby-settings 等核心模块",
+      "completedAt": 1782206048248,
+      "updatedAt": 1782206048248
+    }
+  ]
+}
