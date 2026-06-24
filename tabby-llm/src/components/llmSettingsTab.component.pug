@@ -1,0 +1,104 @@
+h3.mb-3(translate) AI assistant
+
+.alert.alert-info
+    span(translate) Connect an OpenAI-compatible API to enable command autocomplete and natural language to command. Your API key is stored locally in config.yaml.
+
+.form-line
+    .header
+        .title(translate) Enable AI features
+    toggle(
+        [(ngModel)]='config.store.llm.enabled',
+        (ngModelChange)='config.save()'
+    )
+
+ng-container(*ngIf='config.store.llm.enabled')
+    .form-line
+        .header
+            .title(translate) API base URL
+            .description(translate) OpenAI-compatible endpoint, e.g. https://api.openai.com/v1
+        input.form-control(
+            type='text',
+            [(ngModel)]='config.store.llm.baseUrl',
+            (keydown.enter)='saveAndTest()'
+        )
+
+    .form-line
+        .header
+            .title(translate) API key
+        .input-group
+            input.form-control(
+                type='password',
+                [(ngModel)]='config.store.llm.apiKey',
+                (keydown.enter)='saveAndTest()'
+            )
+            button.btn.btn-secondary(
+                (click)='saveAndTest()',
+                [disabled]='testing'
+            )
+                i.fas.fa-circle-notch.fa-spin(*ngIf='testing')
+                span(*ngIf='!testing', translate) Test connection
+            .input-group-text(*ngIf='config.store.llm.apiKey && !testing')
+                i.fas.fa-fw.fa-check.text-success(*ngIf='connectionSuccessful')
+                i.fas.fa-fw.fa-exclamation-triangle.text-danger(*ngIf='connectionSuccessful === false')
+
+    .alert.alert-danger(*ngIf='connectionSuccessful === false')
+        i.fas.fa-exclamation-triangle.me-2
+        span {{ connectionError }}
+
+    .form-line
+        .header
+            .title(translate) Model
+        input.form-control(
+            type='text',
+            [(ngModel)]='config.store.llm.model',
+            (keydown.enter)='config.save()'
+        )
+
+    .form-line
+        .header
+            .title(translate) Autocomplete debounce (ms)
+        input.form-control(
+            type='number',
+            min='100',
+            max='2000',
+            [(ngModel)]='config.store.llm.debounceMs',
+            (keydown.enter)='config.save()'
+        )
+
+    .form-line
+        .header
+            .title(translate) Send terminal context to API
+            .description(translate) When enabled, recent terminal output is sent to help the model. Sensitive patterns are redacted locally.
+        toggle(
+            [(ngModel)]='config.store.llm.sendContextToCloud',
+            (ngModelChange)='config.save()'
+        )
+
+    .form-line
+        .header
+            .title(translate) Autocomplete while typing
+        toggle(
+            [(ngModel)]='config.store.llm.autoCompleteOnType',
+            (ngModelChange)='config.save()'
+        )
+
+    .form-line
+        .header
+            .title(translate) Max context lines
+            .description(translate) Number of recent terminal lines included in AI requests
+        input.form-control(
+            type='number',
+            min='0',
+            max='100',
+            [(ngModel)]='config.store.llm.maxContextLines',
+            (keydown.enter)='config.save()'
+        )
+
+    .form-line
+        .header
+            .title(translate) Execute on confirm (NL to command)
+            .description(translate) When off, confirmed commands are inserted without pressing Enter
+        toggle(
+            [(ngModel)]='config.store.llm.executeOnConfirm',
+            (ngModelChange)='config.save()'
+        )

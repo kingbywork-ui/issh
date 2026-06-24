@@ -1,0 +1,24 @@
+autocomplete-panel(
+    [visible]='controller?.showAutocomplete',
+    [suggestions]='controller?.suggestions ?? []',
+    [loading]='controller?.autocompleteLoading',
+    [position]='controller?.panelPosition ?? {x:0,y:0}',
+    [selectedIndex]='controller?.selectedIndex ?? 0',
+    (selectSuggestion)='onSelectSuggestion($event)',
+    (dismiss)='onAutocompleteDismiss()',
+    (selectedIndexChange)='onSelectedIndexChange($event)'
+)
+nl2-command-panel(
+    [visible]='controller?.showNL2',
+    [loading]='controller?.nl2Loading',
+    [inputText]='controller?.nl2Input ?? ""',
+    [resultCommand]='controller?.nl2ResultCommand ?? ""',
+    [resultExplanation]='controller?.nl2ResultExplanation ?? ""',
+    [dangerous]='controller?.nl2Dangerous',
+    [dangerReason]='controller?.nl2DangerReason ?? ""',
+    (inputTextChange)='onNL2Input($event)',
+    (convert)='onNL2Convert()',
+    (confirm)='onNL2Confirm()',
+    (insertOnly)='onNL2Insert()',
+    (dismiss)='onNL2Dismiss()'
+)

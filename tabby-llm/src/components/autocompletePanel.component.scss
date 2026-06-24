@@ -1,0 +1,61 @@
+:host {
+    position: absolute;
+    z-index: 10;
+    min-width: 280px;
+    max-width: min(600px, 90vw);
+    background: rgba(20, 20, 20, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    display: none;
+    pointer-events: auto;
+
+    &.visible {
+        display: block;
+    }
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    font-size: 0.75rem;
+    opacity: 0.7;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.suggestion-list {
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.suggestion-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+
+    &:hover,
+    &.selected {
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    .command {
+        font-family: monospace;
+        font-size: 0.85rem;
+        word-break: break-all;
+    }
+
+    .description {
+        font-size: 0.75rem;
+        opacity: 0.65;
+        margin-top: 2px;
+    }
+}
+
+.loading-row,
+.empty-row {
+    padding: 12px;
+    font-size: 0.8rem;
+    opacity: 0.7;
+}

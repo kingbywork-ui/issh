@@ -36,6 +36,7 @@ export const builtinPlugins = [
     'tabby-electron',
     'tabby-linkifier',
     'tabby-auto-sudo-password',
+    'tabby-llm',
 ]
 
 export const packagesWithDocs = [

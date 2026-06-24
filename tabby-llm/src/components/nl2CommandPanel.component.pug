@@ -1,0 +1,35 @@
+.nl2-panel(*ngIf='visible', (mousedown)='$event.stopPropagation()')
+    .panel-header
+        span(translate) Natural language to command
+        button.btn.btn-sm.btn-link((click)='dismiss.emit()')
+            i.fas.fa-times
+
+    .input-row
+        input.form-control.form-control-sm(
+            type='text',
+            [value]='inputText',
+            (input)='onInput($event.target.value)',
+            (keydown.enter)='convert.emit()',
+            (keydown.esc)='dismiss.emit()',
+            [placeholder]='"Describe what you want to do..."|translate',
+            autofocus
+        )
+        button.btn.btn-sm.btn-primary.ms-2(
+            (click)='convert.emit()',
+            [disabled]='loading || !inputText.trim()'
+        )
+            i.fas.fa-magic(*ngIf='!loading')
+            i.fas.fa-circle-notch.fa-spin(*ngIf='loading')
+
+    .result-row(*ngIf='resultCommand')
+        .result-label(translate) Suggested command
+        pre.command-preview([class.text-danger]='dangerous') {{ resultCommand }}
+        .explanation(*ngIf='resultExplanation') {{ resultExplanation }}
+        .alert.alert-danger.py-1.px-2.mt-2(*ngIf='dangerous')
+            i.fas.fa-exclamation-triangle.me-1
+            span {{ dangerReason || ('This command may be dangerous'|translate) }}
+
+        .action-row
+            button.btn.btn-sm.btn-success((click)='confirm.emit()', translate) Run command
+            button.btn.btn-sm.btn-secondary.ms-2((click)='insertOnly.emit()', translate) Insert only
+            button.btn.btn-sm.btn-link.ms-2((click)='dismiss.emit()', translate) Cancel

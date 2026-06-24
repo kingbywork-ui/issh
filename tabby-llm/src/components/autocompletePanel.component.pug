@@ -1,0 +1,24 @@
+.autocomplete-panel(
+    *ngIf='visible',
+    (mousedown)='$event.preventDefault()'
+)
+    .panel-header
+        span(translate) AI suggestions
+        button.btn.btn-sm.btn-link((click)='dismiss.emit()')
+            i.fas.fa-times
+
+    .loading-row(*ngIf='loading')
+        i.fas.fa-circle-notch.fa-spin.me-2
+        span(translate) Thinking...
+
+    .suggestion-list(*ngIf='!loading && suggestions.length')
+        .suggestion-item(
+            *ngFor='let item of suggestions; let i = index',
+            [class.selected]='i === selectedIndex',
+            (click)='select(item)'
+        )
+            .command {{ item.command }}
+            .description(*ngIf='item.description') {{ item.description }}
+
+    .empty-row(*ngIf='!loading && !suggestions.length')
+        span(translate) No suggestions
