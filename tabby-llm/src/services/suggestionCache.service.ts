@@ -18,6 +18,9 @@ export class SuggestionCache<T> {
             this.store.delete(key)
             return null
         }
+        // Move to end (most recently used) by re-inserting
+        this.store.delete(key)
+        this.store.set(key, entry)
         return entry.value
     }
 

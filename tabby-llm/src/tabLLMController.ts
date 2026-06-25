@@ -12,7 +12,6 @@ import { HistoryCommandService } from './services/historyCommand.service'
 export class TabLLMController {
     showAutocomplete = false
     showNL2 = false
-    autocompleteLoading = false
     aiLoading = false
     nl2Loading = false
     suggestions: AutocompleteSuggestion[] = []
@@ -155,7 +154,7 @@ export class TabLLMController {
             return true
         }
         if (this.showNL2) {
-            return false
+            return true
         }
         return false
     }
@@ -168,7 +167,6 @@ export class TabLLMController {
 
     hideAutocomplete (): void {
         this.showAutocomplete = false
-        this.autocompleteLoading = false
         this.aiLoading = false
         this.pendingFetchGeneration++
         this.llm.cancelPending()
@@ -217,6 +215,12 @@ export class TabLLMController {
             this.nl2Dangerous = result.dangerous
             this.nl2DangerReason = result.dangerReason ?? ''
         } catch (e) {
+            if (e instanceof DOMException && e.name === 'AbortError') {
+                return
+            }
+            if (e instanceof Error && e.message === 'Request cancelled') {
+                return
+            }
             this.notifications.error(this.translate.instant('AI request failed: {error}', {
                 error: e instanceof Error ? e.message : String(e),
             }))
@@ -319,7 +323,6 @@ export class TabLLMController {
         this.updatePanelPosition()
         this.showAutocomplete = true
         this.aiLoading = this.llm.isConfigured()
-        this.autocompleteLoading = false
         if (partialChanged) {
             this.selectedIndex = 0
         }
@@ -401,6 +404,8 @@ export class TabLLMController {
             this.lineBuffer = this.context.getPartialCommand(this.tab)
             if (!this.lineBuffer) {
                 this.hideAutocomplete()
+            } else if (this.config.store.llm.enabled && this.config.store.llm.autoCompleteOnType) {
+                this.debounceSubject.next()
             }
             return
         }
@@ -428,7 +433,7 @@ export class TabLLMController {
             } else if (char === '\x1b') {
                 this.lineBuffer = this.context.getPartialCommand(this.tab)
                 return
-            } else if (char >= ' ' || char === '\t') {
+            } else if (char >= ' ') {
                 this.lineBuffer += char
             }
         }
@@ -443,7 +448,8 @@ export class TabLLMController {
         if (current && command.startsWith(current)) {
             toSend = command.substring(current.length)
         } else if (current) {
-            toSend = '\x7f'.repeat(current.length) + command
+            const backspaceCount = Array.from(current).length
+            toSend = '\x7f'.repeat(backspaceCount) + command
         }
         if (execute) {
             toSend += '\r'

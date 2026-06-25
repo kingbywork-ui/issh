@@ -170,23 +170,27 @@ export class LLMService {
                 throw new Error('No response body')
             }
 
-            const decoder = new TextDecoder()
-            let content = ''
-            let buffer = ''
+            try {
+                const decoder = new TextDecoder()
+                let content = ''
+                let buffer = ''
 
-            while (true) {
-                const { done, value } = await reader.read()
-                if (done) {
-                    break
+                while (true) {
+                    const { done, value } = await reader.read()
+                    if (done) {
+                        break
+                    }
+                    buffer += decoder.decode(value, { stream: true })
+                    const lines = buffer.split('\n')
+                    buffer = lines.pop() ?? ''
+                    content += this.parseStreamLines(lines)
                 }
-                buffer += decoder.decode(value, { stream: true })
-                const lines = buffer.split('\n')
-                buffer = lines.pop() ?? ''
-                content += this.parseStreamLines(lines)
-            }
-            content += this.parseStreamLines([buffer])
+                content += this.parseStreamLines([buffer])
 
-            return content.trim()
+                return content.trim()
+            } finally {
+                reader.cancel().catch(() => {})
+            }
         } catch (error) {
             if (error instanceof DOMException && error.name === 'AbortError') {
                 throw error

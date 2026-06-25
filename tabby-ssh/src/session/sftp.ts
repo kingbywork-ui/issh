@@ -145,7 +145,7 @@ export class SFTPSession {
                 await transfer.write(chunk)
             }
             transfer.close()
-            handle.close()
+            await handle.close()
         } catch (e) {
             transfer.cancel()
             throw e

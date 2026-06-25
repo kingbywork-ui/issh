@@ -34,10 +34,11 @@ export class LinkHighlighterDecorator extends TerminalDecorator {
                 if (!handler.fullMatchRegex.test(uri)) {
                     continue
                 }
-                if (!await handler.verify(await handler.convert(uri, tab), tab)) {
+                const converted = await handler.convert(uri, tab)
+                if (!await handler.verify(converted, tab)) {
                     continue
                 }
-                handler.handle(await handler.convert(uri, tab), tab)
+                handler.handle(converted, tab)
             }
         }
 

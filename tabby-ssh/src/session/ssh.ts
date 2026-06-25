@@ -854,12 +854,22 @@ export class SSHSession {
         this.emitServiceMessage(`Stopped forwarding ${fw}`)
     }
 
+    private _destroyed = false
+
     async destroy (): Promise<void> {
+        if (this._destroyed) {
+            return
+        }
+        this._destroyed = true
         this.logger.info('Destroying')
         this.willDestroy.next()
         this.willDestroy.complete()
         this.serviceMessage.complete()
-        this.ssh.disconnect()
+        try {
+            this.ssh.disconnect()
+        } catch (e) {
+            this.logger.warn('Error during SSH disconnect', e)
+        }
     }
 
     async openShellChannel (options: { x11: boolean }): Promise<russh.Channel> {

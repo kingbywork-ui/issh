@@ -65,9 +65,19 @@ export class LLMDecorator extends TerminalDecorator {
         }
 
         if (tab.frontendIsReady) {
-            setTimeout(() => setup())
+            setTimeout(() => {
+                if (this.controllers.has(tab) || !tab.content?.nativeElement) {
+                    return
+                }
+                setup()
+            })
         } else {
-            this.subscribeUntilDetached(tab, tab.frontendReady.subscribe(() => setTimeout(() => setup())))
+            this.subscribeUntilDetached(tab, tab.frontendReady.subscribe(() => setTimeout(() => {
+                if (this.controllers.has(tab) || !tab.content?.nativeElement) {
+                    return
+                }
+                setup()
+            })))
         }
     }
 

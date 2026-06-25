@@ -3,7 +3,6 @@ import { PlatformService, LogService, Logger } from 'tabby-core'
 import { BaseTerminalTabComponent } from 'tabby-terminal'
 import * as path from 'path'
 import * as fs from 'fs/promises'
-import * as fsSync from 'fs'
 import * as os from 'os'
 import { TerminalContextService } from './terminalContext.service'
 import { normalizeCommand } from './commandValidation'
@@ -36,21 +35,20 @@ export class HistoryCommandService {
         if (configPath) {
             this.historyFilePath = path.join(path.dirname(configPath), 'llm-command-history.json')
         }
-        this.loadFromDiskSync()
+        this.loadFromDisk()
     }
 
-    private loadFromDiskSync (): void {
+    private async loadFromDisk (): Promise<void> {
         if (!this.historyFilePath) {
             this.loaded = true
             return
         }
         try {
-            if (fsSync.existsSync(this.historyFilePath)) {
-                const data = fsSync.readFileSync(this.historyFilePath, 'utf-8')
-                const parsed = JSON.parse(data) as HistoryEntry[]
-                if (Array.isArray(parsed)) {
-                    this.history = this.compactHistory(parsed).slice(0, this.maxHistory)
-                }
+            await fs.access(this.historyFilePath)
+            const data = await fs.readFile(this.historyFilePath, 'utf-8')
+            const parsed = JSON.parse(data) as HistoryEntry[]
+            if (Array.isArray(parsed)) {
+                this.history = this.compactHistory(parsed).slice(0, this.maxHistory)
             }
         } catch (e) {
             this.logger.warn('Failed to load command history:', e)
@@ -151,7 +149,13 @@ PY`,
         ]
 
         for (const command of commandsToTry) {
-            const output = await runReadonlyCommand(command, 5000)
+            let output: string
+            try {
+                output = await runReadonlyCommand(command, 5000)
+            } catch (e) {
+                this.logger.warn('Remote history command failed:', e)
+                continue
+            }
             if (!output?.trim()) {
                 continue
             }

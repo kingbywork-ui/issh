@@ -46,6 +46,10 @@ export class SessionMiddlewareStack extends SessionMiddleware {
         this.relink()
     }
 
+    some (predicate: (middleware: SessionMiddleware) => boolean): boolean {
+        return this.stack.some(predicate)
+    }
+
     replace (middleware: SessionMiddleware, newMiddleware: SessionMiddleware): void {
         const index = this.stack.indexOf(middleware)
         if (index >= 0) {

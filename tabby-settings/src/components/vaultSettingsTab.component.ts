@@ -25,13 +25,15 @@ export class VaultSettingsTabComponent extends BaseComponent {
         private translate: TranslateService,
     ) {
         super()
-        if (vault.isOpen()) {
-            this.loadVault()
-        }
     }
 
     async loadVault (): Promise<void> {
-        this.vaultContents = await this.vault.load()
+        this.vault.requireReauth()
+        try {
+            this.vaultContents = await this.vault.load()
+        } catch {
+            this.vaultContents = null
+        }
     }
 
     async enableVault () {
@@ -62,7 +64,7 @@ export class VaultSettingsTabComponent extends BaseComponent {
 
     async changePassphrase () {
         if (!this.vaultContents) {
-            this.vaultContents = await this.vault.load()
+            await this.loadVault()
         }
         if (!this.vaultContents) {
             return
@@ -150,7 +152,7 @@ export class VaultSettingsTabComponent extends BaseComponent {
     }
 
     async exportFile (secret: VaultFileSecret) {
-        this.vault.forgetPassphrase()
+        this.vault.requireReauth()
 
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
         secret = (await this.vault.getSecret(secret.type, secret.key)) as VaultFileSecret

@@ -133,6 +133,9 @@ export class AutoSudoPasswordDecorator extends TerminalDecorator {
         if (!tab.session) {
             return
         }
+        if (tab.session.middleware.some(m => m instanceof AutoSudoPasswordMiddleware)) {
+            return
+        }
         tab.session.middleware.unshift(new AutoSudoPasswordMiddleware(tab.profile, this.ps))
     }
 

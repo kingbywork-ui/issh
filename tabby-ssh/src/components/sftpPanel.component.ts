@@ -42,7 +42,7 @@ export class SFTPPanelComponent {
         private ngZone: NgZone,
         @Optional() @Inject(SFTPContextMenuItemProvider) protected contextMenuProviders: SFTPContextMenuItemProvider[],
     ) {
-        this.contextMenuProviders.sort((a, b) => a.weight - b.weight)
+        this.contextMenuProviders?.sort((a, b) => a.weight - b.weight)
     }
 
     async ngOnInit (): Promise<void> {
@@ -382,7 +382,7 @@ export class SFTPPanelComponent {
 
     async buildContextMenu (item: SFTPFile): Promise<MenuItemOptions[]> {
         let items: MenuItemOptions[] = []
-        for (const section of await Promise.all(this.contextMenuProviders.map(x => x.getItems(item, this)))) {
+        for (const section of await Promise.all((this.contextMenuProviders ?? []).map(x => x.getItems(item, this)))) {
             items.push({ type: 'separator' })
             items = items.concat(section)
         }

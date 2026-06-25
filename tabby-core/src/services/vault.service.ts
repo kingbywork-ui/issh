@@ -108,6 +108,7 @@ export class VaultService {
     store: StoredVault|null = null
     private ready = new AsyncSubject<boolean>()
     private contentChanged = new Subject<void>()
+    private _requireReauth = false
 
     /** @hidden */
     private constructor (
@@ -135,6 +136,10 @@ export class VaultService {
 
     forgetPassphrase (): void {
         _rememberedPassphrase = null
+    }
+
+    requireReauth (): void {
+        this._requireReauth = true
     }
 
     async decrypt (storage: StoredVault, passphrase?: string): Promise<Vault> {
@@ -176,14 +181,21 @@ export class VaultService {
     }
 
     async getPassphrase (): Promise<string> {
-        if (!_rememberedPassphrase) {
+        if (!_rememberedPassphrase || this._requireReauth) {
+            const savedPassphrase = _rememberedPassphrase
+            this._requireReauth = false
             const modal = this.ngbModal.open(UnlockVaultModalComponent)
-            const { passphrase, rememberFor } = await modal.result
-            setTimeout(() => {
-                _rememberedPassphrase = null
-                // avoid multiple consequent prompts
-            }, Math.max(1000, rememberFor * 60000))
-            _rememberedPassphrase = passphrase
+            try {
+                const { passphrase, rememberFor } = await modal.result
+                setTimeout(() => {
+                    _rememberedPassphrase = null
+                    // avoid multiple consequent prompts
+                }, Math.max(1000, rememberFor * 60000))
+                _rememberedPassphrase = passphrase
+            } catch {
+                _rememberedPassphrase = savedPassphrase
+                throw new Error('Vault unlock cancelled')
+            }
         }
 
         return _rememberedPassphrase!

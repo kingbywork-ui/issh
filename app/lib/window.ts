@@ -271,6 +271,9 @@ export class Window {
     }
 
     focus (): void {
+        if (!this.window || this.window.isDestroyed()) {
+            return
+        }
         this.window.focus()
     }
 
@@ -290,11 +293,11 @@ export class Window {
     }
 
     isFocused (): boolean {
-        return this.window.isFocused()
+        return this.window?.isFocused() ?? false
     }
 
     isVisible (): boolean {
-        return this.window.isVisible()
+        return this.window?.isVisible() ?? false
     }
 
     isDockedOnTop (): boolean {
@@ -302,6 +305,9 @@ export class Window {
     }
 
     async hide (): Promise<void> {
+        if (!this.window || this.window.isDestroyed()) {
+            return
+        }
         if (process.platform === 'darwin') {
             // Lose focus
             Menu.sendActionToFirstResponder('hide:')
@@ -318,12 +324,18 @@ export class Window {
     }
 
     async show (): Promise<void> {
+        if (!this.window || this.window.isDestroyed()) {
+            return
+        }
         await this.enableDockedWindowStyles(this.isDockedOnTop())
         this.window.show()
         this.window.focus()
     }
 
     async present (): Promise<void> {
+        if (!this.window || this.window.isDestroyed()) {
+            return
+        }
         await this.show()
         this.window.moveTop()
     }

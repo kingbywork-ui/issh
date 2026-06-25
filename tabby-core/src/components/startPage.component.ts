@@ -301,13 +301,23 @@ export class StartPageComponent extends BaseComponent {
     }
 
     private buildProfileContextMenu (profile: PartialProfile<Profile>): MenuItemOptions[] {
-        return [{
-            label: '更改分组',
-            enabled: !profile.isBuiltin,
-            click: () => {
-                void this.changeProfileGroup(profile)
+        return [
+            {
+                label: '更改分组',
+                enabled: !profile.isBuiltin,
+                click: () => {
+                    void this.changeProfileGroup(profile)
+                },
             },
-        }]
+            { type: 'separator' },
+            {
+                label: '删除',
+                enabled: !profile.isBuiltin,
+                click: () => {
+                    void this.deleteProfile(profile)
+                },
+            },
+        ]
     }
 
     private async changeProfileGroup (profile: PartialProfile<Profile>): Promise<void> {
@@ -348,6 +358,29 @@ export class StartPageComponent extends BaseComponent {
                     weight: 1,
                 })),
         )
+    }
+
+    private async deleteProfile (profile: PartialProfile<Profile>): Promise<void> {
+        if (profile.isBuiltin) {
+            return
+        }
+
+        if ((await this.platform.showMessageBox({
+            type: 'warning',
+            message: `删除 "${profile.name}"？`,
+            buttons: [
+                '删除',
+                '取消',
+            ],
+            defaultId: 1,
+            cancelId: 1,
+        })).response !== 0) {
+            return
+        }
+
+        await this.profilesService.deleteProfile(profile)
+        await this.config.save()
+        await this.refreshAll()
     }
 
     // Open settings page HOSTMANAGER

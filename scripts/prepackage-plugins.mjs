@@ -23,10 +23,18 @@ vars.builtinPlugins.forEach(plugin => {
     sh.cp('-r', path.join('..', plugin), '.')
     sh.rm('-rf', path.join(plugin, 'node_modules'))
     sh.cd(plugin)
-    sh.exec(`corepack yarn install --force --production`, { fatal: true })
-
+    sh.exec(`corepack yarn install --force --production --ignore-scripts`, { fatal: true })
 
     log.info('rebuild', 'native')
+    const wptGyp = path.resolve('node_modules/@tabby-gang/windows-process-tree/binding.gyp')
+    if (fs.existsSync(wptGyp)) {
+        let gyp = fs.readFileSync(wptGyp, 'utf-8')
+        if (gyp.includes('SpectreMitigation')) {
+            gyp = gyp.replace(/"msvs_configuration_attributes":\s*\{[^}]*"SpectreMitigation":\s*"Spectre"[^}]*\},?\s*/g, '')
+            fs.writeFileSync(wptGyp, gyp)
+            log.info('patch', 'Removed SpectreMitigation from windows-process-tree binding.gyp')
+        }
+    }
     if (fs.existsSync('node_modules')) {
         rebuild({
             buildPath: path.resolve('.'),
