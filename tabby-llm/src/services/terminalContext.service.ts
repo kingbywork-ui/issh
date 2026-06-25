@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core'
 import { ConfigService } from 'tabby-core'
 import { BaseTerminalTabComponent, XTermFrontend } from 'tabby-terminal'
+import { normalizeCommand } from './commandValidation'
 
 /** @hidden */
 @Injectable({ providedIn: 'root' })
@@ -45,10 +46,22 @@ export class TerminalContextService {
             return ''
         }
 
+        // POSIX prompts: user@host:~/path$ command, root@host:/path#command
+        const posixPromptMatch = /(?:^|\s)(?:[\w.-]+@[\w.-]+:)?[^\s#$%>]*[#$%]\s*(.*)$/.exec(trimmed)
+        if (posixPromptMatch) {
+            return posixPromptMatch[1]
+        }
+
         // PowerShell: PS C:\path> command
         const psMatch = /^PS(?: [^>]+)?>\s*(.*)$/i.exec(trimmed)
         if (psMatch) {
             return psMatch[1]
+        }
+
+        // history command output: "  988  wget http://..."
+        const historyMatch = /^\s*\d+\s{2,}(.*)$/.exec(trimmed)
+        if (historyMatch) {
+            return historyMatch[1].trim()
         }
 
         // Find the last common prompt marker and take input after it
@@ -92,6 +105,50 @@ export class TerminalContextService {
             }
         }
         return lines
+    }
+
+    extractCommandsFromTerminal (tab: BaseTerminalTabComponent<any>, maxLines: number): string[] {
+        const lines = this.getRecentOutput(tab, maxLines)
+        const commands: string[] = []
+        let pendingMultiline: string[] = []
+
+        const flushPending = () => {
+            if (!pendingMultiline.length) {
+                return
+            }
+            const normalized = normalizeCommand(pendingMultiline.join('\n'), { allowMultiline: true })
+            if (normalized) {
+                commands.push(normalized)
+            }
+            pendingMultiline = []
+        }
+
+        for (const line of lines) {
+            const stripped = this.stripPrompt(line).trim()
+            if (!stripped) {
+                flushPending()
+                continue
+            }
+
+            if (/^[>|.]{1,3}\s/.test(stripped) && pendingMultiline.length) {
+                pendingMultiline.push(stripped.replace(/^[>|.]{1,3}\s*/, ''))
+                continue
+            }
+
+            flushPending()
+            if (/[|&\\]$/.test(stripped)) {
+                pendingMultiline = [stripped]
+                continue
+            }
+
+            const normalized = normalizeCommand(stripped, { allowMultiline: true })
+            if (normalized) {
+                commands.push(normalized)
+            }
+        }
+
+        flushPending()
+        return commands
     }
 
     getCursorPosition (tab: BaseTerminalTabComponent<any>): { x: number, y: number } | null {

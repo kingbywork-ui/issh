@@ -34,8 +34,8 @@
         flex: 1 0 0;
 
         > .nav {
-            padding: 20px 10px;
-            width: 222px;
+            padding: 14px 12px;
+            width: 240px;
             flex: none;
             overflow-y: auto;
             flex-wrap: nowrap;
@@ -43,18 +43,36 @@
 
         > .tab-content {
             flex: auto;
-            padding: 20px 0;
+            padding: 24px 0;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
+            min-height: 0;
+            min-width: 0;
 
             > ::ng-deep .tab-pane {
-                padding: 0 30px;
+                padding: 0 32px;
                 min-height: 100%;
+                display: flex;
+                flex-direction: column;
+                min-width: 0;
 
-                > settings-tab-body > * {
+                > settings-tab-body {
                     display: block;
                 }
+
+                > settings-tab-body.full-width {
+                    flex: 1 1 auto;
+                    min-height: 0;
+                    min-width: 0;
+                }
+            }
+
+            > ::ng-deep .tab-pane > settings-tab-body.full-width {
+                padding: 0;
+                margin: 0 -32px;
+                width: calc(100% + 64px);
+                max-width: none;
             }
         }
     }

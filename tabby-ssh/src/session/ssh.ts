@@ -888,6 +888,79 @@ export class SSHSession {
         return ch
     }
 
+    async runReadonlyCommand (command: string, timeoutMs = 4000): Promise<string|null> {
+        if (!(this.ssh instanceof russh.AuthenticatedSSHClient)) {
+            return null
+        }
+
+        const channel: any = await this.ssh.activateChannel(await this.ssh.openSessionChannel())
+        const outputChunks: Buffer[] = []
+
+        const result = new Promise<string|null>(resolve => {
+            let settled = false
+
+            const finish = (value: string | null) => {
+                if (settled) {
+                    return
+                }
+                settled = true
+                resolve(value)
+            }
+
+            const timer = setTimeout(() => {
+                try {
+                    channel.close?.()
+                } catch {
+                    // ignore close errors on timeout
+                }
+                finish(null)
+            }, timeoutMs)
+
+            channel.data$?.subscribe((data: Uint8Array | Buffer | string) => {
+                if (typeof data === 'string') {
+                    outputChunks.push(Buffer.from(data, 'utf-8'))
+                    return
+                }
+                outputChunks.push(Buffer.from(data))
+            })
+
+            channel.eof$?.subscribe(() => {
+                clearTimeout(timer)
+                finish(Buffer.concat(outputChunks).toString('utf-8'))
+            })
+
+            channel.closed$?.subscribe(() => {
+                clearTimeout(timer)
+                finish(Buffer.concat(outputChunks).toString('utf-8'))
+            })
+        })
+
+        const execMethod = [channel.requestExec, channel.exec, channel.execute]
+            .find((fn: unknown) => typeof fn === 'function')
+
+        if (!execMethod) {
+            try {
+                await channel.close?.()
+            } catch {
+                // ignore close errors when exec is unavailable
+            }
+            return null
+        }
+
+        try {
+            await execMethod.call(channel, command)
+            return await result
+        } catch (error) {
+            this.logger.warn('Readonly SSH exec failed', error)
+            try {
+                await channel.close?.()
+            } catch {
+                // ignore close errors after failed exec
+            }
+            return null
+        }
+    }
+
     private setupSocketChannelEvents (channel: russh.Channel, socket: Socket, logPrefix: string): void {
         // Channel → Socket data flow with error handling
         channel.data$.subscribe({

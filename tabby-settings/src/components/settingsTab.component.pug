@@ -99,7 +99,10 @@
                     i(class='fas fa-fw me-2 fa-{{provider.icon}}')
                     span {{provider.title|translate}}
                 ng-template(ngbNavContent)
-                    settings-tab-body([provider]='provider')
+                    settings-tab-body(
+                        [provider]='provider',
+                        [class.full-width]='provider.fullWidth'
+                    )
 
         .mb-3
 
@@ -109,7 +112,10 @@
                     i(class='fas fa-fw me-2 fa-{{provider.icon || "puzzle-piece"}}')
                     span {{provider.title|translate}}
                 ng-template(ngbNavContent)
-                    settings-tab-body([provider]='provider')
+                    settings-tab-body(
+                        [provider]='provider',
+                        [class.full-width]='provider.fullWidth'
+                    )
 
         li(ngbNavItem='config-file')
             a.d-flex.align-items-center(ngbNavLink)

@@ -34,7 +34,10 @@ docs/api
 *.sln
 .travis.ssh.key
 *.code-workspace
-.idea/
+*.idea/
+*.psacowork/
+*.workbuddy/
+*.
 
 .electron-symbols
 sentry.properties
@@ -52,7 +55,5 @@ crowdin.yml
 # OS Files
 Thumbs.db
 desktop.ini
-"main.js"  
-"*.jpg"  
-"*.png"  
-".psacowork/"  
+main.js
+.psacowork/

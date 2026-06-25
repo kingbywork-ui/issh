@@ -57,6 +57,7 @@ export class ProfilesSettingsTabProvider extends SettingsTabProvider {
     icon = 'window-restore'
     title = this.translate.instant('Profiles & connections')
     prioritized = true
+    fullWidth = true
 
     constructor (private translate: TranslateService) { super() }
 

@@ -33,6 +33,7 @@ export class TabLLMController {
     private keyHandlerAttached = false
     private lastAutocompletePartial = ''
     private pendingFetchGeneration = 0
+    private historyBootstrapPromise: Promise<void> | null = null
 
     constructor (
         private tab: BaseTerminalTabComponent<any>,
@@ -87,7 +88,12 @@ export class TabLLMController {
 
     start (): void {
         this.attachKeyHandler()
-        setTimeout(() => this.history.bootstrapFromTerminal(this.tab), 500)
+        this.historyBootstrapPromise = new Promise(resolve => {
+            setTimeout(() => {
+                void this.history.bootstrap(this.tab)
+                    .finally(() => resolve())
+            }, 200)
+        })
         this.inputSubscription = this.tab.input$.subscribe(data => {
             this.handleInput(data)
         })
@@ -155,6 +161,8 @@ export class TabLLMController {
     }
 
     async triggerAutocomplete (): Promise<void> {
+        this.history.bootstrapFromTerminal(this.tab)
+        await this.historyBootstrapPromise
         await this.fetchAutocomplete(true)
     }
 
@@ -297,6 +305,9 @@ export class TabLLMController {
         }
         if (!force && !this.config.store.llm.autoCompleteOnType) {
             return
+        }
+        if (this.historyBootstrapPromise) {
+            await this.historyBootstrapPromise
         }
 
         const partialChanged = partial !== this.lastAutocompletePartial

@@ -1,7 +1,52 @@
 // Host Manager List UI Styles (Optimized)
 
+:host {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    max-width: none;
+}
+
+:host > h3 {
+    flex: none;
+    padding: 24px 32px 0;
+    margin-bottom: 1rem;
+}
+
+:host > .nav-tabs {
+    flex: none;
+    padding: 0 32px;
+    margin-bottom: 0;
+}
+
+:host > div {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+:host ::ng-deep .tab-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+:host ::ng-deep .tab-pane.active,
+:host ::ng-deep .tab-pane.show {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
 .host-manager-layout {
     display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
     height: 100%;
     gap: 0;
 
@@ -128,10 +173,28 @@
 
     .host-main {
         flex: 1;
+        width: 100%;
         min-width: 0;
         display: flex;
         flex-direction: column;
         overflow: hidden;
+
+        .host-content {
+            display: flex;
+            flex: 1 1 auto;
+            min-height: 0;
+            min-width: 0;
+            height: 100%;
+        }
+
+        .host-list-pane {
+            display: flex;
+            flex: 1 1 auto;
+            flex-direction: column;
+            width: 100%;
+            min-width: 0;
+            min-height: 0;
+        }
 
         .host-toolbar {
             flex-shrink: 0;
@@ -246,6 +309,8 @@
 
         .host-list {
             flex: 1;
+            width: 100%;
+            min-width: 0;
             overflow: auto;
             padding: 0;
             display: flex;
@@ -253,13 +318,16 @@
             gap: 0;
 
             .host-grid-wrapper {
-                display: contents;
+                width: 100%;
+                min-width: 0;
             }
 
             .host-group-section {
                 display: flex;
                 flex-direction: column;
                 gap: 0;
+                width: 100%;
+                min-width: 0;
 
                 .host-group-header {
                     padding: 8px 12px;
@@ -565,6 +633,15 @@
         }
 
         .host-main {
+            .host-content {
+                flex-direction: column;
+            }
+
+            .host-list-pane {
+                width: 100% !important;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            }
+
             .host-toolbar {
                 padding: 12px;
 

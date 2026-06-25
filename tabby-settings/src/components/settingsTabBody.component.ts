@@ -1,4 +1,4 @@
-import { Component, Input, ViewContainerRef, ViewChild, ComponentFactoryResolver, ComponentRef } from '@angular/core'
+import { Component, HostBinding, Input, ViewContainerRef, ViewChild, ComponentFactoryResolver, ComponentRef } from '@angular/core'
 import { SettingsTabProvider } from '../api'
 
 /** @hidden */
@@ -11,12 +11,27 @@ import { SettingsTabProvider } from '../api'
             padding-bottom: 20px;
             max-width: 600px;
         }
+
+        :host(.full-width) {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+            min-height: 0;
+            width: 100%;
+            max-width: none;
+            padding-bottom: 0;
+        }
     `],
 })
 export class SettingsTabBodyComponent {
     @Input() provider: SettingsTabProvider
     @ViewChild('placeholder', { read: ViewContainerRef }) placeholder: ViewContainerRef
     component: ComponentRef<unknown>
+
+    @HostBinding('class.full-width')
+    get fullWidth (): boolean {
+        return !!this.provider?.fullWidth
+    }
 
     constructor (private componentFactoryResolver: ComponentFactoryResolver) { }
 

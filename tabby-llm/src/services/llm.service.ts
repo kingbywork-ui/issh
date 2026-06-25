@@ -5,6 +5,7 @@ import { AutocompleteRequest, AutocompleteSuggestion, NL2CommandRequest, NL2Comm
 import { AUTOCOMPLETE_SYSTEM_PROMPT, NL2COMMAND_SYSTEM_PROMPT } from '../prompts'
 import { DangerousCommandGuard } from './dangerousCommandGuard'
 import { SuggestionCache } from './suggestionCache.service'
+import { normalizeCommand } from './commandValidation'
 
 interface ChatMessage {
     role: 'system' | 'user' | 'assistant'
@@ -245,7 +246,7 @@ export class LLMService {
             }
             return items.slice(0, 5).map((item, index) => ({
                 id: `ai-${index}`,
-                command: String(item.command ?? '').trim(),
+                command: normalizeCommand(String(item.command ?? '').trim(), { allowMultiline: true }) ?? '',
                 description: String(item.description ?? ''),
                 category: 'ai' as const,
                 confidence: typeof item.confidence === 'number' ? item.confidence : undefined,
@@ -261,11 +262,11 @@ export class LLMService {
             const json = this.extractJSON(content)
             const item = JSON.parse(json)
             return {
-                command: String(item.command ?? '').trim(),
+                command: normalizeCommand(String(item.command ?? '').trim(), { allowMultiline: true }) ?? '',
                 explanation: String(item.explanation ?? ''),
             }
         } catch {
-            const trimmed = content.trim()
+            const trimmed = normalizeCommand(content.trim(), { allowMultiline: true }) ?? content.trim()
             return { command: trimmed, explanation: '' }
         }
     }

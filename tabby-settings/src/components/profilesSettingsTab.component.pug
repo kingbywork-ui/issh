@@ -31,7 +31,7 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                             [class.active]='!activeGroupId && !favoritesOnly && !recentOnly'
                         )
                             i.fas.fa-fw.fa-server
-                            span.ms-2 全部
+                            span.ms-2(translate) All
                             span.count.ms-auto {{getVisibleCustomProfilesCount()}}
 
                         .host-tree-item.root-item(
@@ -39,7 +39,7 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                             [class.active]='favoritesOnly'
                         )
                             i.fas.fa-fw.fa-star
-                            span.ms-2 收藏
+                            span.ms-2(translate) Favorites
                             span.count.ms-auto {{getFavoriteVisibleCount()}}
 
                         .host-tree-item.root-item(
@@ -47,87 +47,89 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                             [class.active]='recentOnly'
                         )
                             i.fas.fa-fw.fa-history
-                            span.ms-2 最近
+                            span.ms-2(translate) Recent
                             span.count.ms-auto {{getRecentVisibleCount()}}
 
                         ng-container(*ngFor='let group of rootGroups')
                             ng-container(*ngTemplateOutlet='sidebarGroup; context: {$implicit: group, level: 0}')
 
                 .host-main
-                    .host-toolbar
-                        .host-toolbar-top
-                            .input-group.search-group
-                                .input-group-text
-                                    i.fas.fa-fw.fa-search
-                                input.form-control(
-                                    type='search',
-                                    [placeholder]='"Filter"|translate',
-                                    [(ngModel)]='filter'
-                                )
+                    .host-content
+                        .host-list-pane
+                            .host-toolbar
+                                .host-toolbar-top
+                                    .input-group.search-group
+                                        .input-group-text
+                                            i.fas.fa-fw.fa-search
+                                        input.form-control(
+                                            type='search',
+                                            [placeholder]='"Filter"|translate',
+                                            [(ngModel)]='filter'
+                                        )
 
-                            .host-tag-filters(*ngIf='getAvailableTags().length > 0')
-                                button.tag-btn(
-                                    *ngFor='let tag of getAvailableTags()',
-                                    (click)='toggleTag(tag)',
-                                    [class.active]='isTagSelected(tag)',
-                                    [class]='getEnvironmentBadgeClass(tag)'
-                                ) {{tag}}
+                                    .host-tag-filters(*ngIf='getAvailableTags().length > 0')
+                                        button.tag-btn(
+                                            *ngFor='let tag of getAvailableTags()',
+                                            (click)='toggleTag(tag)',
+                                            [class.active]='isTagSelected(tag)',
+                                            [class]='getEnvironmentBadgeClass(tag)'
+                                        ) {{tag}}
 
-                            button.btn.btn-sm.btn-outline-secondary((click)='clearFilters()')
-                                i.fas.fa-fw.fa-rotate-left
-                                span(translate) Clear
+                                    button.btn.btn-sm.btn-outline-secondary((click)='clearFilters()')
+                                        i.fas.fa-fw.fa-rotate-left
+                                        span(translate) Clear
 
-                        .host-toolbar-bottom
-                            .host-toolbar-filters
-                                .host-filter-toggle
-                                    checkbox([text]='"SSH only"|translate', [(ngModel)]='sshOnly')
+                                .host-toolbar-bottom
+                                    .host-toolbar-filters
+                                        .host-filter-toggle
+                                            checkbox([text]='"SSH only"|translate', [(ngModel)]='sshOnly')
 
-                                .host-filter-toggle
-                                    checkbox([text]='"Favorites"|translate', [(ngModel)]='favoritesOnly')
+                                        .host-filter-toggle
+                                            checkbox([text]='"Favorites"|translate', [(ngModel)]='favoritesOnly')
 
-                                select.form-control.environment-filter([(ngModel)]='environmentFilter')
-                                    option(value='') {{'All environments'|translate}}
-                                    option(*ngFor='let environment of getAvailableEnvironments()', [value]='environment') {{environment}}
+                                        select.form-control.environment-filter([(ngModel)]='environmentFilter')
+                                            option(value='') {{'All environments'|translate}}
+                                            option(*ngFor='let environment of getAvailableEnvironments()', [value]='environment') {{environment}}
 
-                            .host-toolbar-actions
-                                button.btn.btn-sm.btn-primary((click)='newProfile()')
-                                    i.fas.fa-fw.fa-plus
-                                    span(translate) New profile
+                                    .host-toolbar-actions
+                                        button.btn.btn-sm.btn-primary((click)='newProfile()')
+                                            i.fas.fa-fw.fa-plus
+                                            span(translate) New profile
 
-                    .bulk-toolbar(*ngIf='selectedProfileIds.size > 0')
-                        .bulk-info
-                            .bulk-title 已选择 {{selectedProfileIds.size}} 台主机
-                            .bulk-quick-actions
-                                button.btn.btn-sm.btn-outline-secondary((click)='selectVisibleProfiles()') 全选可见
-                                button.btn.btn-sm.btn-outline-secondary((click)='clearSelection()') 清空选择
-                        .bulk-actions
-                            .bulk-actions-group
-                                button.btn.btn-sm.btn-outline-warning((click)='bulkSetFavorite(true)') 批量收藏
-                                button.btn.btn-sm.btn-outline-dark((click)='bulkSetFavorite(false)') 取消收藏
-                            .bulk-actions-group
-                                select.form-control.form-control-sm.bulk-select([(ngModel)]='bulkGroupId')
-                                    option(value='') 移动到未分组
-                                    option(*ngFor='let group of profileGroups', [value]='group.id') {{group.name || ("Ungrouped"|translate)}}
-                                button.btn.btn-sm.btn-outline-primary((click)='bulkMoveToGroup()') 应用分组
-                            .bulk-actions-group
-                                input.form-control.form-control-sm.bulk-input(
-                                    type='text',
-                                    [placeholder]='"Comma-separated tags"|translate',
-                                    [(ngModel)]='bulkTagsInput'
-                                )
-                                button.btn.btn-sm.btn-outline-primary((click)='bulkReplaceTags()') {{'Apply tags'|translate}}
-                            .bulk-actions-group
-                                input.form-control.form-control-sm.bulk-input(
-                                    type='text',
-                                    [placeholder]='"Apply environment"|translate',
-                                    [(ngModel)]='bulkEnvironmentInput'
-                                )
-                                button.btn.btn-sm.btn-outline-primary((click)='bulkReplaceEnvironment()') {{'Apply environment'|translate}}
+                            .bulk-toolbar(*ngIf='selectedProfileIds.size > 0')
+                                .bulk-info
+                                    .bulk-title {{selectedProfileIds.size}} selected
+                                    .bulk-quick-actions
+                                        button.btn.btn-sm.btn-outline-secondary((click)='selectVisibleProfiles()') Select visible
+                                        button.btn.btn-sm.btn-outline-secondary((click)='clearSelection()') Clear selection
+                                .bulk-actions
+                                    .bulk-actions-group
+                                        button.btn.btn-sm.btn-outline-warning((click)='bulkSetFavorite(true)') Favorite
+                                        button.btn.btn-sm.btn-outline-dark((click)='bulkSetFavorite(false)') Unfavorite
+                                    .bulk-actions-group
+                                        select.form-control.form-control-sm.bulk-select([(ngModel)]='bulkGroupId')
+                                            option(value='') Move to ungrouped
+                                            option(*ngFor='let group of profileGroups', [value]='group.id') {{group.name || ("Ungrouped"|translate)}}
+                                        button.btn.btn-sm.btn-outline-primary((click)='bulkMoveToGroup()') Apply group
+                                    .bulk-actions-group
+                                        input.form-control.form-control-sm.bulk-input(
+                                            type='text',
+                                            [placeholder]='"Comma-separated tags"|translate',
+                                            [(ngModel)]='bulkTagsInput'
+                                        )
+                                        button.btn.btn-sm.btn-outline-primary((click)='bulkReplaceTags()') {{'Apply tags'|translate}}
+                                    .bulk-actions-group
+                                        input.form-control.form-control-sm.bulk-input(
+                                            type='text',
+                                            [placeholder]='"Apply environment"|translate',
+                                            [(ngModel)]='bulkEnvironmentInput'
+                                        )
+                                        button.btn.btn-sm.btn-outline-primary((click)='bulkReplaceEnvironment()') {{'Apply environment'|translate}}
 
-                    .host-list
-                        .host-grid-wrapper
-                            ng-container(*ngFor='let group of rootGroups')
-                                ng-container(*ngTemplateOutlet='hostGroup; context: {$implicit: group}')
+                            .host-list
+                                .host-grid-wrapper
+                                    ng-container(*ngFor='let group of rootGroups')
+                                        ng-container(*ngTemplateOutlet='hostGroup; context: {$implicit: group}')
 
             ng-template(#sidebarGroup let-group let-level='level')
                 ng-container(*ngIf='isSidebarGroupVisible(group)')
@@ -176,12 +178,12 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                                     tr
                                         th.col-check
                                         th.col-fav
-                                        th.col-system 系统
-                                        th.col-name 名称
-                                        th.col-address 地址
-                                        th.col-info 信息
-                                        th.col-env 环境
-                                        th.col-actions 操作
+                                        th.col-system System
+                                        th.col-name Name
+                                        th.col-address Address
+                                        th.col-info Info
+                                        th.col-env Env
+                                        th.col-actions Actions
                                 tbody
                                     tr.host-row(
                                         *ngFor='let profile of getVisibleProfiles(group)',
@@ -229,13 +231,13 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                                                 [class]='getEnvironmentBadgeClass(profile.environment)'
                                             ) {{profile.environment}}
                                         td.col-actions
-                                            button.btn.btn-sm.btn-success.host-connect-btn(*ngIf='!profile.isTemplate', (click)='launchProfile(profile)') 连接
+                                            button.btn.btn-sm.btn-success.host-connect-btn(*ngIf='!profile.isTemplate', (click)='launchProfile(profile)') Connect
                                             button.btn.btn-sm.btn-link.host-edit-btn(
                                                 *ngIf='!profile.isBuiltin',
                                                 (click)='editProfile(profile)'
-                                            ) 编辑
+                                            ) Edit
                                             .hover-reveal(ngbDropdown, placement='bottom-right top-right auto')
-                                                button.btn.btn-sm.btn-link(ngbDropdownToggle) 更多
+                                                button.btn.btn-sm.btn-link(ngbDropdownToggle) More
                                                     i.fas.fa-fw.fa-ellipsis-vertical.ms-1
                                                 div(ngbDropdownMenu)
                                                     button.dropdown-item(ngbDropdownItem, (click)='newProfile(profile)')

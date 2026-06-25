@@ -7,6 +7,8 @@ export abstract class SettingsTabProvider {
     title: string
     weight = 0
     prioritized = false
+    /** When true, the tab body fills the settings content area (e.g. host manager). */
+    fullWidth = false
 
     getComponentType (): any {
         return null
