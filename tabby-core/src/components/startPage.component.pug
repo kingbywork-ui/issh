@@ -55,7 +55,9 @@
         .host-list(*ngIf='getRightPanelProfiles().length > 0')
             button.host-list-item(
                 *ngFor='let profile of getRightPanelProfiles(); trackBy: profilesTrackBy',
-                (click)='launchProfile(profile)'
+                (click)='launchProfile(profile)',
+                (mousedown)='onProfileMouseDown($event, profile)',
+                (contextmenu)='onProfileContextMenu($event, profile)'
             )
                 .host-item-info
                     .host-item-name {{profile.name}}
@@ -106,7 +108,9 @@ ng-template(#sidebarGroup let-group let-level='level')
         .sidebar-tree-item(
             [style.paddingLeft.rem]='0.75 + (level * 1.1)',
             [class.active]='isGroupActive(group)',
-            (click)='selectGroupView(group)'
+            (click)='selectGroupView(group)',
+            (mousedown)='onGroupMouseDown($event, group)',
+            (contextmenu)='onGroupContextMenu($event, group)'
         )
             button.btn.btn-link.tree-toggle(
                 *ngIf='group.children && group.children.length > 0',

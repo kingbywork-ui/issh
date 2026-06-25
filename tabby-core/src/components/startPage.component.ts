@@ -5,6 +5,10 @@ import { ConfigService } from '../services/config.service'
 import { AppService } from '../services/app.service'
 import { BaseComponent } from './base.component'
 import { PartialProfile, PartialProfileGroup, Profile, ProfileGroup } from '../api'
+import { MenuItemOptions } from '../api/menu'
+import { SelectorOption } from '../api/selector'
+import { PlatformService } from '../api/platform'
+import { SelectorService } from '../services/selector.service'
 
 interface CollapsableProfileGroup extends ProfileGroup {
     collapsed: boolean
@@ -32,12 +36,16 @@ export class StartPageComponent extends BaseComponent {
     profileGroups: PartialProfileGroup<CollapsableProfileGroup>[] = []
     customProfiles: PartialProfile<Profile>[] = []
     recentProfileIds = new Set<string>()
+    private lastGroupContextMenuAt = 0
+    private lastProfileContextMenuAt = 0
 
     constructor (
         public homeBase: HomeBaseService,
         private profilesService: ProfilesService,
         private config: ConfigService,
         private app: AppService,
+        private platform: PlatformService,
+        private selector: SelectorService,
     ) {
         super()
     }
@@ -136,7 +144,7 @@ export class StartPageComponent extends BaseComponent {
     getRightPanelProfiles (): PartialProfile<Profile>[] {
         if (this.favoritesOnly) {
             return this.customProfiles.filter(p => !!p.favorite && !p.isTemplate)
-                .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+                .sort((a, b) => a.name.localeCompare(b.name))
         }
         if (this.recentOnly) {
             return this.customProfiles.filter(p => !!p.id && this.recentProfileIds.has(p.id) && !p.isTemplate)
@@ -156,7 +164,7 @@ export class StartPageComponent extends BaseComponent {
         }
         // Default: show all
         return this.customProfiles.filter(p => !p.isTemplate)
-            .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+            .sort((a, b) => a.name.localeCompare(b.name))
     }
 
     getRightPanelTitle (): string {
@@ -191,7 +199,155 @@ export class StartPageComponent extends BaseComponent {
         const childProfiles = (group.children ?? []).reduce<PartialProfile<Profile>[]>((acc, child) => {
             return acc.concat(this.collectProfilesFromGroup(child))
         }, [])
-        return [...profiles, ...childProfiles].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+        return [...profiles, ...childProfiles].sort((a, b) => a.name.localeCompare(b.name))
+    }
+
+    onGroupMouseDown (event: MouseEvent, group: PartialProfileGroup<CollapsableProfileGroup>): void {
+        if (event.button === 2) {
+            this.showGroupContextMenu(event, group)
+        }
+    }
+
+    onGroupContextMenu (event: MouseEvent, group: PartialProfileGroup<CollapsableProfileGroup>): void {
+        if (Date.now() - this.lastGroupContextMenuAt < 500) {
+            event.preventDefault()
+            event.stopPropagation()
+            return
+        }
+        this.showGroupContextMenu(event, group)
+    }
+
+    private showGroupContextMenu (event: MouseEvent, group: PartialProfileGroup<CollapsableProfileGroup>): void {
+        event.preventDefault()
+        event.stopPropagation()
+        this.lastGroupContextMenuAt = Date.now()
+        this.platform.popupContextMenu(this.buildGroupContextMenu(group), event)
+    }
+
+    private buildGroupContextMenu (group: PartialProfileGroup<CollapsableProfileGroup>): MenuItemOptions[] {
+        const profiles = this.getGroupSSHProfiles(group)
+        return [{
+            label: `连接 (${profiles.length})`,
+            enabled: profiles.length > 0,
+            click: () => {
+                void this.connectGroupSSHProfiles(group)
+            },
+        }]
+    }
+
+    private getGroupSSHProfiles (group: PartialProfileGroup<CollapsableProfileGroup>): PartialProfile<Profile>[] {
+        return this.collectProfilesFromGroup(group).filter(profile => profile.type === 'ssh')
+    }
+
+    private async connectGroupSSHProfiles (group: PartialProfileGroup<CollapsableProfileGroup>): Promise<void> {
+        const profiles = this.getGroupSSHProfiles(group)
+        if (!profiles.length) {
+            return
+        }
+
+        const result = await this.platform.showMessageBox({
+            type: 'warning',
+            message: `连接分组 "${group.name || 'Ungrouped'}" 中的 ${profiles.length} 台 SSH 主机？`,
+            buttons: [
+                '连接',
+                '取消',
+            ],
+            defaultId: 0,
+            cancelId: 1,
+        })
+        if (result.response !== 0) {
+            return
+        }
+
+        const failedProfiles: PartialProfile<Profile>[] = []
+        for (const profile of profiles) {
+            try {
+                await this.profilesService.launchProfile(profile)
+            } catch {
+                failedProfiles.push(profile)
+            }
+        }
+
+        if (failedProfiles.length) {
+            await this.platform.showMessageBox({
+                type: 'error',
+                message: `有 ${failedProfiles.length} 台 SSH 主机连接失败。`,
+                detail: failedProfiles.map(profile => profile.name).join('\n'),
+                buttons: ['OK'],
+            })
+        }
+    }
+
+    onProfileMouseDown (event: MouseEvent, profile: PartialProfile<Profile>): void {
+        if (event.button === 2) {
+            this.showProfileContextMenu(event, profile)
+        }
+    }
+
+    onProfileContextMenu (event: MouseEvent, profile: PartialProfile<Profile>): void {
+        if (Date.now() - this.lastProfileContextMenuAt < 500) {
+            event.preventDefault()
+            event.stopPropagation()
+            return
+        }
+        this.showProfileContextMenu(event, profile)
+    }
+
+    private showProfileContextMenu (event: MouseEvent, profile: PartialProfile<Profile>): void {
+        event.preventDefault()
+        event.stopPropagation()
+        this.lastProfileContextMenuAt = Date.now()
+        this.platform.popupContextMenu(this.buildProfileContextMenu(profile), event)
+    }
+
+    private buildProfileContextMenu (profile: PartialProfile<Profile>): MenuItemOptions[] {
+        return [{
+            label: '更改分组',
+            enabled: !profile.isBuiltin,
+            click: () => {
+                void this.changeProfileGroup(profile)
+            },
+        }]
+    }
+
+    private async changeProfileGroup (profile: PartialProfile<Profile>): Promise<void> {
+        if (profile.isBuiltin) {
+            return
+        }
+
+        const targetGroupId = await this.selector.show<string>(
+            `选择 "${profile.name}" 的分组`,
+            this.getProfileGroupSelectorOptions(profile),
+        ).catch(() => null)
+        if (targetGroupId === null || targetGroupId === (profile.group ?? '')) {
+            return
+        }
+
+        profile.group = targetGroupId || undefined
+        await this.profilesService.writeProfile(profile)
+        await this.config.save()
+        await this.refreshAll()
+    }
+
+    private getProfileGroupSelectorOptions (profile: PartialProfile<Profile>): SelectorOption<string>[] {
+        const options: SelectorOption<string>[] = [{
+            name: '未分组',
+            description: profile.group ? undefined : '当前分组',
+            result: '',
+            weight: 0,
+        }]
+
+        return options.concat(
+            this.profileGroups
+                .filter(group => group.editable)
+                .map((group): SelectorOption<string> => ({
+                    name: group.name,
+                    description: group.id === profile.group ? '当前分组' : undefined,
+                    group: this.profilesService.resolveProfileGroupPath(group.parentGroupId ?? '').join(' / '),
+                    result: group.id,
+                    weight: 1,
+                })),
+        )
     }
 
     // Open settings page HOSTMANAGER
@@ -258,7 +414,7 @@ export class StartPageComponent extends BaseComponent {
         if (builtinEditableDelta !== 0) {
             return builtinEditableDelta
         }
-        return (a.name ?? '').localeCompare(b.name ?? '')
+        return a.name.localeCompare(b.name)
     }
 
     private static intoPartialCollapsableProfileGroup (group: PartialProfileGroup<ProfileGroup>, collapsed: boolean): PartialProfileGroup<CollapsableProfileGroup> {
