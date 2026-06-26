@@ -5,6 +5,8 @@ export class LLMConfigProvider extends ConfigProvider {
     defaults = {
         llm: {
             enabled: false,
+            historyAutocompleteEnabled: true,
+            aiAutocompleteEnabled: true,
             baseUrl: 'https://api.openai.com/v1',
             apiKey: null as string | null,
             model: 'gpt-4o-mini',

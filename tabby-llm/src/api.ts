@@ -7,6 +7,7 @@ export interface AutocompleteSuggestion {
 }
 
 export interface AutocompleteRequest {
+    tabKey: string
     partialCommand: string
     cwd: string | null
     shell: string

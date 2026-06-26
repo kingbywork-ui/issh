@@ -7,6 +7,7 @@ import { LLMTerminalHostComponent } from './components/llmTerminalHost.component
 import { LLMService } from './services/llm.service'
 import { TerminalContextService } from './services/terminalContext.service'
 import { HistoryCommandService } from './services/historyCommand.service'
+import { SensitiveInputService } from './services/sensitiveInput.service'
 
 /** @hidden */
 export class TabLLMController {
@@ -33,12 +34,15 @@ export class TabLLMController {
     private lastAutocompletePartial = ''
     private pendingFetchGeneration = 0
     private historyBootstrapPromise: Promise<void> | null = null
+    private tabKey: string
+    private inputWasSensitive = false
 
     constructor (
         private tab: BaseTerminalTabComponent<any>,
         private llm: LLMService,
         private context: TerminalContextService,
         private history: HistoryCommandService,
+        private sensitiveInput: SensitiveInputService,
         private config: ConfigService,
         private notifications: NotificationsService,
         private translate: TranslateService,
@@ -46,6 +50,7 @@ export class TabLLMController {
         private injector: EnvironmentInjector,
         private appRef: ApplicationRef,
     ) {
+        this.tabKey = this.history.getTabKey(tab)
         this.debounceSubscription = this.debounceSubject.pipe(
             debounce(() => timer(this.config.store.llm.debounceMs ?? 300)),
         ).subscribe(() => {
@@ -67,6 +72,8 @@ export class TabLLMController {
 
     destroy (): void {
         this.llm.cancelPending()
+        this.llm.clearAutocompleteCache(this.tabKey)
+        this.history.clearTabHistory(this.tabKey)
         this.inputSubscription?.unsubscribe()
         this.debounceSubscription?.unsubscribe()
         this.debounceSubject.complete()
@@ -87,6 +94,14 @@ export class TabLLMController {
 
     start (): void {
         this.attachKeyHandler()
+        this.tab.sessionChanged$.subscribe(() => {
+            this.llm.clearAutocompleteCache(this.tabKey)
+            this.history.clearTabHistory(this.tabKey)
+            this.lineBuffer = ''
+            this.lastAutocompletePartial = ''
+            this.inputWasSensitive = false
+            this.hideAutocomplete()
+        })
         this.historyBootstrapPromise = new Promise(resolve => {
             setTimeout(() => {
                 void this.history.bootstrap(this.tab)
@@ -104,7 +119,7 @@ export class TabLLMController {
                 void this.triggerAutocomplete()
                 return true
             case 'llm-nl2command':
-                if (!this.llm.isConfigured()) {
+                if (!this.isAIEnabledForCommands()) {
                     this.notifications.notice(this.translate.instant('Configure AI assistant in Settings first'))
                     return false
                 }
@@ -160,7 +175,15 @@ export class TabLLMController {
     }
 
     async triggerAutocomplete (): Promise<void> {
-        this.history.bootstrapFromTerminal(this.tab)
+        if (this.isSensitiveInputActive()) {
+            this.hideAutocomplete()
+            return
+        }
+        if (!this.hasAnyAutocompleteSourceEnabled()) {
+            this.hideAutocomplete()
+            return
+        }
+        this.history.bootstrapFromTerminal(this.tab, this.tabKey)
         await this.historyBootstrapPromise
         await this.fetchAutocomplete(true)
     }
@@ -174,7 +197,7 @@ export class TabLLMController {
     }
 
     openNL2 (): void {
-        if (!this.llm.isConfigured()) {
+        if (!this.isAIEnabledForCommands()) {
             this.notifications.notice(this.translate.instant('Configure AI assistant in Settings first'))
             return
         }
@@ -196,6 +219,9 @@ export class TabLLMController {
     }
 
     async convertNL2 (): Promise<void> {
+        if (!this.isAIEnabledForCommands()) {
+            return
+        }
         if (!this.nl2Input.trim()) {
             return
         }
@@ -259,7 +285,7 @@ export class TabLLMController {
     acceptSuggestion (suggestion: AutocompleteSuggestion): void {
         const partial = this.getPartial()
         this.insertCommand(suggestion.command, false, partial)
-        this.history.addCommand(suggestion.command)
+        this.history.addCommand(suggestion.command, { tabKey: this.tabKey })
         this.hideAutocomplete()
         this.lineBuffer = suggestion.command
         this.refresh()
@@ -301,6 +327,16 @@ export class TabLLMController {
     }
 
     private async fetchAutocomplete (force = false): Promise<void> {
+        if (this.isSensitiveInputActive()) {
+            this.lastAutocompletePartial = ''
+            this.hideAutocomplete()
+            return
+        }
+        if (!this.hasAnyAutocompleteSourceEnabled()) {
+            this.lastAutocompletePartial = ''
+            this.hideAutocomplete()
+            return
+        }
         const partial = this.getPartial()
         if (!partial.trim() || partial.trim().length < 2) {
             this.hideAutocomplete()
@@ -319,15 +355,17 @@ export class TabLLMController {
         const previousIndex = this.selectedIndex
         const previousSuggestions = [...this.suggestions]
         const fetchGeneration = ++this.pendingFetchGeneration
+        const historyEnabled = this.isHistoryAutocompleteEnabled()
+        const aiEnabled = this.isAIEnabledForCommands()
 
         this.updatePanelPosition()
-        this.showAutocomplete = true
-        this.aiLoading = this.llm.isConfigured()
+        this.showAutocomplete = historyEnabled || aiEnabled
+        this.aiLoading = aiEnabled
         if (partialChanged) {
             this.selectedIndex = 0
         }
 
-        const historyResults = this.history.search(partial, 3)
+        const historyResults = historyEnabled ? this.history.search(partial, 3, this.tabKey) : []
         const historySuggestions: AutocompleteSuggestion[] = historyResults.map((r, i) => ({
             id: `history-${i}`,
             command: r.command,
@@ -341,7 +379,7 @@ export class TabLLMController {
         }
         this.refresh()
 
-        if (!this.llm.isConfigured()) {
+        if (!aiEnabled) {
             if (!historySuggestions.length) {
                 this.showAutocomplete = false
             }
@@ -354,6 +392,7 @@ export class TabLLMController {
                 this.context.getRecentOutput(this.tab, this.config.store.llm.maxContextLines ?? 20),
             )
             const aiSuggestions = await this.llm.getAutocompleteSuggestions({
+                tabKey: this.tabKey,
                 partialCommand: partial,
                 cwd: ctx.cwd,
                 shell: ctx.shell,
@@ -399,32 +438,41 @@ export class TabLLMController {
 
     private handleInput (data: Buffer): void {
         const text = data.toString('utf-8')
+        const isSensitive = this.isSensitiveInputActive()
+        if (isSensitive) {
+            this.inputWasSensitive = true
+            this.lineBuffer = ''
+            this.lastAutocompletePartial = ''
+            this.hideAutocomplete()
+        }
 
         if (text.startsWith('\x1b')) {
             this.lineBuffer = this.context.getPartialCommand(this.tab)
             if (!this.lineBuffer) {
                 this.hideAutocomplete()
-            } else if (this.config.store.llm.enabled && this.config.store.llm.autoCompleteOnType) {
+            } else if (this.hasAnyAutocompleteSourceEnabled() && this.config.store.llm.autoCompleteOnType) {
                 this.debounceSubject.next()
             }
             return
         }
 
         if (text === '\r' || text === '\n') {
-            if (this.lineBuffer.trim()) {
-                this.history.addCommand(this.lineBuffer.trim())
+            if (this.lineBuffer.trim() && !this.inputWasSensitive) {
+                this.history.addCommand(this.lineBuffer.trim(), { tabKey: this.tabKey })
             }
             this.lineBuffer = ''
+            this.inputWasSensitive = false
             this.hideAutocomplete()
             return
         }
 
         for (const char of text) {
             if (char === '\r' || char === '\n') {
-                if (this.lineBuffer.trim()) {
-                    this.history.addCommand(this.lineBuffer.trim())
+                if (this.lineBuffer.trim() && !this.inputWasSensitive) {
+                    this.history.addCommand(this.lineBuffer.trim(), { tabKey: this.tabKey })
                 }
                 this.lineBuffer = ''
+                this.inputWasSensitive = false
                 this.hideAutocomplete()
                 continue
             }
@@ -433,11 +481,11 @@ export class TabLLMController {
             } else if (char === '\x1b') {
                 this.lineBuffer = this.context.getPartialCommand(this.tab)
                 return
-            } else if (char >= ' ') {
+            } else if (char >= ' ' && !isSensitive) {
                 this.lineBuffer += char
             }
         }
-        if (this.config.store.llm.enabled && this.config.store.llm.autoCompleteOnType) {
+        if (!isSensitive && this.hasAnyAutocompleteSourceEnabled() && this.config.store.llm.autoCompleteOnType) {
             this.debounceSubject.next()
         }
     }
@@ -484,5 +532,21 @@ export class TabLLMController {
 
     private refresh (): void {
         this.notifyChange?.()
+    }
+
+    private isSensitiveInputActive (): boolean {
+        return this.sensitiveInput.isSensitiveInputActive(this.tab, this.lineBuffer)
+    }
+
+    private isHistoryAutocompleteEnabled (): boolean {
+        return this.config.store.llm.historyAutocompleteEnabled ?? true
+    }
+
+    private isAIEnabledForCommands (): boolean {
+        return (this.config.store.llm.aiAutocompleteEnabled ?? true) && this.llm.isConfigured()
+    }
+
+    private hasAnyAutocompleteSourceEnabled (): boolean {
+        return this.isHistoryAutocompleteEnabled() || this.isAIEnabledForCommands()
     }
 }

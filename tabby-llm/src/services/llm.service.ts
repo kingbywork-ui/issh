@@ -20,7 +20,7 @@ interface ChatCompletionResponse {
 @Injectable({ providedIn: 'root' })
 export class LLMService {
     private logger: Logger
-    private cache = new SuggestionCache<AutocompleteSuggestion[]>()
+    private caches = new Map<string, SuggestionCache<AutocompleteSuggestion[]>>()
     private guard = new DangerousCommandGuard()
     private abortController: AbortController | null = null
 
@@ -53,12 +53,13 @@ export class LLMService {
             return []
         }
 
-        const cacheKey = this.cache.makeKey(
+        const cache = this.getCache(request.tabKey)
+        const cacheKey = cache.makeKey(
             request.partialCommand,
             request.cwd,
             request.shell,
         )
-        const cached = this.cache.get(cacheKey)
+        const cached = cache.get(cacheKey)
         if (cached) {
             return cached
         }
@@ -70,8 +71,12 @@ export class LLMService {
         ], { maxTokens: 512, temperature: 0.2 })
 
         const suggestions = this.parseAutocompleteResponse(content)
-        this.cache.set(cacheKey, suggestions)
+        cache.set(cacheKey, suggestions)
         return suggestions
+    }
+
+    clearAutocompleteCache (tabKey: string): void {
+        this.caches.delete(tabKey)
     }
 
     async convertNaturalLanguage (request: NL2CommandRequest): Promise<NL2CommandResult> {
@@ -239,6 +244,15 @@ export class LLMService {
         } finally {
             this.abortController = null
         }
+    }
+
+    private getCache (tabKey: string): SuggestionCache<AutocompleteSuggestion[]> {
+        let cache = this.caches.get(tabKey)
+        if (!cache) {
+            cache = new SuggestionCache<AutocompleteSuggestion[]>()
+            this.caches.set(tabKey, cache)
+        }
+        return cache
     }
 
     private parseAutocompleteResponse (content: string): AutocompleteSuggestion[] {

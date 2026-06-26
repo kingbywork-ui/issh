@@ -6,6 +6,7 @@ import * as fs from 'fs/promises'
 import * as os from 'os'
 import { TerminalContextService } from './terminalContext.service'
 import { normalizeCommand } from './commandValidation'
+import { SensitiveInputService } from './sensitiveInput.service'
 
 interface HistoryEntry {
     command: string
@@ -18,17 +19,20 @@ interface HistoryEntry {
 export class HistoryCommandService {
     private history: HistoryEntry[] = []
     private maxHistory = 500
+    private maxTabHistory = 100
     private logger: Logger
     private historyFilePath: string | null = null
     private saveTimer: ReturnType<typeof setTimeout> | null = null
     private loaded = false
     private shellHistoryLoaded = new Set<string>()
     private bootstrapPromises = new Map<string, Promise<void>>()
+    private tabHistory = new Map<string, HistoryEntry[]>()
 
     constructor (
         log: LogService,
         platform: PlatformService,
         private context: TerminalContextService,
+        private sensitiveInput: SensitiveInputService,
     ) {
         this.logger = log.create('llm-history')
         const configPath = platform.getConfigPath()
@@ -59,18 +63,17 @@ export class HistoryCommandService {
 
     async bootstrap (tab: BaseTerminalTabComponent<any>): Promise<void> {
         await this.ensureShellHistoryLoaded(tab)
-        this.bootstrapFromTerminal(tab)
+        this.bootstrapFromTerminal(tab, this.getTabKey(tab))
     }
 
-    bootstrapFromTerminal (tab: BaseTerminalTabComponent<any>): void {
+    bootstrapFromTerminal (tab: BaseTerminalTabComponent<any>, tabKey: string): void {
         const commands = this.context.extractCommandsFromTerminal(tab, 300)
         for (const command of commands) {
             const normalized = normalizeCommand(command, { allowMultiline: true })
             if (normalized) {
-                this.addCommand(normalized, false)
+                this.addCommand(normalized, { scheduleSave: false, tabKey, persistGlobal: false })
             }
         }
-        void this.saveToDisk()
     }
 
     async ensureShellHistoryLoaded (tab: BaseTerminalTabComponent<any>): Promise<void> {
@@ -108,7 +111,7 @@ export class HistoryCommandService {
                 for (const command of this.parseShellHistory(file, data)) {
                     const normalized = normalizeCommand(command, { allowMultiline: true })
                     if (normalized) {
-                        this.addCommand(normalized, false)
+                        this.addCommand(normalized, { scheduleSave: false })
                     }
                 }
             } catch (e) {
@@ -162,7 +165,7 @@ PY`,
 
             const normalizedCommands = this.parseRemoteHistoryOutput(output)
             for (const item of normalizedCommands) {
-                this.addCommand(item, false)
+                this.addCommand(item, { scheduleSave: false })
             }
             if (normalizedCommands.length > 0) {
                 void this.saveToDisk()
@@ -284,36 +287,78 @@ PY`,
         }
     }
 
-    addCommand (command: string, scheduleSave = true): void {
+    addCommand (
+        command: string,
+        options: { scheduleSave?: boolean, tabKey?: string, persistGlobal?: boolean } = {},
+    ): void {
+        const scheduleSave = options.scheduleSave ?? true
+        const persistGlobal = options.persistGlobal ?? true
         const normalized = this.normalizeHistoryCommand(command)
-        if (!normalized) {
+        if (!normalized || !this.sensitiveInput.shouldStoreCommand(normalized)) {
             return
         }
-        const existing = this.history.find(e => e.command === normalized)
-        if (existing) {
-            existing.useCount++
-            existing.timestamp = Date.now()
-            this.history.sort((a, b) => b.timestamp - a.timestamp)
-            if (scheduleSave) {
-                this.scheduleSave()
+
+        if (options.tabKey) {
+            this.addToTabHistory(options.tabKey, normalized)
+        }
+
+        if (persistGlobal) {
+            const existing = this.history.find(e => e.command === normalized)
+            if (existing) {
+                existing.useCount++
+                existing.timestamp = Date.now()
+                this.history.sort((a, b) => b.timestamp - a.timestamp)
+                if (scheduleSave) {
+                    this.scheduleSave()
+                }
+                return
             }
-            return
-        }
-        this.history.unshift({ command: normalized, timestamp: Date.now(), useCount: 1 })
-        if (this.history.length > this.maxHistory) {
-            this.history = this.history.slice(0, this.maxHistory)
+            this.history.unshift({ command: normalized, timestamp: Date.now(), useCount: 1 })
+            if (this.history.length > this.maxHistory) {
+                this.history = this.history.slice(0, this.maxHistory)
+            }
         }
         if (scheduleSave) {
             this.scheduleSave()
         }
     }
 
-    search (partial: string, limit: number): { command: string, score: number }[] {
-        if (!this.loaded || !partial.trim() || this.history.length === 0) {
+    search (partial: string, limit: number, tabKey?: string): { command: string, score: number }[] {
+        if (!this.loaded || !partial.trim()) {
             return []
         }
         const lower = partial.toLowerCase().trim()
-        const scored = this.history.map((entry, index) => {
+        const tabResults = (tabKey ? this.scoreEntries(this.tabHistory.get(tabKey) ?? [], lower, true) : [])
+            .slice(0, limit)
+        const seen = new Set(tabResults.map(result => result.command))
+        const globalResults = this.scoreEntries(this.history, lower, false)
+            .filter(result => !seen.has(result.command))
+            .slice(0, Math.max(0, limit - tabResults.length))
+
+        return [...tabResults, ...globalResults]
+    }
+
+    clearTabHistory (tabKey: string): void {
+        this.tabHistory.delete(tabKey)
+    }
+
+    getTabKey (tab: BaseTerminalTabComponent<any>): string {
+        const target = tab as any
+        const profile = tab.profile
+        if (!target.__tabbyLLMKey) {
+            const profilePart = profile?.id ?? profile?.name ?? profile?.type ?? 'tab'
+            const sessionPart = target.session?.constructor?.name ?? profile?.options?.host ?? 'session'
+            target.__tabbyLLMKey = `${profilePart}:${sessionPart}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`
+        }
+        return target.__tabbyLLMKey
+    }
+
+    private scoreEntries (entries: HistoryEntry[], lower: string, preferTabLocal: boolean): { command: string, score: number }[] {
+        if (!entries.length) {
+            return []
+        }
+
+        const scored = entries.map((entry, index) => {
             const cmd = entry.command.toLowerCase()
             let score = 0
 
@@ -330,9 +375,9 @@ PY`,
             }
 
             if (score > 0) {
-                const recencyBonus = Math.max(0, 10 - index)
+                const recencyBonus = Math.max(0, (preferTabLocal ? 14 : 10) - index)
                 const frequencyBonus = Math.min(15, entry.useCount * 3)
-                score += recencyBonus + frequencyBonus
+                score += recencyBonus + frequencyBonus + (preferTabLocal ? 20 : 0)
             }
 
             return { command: entry.command, score }
@@ -341,7 +386,6 @@ PY`,
         return scored
             .filter(s => s.score > 0)
             .sort((a, b) => b.score - a.score)
-            .slice(0, limit)
     }
 
     private fuzzyMatch (pattern: string, text: string): boolean {
@@ -391,5 +435,21 @@ PY`,
         }
         return Array.from(merged.values())
             .sort((a, b) => b.timestamp - a.timestamp)
+    }
+
+    private addToTabHistory (tabKey: string, command: string): void {
+        const entries = this.tabHistory.get(tabKey) ?? []
+        const existing = entries.find(entry => entry.command === command)
+        if (existing) {
+            existing.useCount++
+            existing.timestamp = Date.now()
+            entries.sort((a, b) => b.timestamp - a.timestamp)
+        } else {
+            entries.unshift({ command, timestamp: Date.now(), useCount: 1 })
+            if (entries.length > this.maxTabHistory) {
+                entries.length = this.maxTabHistory
+            }
+        }
+        this.tabHistory.set(tabKey, entries)
     }
 }

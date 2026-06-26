@@ -1,11 +1,31 @@
 h3.mb-3(translate) AI assistant
 
 .alert.alert-info
-    span(translate) Connect an OpenAI-compatible API to enable command autocomplete and natural language to command. Your API key is stored locally in config.yaml.
+    span(translate) Connect an OpenAI-compatible API to enable AI command autocomplete and natural language to command. Your API key is stored locally in config.yaml.
+
+.form-line
+    .header
+        .title(translate) History autocomplete
+        .description(translate) Show local history-based command suggestions without using any AI service
+    toggle(
+        [(ngModel)]='config.store.llm.historyAutocompleteEnabled',
+        (ngModelChange)='config.save()'
+    )
+
+.form-line
+    .header
+        .title(translate) AI command autocomplete
+        .description(translate) Show AI-generated command suggestions. Requires AI features to be enabled below.
+    toggle(
+        [(ngModel)]='config.store.llm.aiAutocompleteEnabled',
+        (ngModelChange)='config.save()'
+    )
+    .mt-1.text-muted.small(*ngIf='config.store.llm.aiAutocompleteEnabled && !config.store.llm.enabled', translate) Enable AI features below to use AI command autocomplete.
 
 .form-line
     .header
         .title(translate) Enable AI features
+        .description(translate) Enables AI-backed features such as AI command autocomplete and natural language to command
     toggle(
         [(ngModel)]='config.store.llm.enabled',
         (ngModelChange)='config.save()'
@@ -77,6 +97,7 @@ ng-container(*ngIf='config.store.llm.enabled')
     .form-line
         .header
             .title(translate) Autocomplete while typing
+            .description(translate) Automatically show suggestions while typing when history autocomplete or AI command autocomplete is enabled
         toggle(
             [(ngModel)]='config.store.llm.autoCompleteOnType',
             (ngModelChange)='config.save()'
