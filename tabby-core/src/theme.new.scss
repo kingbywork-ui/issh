@@ -1,5 +1,8 @@
+@use 'sass:math';
+@import './ops-ui.tokens.scss';
+
 $font-family-sans-serif: "Source Sans Pro";
-$font-size-base: 14rem / 16;
+$font-size-base: math.div(14rem, 16);
 
 app-root {
     background: transparent;
@@ -56,12 +59,17 @@ app-root {
                     }
 
                     .current-tab-indicator {
-                        background:var(--bs-light);
+                        background: var(--ops-signal);
                     }
 
                     &.active {
                         color: var(--theme-fg);
                         background: var(--body-bg);
+
+                        .index {
+                            opacity: 0.85;
+                            color: var(--ops-signal);
+                        }
                     }
                 }
             }
@@ -426,7 +434,7 @@ ngx-colors-panel .opened {
 }
 
 start-page {
-    background: var(--theme-bg-more-2);
+    background: var(--ops-base);
 }
 
 split-tab-spanner {

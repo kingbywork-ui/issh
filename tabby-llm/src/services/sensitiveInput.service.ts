@@ -3,7 +3,7 @@ import { BaseTerminalTabComponent } from 'tabby-terminal'
 import { TerminalContextService } from './terminalContext.service'
 
 const SENSITIVE_PROMPT_PATTERNS = [
-    /password(?:\s+for)?[\s:>]*$/i,
+    /(?:^|\s)password(?:\s+for)?[\s:>]*$/i,
     /passphrase[\s:>]*$/i,
     /pin[\s:>]*$/i,
     /token[\s:>]*$/i,
@@ -14,6 +14,9 @@ const SENSITIVE_PROMPT_PATTERNS = [
     /口令[\s:：>]*$/i,
     /密码[\s:：>]*$/i,
     /\[sudo\]\s+password\s+for\s+.+[\s:>]*$/i,
+    /\[sudo(?::[^\]]+)?\]\s+password[\s:>]*$/i,
+    /\[sudo(?::[^\]]+)?\][^\r\n]*password[\s:>]*$/i,
+    /\bsu\b[^\r\n]*password[\s:>]*$/i,
     /enter (?:your )?(?:password|passphrase|pin|token|secret)[\s:>]*$/i,
     /请输入(?:密码|口令|验证码|密钥口令)[\s:：>]*$/i,
 ]
@@ -45,7 +48,7 @@ export class SensitiveInputService {
             .map(text => text?.trim())
             .filter(Boolean) as string[]
 
-        return candidates.some(text => SENSITIVE_PROMPT_PATTERNS.some(pattern => pattern.test(text)))
+        return candidates.some(text => this.looksLikeSensitivePrompt(text))
     }
 
     shouldStoreCommand (command: string): boolean {
@@ -54,5 +57,17 @@ export class SensitiveInputService {
             return false
         }
         return !SENSITIVE_COMMAND_PATTERNS.some(pattern => pattern.test(normalized))
+    }
+
+    looksLikeSensitivePrompt (text: string): boolean {
+        const normalized = text.trim()
+        if (!normalized) {
+            return false
+        }
+
+        const maskedPrompt = normalized.replace(/\*+$/g, '').trimEnd()
+        return [normalized, maskedPrompt]
+            .filter(Boolean)
+            .some(candidate => SENSITIVE_PROMPT_PATTERNS.some(pattern => pattern.test(candidate)))
     }
 }

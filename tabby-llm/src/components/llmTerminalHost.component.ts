@@ -53,4 +53,48 @@ export class LLMTerminalHostComponent implements OnDestroy {
     onNL2Dismiss (): void {
         this.controller?.hideNL2()
     }
+
+    onSidecarInput (text: string): void {
+        this.controller!.sidecarInput = text
+    }
+
+    onSidecarSubmit (): void {
+        void this.controller?.submitSidecarInput()
+    }
+
+    onSidecarDismiss (): void {
+        this.controller?.hideSidecar()
+    }
+
+    onSidecarClear (): void {
+        this.controller?.clearSidecar()
+    }
+
+    onSidecarSelectRagResult (suggestion: AutocompleteSuggestion): void {
+        void this.controller?.selectSidecarRagResult(suggestion)
+    }
+
+    onSidecarInsertRagResult (suggestion: AutocompleteSuggestion): void {
+        this.controller?.insertSidecarSuggestion(suggestion)
+    }
+
+    onSidecarInsertAIResult (): void {
+        void this.controller?.insertSidecarAIResult(false)
+    }
+
+    onSidecarRunAIResult (): void {
+        void this.controller?.insertSidecarAIResult(true)
+    }
+
+    onSidecarMoveNext (): void {
+        this.controller?.moveSidecarSelection(1)
+    }
+
+    onSidecarMovePrev (): void {
+        this.controller?.moveSidecarSelection(-1)
+    }
+
+    onSidecarInsertCurrent (): void {
+        void this.controller?.insertCurrentSidecarResult(false)
+    }
 }

@@ -4,9 +4,10 @@ import { FormsModule } from '@angular/forms'
 import { NgbModule } from '@ng-bootstrap/ng-bootstrap'
 import { InfiniteScrollModule } from 'ngx-infinite-scroll'
 
-import TabbyCorePlugin, { ToolbarButtonProvider, HotkeyProvider, ConfigProvider, HotkeysService, AppService } from 'tabby-core'
+import TabbyCorePlugin, { ToolbarButtonProvider, HotkeyProvider, ConfigProvider, HotkeysService, AppService, ProfileEditorService } from 'tabby-core'
 
 import { EditProfileModalComponent } from './components/editProfileModal.component'
+import { ProfileEditorServiceImpl } from './profileEditorImpl'
 import { EditProfileGroupModalComponent } from './components/editProfileGroupModal.component'
 import { HotkeyInputModalComponent } from './components/hotkeyInputModal.component'
 import { HotkeySettingsTabComponent } from './components/hotkeySettingsTab.component'
@@ -39,6 +40,7 @@ import { HotkeySettingsTabProvider, WindowSettingsTabProvider, VaultSettingsTabP
         InfiniteScrollModule,
     ],
     providers: [
+        { provide: ProfileEditorService, useClass: ProfileEditorServiceImpl },
         { provide: ToolbarButtonProvider, useClass: ButtonProvider, multi: true },
         { provide: ConfigProvider, useClass: SettingsConfigProvider, multi: true },
         { provide: HotkeyProvider, useClass: SettingsHotkeyProvider, multi: true },
@@ -85,3 +87,4 @@ export default class SettingsModule {
 
 export * from './api'
 export { SettingsTabComponent }
+export { EditProfileModalComponent }

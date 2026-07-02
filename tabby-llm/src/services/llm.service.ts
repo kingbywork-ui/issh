@@ -29,6 +29,9 @@ export class LLMService {
         private config: ConfigService,
     ) {
         this.logger = log.create('llm')
+        this.config.changed$.subscribe(() => {
+            this.caches.clear()
+        })
     }
 
     isConfigured (): boolean {

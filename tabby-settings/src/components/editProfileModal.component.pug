@@ -92,5 +92,22 @@
             ng-template(#placeholder)
 
 .modal-footer
+    button.btn.btn-info.me-auto(
+        *ngIf='defaultsMode === "disabled"',
+        (click)='testConnection()',
+        [disabled]='testing',
+    )
+        span(*ngIf='!testing')
+            i.fas.fa-plug.me-1
+            | {{ '测试连接' }}
+        span(*ngIf='testing')
+            span.spinner-border.spinner-border-sm.me-1
+            | {{ '测试中...' }}
+    span.me-auto.text-success.fs-6(*ngIf='testResult === "success"')
+        i.fas.fa-check-circle.me-1
+        | {{ testMessage }}
+    span.me-auto.text-danger.fs-6(*ngIf='testResult === "fail"')
+        i.fas.fa-times-circle.me-1
+        | {{ testMessage }}
     button.btn.btn-primary((click)='save()', translate) Save
     button.btn.btn-danger((click)='cancel()', translate) Cancel

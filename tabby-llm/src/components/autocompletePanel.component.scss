@@ -74,6 +74,16 @@
             background: rgba(120, 60, 200, 0.3);
             color: #c084fc;
         }
+
+        &.script {
+            background: rgba(0, 150, 80, 0.3);
+            color: #4dbf7a;
+        }
+
+        &.rag {
+            background: rgba(220, 120, 0, 0.28);
+            color: #ffb24d;
+        }
     }
 
     .command {

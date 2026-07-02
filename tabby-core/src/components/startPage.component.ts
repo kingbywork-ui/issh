@@ -1,14 +1,16 @@
-import { Component } from '@angular/core'
+import { Component, Optional, Inject } from '@angular/core'
+import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
 import { HomeBaseService } from '../services/homeBase.service'
 import { ProfilesService } from '../services/profiles.service'
 import { ConfigService } from '../services/config.service'
 import { AppService } from '../services/app.service'
 import { BaseComponent } from './base.component'
-import { PartialProfile, PartialProfileGroup, Profile, ProfileGroup } from '../api'
+import { PartialProfile, PartialProfileGroup, Profile, ProfileGroup, ProfileEditorService } from '../api'
 import { MenuItemOptions } from '../api/menu'
 import { SelectorOption } from '../api/selector'
 import { PlatformService } from '../api/platform'
 import { SelectorService } from '../services/selector.service'
+import { PromptModalComponent } from './promptModal.component'
 
 interface CollapsableProfileGroup extends ProfileGroup {
     collapsed: boolean
@@ -46,11 +48,24 @@ export class StartPageComponent extends BaseComponent {
         private app: AppService,
         private platform: PlatformService,
         private selector: SelectorService,
+        private ngbModal: NgbModal,
+        @Optional() @Inject(ProfileEditorService) private profileEditor: ProfileEditorService | null,
     ) {
         super()
     }
 
     async ngOnInit (): Promise<void> {
+        const savedGroupId = window.localStorage.startPageActiveGroupId
+        if (savedGroupId) {
+            this.activeGroupId = savedGroupId
+        } else {
+            const savedView = window.localStorage.startPageActiveView
+            if (savedView === 'favorites') {
+                this.favoritesOnly = true
+            } else if (savedView === 'recent') {
+                this.recentOnly = true
+            }
+        }
         await this.refreshAll()
         this.subscribeUntilDestroyed(this.config.changed$, () => this.refreshAll())
     }
@@ -85,24 +100,32 @@ export class StartPageComponent extends BaseComponent {
         this.activeGroupId = null
         this.favoritesOnly = false
         this.recentOnly = false
+        delete window.localStorage.startPageActiveGroupId
+        delete window.localStorage.startPageActiveView
     }
 
     showFavorites (): void {
         this.activeGroupId = null
         this.recentOnly = false
         this.favoritesOnly = true
+        window.localStorage.startPageActiveView = 'favorites'
+        delete window.localStorage.startPageActiveGroupId
     }
 
     showRecentHosts (): void {
         this.activeGroupId = null
         this.favoritesOnly = false
         this.recentOnly = true
+        window.localStorage.startPageActiveView = 'recent'
+        delete window.localStorage.startPageActiveGroupId
     }
 
     selectGroupView (group: PartialProfileGroup<CollapsableProfileGroup>): void {
         this.activeGroupId = group.id
         this.favoritesOnly = false
         this.recentOnly = false
+        window.localStorage.startPageActiveGroupId = group.id ?? ''
+        delete window.localStorage.startPageActiveView
     }
 
     isGroupActive (group: PartialProfileGroup<CollapsableProfileGroup>): boolean {
@@ -117,6 +140,9 @@ export class StartPageComponent extends BaseComponent {
     }
 
     isSidebarGroupVisible (group: PartialProfileGroup<CollapsableProfileGroup>): boolean {
+        if (group.editable) {
+            return true
+        }
         return this.getSidebarVisibleProfiles(group).length > 0 || (group.children ?? []).some(child => this.isSidebarGroupVisible(child))
     }
 
@@ -226,13 +252,41 @@ export class StartPageComponent extends BaseComponent {
 
     private buildGroupContextMenu (group: PartialProfileGroup<CollapsableProfileGroup>): MenuItemOptions[] {
         const profiles = this.getGroupSSHProfiles(group)
-        return [{
-            label: `连接 (${profiles.length})`,
-            enabled: profiles.length > 0,
-            click: () => {
-                void this.connectGroupSSHProfiles(group)
+        return [
+            {
+                label: `连接 (${profiles.length})`,
+                enabled: profiles.length > 0,
+                click: () => {
+                    void this.connectGroupSSHProfiles(group)
+                },
             },
-        }]
+            { type: 'separator' },
+            {
+                label: '新增主机',
+                click: () => {
+                    void this.addProfileToGroup(group)
+                },
+            },
+            {
+                label: '新增组',
+                click: () => {
+                    void this.addSubGroup(group)
+                },
+            },
+            { type: 'separator' },
+            {
+                label: '重命名',
+                click: () => {
+                    void this.renameGroup(group)
+                },
+            },
+            {
+                label: '删除组',
+                click: () => {
+                    void this.deleteGroup(group)
+                },
+            },
+        ]
     }
 
     private getGroupSSHProfiles (group: PartialProfileGroup<CollapsableProfileGroup>): PartialProfile<Profile>[] {
@@ -248,6 +302,7 @@ export class StartPageComponent extends BaseComponent {
         const result = await this.platform.showMessageBox({
             type: 'warning',
             message: `连接分组 "${group.name || 'Ungrouped'}" 中的 ${profiles.length} 台 SSH 主机？`,
+            detail: this.buildGroupConnectDetail(profiles),
             buttons: [
                 '连接',
                 '取消',
@@ -278,6 +333,163 @@ export class StartPageComponent extends BaseComponent {
         }
     }
 
+    private async addProfileToGroup (group: PartialProfileGroup<CollapsableProfileGroup>): Promise<void> {
+        if (!this.profileEditor) {
+            this.openSettingsProfiles()
+            return
+        }
+
+        let base = await this.selector.show<PartialProfile<Profile>>(
+            '选择一个基础配置作为模板',
+            (await this.profilesService.getProfiles())
+                .filter(p => !(p.id && this.config.store.profileBlacklist?.includes(p.id)))
+                .map(p => ({
+                    icon: p.icon ?? undefined,
+                    description: this.profilesService.getDescription(p) ?? undefined,
+                    name: p.group ? `${this.profilesService.resolveProfileGroupName(p.group)} / ${p.name}` : p.name,
+                    group: p.isTemplate ? '模板' : '复制已有配置',
+                    result: p,
+                    weight: p.isTemplate ? 0 : 1,
+                })),
+        ).catch(() => undefined)
+        if (!base) {
+            return
+        }
+
+        const result = await this.profileEditor.newProfile(base)
+        if (!result) {
+            return
+        }
+
+        result.group = group.id
+
+        if (!result.name) {
+            const provider = this.profilesService.providerForProfile(result)
+            const cfgProxy = this.profilesService.getConfigProxyForProfile(result)
+            result.name = provider?.getSuggestedName?.(cfgProxy) ?? `${base.name} copy`
+        }
+
+        await this.profilesService.newProfile(result)
+        await this.config.save()
+        await this.refreshAll()
+    }
+
+    private async addSubGroup (group: PartialProfileGroup<CollapsableProfileGroup>): Promise<void> {
+        const modal = this.ngbModal.open(PromptModalComponent)
+        modal.componentInstance.prompt = `在 "${group.name || 'Ungrouped'}" 下新增分组名称`
+        const result = (await modal.result.catch(() => null)) as { value: string } | null
+        if (!result?.value?.trim()) {
+            return
+        }
+
+        const newGroup: PartialProfileGroup<ProfileGroup> = {
+            id: '',
+            name: result.value.trim(),
+            parentGroupId: group.id,
+            icon: group.icon,
+        }
+
+        await this.profilesService.newProfileGroup(newGroup)
+        await this.config.save()
+        await this.refreshAll()
+    }
+
+    private async renameGroup (group: PartialProfileGroup<CollapsableProfileGroup>): Promise<void> {
+        const modal = this.ngbModal.open(PromptModalComponent)
+        modal.componentInstance.prompt = '重命名分组'
+        modal.componentInstance.value = group.name || ''
+        const result = (await modal.result.catch(() => null)) as { value: string } | null
+        if (!result?.value?.trim() || result.value.trim() === group.name) {
+            return
+        }
+
+        group.name = result.value.trim()
+        await this.profilesService.writeProfileGroup(group)
+        await this.config.save()
+        await this.refreshAll()
+    }
+
+    onSidebarContextMenu (event: MouseEvent): void {
+        event.preventDefault()
+        event.stopPropagation()
+        this.platform.popupContextMenu([
+            {
+                label: '新建分组',
+                click: () => {
+                    void this.createRootGroup()
+                },
+            },
+        ], event)
+    }
+
+    private async createRootGroup (): Promise<void> {
+        const modal = this.ngbModal.open(PromptModalComponent)
+        modal.componentInstance.prompt = '新建分组名称'
+        const result = (await modal.result.catch(() => null)) as { value: string } | null
+        if (!result?.value?.trim()) {
+            return
+        }
+
+        const newGroup: PartialProfileGroup<ProfileGroup> = {
+            id: '',
+            name: result.value.trim(),
+            parentGroupId: undefined,
+            icon: 'folder',
+        }
+
+        await this.profilesService.newProfileGroup(newGroup)
+        await this.config.save()
+        await this.refreshAll()
+    }
+
+    private async deleteGroup (group: PartialProfileGroup<CollapsableProfileGroup>): Promise<void> {
+        const profiles = this.getGroupSSHProfiles(group)
+        const childCount = this.countGroupsRecursive(group)
+
+        if (profiles.length > 0) {
+            const choice = await this.platform.showMessageBox({
+                type: 'warning',
+                message: `分组 "${group.name}" 包含 ${profiles.length} 台主机。`,
+                detail: `选择"移动到未分组"将保留主机并删除分组；选择"同时删除"将连同主机一起删除。`,
+                buttons: ['移动到未分组并删除', '同时删除所有主机', '取消'],
+                defaultId: 0,
+                cancelId: 2,
+            })
+
+            if (choice.response === 2) {
+                return
+            }
+
+            await this.profilesService.deleteProfileGroup(group, { deleteProfiles: choice.response === 1 })
+        } else {
+            const choice = await this.platform.showMessageBox({
+                type: 'warning',
+                message: `确认删除分组 "${group.name}"？`,
+                detail: childCount > 1 ? `该分组下还有 ${childCount - 1} 个子分组，子分组中的主机将移动到未分组。` : undefined,
+                buttons: ['删除', '取消'],
+                defaultId: 0,
+                cancelId: 1,
+            })
+
+            if (choice.response === 1) {
+                return
+            }
+
+            await this.profilesService.deleteProfileGroup(group)
+        }
+
+        await this.config.save()
+        await this.refreshAll()
+    }
+
+    private countGroupsRecursive (group: PartialProfileGroup<CollapsableProfileGroup>): number {
+        let count = 1
+        for (const child of group.children ?? []) {
+            count += this.countGroupsRecursive(child)
+        }
+        return count
+    }
+
     onProfileMouseDown (event: MouseEvent, profile: PartialProfile<Profile>): void {
         if (event.button === 2) {
             this.showProfileContextMenu(event, profile)
@@ -302,6 +514,19 @@ export class StartPageComponent extends BaseComponent {
 
     private buildProfileContextMenu (profile: PartialProfile<Profile>): MenuItemOptions[] {
         return [
+            {
+                label: '连接',
+                click: () => {
+                    void this.launchProfile(profile)
+                },
+            },
+            {
+                label: '编辑',
+                enabled: !profile.isBuiltin,
+                click: () => {
+                    void this.editProfile(profile)
+                },
+            },
             {
                 label: '更改分组',
                 enabled: !profile.isBuiltin,
@@ -360,6 +585,22 @@ export class StartPageComponent extends BaseComponent {
         )
     }
 
+    private async editProfile (profile: PartialProfile<Profile>): Promise<void> {
+        if (!this.profileEditor) {
+            this.openSettingsProfiles()
+            return
+        }
+
+        const result = await this.profileEditor.editProfile(profile)
+        if (!result) {
+            return
+        }
+
+        await this.profilesService.writeProfile(result)
+        await this.config.save()
+        await this.refreshAll()
+    }
+
     private async deleteProfile (profile: PartialProfile<Profile>): Promise<void> {
         if (profile.isBuiltin) {
             return
@@ -367,7 +608,8 @@ export class StartPageComponent extends BaseComponent {
 
         if ((await this.platform.showMessageBox({
             type: 'warning',
-            message: `删除 "${profile.name}"？`,
+            message: `删除主机 "${profile.name}"？`,
+            detail: this.buildDeleteConfirmDetail(profile),
             buttons: [
                 '删除',
                 '取消',
@@ -426,6 +668,59 @@ export class StartPageComponent extends BaseComponent {
             return 'text-bg-success'
         }
         return 'text-bg-dark'
+    }
+
+    isRiskEnvironment (environment?: string | null): boolean {
+        return (environment ?? '').toLowerCase().includes('prod')
+    }
+
+    isRecentProfile (profile: PartialProfile<Profile>): boolean {
+        return !!profile.id && this.recentProfileIds.has(profile.id)
+    }
+
+    getHostStatusRailClass (profile: PartialProfile<Profile>): string {
+        if (this.isRiskEnvironment(profile.environment)) {
+            return 'host-status-rail--risk'
+        }
+        if (profile.favorite) {
+            return 'host-status-rail--favorite'
+        }
+        if (this.isRecentProfile(profile)) {
+            return 'host-status-rail--recent'
+        }
+        if (profile.type === 'ssh') {
+            return 'host-status-rail--signal'
+        }
+        return ''
+    }
+
+    private getProfileGroupLabel (profile: PartialProfile<Profile>): string {
+        if (!profile.group) {
+            return '未分组'
+        }
+        return this.profilesService.resolveProfileGroupPath(profile.group).join(' / ') || profile.group
+    }
+
+    private buildDeleteConfirmDetail (profile: PartialProfile<Profile>): string {
+        const lines: string[] = []
+        const info = this.getProfileConnectionInfo(profile)
+        if (info?.host) {
+            lines.push(`地址：${info.user ? `${info.user}@` : ''}${info.host}${info.port ? `:${info.port}` : ''}`)
+        }
+        lines.push(`分组：${this.getProfileGroupLabel(profile)}`)
+        if (profile.environment) {
+            lines.push(`环境：${profile.environment}`)
+        }
+        lines.push('此操作不可恢复。')
+        return lines.join('\n')
+    }
+
+    private buildGroupConnectDetail (profiles: PartialProfile<Profile>[]): string {
+        const preview = profiles.slice(0, 5).map(p => p.name).join('\n')
+        if (profiles.length <= 5) {
+            return preview
+        }
+        return `${preview}\n… 等 ${profiles.length} 台`
     }
 
     // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types

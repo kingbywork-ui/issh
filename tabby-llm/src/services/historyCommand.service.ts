@@ -18,8 +18,6 @@ interface HistoryEntry {
 @Injectable({ providedIn: 'root' })
 export class HistoryCommandService {
     private history: HistoryEntry[] = []
-    private maxHistory = 500
-    private maxTabHistory = 100
     private logger: Logger
     private historyFilePath: string | null = null
     private saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -52,7 +50,7 @@ export class HistoryCommandService {
             const data = await fs.readFile(this.historyFilePath, 'utf-8')
             const parsed = JSON.parse(data) as HistoryEntry[]
             if (Array.isArray(parsed)) {
-                this.history = this.compactHistory(parsed).slice(0, this.maxHistory)
+                this.history = this.compactHistory(parsed)
             }
         } catch (e) {
             this.logger.warn('Failed to load command history:', e)
@@ -63,16 +61,22 @@ export class HistoryCommandService {
 
     async bootstrap (tab: BaseTerminalTabComponent<any>): Promise<void> {
         await this.ensureShellHistoryLoaded(tab)
-        this.bootstrapFromTerminal(tab, this.getTabKey(tab))
     }
 
-    bootstrapFromTerminal (tab: BaseTerminalTabComponent<any>, tabKey: string): void {
-        const commands = this.context.extractCommandsFromTerminal(tab, 300)
-        for (const command of commands) {
-            const normalized = normalizeCommand(command, { allowMultiline: true })
-            if (normalized) {
-                this.addCommand(normalized, { scheduleSave: false, tabKey, persistGlobal: false })
-            }
+    usesRemoteHistory (tab: BaseTerminalTabComponent<any>): boolean {
+        return tab.profile?.type === 'ssh'
+    }
+
+    async refreshRemoteHistory (tab: BaseTerminalTabComponent<any>, tabKey: string): Promise<void> {
+        if (!this.usesRemoteHistory(tab)) {
+            return
+        }
+        const commands = [
+            ...await this.fetchRemoteHistoryCommands(tab),
+            ...this.getTerminalHistoryOutputCommands(tab),
+        ]
+        if (commands.length) {
+            this.replaceTabHistory(tabKey, commands)
         }
     }
 
@@ -95,8 +99,8 @@ export class HistoryCommandService {
     }
 
     private async bootstrapFromShellHistory (tab: BaseTerminalTabComponent<any>): Promise<void> {
-        if (tab.profile?.type === 'ssh') {
-            await this.bootstrapFromRemoteHistory(tab)
+        if (this.usesRemoteHistory(tab)) {
+            await this.refreshRemoteHistory(tab, this.getTabKey(tab))
             return
         }
 
@@ -124,14 +128,16 @@ export class HistoryCommandService {
         void this.saveToDisk()
     }
 
-    private async bootstrapFromRemoteHistory (tab: BaseTerminalTabComponent<any>): Promise<void> {
+    private async fetchRemoteHistoryCommands (tab: BaseTerminalTabComponent<any>): Promise<string[]> {
         const sshSession = (tab as any).sshSession
         const runReadonlyCommand = sshSession?.runReadonlyCommand?.bind(sshSession)
         if (typeof runReadonlyCommand !== 'function') {
-            return
+            return []
         }
 
         const commandsToTry = [
+            'history 2>/dev/null',
+            'fc -ln 2>/dev/null',
             `python3 - <<'PY'
 import os
 from pathlib import Path
@@ -148,9 +154,10 @@ for path in paths:
         except Exception:
             pass
 PY`,
-            'fc -ln -200 2>/dev/null || history 200 2>/dev/null || cat ~/.bash_history 2>/dev/null || cat ~/.zsh_history 2>/dev/null',
+            'cat ~/.bash_history 2>/dev/null || cat ~/.zsh_history 2>/dev/null',
         ]
 
+        const commands: string[] = []
         for (const command of commandsToTry) {
             let output: string
             try {
@@ -164,14 +171,9 @@ PY`,
             }
 
             const normalizedCommands = this.parseRemoteHistoryOutput(output)
-            for (const item of normalizedCommands) {
-                this.addCommand(item, { scheduleSave: false })
-            }
-            if (normalizedCommands.length > 0) {
-                void this.saveToDisk()
-                return
-            }
+            commands.push(...normalizedCommands)
         }
+        return Array.from(new Set(commands))
     }
 
     private parseRemoteHistoryOutput (output: string): string[] {
@@ -197,7 +199,23 @@ PY`,
 
         for (const line of output.split(/\r?\n/)) {
             const stripped = this.context.stripPrompt(line).trim()
-            const normalized = normalizeCommand(stripped, { allowMultiline: true })
+            const withoutNumber = stripped.replace(/^\s*\d+\s+/, '')
+            const normalized = normalizeCommand(withoutNumber, { allowMultiline: true })
+            if (normalized) {
+                commands.push(normalized)
+            }
+        }
+        return Array.from(new Set(commands))
+    }
+
+    private getTerminalHistoryOutputCommands (tab: BaseTerminalTabComponent<any>): string[] {
+        const commands: string[] = []
+        for (const line of this.context.getRecentOutput(tab, 5000)) {
+            const historyMatch = /^\s*\d+\s+(.*)$/.exec(line)
+            if (!historyMatch) {
+                continue
+            }
+            const normalized = normalizeCommand(historyMatch[1].trim(), { allowMultiline: true })
             if (normalized) {
                 commands.push(normalized)
             }
@@ -314,26 +332,37 @@ PY`,
                 return
             }
             this.history.unshift({ command: normalized, timestamp: Date.now(), useCount: 1 })
-            if (this.history.length > this.maxHistory) {
-                this.history = this.history.slice(0, this.maxHistory)
-            }
         }
         if (scheduleSave) {
             this.scheduleSave()
         }
     }
 
-    search (partial: string, limit: number, tabKey?: string): { command: string, score: number }[] {
-        if (!this.loaded || !partial.trim()) {
+    search (
+        partial: string,
+        limit?: number,
+        tabKey?: string,
+        options: { includeGlobal?: boolean } = {},
+    ): { command: string, score: number }[] {
+        if (!partial.trim()) {
             return []
         }
+        const includeGlobal = options.includeGlobal ?? true
         const lower = partial.toLowerCase().trim()
-        const tabResults = (tabKey ? this.scoreEntries(this.tabHistory.get(tabKey) ?? [], lower, true) : [])
-            .slice(0, limit)
+        const tabResults = this.limitResults(
+            tabKey ? this.scoreEntries(this.tabHistory.get(tabKey) ?? [], lower, true) : [],
+            limit,
+        )
+        if (!includeGlobal || !this.loaded) {
+            return tabResults
+        }
         const seen = new Set(tabResults.map(result => result.command))
-        const globalResults = this.scoreEntries(this.history, lower, false)
-            .filter(result => !seen.has(result.command))
-            .slice(0, Math.max(0, limit - tabResults.length))
+        const globalLimit = limit === undefined ? undefined : Math.max(0, limit - tabResults.length)
+        const globalResults = this.limitResults(
+            this.scoreEntries(this.history, lower, false)
+                .filter(result => !seen.has(result.command)),
+            globalLimit,
+        )
 
         return [...tabResults, ...globalResults]
     }
@@ -404,6 +433,10 @@ PY`,
             .some(word => word.startsWith(partial))
     }
 
+    private limitResults<T> (results: T[], limit?: number): T[] {
+        return limit === undefined ? results : results.slice(0, limit)
+    }
+
     private normalizeHistoryCommand (command: string): string | null {
         return normalizeCommand(
             this.context.stripPrompt(command).trim(),
@@ -446,9 +479,24 @@ PY`,
             entries.sort((a, b) => b.timestamp - a.timestamp)
         } else {
             entries.unshift({ command, timestamp: Date.now(), useCount: 1 })
-            if (entries.length > this.maxTabHistory) {
-                entries.length = this.maxTabHistory
+        }
+        this.tabHistory.set(tabKey, entries)
+    }
+
+    private replaceTabHistory (tabKey: string, commands: string[]): void {
+        const entries: HistoryEntry[] = []
+        const seen = new Set<string>()
+        for (const command of commands.slice().reverse()) {
+            const normalized = this.normalizeHistoryCommand(command)
+            if (!normalized || seen.has(normalized) || !this.sensitiveInput.shouldStoreCommand(normalized)) {
+                continue
             }
+            seen.add(normalized)
+            entries.push({
+                command: normalized,
+                timestamp: Date.now() - entries.length,
+                useCount: 1,
+            })
         }
         this.tabHistory.set(tabKey, entries)
     }

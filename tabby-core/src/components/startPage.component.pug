@@ -1,25 +1,6 @@
 .start-page-layout
     .start-page-sidebar
-        .sidebar-nav
-            button.btn.btn-sm.btn-link((click)='showAllHosts()', [class.active]='!activeGroupId && !favoritesOnly && !recentOnly')
-                i.fas.fa-fw.fa-bars
-                span.ms-2 All
-            button.btn.btn-sm.btn-link((click)='showFavorites()', [class.active]='favoritesOnly')
-                i.fas.fa-fw.fa-star
-                span Favorites
-            button.btn.btn-sm.btn-link((click)='showRecentHosts()', [class.active]='recentOnly')
-                i.fas.fa-fw.fa-history
-                span Recent
-
-        .sidebar-actions
-            button.btn.btn-sm.btn-outline-secondary((click)='openSettingsProfiles()')
-                i.fas.fa-fw.fa-folder-plus
-                span New group
-            button.btn.btn-sm.btn-success((click)='openSettingsProfiles()')
-                i.fas.fa-fw.fa-plus
-                span New SSH
-
-        .sidebar-tree
+        .sidebar-tree((contextmenu)='onSidebarContextMenu($event)')
             .sidebar-tree-item.root-item(
                 (click)='showAllHosts()',
                 [class.active]='!activeGroupId && !favoritesOnly && !recentOnly'
@@ -55,34 +36,41 @@
         .host-list(*ngIf='getRightPanelProfiles().length > 0')
             button.host-list-item(
                 *ngFor='let profile of getRightPanelProfiles(); trackBy: profilesTrackBy',
+                [class.host-list-item--risk]='isRiskEnvironment(profile.environment)',
                 (click)='launchProfile(profile)',
                 (mousedown)='onProfileMouseDown($event, profile)',
                 (contextmenu)='onProfileContextMenu($event, profile)'
             )
-                .host-item-info
-                    .host-item-name {{profile.name}}
-                    .host-item-meta(*ngIf='getProfileConnectionInfo(profile) as info')
-                        span(*ngIf='info.user')
-                            i.fas.fa-user.fa-fw.me-1
-                            | {{info.user}}
-                        span(*ngIf='info.host')
-                            i.fas.fa-globe.fa-fw.me-1
-                            | {{info.host}}
-                        span(*ngIf='info.port')
-                            i.fas.fa-plug.fa-fw.me-1
-                            | {{info.port}}
-                    .host-item-remark(*ngIf='profile.remark') {{profile.remark}}
-                    .host-item-tags(*ngIf='(profile.tags?.length ?? 0) > 0')
-                        span.badge.text-bg-secondary(*ngFor='let tag of profile.tags') {{tag}}
+                .host-status-rail([class]='getHostStatusRailClass(profile)')
+                .host-item-body
+                    .host-item-info
+                        .host-item-name-row
+                            .host-item-name {{profile.name}}
+                            .host-item-badges
+                                span.host-badge.host-badge--favorite(*ngIf='profile.favorite') 收藏
+                                span.host-badge.host-badge--recent(*ngIf='isRecentProfile(profile)') 最近
+                        .host-item-meta(*ngIf='getProfileConnectionInfo(profile) as info')
+                            span(*ngIf='info.user')
+                                i.fas.fa-user.fa-fw
+                                | {{info.user}}
+                            span(*ngIf='info.host')
+                                i.fas.fa-globe.fa-fw
+                                | {{info.host}}
+                            span(*ngIf='info.port')
+                                i.fas.fa-plug.fa-fw
+                                | :{{info.port}}
+                        .host-item-remark(*ngIf='profile.remark') {{profile.remark}}
+                        .host-item-tags(*ngIf='(profile.tags?.length ?? 0) > 0')
+                            span.badge.text-bg-secondary(*ngFor='let tag of profile.tags') {{tag}}
 
-                .host-item-actions
-                    span.badge.env-badge(
-                        *ngIf='profile.environment',
-                        [class]='getEnvironmentBadgeClass(profile.environment)'
-                    ) {{profile.environment}}
-                    button.btn.btn-sm.btn-outline-success.connect-btn((click)='$event.stopPropagation(); launchProfile(profile)')
-                        i.fas.fa-plug
-                        span Connect
+                    .host-item-actions
+                        span.badge.env-badge(
+                            *ngIf='profile.environment',
+                            [class]='getEnvironmentBadgeClass(profile.environment)'
+                        ) {{profile.environment}}
+                        button.btn.btn-sm.btn-outline-success.connect-btn((click)='$event.stopPropagation(); launchProfile(profile)')
+                            i.fas.fa-plug
+                            span 连接
 
         .host-list-empty(*ngIf='getRightPanelProfiles().length === 0')
             .empty-icon

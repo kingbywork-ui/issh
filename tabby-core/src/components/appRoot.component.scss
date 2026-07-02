@@ -110,7 +110,7 @@ $tab-border-radius: 4px;
 
         text-transform: uppercase;
         font-weight: bold;
-        color: #aaa;
+        color: var(--ops-fg-muted, #aaa);
         border: none;
         border-radius: 0;
 

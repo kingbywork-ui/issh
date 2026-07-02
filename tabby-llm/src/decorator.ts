@@ -1,8 +1,9 @@
 import { ApplicationRef, EnvironmentInjector, Injectable } from '@angular/core'
-import { ConfigService, HotkeysService, NotificationsService, PlatformService, TranslateService } from 'tabby-core'
+import { ConfigService, HotkeysService, LogService, NotificationsService, PlatformService, TranslateService } from 'tabby-core'
 import { BaseTerminalTabComponent, TerminalDecorator, XTermFrontend } from 'tabby-terminal'
 import { TabLLMController } from './tabLLMController'
 import { LLMService } from './services/llm.service'
+import { RAGCommandService } from './services/ragCommand.service'
 import { TerminalContextService } from './services/terminalContext.service'
 import { HistoryCommandService } from './services/historyCommand.service'
 import { SensitiveInputService } from './services/sensitiveInput.service'
@@ -14,6 +15,7 @@ export class LLMDecorator extends TerminalDecorator {
 
     constructor (
         private llm: LLMService,
+        private rag: RAGCommandService,
         private context: TerminalContextService,
         private history: HistoryCommandService,
         private sensitiveInput: SensitiveInputService,
@@ -24,6 +26,7 @@ export class LLMDecorator extends TerminalDecorator {
         private platform: PlatformService,
         private injector: EnvironmentInjector,
         private appRef: ApplicationRef,
+        private log: LogService,
     ) {
         super()
     }
@@ -45,6 +48,7 @@ export class LLMDecorator extends TerminalDecorator {
             const controller = new TabLLMController(
                 tab,
                 this.llm,
+                this.rag,
                 this.context,
                 this.history,
                 this.sensitiveInput,
@@ -54,6 +58,7 @@ export class LLMDecorator extends TerminalDecorator {
                 this.platform,
                 this.injector,
                 this.appRef,
+                this.log,
             )
             controller.mount(content)
             controller.start()

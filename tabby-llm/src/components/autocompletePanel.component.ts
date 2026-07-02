@@ -1,4 +1,4 @@
-import { Component, EventEmitter, HostBinding, Input, Output } from '@angular/core'
+import { AfterViewChecked, Component, ElementRef, EventEmitter, HostBinding, Input, Output } from '@angular/core'
 import { AutocompleteSuggestion } from '../api'
 
 /** @hidden */
@@ -7,7 +7,7 @@ import { AutocompleteSuggestion } from '../api'
     templateUrl: './autocompletePanel.component.pug',
     styleUrls: ['./autocompletePanel.component.scss'],
 })
-export class AutocompletePanelComponent {
+export class AutocompletePanelComponent implements AfterViewChecked {
     @Input() suggestions: AutocompleteSuggestion[] = []
     @Input() visible = false
     @Input() loading = false
@@ -18,6 +18,10 @@ export class AutocompletePanelComponent {
     @Output() selectSuggestion = new EventEmitter<AutocompleteSuggestion>()
     @Output() dismiss = new EventEmitter<void>()
     @Output() selectedIndexChange = new EventEmitter<number>()
+
+    private lastScrolledIndex = -1
+
+    constructor (private element: ElementRef<HTMLElement>) {}
 
     @HostBinding('class.visible') get isVisible (): boolean {
         return this.visible
@@ -45,5 +49,14 @@ export class AutocompletePanelComponent {
         }
         this.selectedIndex = next
         this.selectedIndexChange.emit(next)
+    }
+
+    ngAfterViewChecked (): void {
+        if (!this.visible || this.selectedIndex === this.lastScrolledIndex) {
+            return
+        }
+        const selected = this.element.nativeElement.querySelector('.suggestion-item.selected')
+        selected?.scrollIntoView({ block: 'nearest' })
+        this.lastScrolledIndex = this.selectedIndex
     }
 }

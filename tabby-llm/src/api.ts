@@ -1,9 +1,22 @@
+export type SuggestionCategory = 'history' | 'ai' | 'script' | 'rag'
+
 export interface AutocompleteSuggestion {
     id: string
     command: string
     description: string
-    category: 'history' | 'ai'
+    category: SuggestionCategory
     confidence?: number
+}
+
+export interface CommandDetail {
+    name: string
+    description?: string
+    examples?: string[]
+    options?: Array<{ flag?: string, description?: string }>
+    useCases?: string[]
+    related?: string[]
+    tags?: string[]
+    category?: string
 }
 
 export interface AutocompleteRequest {
@@ -14,6 +27,7 @@ export interface AutocompleteRequest {
     os: string
     recentOutput: string[]
     excludeCommands: string[]
+    limit?: number
 }
 
 export interface NL2CommandRequest {

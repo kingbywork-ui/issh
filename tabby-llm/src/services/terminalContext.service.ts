@@ -88,23 +88,9 @@ export class TerminalContextService {
             return []
         }
         const buffer = xterm.buffer.active
-        const lines: string[] = []
-        const start = Math.max(0, buffer.length - maxLines)
-        for (let i = start; i < buffer.length; i++) {
-            const line = buffer.getLine(i)
-            if (!line) {
-                continue
-            }
-            let text = ''
-            for (let col = 0; col < line.length; col++) {
-                text += line.getCell(col)?.getChars() ?? ''
-            }
-            const trimmed = text.trimEnd()
-            if (trimmed) {
-                lines.push(trimmed)
-            }
-        }
-        return lines
+        return this.readLogicalLines(buffer, Math.max(0, buffer.length - maxLines), buffer.length - 1)
+            .map(line => line.trimEnd())
+            .filter(Boolean)
     }
 
     extractCommandsFromTerminal (tab: BaseTerminalTabComponent<any>, maxLines: number): string[] {
@@ -173,16 +159,76 @@ export class TerminalContextService {
 
     private readInputFromBuffer (xterm: XTermFrontend['xterm']): string {
         const buffer = xterm.buffer.active
-        const line = buffer.getLine(buffer.cursorY + buffer.viewportY)
+        const cursorLineIndex = buffer.cursorY + buffer.viewportY
+        const line = buffer.getLine(cursorLineIndex)
         if (!line) {
             return ''
         }
+
+        let startLineIndex = cursorLineIndex
+        while (startLineIndex > 0) {
+            const current = buffer.getLine(startLineIndex) as any
+            if (!current?.isWrapped) {
+                break
+            }
+            startLineIndex--
+        }
+
         let text = ''
-        const endCol = Math.min(buffer.cursorX + 1, line.length)
-        for (let i = 0; i < endCol; i++) {
-            text += line.getCell(i)?.getChars() ?? ''
+        for (let lineIndex = startLineIndex; lineIndex <= cursorLineIndex; lineIndex++) {
+            const currentLine = buffer.getLine(lineIndex)
+            if (!currentLine) {
+                continue
+            }
+            const endCol = lineIndex === cursorLineIndex
+                ? Math.min(buffer.cursorX + 1, currentLine.length)
+                : currentLine.length
+            text += this.readTerminalLine(currentLine, endCol)
         }
         return this.stripPrompt(text)
+    }
+
+    private readLogicalLines (buffer: XTermFrontend['xterm']['buffer']['active'], start: number, end: number): string[] {
+        const lines: string[] = []
+        let current = ''
+
+        for (let i = Math.max(0, start); i <= end; i++) {
+            const line = buffer.getLine(i)
+            if (!line) {
+                continue
+            }
+
+            const text = this.readTerminalLine(line)
+            const wrapped = !!(line as any).isWrapped
+
+            if (!wrapped) {
+                if (current.trimEnd()) {
+                    lines.push(current)
+                }
+                current = text
+            } else {
+                current += text
+            }
+        }
+
+        if (current.trimEnd()) {
+            lines.push(current)
+        }
+
+        return lines
+    }
+
+    private readTerminalLine (line: ReturnType<XTermFrontend['xterm']['buffer']['active']['getLine']>, endCol?: number): string {
+        if (!line) {
+            return ''
+        }
+
+        let text = ''
+        const limit = Math.min(endCol ?? line.length, line.length)
+        for (let col = 0; col < limit; col++) {
+            text += line.getCell(col)?.getChars() ?? ''
+        }
+        return text
     }
 
     private detectShell (tab: BaseTerminalTabComponent<any>): string {

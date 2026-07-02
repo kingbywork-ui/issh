@@ -6,25 +6,6 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
         ng-template(ngbNavContent)
             .host-manager-layout
                 .host-sidebar
-                    .host-sidebar-nav
-                        button.btn.btn-sm.btn-link((click)='showAllHosts()', [class.active]='!activeGroupId && !favoritesOnly && !recentOnly')
-                            i.fas.fa-fw.fa-bars
-                            span.ms-2(translate) All
-                        button.btn.btn-sm.btn-link((click)='showFavorites()', [class.active]='favoritesOnly')
-                            i.fas.fa-fw.fa-star
-                            span(translate) Favorites
-                        button.btn.btn-sm.btn-link((click)='showRecentHosts()', [class.active]='recentOnly')
-                            i.fas.fa-fw.fa-history
-                            span(translate) Recent
-
-                    .host-sidebar-actions
-                        button.btn.btn-sm.btn-outline-secondary((click)='newProfileGroup()')
-                            i.fas.fa-fw.fa-folder-plus
-                            span(translate) New group
-                        button.btn.btn-sm.btn-success((click)='newProfile()')
-                            i.fas.fa-fw.fa-plus
-                            span(translate) New SSH
-
                     .host-tree
                         .host-tree-item.root-item(
                             (click)='showAllHosts()',

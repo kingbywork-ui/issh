@@ -1,0 +1,20 @@
+// Ops console design tokens — professional terminal tool aesthetic
+:root {
+    --ops-base: #0b0f14;
+    --ops-panel: #121821;
+    --ops-line: #243041;
+    --ops-signal: #59d98e;
+    --ops-signal-dim: rgba(89, 217, 142, 0.1);
+    --ops-signal-hover: rgba(89, 217, 142, 0.06);
+    --ops-signal-border: rgba(89, 217, 142, 0.35);
+    --ops-risk: #f6b44b;
+    --ops-risk-dim: rgba(246, 180, 75, 0.14);
+    --ops-danger: #ef5f67;
+    --ops-danger-dim: rgba(239, 95, 103, 0.12);
+    --ops-fg: rgba(255, 255, 255, 0.9);
+    --ops-fg-muted: rgba(255, 255, 255, 0.55);
+    --ops-radius: 4px;
+    --ops-radius-lg: 6px;
+    --ops-font-mono: var(--bs-font-monospace, 'Source Code Pro', ui-monospace, monospace);
+    --ops-sidebar-active-border: 2px solid var(--ops-signal);
+}

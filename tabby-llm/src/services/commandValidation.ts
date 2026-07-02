@@ -64,6 +64,147 @@ function looksLikeExecutableToken (token: string): boolean {
     return /^[A-Za-z0-9_./~@%:+\\-]+$/.test(token)
 }
 
+function shellWords (command: string): string[] {
+    const words: string[] = []
+    let current = ''
+    let quote: '"' | "'" | null = null
+    let escaped = false
+
+    for (const char of command) {
+        if (escaped) {
+            current += char
+            escaped = false
+            continue
+        }
+        if (char === '\\') {
+            escaped = true
+            current += char
+            continue
+        }
+        if (quote) {
+            current += char
+            if (char === quote) {
+                quote = null
+            }
+            continue
+        }
+        if (char === '"' || char === "'") {
+            quote = char
+            current += char
+            continue
+        }
+        if (/\s/.test(char)) {
+            if (current) {
+                words.push(current)
+                current = ''
+            }
+            continue
+        }
+        current += char
+    }
+
+    if (current) {
+        words.push(current)
+    }
+    return words
+}
+
+const DOCKER_COMPOSE_SUBCOMMANDS = new Set([
+    'attach',
+    'build',
+    'config',
+    'cp',
+    'create',
+    'down',
+    'events',
+    'exec',
+    'images',
+    'kill',
+    'logs',
+    'ls',
+    'pause',
+    'port',
+    'ps',
+    'pull',
+    'push',
+    'restart',
+    'rm',
+    'run',
+    'scale',
+    'start',
+    'stats',
+    'stop',
+    'top',
+    'unpause',
+    'up',
+    'version',
+    'wait',
+    'watch',
+])
+
+function looksLikeIncompleteShellCommand (command: string): boolean {
+    return /(?:&&|\|\||[|;\\])\s*$/.test(command)
+}
+
+const DOCKER_COMPOSE_OPTIONS_WITH_VALUE = new Set([
+    '-f',
+    '--file',
+    '-p',
+    '--project-name',
+    '--profile',
+    '--env-file',
+    '--project-directory',
+    '--ansi',
+    '--parallel',
+    '--progress',
+])
+
+function dockerComposeSubcommand (words: string[], startIndex: number): string | null {
+    for (let i = startIndex; i < words.length; i++) {
+        const word = words[i]
+        if (word.startsWith('-')) {
+            if (DOCKER_COMPOSE_OPTIONS_WITH_VALUE.has(word)) {
+                i++
+            }
+            continue
+        }
+        return word
+    }
+    return null
+}
+
+function looksLikeCorruptedDockerComposeCommand (command: string): boolean {
+    const words = shellWords(command.toLowerCase())
+        .filter(word => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(word))
+
+    if (!words.length) {
+        return false
+    }
+
+    const [first, second] = words
+    if (first === 'docker-compose') {
+        const subcommand = dockerComposeSubcommand(words, 1)
+        return !!subcommand && !DOCKER_COMPOSE_SUBCOMMANDS.has(subcommand)
+    }
+    if (first === 'docker' && second === 'compose') {
+        const subcommand = dockerComposeSubcommand(words, 2)
+        return !!subcommand && !DOCKER_COMPOSE_SUBCOMMANDS.has(subcommand)
+    }
+
+    const compactPrefix = `${first ?? ''} ${second ?? ''}`
+    return /^(?:do|doc|dock)\s+comp(?:ose|up|down)?\b/.test(compactPrefix)
+}
+
+export function isLikelyCompleteCommand (command: string): boolean {
+    if (looksLikeIncompleteShellCommand(command)) {
+        return false
+    }
+    if (looksLikeCorruptedDockerComposeCommand(command)) {
+        return false
+    }
+    return true
+}
+
 export function normalizeCommand (input: string, options: NormalizedCommandOptions = {}): string | null {
     if (!input) {
         return null
@@ -113,6 +254,9 @@ export function normalizeCommand (input: string, options: NormalizedCommandOptio
 
     const token = firstExecutableToken(normalized)
     if (!looksLikeExecutableToken(token)) {
+        return null
+    }
+    if (!isLikelyCompleteCommand(normalized)) {
         return null
     }
 

@@ -149,7 +149,6 @@ Tabby.registerModule('string_decoder', require('string_decoder'))
 Tabby.registerModule('js-yaml', require('js-yaml'))
 Tabby.registerModule('zone.js/dist/zone.js', require('zone.js'))
 Tabby.registerModule('zone.js', require('zone.js'))
-Tabby.registerModule('any-promise', require('any-promise'))
 
 Object.assign(window, {
     __dirname: '__dirname',

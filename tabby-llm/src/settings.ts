@@ -1,6 +1,5 @@
 import { Injectable } from '@angular/core'
 import { SettingsTabProvider } from 'tabby-settings'
-import { TranslateService } from 'tabby-core'
 import { LLMSettingsTabComponent } from './components/llmSettingsTab.component'
 
 /** @hidden */
@@ -8,9 +7,7 @@ import { LLMSettingsTabComponent } from './components/llmSettingsTab.component'
 export class LLMSettingsTabProvider extends SettingsTabProvider {
     id = 'llm'
     icon = 'robot'
-    title = this.translate.instant('AI assistant')
-
-    constructor (private translate: TranslateService) { super() }
+    title = 'AI 助手'
 
     getComponentType (): any {
         return LLMSettingsTabComponent

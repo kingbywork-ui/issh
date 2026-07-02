@@ -77,6 +77,11 @@ export default () => ({
         fs: 'commonjs fs',
         module: 'commonjs module',
         mz: 'commonjs mz',
+        'mz/fs': 'commonjs mz/fs',
+        'mz/child_process': 'commonjs mz/child_process',
+        'any-promise': 'commonjs any-promise',
+        'thenify': 'commonjs thenify',
+        'thenify-all': 'commonjs thenify-all',
         path: 'commonjs path',
     },
     plugins: [

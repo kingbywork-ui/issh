@@ -17,6 +17,7 @@ export { HostWindowService } from './hostWindow'
 export { HostAppService, Platform } from './hostApp'
 export { FileProvider } from './fileProvider'
 export { ProfileProvider, ConnectableProfileProvider, QuickConnectProfileProvider, Profile, ConnectableProfile, PartialProfile, ProfileSettingsComponent, ProfileGroup, PartialProfileGroup } from './profileProvider'
+export { ProfileEditorService } from './profileEditor'
 export { PromptModalComponent } from '../components/promptModal.component'
 export * from './commands'
 

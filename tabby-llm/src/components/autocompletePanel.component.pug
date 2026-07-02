@@ -25,6 +25,14 @@
                     *ngIf='item.category === "ai"',
                     class='ai'
                 ) AI
+                span.category-tag(
+                    *ngIf='item.category === "script"',
+                    class='script'
+                ) Script
+                span.category-tag(
+                    *ngIf='item.category === "rag"',
+                    class='rag'
+                ) RAG
                 .command {{ item.command }}
             .description(*ngIf='item.description && item.category !== "history"') {{ item.description }}
 

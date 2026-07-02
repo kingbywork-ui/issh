@@ -17,6 +17,7 @@ import { AutocompletePanelComponent } from './components/autocompletePanel.compo
 import { NL2CommandPanelComponent } from './components/nl2CommandPanel.component'
 import { LLMSettingsTabComponent } from './components/llmSettingsTab.component'
 import { LLMTerminalHostComponent } from './components/llmTerminalHost.component'
+import { CommandSidecarComponent } from './components/commandSidecar.component'
 
 /** @hidden */
 @NgModule({
@@ -36,6 +37,7 @@ import { LLMTerminalHostComponent } from './components/llmTerminalHost.component
     declarations: [
         AutocompletePanelComponent,
         NL2CommandPanelComponent,
+        CommandSidecarComponent,
         LLMSettingsTabComponent,
         LLMTerminalHostComponent,
     ],

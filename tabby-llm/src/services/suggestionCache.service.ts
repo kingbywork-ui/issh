@@ -25,7 +25,7 @@ export class SuggestionCache<T> {
     }
 
     set (key: string, value: T): void {
-        if (this.store.size >= this.maxSize) {
+        if (!this.store.has(key) && this.store.size >= this.maxSize) {
             const firstKey = this.store.keys().next().value
             if (firstKey) {
                 this.store.delete(firstKey)
@@ -38,6 +38,6 @@ export class SuggestionCache<T> {
     }
 
     makeKey (...parts: (string | null | undefined)[]): string {
-        return parts.filter(Boolean).join('|')
+        return parts.filter(Boolean).join('\x00')
     }
 }

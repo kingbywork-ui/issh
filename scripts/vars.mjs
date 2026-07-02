@@ -15,7 +15,7 @@ const appPackageInfo = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../ap
 
 export let version
 try {
-    version = childProcess.execSync('git describe --tags', { encoding:'utf-8' })
+    version = childProcess.execSync('git describe --tags', { encoding:'utf-8', stdio: ['pipe', 'pipe', 'ignore'] })
     version = version.substring(1).trim()
     version = version.replace('-', '-c')
 

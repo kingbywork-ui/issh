@@ -3,6 +3,7 @@ import { Observable, OperatorFunction, debounceTime, map, distinctUntilChanged }
 import { Component, Input, ViewChild, ViewContainerRef, ComponentFactoryResolver, Injector } from '@angular/core'
 import { NgbActiveModal } from '@ng-bootstrap/ng-bootstrap'
 import { PartialProfileGroup, Profile, ProfileProvider, ProfileSettingsComponent, ProfilesService, TAB_COLORS, ProfileGroup, ConnectableProfileProvider, FullyDefined, ConfigProxy } from 'tabby-core'
+import { Socket } from 'net'
 
 const iconsData = require('../../../tabby-core/src/icons.json')
 const iconsClassList = Object.keys(iconsData).map(
@@ -23,6 +24,10 @@ export class EditProfileModalComponent<P extends Profile, PP extends ProfileProv
     @Input() profileGroup: PartialProfileGroup<ProfileGroup> | undefined
     groups: PartialProfileGroup<ProfileGroup>[]
     @ViewChild('placeholder', { read: ViewContainerRef }) placeholder: ViewContainerRef
+
+    testing = false
+    testResult: 'success'|'fail'|null = null
+    testMessage: string|null = null
 
     protected profile: FullyDefined<P> & ConfigProxy<FullyDefined<P>>
     private settingsComponentInstance?: ProfileSettingsComponent<P, PP>
@@ -86,6 +91,59 @@ export class EditProfileModalComponent<P extends Profile, PP extends ProfileProv
             debounceTime(200),
             map(term => iconsClassList.filter(v => v.toLowerCase().includes(term.toLowerCase())).slice(0, 10)),
         )
+
+    async testConnection () {
+        if (this.defaultsMode !== 'disabled') {
+            return
+        }
+        this.testing = true
+        this.testResult = null
+        this.testMessage = null
+
+        try {
+            const host = this.profile.options?.host
+            const port = this.profile.options?.port ?? 22
+            if (!host) {
+                this.testResult = 'fail'
+                this.testMessage = '未配置主机地址'
+                return
+            }
+
+            await new Promise<void>((resolve, reject) => {
+                const socket = new Socket()
+                const timeout = 8000
+                let settled = false
+
+                socket.setTimeout(timeout)
+                socket.once('connect', () => {
+                    if (settled) return
+                    settled = true
+                    socket.destroy()
+                    resolve()
+                })
+                socket.once('timeout', () => {
+                    if (settled) return
+                    settled = true
+                    socket.destroy()
+                    reject(new Error(`连接超时 (${timeout / 1000}s)`))
+                })
+                socket.once('error', (err: Error) => {
+                    if (settled) return
+                    settled = true
+                    reject(err)
+                })
+                socket.connect(port, host as string)
+            })
+
+            this.testResult = 'success'
+            this.testMessage = `TCP ${this.profile.options.host}:${port} 连接成功`
+        } catch (err: any) {
+            this.testResult = 'fail'
+            this.testMessage = err?.message ?? String(err)
+        } finally {
+            this.testing = false
+        }
+    }
 
     save () {
         if (!this.profileGroup) {
