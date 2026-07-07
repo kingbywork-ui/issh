@@ -11,12 +11,13 @@ import { TerminalDecorator } from 'tabby-terminal'
 
 import { LLMConfigProvider } from './config'
 import { LLMHotkeyProvider } from './hotkeys'
-import { LLMSettingsTabProvider } from './settings'
+import { AgentBridgeSettingsTabProvider, LLMSettingsTabProvider } from './settings'
 import { LLMDecorator } from './decorator'
 import { AutocompletePanelComponent } from './components/autocompletePanel.component'
-import { NL2CommandPanelComponent } from './components/nl2CommandPanel.component'
 import { LLMSettingsTabComponent } from './components/llmSettingsTab.component'
+import { AgentBridgeSettingsTabComponent } from './components/agentBridgeSettingsTab.component'
 import { LLMTerminalHostComponent } from './components/llmTerminalHost.component'
+import { LLMAppSidecarHostComponent } from './components/llmAppSidecarHost.component'
 import { CommandSidecarComponent } from './components/commandSidecar.component'
 
 /** @hidden */
@@ -32,12 +33,14 @@ import { CommandSidecarComponent } from './components/commandSidecar.component'
         { provide: ConfigProvider, useClass: LLMConfigProvider, multi: true },
         { provide: HotkeyProvider, useClass: LLMHotkeyProvider, multi: true },
         { provide: SettingsTabProvider, useClass: LLMSettingsTabProvider, multi: true },
+        { provide: SettingsTabProvider, useClass: AgentBridgeSettingsTabProvider, multi: true },
         { provide: TerminalDecorator, useClass: LLMDecorator, multi: true },
     ],
     declarations: [
         AutocompletePanelComponent,
-        NL2CommandPanelComponent,
+        AgentBridgeSettingsTabComponent,
         CommandSidecarComponent,
+        LLMAppSidecarHostComponent,
         LLMSettingsTabComponent,
         LLMTerminalHostComponent,
     ],

@@ -43,3 +43,4 @@ export interface NL2CommandResult {
     dangerous: boolean
     dangerReason?: string
 }
+

@@ -21,6 +21,8 @@ export { ProfileEditorService } from './profileEditor'
 export { PromptModalComponent } from '../components/promptModal.component'
 export * from './commands'
 
+export { AppPanelService } from '../services/appPanel.service'
+export type { AppPanelSlot } from '../services/appPanel.service'
 export { AppService } from '../services/app.service'
 export { ConfigService, configMerge, ConfigProxy, ProxifiedConfig, FullyDefined } from '../services/config.service'
 export { DockingService, Screen } from '../services/docking.service'

@@ -25,6 +25,12 @@ export interface Prompt {
     echo?: boolean
 }
 
+export interface ReadonlyCommandResult {
+    output: string
+    exitCode: number | null
+    timedOut: boolean
+}
+
 type AuthMethod = {
     type: 'none'|'prompt-password'|'hostbased'
 } | {
@@ -899,22 +905,32 @@ export class SSHSession {
     }
 
     async runReadonlyCommand (command: string, timeoutMs = 4000): Promise<string|null> {
+        const result = await this.runReadonlyCommandWithExitCode(command, timeoutMs)
+        return result.timedOut ? null : result.output
+    }
+
+    async runReadonlyCommandWithExitCode (command: string, timeoutMs = 4000): Promise<ReadonlyCommandResult> {
         if (!(this.ssh instanceof russh.AuthenticatedSSHClient)) {
-            return null
+            return { output: '', exitCode: null, timedOut: true }
         }
 
         const channel: any = await this.ssh.activateChannel(await this.ssh.openSessionChannel())
         const outputChunks: Buffer[] = []
+        const marker = `__TABBY_EXIT_CODE_${Date.now()}_${Math.random().toString(16).slice(2)}__`
+        const wrappedCommand = `sh -lc ${this.quotePosixShellArg(`${command}\n_tabby_ec=$?\nprintf '\\n${marker}:%s\\n' "$_tabby_ec"`)}`
 
-        const result = new Promise<string|null>(resolve => {
+        const result = new Promise<ReadonlyCommandResult>(resolve => {
             let settled = false
 
-            const finish = (value: string | null) => {
+            const finish = (timedOut: boolean) => {
                 if (settled) {
                     return
                 }
                 settled = true
-                resolve(value)
+                resolve({
+                    ...this.parseReadonlyCommandOutput(Buffer.concat(outputChunks).toString('utf-8'), marker),
+                    timedOut,
+                })
             }
 
             const timer = setTimeout(() => {
@@ -923,7 +939,7 @@ export class SSHSession {
                 } catch {
                     // ignore close errors on timeout
                 }
-                finish(null)
+                finish(true)
             }, timeoutMs)
 
             channel.data$?.subscribe((data: Uint8Array | Buffer | string) => {
@@ -936,12 +952,12 @@ export class SSHSession {
 
             channel.eof$?.subscribe(() => {
                 clearTimeout(timer)
-                finish(Buffer.concat(outputChunks).toString('utf-8'))
+                finish(false)
             })
 
             channel.closed$?.subscribe(() => {
                 clearTimeout(timer)
-                finish(Buffer.concat(outputChunks).toString('utf-8'))
+                finish(false)
             })
         })
 
@@ -954,11 +970,11 @@ export class SSHSession {
             } catch {
                 // ignore close errors when exec is unavailable
             }
-            return null
+            return { output: '', exitCode: null, timedOut: true }
         }
 
         try {
-            await execMethod.call(channel, command)
+            await execMethod.call(channel, wrappedCommand)
             return await result
         } catch (error) {
             this.logger.warn('Readonly SSH exec failed', error)
@@ -967,8 +983,24 @@ export class SSHSession {
             } catch {
                 // ignore close errors after failed exec
             }
-            return null
+            return { output: '', exitCode: null, timedOut: true }
         }
+    }
+
+    private parseReadonlyCommandOutput (rawOutput: string, marker: string): { output: string, exitCode: number | null } {
+        const pattern = new RegExp(`\\r?\\n?${marker}:(\\d+)\\r?\\n?`)
+        const match = pattern.exec(rawOutput)
+        if (!match) {
+            return { output: rawOutput, exitCode: null }
+        }
+        return {
+            output: rawOutput.slice(0, match.index).replace(/\r?\n$/, ''),
+            exitCode: Number(match[1]),
+        }
+    }
+
+    private quotePosixShellArg (value: string): string {
+        return `'${value.replace(/'/g, `'\\''`)}'`
     }
 
     private setupSocketChannelEvents (channel: russh.Channel, socket: Socket, logPrefix: string): void {

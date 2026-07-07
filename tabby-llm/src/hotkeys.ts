@@ -10,10 +10,6 @@ export class LLMHotkeyProvider extends HotkeyProvider {
             name: this.translate.instant('AI command autocomplete'),
         },
         {
-            id: 'llm-nl2command',
-            name: this.translate.instant('Natural language to command'),
-        },
-        {
             id: 'llm-accept-suggestion',
             name: this.translate.instant('Accept AI suggestion (Ctrl+Y)'),
         },

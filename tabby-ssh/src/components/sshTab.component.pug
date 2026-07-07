@@ -36,17 +36,24 @@ terminal-toolbar([tab]='this')
         i.fas.fa-plug
         span(translate) Ports
 
+.terminal-toolbar-spacer
+.content(#content, [style.opacity]='frontendIsReady ? 1 : 0')
 
-sftp-panel.bg-dark(
-    @panelSlide,
+search-panel(
+    *ngIf='showSearchPanel && hasFocus && frontend',
+    @toolbarSlide,
     [@.disabled]='!config.store.accessibility.animations',
-    [(path)]='sftpPath',
-    *ngIf='sftpPanelVisible && sshSession',
-    (click)='$event.stopPropagation()',
-    [session]='sshSession!',
-    [cwdDetectionAvailable]='session?.supportsWorkingDirectory() ?? false',
-    (closed)='sftpPanelVisible = false'
+    [frontend]='frontend',
+    (close)='showSearchPanel = false; frontend.cancelSearch()'
 )
+
+button.btn.btn-sm.btn-link.toolbar-pin-button(
+    *ngIf='enableToolbar && !pinToolbar',
+    (click)='togglePinToolbar()',
+    (mouseenter)='showToolbar()',
+    (mouseleave)='hideToolbar()'
+)
+    i.fas.fa-wrench
 
 keyboard-interactive-auth-panel.bg-dark(
     *ngIf='activeKIPrompt',

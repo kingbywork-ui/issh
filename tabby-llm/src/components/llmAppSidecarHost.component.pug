@@ -1,0 +1,19 @@
+command-sidecar(
+    *ngIf='controller?.sidecarVisible',
+    [visible]='controller?.sidecarVisible',
+    [inputText]='controller?.sidecarInput ?? ""',
+    [loading]='controller?.sidecarLoading',
+    [ragResults]='controller?.sidecarRagResults ?? []',
+    [selectedIndex]='controller?.sidecarSelectedIndex ?? 0',
+    [commandDetail]='controller?.sidecarCommandDetail ?? null',
+    [errorText]='controller?.sidecarError ?? ""',
+    (inputTextChange)='onSidecarInput($event)',
+    (submitInput)='onSidecarSubmit()',
+    (dismiss)='onSidecarDismiss()',
+    (clear)='onSidecarClear()',
+    (selectRagResult)='onSidecarSelectRagResult($event)',
+    (insertRagResult)='onSidecarInsertRagResult($event)',
+    (moveNext)='onSidecarMoveNext()',
+    (movePrev)='onSidecarMovePrev()',
+    (insertCurrent)='onSidecarInsertCurrent()'
+)

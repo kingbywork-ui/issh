@@ -1,13 +1,13 @@
 :host {
-    position: absolute;
-    inset: 8px 8px 8px auto;
-    width: min(420px, calc(100vw - 24px));
+    position: relative;
+    width: 100%;
+    height: 100%;
     display: none;
     pointer-events: auto;
-    z-index: 12;
 
     &.visible {
-        display: block;
+        display: flex;
+        flex-direction: column;
     }
 }
 
@@ -16,9 +16,7 @@
     display: flex;
     flex-direction: column;
     background: rgba(18, 22, 28, 0.98);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 6px;
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+    border-left: 1px solid rgba(255, 255, 255, 0.12);
     color: rgba(255, 255, 255, 0.9);
     overflow: hidden;
 }
@@ -30,6 +28,7 @@
     gap: 8px;
     padding: 10px;
     border-color: rgba(255, 255, 255, 0.08);
+    flex: none;
 }
 
 .sidecar-header {
@@ -50,12 +49,6 @@
     border: 1px solid rgba(67, 180, 130, 0.28);
     border-radius: 4px;
     padding: 2px 7px;
-
-    &.ai {
-        color: #bca7ff;
-        background: rgba(120, 90, 220, 0.18);
-        border-color: rgba(120, 90, 220, 0.34);
-    }
 }
 
 .title {
@@ -78,8 +71,7 @@
     color: rgba(255, 255, 255, 0.68);
 }
 
-.error-row,
-.danger-row {
+.error-row {
     color: #ffb4a8;
 }
 
@@ -90,8 +82,7 @@
 }
 
 .result-item,
-.detail-panel,
-.ai-result {
+.detail-panel {
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 6px;
     background: rgba(255, 255, 255, 0.035);
@@ -109,15 +100,13 @@
 
 .command-line,
 .option-row,
-.action-row,
 .tag-row {
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
-code,
-.command-preview {
+code {
     color: #dce7ff;
     background: rgba(0, 0, 0, 0.22);
     border-radius: 4px;
@@ -138,8 +127,7 @@ code {
     line-height: 1.45;
 }
 
-.detail-panel,
-.ai-result {
+.detail-panel {
     margin-top: 10px;
     padding: 10px;
 }
@@ -177,17 +165,6 @@ code {
     background: rgba(80, 150, 255, 0.14);
     border-radius: 4px;
     padding: 2px 6px;
-}
-
-.command-preview {
-    margin: 0;
-    padding: 8px;
-    white-space: pre-wrap;
-    word-break: break-word;
-
-    &.danger {
-        color: #ffb4a8;
-    }
 }
 
 .sidecar-input input {

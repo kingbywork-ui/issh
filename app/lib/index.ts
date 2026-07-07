@@ -8,6 +8,32 @@ require('dotenv/config')
 require('./portable')
 process.env.TABBY_PLUGINS ??= ''
 process.env.TABBY_CONFIG_DIRECTORY ??= app.getPath('userData')
+if (process.env.TABBY_CONFIG_DIRECTORY) {
+    fs.mkdirSync(process.env.TABBY_CONFIG_DIRECTORY, { recursive: true })
+    app.setPath('userData', process.env.TABBY_CONFIG_DIRECTORY)
+}
+if (process.env.TABBY_SMOKE_DISABLE_GPU) {
+    app.commandLine.appendSwitch('disable-gpu')
+    app.commandLine.appendSwitch('disable-gpu-compositing')
+    app.commandLine.appendSwitch('disable-software-rasterizer')
+    app.commandLine.appendSwitch('in-process-gpu')
+}
+
+function ensureDevMode (): void {
+    if (process.env.TABBY_DEV) {
+        return
+    }
+    try {
+        const appPath = app.getAppPath()
+        const repoRoot = path.dirname(appPath)
+        if (fs.existsSync(path.join(repoRoot, 'tabby-core', 'package.json'))) {
+            process.env.TABBY_DEV = '1'
+        }
+    } catch {
+        // ignore — packaged app path may not be ready yet
+    }
+}
+ensureDevMode()
 
 const startupDebugLogPath = path.join(process.env.TABBY_CONFIG_DIRECTORY ?? app.getPath('userData'), 'startup-debug.log')
 

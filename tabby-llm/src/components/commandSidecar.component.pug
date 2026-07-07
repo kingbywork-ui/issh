@@ -1,7 +1,7 @@
-.command-sidecar(*ngIf='visible', (mousedown)='$event.stopPropagation()')
+.command-sidecar(*ngIf='visible', (mousedown)='onMouseEvent($event)', (click)='onMouseEvent($event)', (mouseup)='onMouseEvent($event)')
     .sidecar-header
-        .mode-pill([class.ai]='mode === "ai"') {{ mode === 'rag' ? '/rag' : '/ai' }}
-        .title {{ mode === 'rag' ? '命令用法' : 'AI 对话' }}
+        .mode-pill /rag
+        .title 命令用法
         button.btn.btn-sm.btn-link.ms-auto((click)='clear.emit()', title='清空')
             i.fas.fa-eraser
         button.btn.btn-sm.btn-link((click)='dismiss.emit()', title='关闭')
@@ -10,13 +10,13 @@
     .sidecar-body
         .loading-row(*ngIf='loading')
             i.fas.fa-circle-notch.fa-spin.me-2
-            span {{ mode === 'rag' ? '查询命令知识库...' : '生成命令...' }}
+            span 查询命令知识库...
 
         .error-row(*ngIf='!loading && errorText')
             i.fas.fa-exclamation-triangle.me-2
             span {{ errorText }}
 
-        ng-container(*ngIf='!loading && !errorText && mode === "rag"')
+        ng-container(*ngIf='!loading && !errorText')
             .empty-row(*ngIf='!ragResults.length && !commandDetail') 输入 /rag dnf 查询命令用法
 
             .result-list(*ngIf='ragResults.length')
@@ -52,23 +52,6 @@
                 .tag-row(*ngIf='commandDetail.tags?.length')
                     span.tag(*ngFor='let tag of commandDetail.tags') {{ tag }}
 
-        ng-container(*ngIf='!loading && !errorText && mode === "ai"')
-            .empty-row(*ngIf='!aiCommand') 输入 /ai 查看 nginx 状态
-            .ai-result(*ngIf='aiCommand')
-                .section-title 建议命令
-                pre.command-preview([class.danger]='aiDangerous') {{ aiCommand }}
-                .detail-desc(*ngIf='aiExplanation') {{ aiExplanation }}
-                .danger-row(*ngIf='aiDangerous')
-                    i.fas.fa-exclamation-triangle.me-2
-                    span {{ aiDangerReason || '此命令可能有风险' }}
-                .action-row
-                    button.btn.btn-sm.btn-success((click)='runAIResult.emit()')
-                        i.fas.fa-play.me-1
-                        span 执行
-                    button.btn.btn-sm.btn-secondary.ms-2((click)='insertAIResult.emit()')
-                        i.fas.fa-terminal.me-1
-                        span 插入
-
     .sidecar-input
         input.form-control.form-control-sm(
             #inputField,
@@ -77,7 +60,12 @@
             (input)='onInput($event.target.value)',
             (keydown)='onKeydown($event)',
             (keydown.enter)='!$event.ctrlKey && submitInput.emit()',
-            placeholder='/rag dnf 或 /ai 查看 nginx 状态'
+            (click)='onInputClick($event)',
+            (mousedown)='onMouseEvent($event)',
+            (focus)='$event.stopPropagation()',
+            autocomplete='off',
+            spellcheck='false',
+            placeholder='/rag dnf'
         )
         button.btn.btn-sm.btn-primary.ms-2(
             (click)='submitInput.emit()',

@@ -6,6 +6,7 @@ import { LLMService } from '../services/llm.service'
 @Component({
     selector: 'llm-settings-tab',
     templateUrl: './llmSettingsTab.component.pug',
+    styleUrls: ['./llmSettingsTab.component.scss'],
 })
 export class LLMSettingsTabComponent extends BaseComponent {
     connectionSuccessful: boolean | null = null
@@ -47,4 +48,5 @@ export class LLMSettingsTabComponent extends BaseComponent {
         await this.config.save()
         await this.testConnection()
     }
+
 }

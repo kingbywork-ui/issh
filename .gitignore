@@ -34,10 +34,7 @@ docs/api
 *.sln
 .travis.ssh.key
 *.code-workspace
-*.idea/
-*.psacowork/
-*.workbuddy/
-*.
+.idea/
 
 .electron-symbols
 sentry.properties
@@ -51,6 +48,24 @@ crowdin.yml
 # Build & Cache
 .electron-builder-cache/
 .npm-cache/
+
+# Python & AI deps
+.python-deps/
+__pycache__/
+*.pyc
+
+# Smoke test / debug
+.tabby-smoke/
+.cursor/
+.workbuddy/
+
+# Temp artifacts
+*.log
+smoke_launch.log
+smoke_test_report.json
+start-dev.cmd
+AGENTS.md
+HANDOFF.md
 
 # OS Files
 Thumbs.db

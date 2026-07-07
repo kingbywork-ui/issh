@@ -1,0 +1,140 @@
+h3.mb-3 CLI / MCP Agent
+
+.alert.alert-info
+    div
+        strong Agent Bridge
+        span  exposes local Tabby terminal sessions to Codex, Cursor, and the bundled CLI through a token-protected localhost RPC server.
+    div Tools include session list/select, context and buffer read, command preview/insert/run, SSH exec, SFTP read/write, batch exec, and RAG search.
+
+.form-line
+    .header
+        .title Enable CLI / MCP Agent
+        .description Starts a local-only bridge on 127.0.0.1 and writes tabby-agent-bridge.json in the Tabby config directory.
+    toggle(
+        [(ngModel)]='config.store.llm.agentBridgeEnabled',
+        (ngModelChange)='config.save()'
+    )
+
+ng-container(*ngIf='config.store.llm.agentBridgeEnabled')
+    .form-line
+        .header
+            .title Agent Bridge port
+            .description 0 selects a free port. TABBY_AGENT_BRIDGE_PORT can override this value.
+        input.form-control(
+            type='number',
+            min='0',
+            max='65535',
+            [(ngModel)]='config.store.llm.agentBridgePort',
+            (keydown.enter)='config.save()',
+            (blur)='config.save()'
+        )
+
+    .form-line
+        .header
+            .title Default exec timeout (seconds)
+            .description tabby_exec_command waits this long for command output by default.
+        input.form-control(
+            type='number',
+            min='1',
+            max='3600',
+            [ngModel]='(config.store.llm.agentBridgeDefaultExecTimeoutMs || 60000) / 1000',
+            (ngModelChange)='config.store.llm.agentBridgeDefaultExecTimeoutMs = $event * 1000; config.save()'
+        )
+
+    .form-line
+        .header
+            .title Audit log
+            .description Writes one JSONL entry per RPC call to agent-bridge-audit.jsonl in the Tabby config directory.
+        toggle(
+            [(ngModel)]='config.store.llm.agentBridgeAuditLogEnabled',
+            (ngModelChange)='config.save()'
+        )
+
+    .form-line
+        .header
+            .title Agent-readable discovery file
+            .description Writes a second connection file for sandboxed agents. Disable this only if every agent can read the Tabby config directory.
+        toggle(
+            [(ngModel)]='config.store.llm.agentBridgePublicDiscoveryEnabled',
+            (ngModelChange)='config.save()'
+        )
+
+    .alert.alert-info
+        div
+            strong MCP listener:
+            span.text-success(*ngIf='agentBridge.running')  running
+            span.text-muted(*ngIf='!agentBridge.running')  starting
+        div(*ngIf='agentBridge.listeningPort') Port: {{ agentBridge.listeningPort }}
+        div(*ngIf='agentBridge.rpcUrl') RPC URL: {{ agentBridge.rpcUrl }}
+        div MCP server: {{ agentBridge.mcpServerScriptPath }}
+        div Node requirement: Codex/Cursor must be able to execute the node command.
+        div(*ngIf='agentBridge.connectionFile') Connection file: {{ agentBridge.connectionFile }}
+        div(*ngIf='agentBridge.publicConnectionFile') Agent discovery file: {{ agentBridge.publicConnectionFile }}
+        div(*ngIf='agentBridge.auditLogFile') Audit log: {{ agentBridge.auditLogFile }}
+        div(*ngIf='!agentBridge.connectionFile') The connection file appears after the bridge starts.
+
+    .alert.alert-danger(*ngIf='agentBridge.startupError')
+        i.fas.fa-exclamation-triangle.me-2
+        span {{ agentBridge.startupError }}
+
+    .form-line.form-line-stacked
+        .header
+            .title Onboarding
+            .description Copy the MCP config for your agent, then test the bridge. Dangerous commands require confirmDangerous=true from the agent flow.
+        .btn-toolbar
+            button.btn.btn-secondary.me-2(
+                type='button',
+                [disabled]='bridgeTesting || !agentBridge.listeningPort',
+                (click)='testBridgeConnection()'
+            )
+                i.fas.fa-circle-notch.fa-spin.me-1(*ngIf='bridgeTesting')
+                i.fas.fa-plug.me-1(*ngIf='!bridgeTesting')
+                span Test connection
+            button.btn.btn-secondary.me-2(
+                type='button',
+                (click)='copyCodexConfig()'
+            )
+                i.fas.fa-copy.me-1
+                span Copy Codex config
+            button.btn.btn-secondary.me-2(
+                type='button',
+                (click)='copyCursorConfig()'
+            )
+                i.fas.fa-copy.me-1
+                span Copy Cursor config
+            button.btn.btn-secondary(
+                type='button',
+                (click)='copyAgentRulesTemplate()'
+            )
+                i.fas.fa-copy.me-1
+                span Copy Agent Rules
+        .section-note.text-success(*ngIf='bridgeTestSuccessful') Agent Bridge is reachable.
+        .section-note.text-danger(*ngIf='bridgeTestSuccessful === false') {{ bridgeTestError }}
+
+    .form-line.form-line-stacked(*ngIf='agentBridge.accessToken')
+        .header
+            .title Persistent access token
+            .description Stored locally in config.yaml. Rotate it if you shared the connection file or MCP config with an untrusted process.
+        .input-group
+            input.form-control(
+                type='text',
+                readonly,
+                [value]='agentBridge.accessToken'
+            )
+            button.btn.btn-secondary(
+                type='button',
+                (click)='copyBridgeToken()'
+            )
+                i.fas.fa-copy.me-1
+                span Copy
+            button.btn.btn-secondary(
+                type='button',
+                (click)='rotateBridgeToken()'
+            )
+                i.fas.fa-sync-alt.me-1
+                span Rotate
+
+    .form-line
+        .header
+            .title CLI quick check
+            .description From the project directory, run npm run tabby-agent -- sessions to verify that current Tabby sessions are visible.

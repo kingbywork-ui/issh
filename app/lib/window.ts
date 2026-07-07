@@ -59,7 +59,7 @@ export class Window {
 
         this.windowConfig = new ElectronConfig({ name: 'window' })
         this.windowBounds = this.windowConfig.get('windowBoundaries')
-        const glasstron = process.platform !== 'darwin' ? (() => {
+        const glasstron = process.platform !== 'darwin' && !process.env.TABBY_DISABLE_GLASSTRON ? (() => {
             try {
                 return require('glasstron')
             } catch (error) {
@@ -446,6 +446,7 @@ export class Window {
                 windowID: this.window.id,
                 isMainWindow: this.isMainWindow,
                 userPluginsPath: this.application.userPluginsPath,
+                vaultPassphrase: process.env.TABBY_VAULT_PASSPHRASE || undefined,
             })
         })
 

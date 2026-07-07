@@ -20,4 +20,6 @@ export interface BootstrapData {
     windowID: number
     installedPlugins: PluginInfo[]
     userPluginsPath: string
+    /** Passed from main process env for dev/CI auto-unlock */
+    vaultPassphrase?: string
 }

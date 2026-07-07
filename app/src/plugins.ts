@@ -1,3 +1,4 @@
+import * as fsSync from 'fs'
 import * as fs from 'mz/fs'
 import * as path from 'path'
 import * as remote from '@electron/remote'
@@ -17,7 +18,17 @@ function normalizePath (p: string): string {
     return p
 }
 
-const builtinPluginsPath = process.env.TABBY_DEV ? path.dirname(remote.app.getAppPath()) : path.join((process as any).resourcesPath, 'builtin-plugins')
+function resolveBuiltinPluginsPath (): string {
+    if (process.env.TABBY_DEV) {
+        return path.dirname(remote.app.getAppPath())
+    }
+    const repoRoot = path.dirname(remote.app.getAppPath())
+    if (fsSync.existsSync(path.join(repoRoot, 'tabby-core', 'package.json'))) {
+        process.env.TABBY_DEV = '1'
+        return repoRoot
+    }
+    return path.join((process as any).resourcesPath, 'builtin-plugins')
+}
 
 const cachedBuiltinModules = {
     '@angular/animations': require('@angular/animations'),
@@ -67,6 +78,7 @@ nodeModule.prototype.require = function (query: string) {
 export type ProgressCallback = (current: number, total: number) => void
 
 export function initModuleLookup (userPluginsPath: string): void {
+    const builtinPluginsPath = resolveBuiltinPluginsPath()
     global['module'].paths.map((x: string) => nodeModule.globalPaths.push(normalizePath(x)))
 
     const paths = []
@@ -83,7 +95,8 @@ export function initModuleLookup (userPluginsPath: string): void {
         process.env.TABBY_PLUGINS.split(':').map(x => paths.push(normalizePath(x)))
     }
 
-    process.env.NODE_PATH += path.delimiter + paths.join(path.delimiter)
+    const nodePath = process.env.NODE_PATH ? `${process.env.NODE_PATH}${path.delimiter}` : ''
+    process.env.NODE_PATH = nodePath + paths.join(path.delimiter)
     nodeModule._initPaths()
 
     builtinModules.forEach(m => {
@@ -174,7 +187,7 @@ async function parsePluginInfo (pluginDir: string, packageName: string): Promise
         return {
             name: name,
             packageName: packageName,
-            isBuiltin: pluginDir === builtinPluginsPath,
+            isBuiltin: pluginDir === resolveBuiltinPluginsPath(),
             isLegacy: info.keywords.includes('terminus-plugin') || info.keywords.includes('terminus-builtin-plugin'),
             version: info.version,
             description: info.description,
@@ -197,7 +210,7 @@ export async function findPlugins (): Promise<PluginInfo[]> {
     const foundPluginsPromises: Promise<PluginInfo|null>[] = []
     for (const { pluginDir, packageName } of candidateLocations) {
 
-        if (builtinModules.includes(packageName) && pluginDir !== builtinPluginsPath) {
+        if (builtinModules.includes(packageName) && pluginDir !== resolveBuiltinPluginsPath()) {
             continue
         }
 

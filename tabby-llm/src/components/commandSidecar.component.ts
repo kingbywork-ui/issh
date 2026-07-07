@@ -1,8 +1,6 @@
 import { AfterViewChecked, Component, ElementRef, EventEmitter, HostBinding, Input, Output, ViewChild } from '@angular/core'
 import { AutocompleteSuggestion, CommandDetail } from '../api'
 
-export type CommandSidecarMode = 'rag' | 'ai'
-
 /** @hidden */
 @Component({
     selector: 'command-sidecar',
@@ -11,17 +9,12 @@ export type CommandSidecarMode = 'rag' | 'ai'
 })
 export class CommandSidecarComponent implements AfterViewChecked {
     @Input() visible = false
-    @Input() mode: CommandSidecarMode = 'rag'
     @Input() inputText = ''
     @Input() loading = false
     @Input() ragResults: AutocompleteSuggestion[] = []
     @Input() selectedIndex = 0
     @Input() commandDetail: CommandDetail | null = null
     @Input() errorText = ''
-    @Input() aiCommand = ''
-    @Input() aiExplanation = ''
-    @Input() aiDangerous = false
-    @Input() aiDangerReason = ''
 
     @Output() inputTextChange = new EventEmitter<string>()
     @Output() submitInput = new EventEmitter<void>()
@@ -29,8 +22,6 @@ export class CommandSidecarComponent implements AfterViewChecked {
     @Output() clear = new EventEmitter<void>()
     @Output() selectRagResult = new EventEmitter<AutocompleteSuggestion>()
     @Output() insertRagResult = new EventEmitter<AutocompleteSuggestion>()
-    @Output() insertAIResult = new EventEmitter<void>()
-    @Output() runAIResult = new EventEmitter<void>()
     @Output() moveNext = new EventEmitter<void>()
     @Output() movePrev = new EventEmitter<void>()
     @Output() insertCurrent = new EventEmitter<void>()
@@ -49,7 +40,12 @@ export class CommandSidecarComponent implements AfterViewChecked {
     ngAfterViewChecked (): void {
         if (this.visible && !this.wasVisible) {
             this.wasVisible = true
-            setTimeout(() => this.inputField?.nativeElement.focus())
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    this.inputField?.nativeElement.focus()
+                    this.inputField?.nativeElement.click()
+                }, 150)
+            })
         }
         if (!this.visible) {
             this.wasVisible = false
@@ -68,9 +64,9 @@ export class CommandSidecarComponent implements AfterViewChecked {
     }
 
     onKeydown (event: KeyboardEvent): void {
+        event.stopPropagation()
         if (event.key === 'Escape') {
             event.preventDefault()
-            event.stopPropagation()
             this.dismiss.emit()
             return
         }
@@ -79,21 +75,31 @@ export class CommandSidecarComponent implements AfterViewChecked {
             const key = event.key.toLowerCase()
             if (key === 'n') {
                 event.preventDefault()
-                event.stopPropagation()
                 this.moveNext.emit()
                 return
             }
             if (key === 'u') {
                 event.preventDefault()
-                event.stopPropagation()
                 this.movePrev.emit()
                 return
             }
             if (event.key === 'Enter') {
                 event.preventDefault()
-                event.stopPropagation()
                 this.insertCurrent.emit()
             }
+        }
+    }
+
+    onMouseEvent (event: MouseEvent): void {
+        event.stopPropagation()
+    }
+
+    onInputClick (event: MouseEvent): void {
+        event.stopPropagation()
+        const el = this.inputField?.nativeElement
+        if (el) {
+            el.focus()
+            el.click()
         }
     }
 }

@@ -1,4 +1,3 @@
-import * as C from 'constants'
 import { posix as path } from 'path'
 import { Component, Input, Output, EventEmitter, Inject, Optional, ChangeDetectorRef, NgZone } from '@angular/core'
 import { FileUpload, DirectoryUpload, DirectoryDownload, MenuItemOptions, NotificationsService, PlatformService } from 'tabby-core'
@@ -364,22 +363,6 @@ export class SFTPPanelComponent {
         }
     }
 
-    getModeString (item: SFTPFile): string {
-        const s = 'SGdrwxrwxrwx'
-        const e = '   ---------'
-        const c = [
-            0o4000, 0o2000, C.S_IFDIR,
-            C.S_IRUSR, C.S_IWUSR, C.S_IXUSR,
-            C.S_IRGRP, C.S_IWGRP, C.S_IXGRP,
-            C.S_IROTH, C.S_IWOTH, C.S_IXOTH,
-        ]
-        let result = ''
-        for (let i = 0; i < c.length; i++) {
-            result += item.mode & c[i] ? s[i] : e[i]
-        }
-        return result
-    }
-
     async buildContextMenu (item: SFTPFile): Promise<MenuItemOptions[]> {
         let items: MenuItemOptions[] = []
         for (const section of await Promise.all((this.contextMenuProviders ?? []).map(x => x.getItems(item, this)))) {
@@ -392,14 +375,6 @@ export class SFTPPanelComponent {
     async showContextMenu (item: SFTPFile, event: MouseEvent): Promise<void> {
         event.preventDefault()
         this.platform.popupContextMenu(await this.buildContextMenu(item), event)
-    }
-
-    get shouldShowCWDTip (): boolean {
-        return !window.localStorage.sshCWDTipDismissed
-    }
-
-    dismissCWDTip (): void {
-        window.localStorage.sshCWDTipDismissed = 'true'
     }
 
     editPath (): void {

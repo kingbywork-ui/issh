@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
-import { Component, Input, HostListener, HostBinding, ViewChildren, ViewChild } from '@angular/core'
+import { Component, Input, HostListener, HostBinding, ViewChildren, ViewChild, AfterViewInit, AfterViewChecked, ElementRef } from '@angular/core'
 import { trigger, style, animate, transition, state } from '@angular/animations'
 import { NgbDropdown, NgbModal } from '@ng-bootstrap/ng-bootstrap'
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop'
@@ -16,7 +16,7 @@ import { BaseTabComponent } from './baseTab.component'
 import { SafeModeModalComponent } from './safeModeModal.component'
 import { TabBodyComponent } from './tabBody.component'
 import { SplitTabComponent } from './splitTab.component'
-import { AppService, Command, CommandLocation, FileTransfer, HostWindowService, PlatformService } from '../api'
+import { AppService, Command, CommandLocation, FileTransfer, HostWindowService, PlatformService, AppPanelService } from '../api'
 
 function makeTabAnimation (dimension: string, size: number) {
     return [
@@ -61,7 +61,7 @@ function makeTabAnimation (dimension: string, size: number) {
         trigger('animateTab', makeTabAnimation('width', 200)),
     ],
 })
-export class AppRootComponent {
+export class AppRootComponent implements AfterViewInit, AfterViewChecked {
     Platform = Platform
     @Input() ready = false
     @Input() leftToolbarButtons: Command[]
@@ -72,9 +72,13 @@ export class AppRootComponent {
     @HostBinding('class.no-tabs') noTabs = true
     @ViewChildren(TabBodyComponent) tabBodies: TabBodyComponent[]
     @ViewChild('activeTransfersDropdown') activeTransfersDropdown: NgbDropdown
+    @ViewChild('leftPanel') leftPanel?: ElementRef<HTMLElement>
+    @ViewChild('rightPanel') rightPanel?: ElementRef<HTMLElement>
+    @ViewChild('bottomPanel') bottomPanel?: ElementRef<HTMLElement>
     unsortedTabs: BaseTabComponent[] = []
     updatesAvailable = false
     activeTransfers: FileTransfer[] = []
+    private panelSlotsRegistered = false
     private logger: Logger
 
     constructor (
@@ -85,6 +89,7 @@ export class AppRootComponent {
         public hostApp: HostAppService,
         public config: ConfigService,
         public app: AppService,
+        public appPanel: AppPanelService,
         platform: PlatformService,
         log: LogService,
         ngbModal: NgbModal,
@@ -190,11 +195,46 @@ export class AppRootComponent {
         })
     }
 
+    ngAfterViewInit (): void {
+        this.tryRegisterPanelSlots()
+    }
+
+    ngAfterViewChecked (): void {
+        this.tryRegisterPanelSlots()
+    }
+
     async ngOnInit () {
         this.config.ready$.toPromise().then(() => {
             this.ready = true
             this.app.emitReady()
+            this.panelSlotsRegistered = false
+            this.tryRegisterPanelSlots()
         })
+    }
+
+    private tryRegisterPanelSlots (): void {
+        if (!this.ready || this.panelSlotsRegistered) {
+            return
+        }
+        if (!this.leftPanel?.nativeElement || !this.rightPanel?.nativeElement || !this.bottomPanel?.nativeElement) {
+            return
+        }
+        this.registerPanelSlots()
+        if (this.appPanel.getSlotElement('left') && this.appPanel.getSlotElement('bottom')) {
+            this.panelSlotsRegistered = true
+        }
+    }
+
+    private registerPanelSlots (): void {
+        if (this.leftPanel?.nativeElement) {
+            this.appPanel.registerSlot('left', this.leftPanel.nativeElement)
+        }
+        if (this.rightPanel?.nativeElement) {
+            this.appPanel.registerSlot('right', this.rightPanel.nativeElement)
+        }
+        if (this.bottomPanel?.nativeElement) {
+            this.appPanel.registerSlot('bottom', this.bottomPanel.nativeElement)
+        }
     }
 
     @HostListener('dragover')

@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core'
 import { SettingsTabProvider } from 'tabby-settings'
+import { AgentBridgeSettingsTabComponent } from './components/agentBridgeSettingsTab.component'
 import { LLMSettingsTabComponent } from './components/llmSettingsTab.component'
 
 /** @hidden */
@@ -11,5 +12,17 @@ export class LLMSettingsTabProvider extends SettingsTabProvider {
 
     getComponentType (): any {
         return LLMSettingsTabComponent
+    }
+}
+
+/** @hidden */
+@Injectable()
+export class AgentBridgeSettingsTabProvider extends SettingsTabProvider {
+    id = 'agent-bridge'
+    icon = 'terminal'
+    title = 'CLI / MCP Agent'
+
+    getComponentType (): any {
+        return AgentBridgeSettingsTabComponent
     }
 }

@@ -94,7 +94,12 @@ ipcRenderer.once('start', async (_$event, bootstrapData: BootstrapData) => {
     debugLog('ipc-start-received', {
         userPluginsPath: bootstrapData.userPluginsPath,
         isMainWindow: bootstrapData.isMainWindow,
+        hasVaultPassphrase: !!bootstrapData.vaultPassphrase,
     })
+
+    if (bootstrapData.vaultPassphrase) {
+        process.env.TABBY_VAULT_PASSPHRASE = bootstrapData.vaultPassphrase
+    }
 
     initModuleLookup(bootstrapData.userPluginsPath)
     debugLog('module-lookup-initialized')

@@ -20,7 +20,7 @@ interface RAGSearchResult {
 export class RAGCommandService {
     private logger: Logger
     private caches = new Map<string, SuggestionCache<AutocompleteSuggestion[]>>()
-    private abortController: AbortController | null = null
+    private abortControllers = new Map<string, AbortController>()
 
     constructor (
         log: LogService,
@@ -36,9 +36,16 @@ export class RAGCommandService {
         return !!this.config.store.llm.ragBaseUrl
     }
 
-    cancelPending (): void {
-        this.abortController?.abort()
-        this.abortController = null
+    cancelPending (tabKey?: string): void {
+        if (tabKey) {
+            this.abortControllers.get(tabKey)?.abort()
+            this.abortControllers.delete(tabKey)
+            return
+        }
+        for (const controller of this.abortControllers.values()) {
+            controller.abort()
+        }
+        this.abortControllers.clear()
     }
 
     clearAutocompleteCache (tabKey: string): void {
@@ -61,23 +68,29 @@ export class RAGCommandService {
             return cached
         }
 
-        this.cancelPending()
-        this.abortController = new AbortController()
+        this.cancelPending(request.tabKey)
+        const abortController = new AbortController()
+        this.abortControllers.set(request.tabKey, abortController)
 
         try {
             const baseUrl = this.config.store.llm.ragBaseUrl.replace(/\/$/, '')
-            const suggestions = await this.fetchAutocomplete(baseUrl, request)
+            const suggestions = await this.fetchAutocomplete(baseUrl, request, abortController.signal)
             cache.set(cacheKey, suggestions)
             return suggestions
         } catch (error) {
             if (error instanceof DOMException && error.name === 'AbortError') {
                 throw error
             }
+            if (error instanceof Error && error.message === 'Request cancelled') {
+                throw error
+            }
             const message = error instanceof Error ? error.message : String(error)
             this.logger.warn('RAG autocomplete request failed', message)
-            return []
+            throw new Error(message)
         } finally {
-            this.abortController = null
+            if (this.abortControllers.get(request.tabKey) === abortController) {
+                this.abortControllers.delete(request.tabKey)
+            }
         }
     }
 
@@ -114,14 +127,14 @@ export class RAGCommandService {
         }
     }
 
-    private async fetchAutocomplete (baseUrl: string, request: AutocompleteRequest): Promise<AutocompleteSuggestion[]> {
+    private async fetchAutocomplete (baseUrl: string, request: AutocompleteRequest, signal: AbortSignal): Promise<AutocompleteSuggestion[]> {
         const endpoints = [
             {
                 path: '/api/autocomplete',
                 init: () => ({
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    signal: this.abortController?.signal,
+                    signal,
                     body: JSON.stringify({
                         q: request.partialCommand,
                         partial: request.partialCommand,
@@ -140,7 +153,7 @@ export class RAGCommandService {
                 path: '/api/search',
                 init: () => ({
                     method: 'GET',
-                    signal: this.abortController?.signal,
+                    signal,
                 }),
                 parse: (body: unknown) => this.parseSearchPayload(body, request),
                 query: () => new URLSearchParams({
@@ -151,11 +164,13 @@ export class RAGCommandService {
             },
         ]
 
+        let lastError: Error | null = null
         for (const endpoint of endpoints) {
             try {
                 const url = endpoint.query ? `${baseUrl}${endpoint.path}?${endpoint.query()}` : `${baseUrl}${endpoint.path}`
                 const response = await fetch(url, endpoint.init())
                 if (!response.ok) {
+                    lastError = new Error(`HTTP ${response.status} ${response.statusText}`)
                     continue
                 }
                 return endpoint.parse(await response.json())
@@ -163,8 +178,12 @@ export class RAGCommandService {
                 if (error instanceof DOMException && error.name === 'AbortError') {
                     throw error
                 }
+                lastError = error instanceof Error ? error : new Error(String(error))
                 continue
             }
+        }
+        if (lastError) {
+            throw new Error(`RAG service unavailable: ${lastError.message}`)
         }
         return []
     }

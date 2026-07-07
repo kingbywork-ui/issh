@@ -14,6 +14,8 @@ export class AutocompletePanelComponent implements AfterViewChecked {
     @Input() aiLoading = false
     @Input() position: { x: number, y: number } = { x: 0, y: 0 }
     @Input() selectedIndex = 0
+    @Input() lightweight = false
+    @Input() hintText = ''
 
     @Output() selectSuggestion = new EventEmitter<AutocompleteSuggestion>()
     @Output() dismiss = new EventEmitter<void>()
@@ -25,6 +27,10 @@ export class AutocompletePanelComponent implements AfterViewChecked {
 
     @HostBinding('class.visible') get isVisible (): boolean {
         return this.visible
+    }
+
+    @HostBinding('class.lightweight') get isLightweight (): boolean {
+        return this.lightweight
     }
 
     @HostBinding('style.left.px') get left (): number {

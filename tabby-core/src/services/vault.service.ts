@@ -181,10 +181,19 @@ export class VaultService {
     }
 
     async getPassphrase (): Promise<string> {
+        const envPassphrase = process.env.TABBY_VAULT_PASSPHRASE
+        if (envPassphrase && (!_rememberedPassphrase || this._requireReauth)) {
+            _rememberedPassphrase = envPassphrase
+            this._requireReauth = false
+            return envPassphrase
+        }
+
         if (!_rememberedPassphrase || this._requireReauth) {
             const savedPassphrase = _rememberedPassphrase
             this._requireReauth = false
-            const modal = this.ngbModal.open(UnlockVaultModalComponent)
+            // Config may decrypt during bootstrap before modal host renders.
+            await new Promise(resolve => setTimeout(resolve, 300))
+            const modal = this.ngbModal.open(UnlockVaultModalComponent, { backdrop: 'static', keyboard: false })
             try {
                 const { passphrase, rememberFor } = await modal.result
                 setTimeout(() => {

@@ -1,0 +1,32 @@
+{
+  "passed": false,
+  "total": 4,
+  "failed": [
+    "Open SSH profile from start page",
+    "SSH tab present",
+    "llm-terminal-host mounted",
+    "Skipped LLM interaction tests"
+  ],
+  "checks": [
+    {
+      "name": "Open SSH profile from start page",
+      "passed": false,
+      "detail": ""
+    },
+    {
+      "name": "SSH tab present",
+      "passed": false,
+      "detail": ""
+    },
+    {
+      "name": "llm-terminal-host mounted",
+      "passed": false,
+      "detail": ""
+    },
+    {
+      "name": "Skipped LLM interaction tests",
+      "passed": false,
+      "detail": "no SSH tab"
+    }
+  ]
+}

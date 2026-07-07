@@ -1,3 +1,5 @@
+ng-template(ngbModalContainer)
+
 title-bar(
   *ngIf='ready && !hostWindow.isFullscreen && config.store.appearance.dock == "off" && isTitleBarNeeded()',
   (dblclick)='toggleMaximize()',
@@ -97,15 +99,21 @@ title-bar(
         div.window-controls-spacer(
             *ngIf='config.store.appearance.frame == "thin" && (hostApp.platform == Platform.Windows) && (config.store.appearance.tabsLocation == "top")',
         )
-    .content
-        start-page.content-tab.content-tab-active(*ngIf='ready && (app.tabs.length == 0 || app.showStartPage)')
+    .app-workspace(
+        [class.left-open]='appPanel.leftVisible',
+        [class.right-open]='appPanel.rightVisible',
+        [class.bottom-open]='appPanel.bottomVisible',
+    )
+        .app-panel-left(#leftPanel)
+        .app-panel-center
+            start-page.content-tab.content-tab-active(*ngIf='ready && (app.tabs.length == 0 || app.showStartPage)')
 
-        tab-body.content-tab(
-            #tabBodies,
-            *ngFor='let tab of unsortedTabs',
-            [class.content-tab-active]='tab == app.activeTab && !app.showStartPage',
-            [active]='tab == app.activeTab && !app.showStartPage',
-            [tab]='tab',
-        )
-
-ng-template(ngbModalContainer)
+            tab-body.content-tab(
+                #tabBodies,
+                *ngFor='let tab of unsortedTabs',
+                [class.content-tab-active]='tab == app.activeTab && !app.showStartPage',
+                [active]='tab == app.activeTab && !app.showStartPage',
+                [tab]='tab',
+            )
+        .app-panel-right(#rightPanel)
+        .app-panel-bottom(#bottomPanel)

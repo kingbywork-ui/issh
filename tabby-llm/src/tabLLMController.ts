@@ -1,9 +1,8 @@
 import { ApplicationRef, ComponentRef, createComponent, EnvironmentInjector } from '@angular/core'
 import { Subject, Subscription, debounce, timer } from 'rxjs'
-import { ConfigService, LogService, Logger, NotificationsService, PlatformService, TranslateService } from 'tabby-core'
+import { ConfigService, LogService, Logger, NotificationsService, TranslateService } from 'tabby-core'
 import { BaseTerminalTabComponent, XTermFrontend } from 'tabby-terminal'
 import { AutocompleteSuggestion, CommandDetail } from './api'
-import { CommandSidecarMode } from './components/commandSidecar.component'
 import { LLMTerminalHostComponent } from './components/llmTerminalHost.component'
 import { LLMService } from './services/llm.service'
 import { RAGCommandService } from './services/ragCommand.service'
@@ -11,40 +10,33 @@ import { TerminalContextService } from './services/terminalContext.service'
 import { HistoryCommandService } from './services/historyCommand.service'
 import { SensitiveInputService } from './services/sensitiveInput.service'
 import { normalizeCommand } from './services/commandValidation'
+import { LLMAppPanelService } from './services/llmAppPanel.service'
+import { LLMAppSidecarHostComponent } from './components/llmAppSidecarHost.component'
 
 /** @hidden */
 export class TabLLMController {
     showAutocomplete = false
-    showNL2 = false
     aiLoading = false
-    nl2Loading = false
     suggestions: AutocompleteSuggestion[] = []
     selectedIndex = 0
     panelPosition = { x: 8, y: 8 }
-    nl2Input = ''
-    nl2ResultCommand = ''
-    nl2ResultExplanation = ''
-    nl2Dangerous = false
-    nl2DangerReason = ''
     sidecarVisible = false
-    sidecarMode: CommandSidecarMode = 'rag'
     sidecarInput = ''
     sidecarLoading = false
     sidecarRagResults: AutocompleteSuggestion[] = []
     sidecarCommandDetail: CommandDetail | null = null
-    sidecarAICommand = ''
-    sidecarAIExplanation = ''
-    sidecarAIDangerous = false
-    sidecarAIDangerReason = ''
     sidecarSelectedIndex = 0
     sidecarError = ''
 
     private lineBuffer = ''
     private inputSubscription?: Subscription
+    private sessionChangedSubscription?: Subscription
     private debounceSubject = new Subject<void>()
     private debounceSubscription?: Subscription
     private hostRef: ComponentRef<LLMTerminalHostComponent> | null = null
     private notifyChange: (() => void) | null = null
+    private sidecarNotifyChange: (() => void) | null = null
+    private appPanelService: LLMAppPanelService | null = null
     private keyHandlerAttached = false
     private lastAutocompletePartial = ''
     private pendingFetchGeneration = 0
@@ -66,7 +58,6 @@ export class TabLLMController {
         private config: ConfigService,
         private notifications: NotificationsService,
         private translate: TranslateService,
-        private platform: PlatformService,
         private injector: EnvironmentInjector,
         private appRef: ApplicationRef,
         log: LogService,
@@ -78,6 +69,10 @@ export class TabLLMController {
         ).subscribe(() => {
             void this.fetchAutocomplete()
         })
+    }
+
+    setAppPanelService (service: LLMAppPanelService): void {
+        this.appPanelService = service
     }
 
     mount (contentElement: HTMLElement): void {
@@ -99,6 +94,7 @@ export class TabLLMController {
         this.rag.clearAutocompleteCache(this.tabKey)
         this.history.clearTabHistory(this.tabKey)
         this.inputSubscription?.unsubscribe()
+        this.sessionChangedSubscription?.unsubscribe()
         this.debounceSubscription?.unsubscribe()
         this.debounceSubject.complete()
         if (this.hostRef) {
@@ -116,9 +112,17 @@ export class TabLLMController {
         this.notifyChange = null
     }
 
+    attachSidecarView (_host: LLMAppSidecarHostComponent, notify: () => void): void {
+        this.sidecarNotifyChange = notify
+    }
+
+    detachSidecarView (_host: LLMAppSidecarHostComponent): void {
+        this.sidecarNotifyChange = null
+    }
+
     start (): void {
         this.attachKeyHandler()
-        this.tab.sessionChanged$.subscribe(() => {
+        this.sessionChangedSubscription = this.tab.sessionChanged$.subscribe(() => {
             this.llm.clearAutocompleteCache(this.tabKey)
             this.rag.clearAutocompleteCache(this.tabKey)
             this.history.clearTabHistory(this.tabKey)
@@ -145,11 +149,9 @@ export class TabLLMController {
             case 'llm-autocomplete':
                 void this.triggerAutocomplete()
                 return true
-            case 'llm-nl2command':
-                this.openSidecar('ai')
-                return true
             case 'llm-accept-suggestion':
                 if (this.showAutocomplete && this.suggestions[this.selectedIndex]) {
+                    this.acceptSuggestion(this.suggestions[this.selectedIndex])
                     return true
                 }
                 return false
@@ -174,9 +176,8 @@ export class TabLLMController {
                 }
                 return false
             case 'llm-dismiss':
-                if (this.showAutocomplete || this.showNL2 || this.sidecarVisible) {
+                if (this.showAutocomplete || this.sidecarVisible) {
                     this.hideAutocomplete()
-                    this.hideNL2()
                     this.hideSidecar()
                     return true
                 }
@@ -187,7 +188,7 @@ export class TabLLMController {
     }
 
     handlePanelKeyEvent (event: KeyboardEvent): boolean {
-        if (!this.showAutocomplete && !this.showNL2 && !this.sidecarVisible) {
+        if (!this.showAutocomplete && !this.sidecarVisible) {
             return false
         }
         if (event.type !== 'keydown') {
@@ -195,7 +196,6 @@ export class TabLLMController {
         }
         if (event.key === 'Escape') {
             this.hideAutocomplete()
-            this.hideNL2()
             this.hideSidecar()
             event.preventDefault()
             return true
@@ -221,16 +221,15 @@ export class TabLLMController {
             }
             return false
         }
-        if (this.showNL2) {
-            return true
-        }
         if (event.ctrlKey && !event.altKey && !event.metaKey) {
             const key = event.key.toLowerCase()
             if (key === 'n') {
+                this.moveSelection(1)
                 event.preventDefault()
                 return true
             }
             if (key === 'u') {
+                this.moveSelection(-1)
                 event.preventDefault()
                 return true
             }
@@ -249,7 +248,7 @@ export class TabLLMController {
             return
         }
         if (!this.getPartial().trim()) {
-            this.openSidecar('rag')
+            this.openSidecar()
             return
         }
         if (!this.hasAnyAutocompleteSourceEnabled()) {
@@ -269,27 +268,38 @@ export class TabLLMController {
         this.refresh()
     }
 
-    openNL2 (): void {
-        this.openSidecar('ai')
+    isLightweightHintEnabled (): boolean {
+        return this.config.store.llm.lightweightHintEnabled ?? false
     }
 
-    hideNL2 (): void {
-        this.showNL2 = false
-        this.nl2Loading = false
-        this.llm.cancelPending()
-        this.rag.cancelPending()
-        this.refresh()
+    getAutocompleteHintText (): string {
+        if (!this.showAutocomplete || !this.isLightweightHintEnabled()) {
+            return ''
+        }
+        const suggestion = this.suggestions[this.selectedIndex]
+        if (!suggestion) {
+            return ''
+        }
+        const partial = this.getPartial()
+        if (partial && suggestion.command.startsWith(partial)) {
+            return suggestion.command.substring(partial.length)
+        }
+        const trimmed = partial.trim()
+        if (trimmed && suggestion.command.startsWith(trimmed)) {
+            return suggestion.command.substring(trimmed.length)
+        }
+        return suggestion.command
     }
 
-    openSidecar (mode: CommandSidecarMode = this.sidecarMode): void {
+    openSidecar (): void {
         this.hideAutocomplete()
-        this.hideNL2()
-        this.sidecarMode = mode
         this.sidecarVisible = true
         if (!this.sidecarInput.trim()) {
-            this.sidecarInput = mode === 'rag' ? '/rag ' : '/ai '
+            this.sidecarInput = '/rag '
         }
         this.refresh()
+        this.appPanelService?.onSidecarVisibilityChanged(this)
+        this.requestTerminalResize()
     }
 
     hideSidecar (): void {
@@ -298,34 +308,26 @@ export class TabLLMController {
         this.llm.cancelPending()
         this.rag.cancelPending()
         this.refresh()
+        this.appPanelService?.onSidecarVisibilityChanged(this)
+        this.requestTerminalResize()
     }
 
     clearSidecar (): void {
-        this.sidecarInput = this.sidecarMode === 'rag' ? '/rag ' : '/ai '
+        this.sidecarInput = '/rag '
         this.sidecarRagResults = []
         this.sidecarCommandDetail = null
-        this.sidecarAICommand = ''
-        this.sidecarAIExplanation = ''
-        this.sidecarAIDangerous = false
-        this.sidecarAIDangerReason = ''
         this.sidecarSelectedIndex = 0
         this.sidecarError = ''
         this.refresh()
     }
 
     async submitSidecarInput (): Promise<void> {
-        const parsed = this.parseSidecarInput(this.sidecarInput)
-        this.sidecarMode = parsed.mode
-        const query = parsed.query.trim()
+        const query = this.parseSidecarInput(this.sidecarInput).trim()
         if (!query) {
             this.clearSidecar()
             return
         }
-        if (parsed.mode === 'rag') {
-            await this.runSidecarRAG(query)
-        } else {
-            await this.runSidecarAI(query)
-        }
+        await this.runSidecarRAG(query)
     }
 
     async selectSidecarRagResult (suggestion: AutocompleteSuggestion): Promise<void> {
@@ -343,36 +345,15 @@ export class TabLLMController {
         this.refresh()
     }
 
-    async insertSidecarAIResult (execute: boolean): Promise<void> {
-        if (!this.sidecarAICommand) {
+    private async runSidecarRAG (query: string): Promise<void> {
+        if (!this.rag.isConfigured()) {
+            this.sidecarError = this.translate.instant('Configure RAG base URL in Settings first')
+            this.sidecarRagResults = []
+            this.sidecarCommandDetail = null
+            this.refresh()
             return
         }
-        if (execute && this.sidecarAIDangerous) {
-            const confirmed = await this.platform.showMessageBox({
-                type: 'warning',
-                message: this.translate.instant('Run potentially dangerous command?'),
-                detail: this.sidecarAICommand,
-                buttons: [
-                    this.translate.instant('Run anyway'),
-                    this.translate.instant('Cancel'),
-                ],
-                defaultId: 1,
-                cancelId: 1,
-            })
-            if (confirmed.response !== 0) {
-                return
-            }
-        }
-        this.insertCommand(this.sidecarAICommand, execute)
-        this.lineBuffer = execute ? '' : this.sidecarAICommand
-        if (execute) {
-            this.hideSidecar()
-        } else {
-            this.refresh()
-        }
-    }
 
-    private async runSidecarRAG (query: string): Promise<void> {
         this.sidecarLoading = true
         this.sidecarError = ''
         this.sidecarRagResults = []
@@ -383,7 +364,7 @@ export class TabLLMController {
         try {
             const ctx = await this.context.collectContext(this.tab)
             const results = await this.rag.getAutocompleteSuggestions({
-                tabKey: this.tabKey,
+                tabKey: `${this.tabKey}:sidecar`,
                 partialCommand: query,
                 cwd: ctx.cwd,
                 shell: ctx.shell,
@@ -403,46 +384,6 @@ export class TabLLMController {
             if (e instanceof DOMException && e.name === 'AbortError') {
                 return
             }
-            this.sidecarError = e instanceof Error ? e.message : String(e)
-        } finally {
-            this.sidecarLoading = false
-            this.refresh()
-        }
-    }
-
-    private async runSidecarAI (prompt: string): Promise<void> {
-        if (!this.isAIEnabledForCommands()) {
-            this.sidecarError = this.translate.instant('Configure AI assistant in Settings first')
-            this.sidecarAICommand = ''
-            this.sidecarAIExplanation = ''
-            this.refresh()
-            return
-        }
-
-        this.sidecarLoading = true
-        this.sidecarError = ''
-        this.sidecarAICommand = ''
-        this.sidecarAIExplanation = ''
-        this.sidecarAIDangerous = false
-        this.sidecarAIDangerReason = ''
-        this.refresh()
-
-        try {
-            const ctx = await this.context.collectContext(this.tab)
-            const result = await this.llm.convertNaturalLanguage({
-                naturalLanguage: prompt,
-                cwd: ctx.cwd,
-                shell: ctx.shell,
-                os: ctx.os,
-            })
-            this.sidecarAICommand = result.command
-            this.sidecarAIExplanation = result.explanation
-            this.sidecarAIDangerous = result.dangerous
-            this.sidecarAIDangerReason = result.dangerReason ?? ''
-        } catch (e) {
-            if (e instanceof DOMException && e.name === 'AbortError') {
-                return
-            }
             if (e instanceof Error && e.message === 'Request cancelled') {
                 return
             }
@@ -453,19 +394,16 @@ export class TabLLMController {
         }
     }
 
-    private parseSidecarInput (text: string): { mode: CommandSidecarMode, query: string } {
+    private parseSidecarInput (text: string): string {
         const trimmed = text.trim()
         if (trimmed.toLowerCase().startsWith('/rag')) {
-            return { mode: 'rag', query: trimmed.substring(4).trim() }
+            return trimmed.substring(4).trim()
         }
-        if (trimmed.toLowerCase().startsWith('/ai')) {
-            return { mode: 'ai', query: trimmed.substring(3).trim() }
-        }
-        return { mode: this.sidecarMode, query: trimmed }
+        return trimmed
     }
 
     moveSidecarSelection (delta: number): void {
-        if (!this.sidecarVisible || this.sidecarMode !== 'rag' || !this.sidecarRagResults.length) {
+        if (!this.sidecarVisible || !this.sidecarRagResults.length) {
             return
         }
         const now = Date.now()
@@ -483,81 +421,12 @@ export class TabLLMController {
     }
 
     insertCurrentSidecarResult (execute: boolean): void {
-        if (this.sidecarMode === 'rag') {
-            const selected = this.sidecarRagResults[this.sidecarSelectedIndex]
-            if (selected) {
-                this.insertCommand(selected.command, execute)
-                this.lineBuffer = execute ? '' : selected.command
-                this.refresh()
-            }
-            return
-        }
-        void this.insertSidecarAIResult(execute)
-    }
-
-    async convertNL2 (): Promise<void> {
-        if (!this.isAIEnabledForCommands()) {
-            return
-        }
-        if (!this.nl2Input.trim()) {
-            return
-        }
-        this.nl2Loading = true
-        this.nl2ResultCommand = ''
-        this.refresh()
-        try {
-            const ctx = await this.context.collectContext(this.tab)
-            const result = await this.llm.convertNaturalLanguage({
-                naturalLanguage: this.nl2Input.trim(),
-                cwd: ctx.cwd,
-                shell: ctx.shell,
-                os: ctx.os,
-            })
-            this.nl2ResultCommand = result.command
-            this.nl2ResultExplanation = result.explanation
-            this.nl2Dangerous = result.dangerous
-            this.nl2DangerReason = result.dangerReason ?? ''
-        } catch (e) {
-            if (e instanceof DOMException && e.name === 'AbortError') {
-                return
-            }
-            if (e instanceof Error && e.message === 'Request cancelled') {
-                return
-            }
-            this.notifications.error(this.translate.instant('AI request failed: {error}', {
-                error: e instanceof Error ? e.message : String(e),
-            }))
-        } finally {
-            this.nl2Loading = false
+        const selected = this.sidecarRagResults[this.sidecarSelectedIndex]
+        if (selected) {
+            this.insertCommand(selected.command, execute)
+            this.lineBuffer = execute ? '' : selected.command
             this.refresh()
         }
-    }
-
-    async confirmNL2 (execute: boolean): Promise<void> {
-        if (!this.nl2ResultCommand) {
-            return
-        }
-        if (this.nl2Dangerous) {
-            const confirmed = await this.platform.showMessageBox({
-                type: 'warning',
-                message: this.translate.instant('Run potentially dangerous command?'),
-                detail: this.nl2ResultCommand,
-                buttons: [
-                    this.translate.instant('Run anyway'),
-                    this.translate.instant('Cancel'),
-                ],
-                defaultId: 1,
-                cancelId: 1,
-            })
-            if (confirmed.response !== 0) {
-                return
-            }
-        }
-        const shouldExecute = execute || this.config.store.llm.executeOnConfirm
-        this.insertCommand(this.nl2ResultCommand, shouldExecute)
-        this.hideNL2()
-        this.lineBuffer = ''
-        this.sensitiveInputLatched = false
     }
 
     acceptSuggestion (suggestion: AutocompleteSuggestion): void {
@@ -634,11 +503,10 @@ export class TabLLMController {
         const fetchGeneration = ++this.pendingFetchGeneration
         const historyEnabled = this.isHistoryAutocompleteEnabled()
         const scriptEnabled = this.isScriptAutocompleteEnabled()
-        const ragEnabled = this.isRAGAutocompleteEnabled()
         const aiEnabled = this.isAIEnabledForCommands()
 
         this.updatePanelPosition()
-        const anySource = historyEnabled || scriptEnabled || ragEnabled || aiEnabled
+        const anySource = historyEnabled || scriptEnabled || aiEnabled
         this.showAutocomplete = anySource
         this.aiLoading = aiEnabled
         if (partialChanged) {
@@ -675,35 +543,10 @@ export class TabLLMController {
             this.preserveSelection(previousIndex, previousSuggestions)
         }
         this.refresh()
-        this.logger.debug('fetchAutocomplete: history=%d script=%d rag=%s ai_pending=%s', historySuggestions.length, scriptSuggestions.length, ragEnabled, aiEnabled)
-
-        let mergedSuggestions = merged
-        if (ragEnabled) {
-            const ctx = await this.context.collectContext(this.tab)
-            const ragSuggestions = await this.rag.getAutocompleteSuggestions({
-                tabKey: this.tabKey,
-                partialCommand: partial,
-                cwd: ctx.cwd,
-                shell: ctx.shell,
-                os: ctx.os,
-                recentOutput: [],
-                excludeCommands: mergedSuggestions.map(s => s.command),
-            })
-            if (fetchGeneration !== this.pendingFetchGeneration) {
-                return
-            }
-            mergedSuggestions = this.mergeSuggestions(mergedSuggestions, ragSuggestions)
-            this.suggestions = mergedSuggestions
-            if (partialChanged) {
-                this.selectedIndex = 0
-            } else {
-                this.preserveSelection(previousIndex, previousSuggestions)
-            }
-            this.refresh()
-        }
+        this.logger.debug('fetchAutocomplete: history=%d script=%d ai_pending=%s', historySuggestions.length, scriptSuggestions.length, aiEnabled)
 
         if (!aiEnabled) {
-            if (!mergedSuggestions.length) {
+            if (!merged.length) {
                 this.showAutocomplete = false
             }
             return
@@ -721,16 +564,16 @@ export class TabLLMController {
                 shell: ctx.shell,
                 os: ctx.os,
                 recentOutput,
-                excludeCommands: mergedSuggestions.map(s => s.command),
+                excludeCommands: merged.map(s => s.command),
             })
             if (fetchGeneration !== this.pendingFetchGeneration) {
                 return
             }
-            const existingSet = new Set(mergedSuggestions.map(s => s.command))
+            const existingSet = new Set(merged.map(s => s.command))
             const deduped = aiSuggestions.filter(s => !existingSet.has(s.command))
             const indexBeforeMerge = this.selectedIndex
             const suggestionsBeforeMerge = [...this.suggestions]
-            this.suggestions = [...mergedSuggestions, ...deduped]
+            this.suggestions = [...merged, ...deduped]
             if (partialChanged) {
                 this.selectedIndex = 0
             } else {
@@ -748,7 +591,7 @@ export class TabLLMController {
                     error: e instanceof Error ? e.message : String(e),
                 }))
             }
-            if (!mergedSuggestions.length) {
+            if (!merged.length) {
                 this.showAutocomplete = false
             }
         } finally {
@@ -858,6 +701,16 @@ export class TabLLMController {
 
     private refresh (): void {
         this.notifyChange?.()
+        this.sidecarNotifyChange?.()
+    }
+
+    private requestTerminalResize (): void {
+        setTimeout(() => {
+            window.dispatchEvent(new Event('resize'))
+        }, 50)
+        setTimeout(() => {
+            window.dispatchEvent(new Event('resize'))
+        }, 200)
     }
 
     private isSensitiveInputActive (): boolean {
@@ -879,10 +732,6 @@ export class TabLLMController {
         return this.config.store.llm.scriptAutocompleteEnabled ?? false
     }
 
-    private isRAGAutocompleteEnabled (): boolean {
-        return (this.config.store.llm.ragAutocompleteEnabled ?? false) && this.rag.isConfigured()
-    }
-
     private isAIEnabledForCommands (): boolean {
         return (this.config.store.llm.aiAutocompleteEnabled ?? true) && this.llm.isConfigured()
     }
@@ -890,7 +739,6 @@ export class TabLLMController {
     private hasAnyAutocompleteSourceEnabled (): boolean {
         return this.isHistoryAutocompleteEnabled() ||
             this.isScriptAutocompleteEnabled() ||
-            this.isRAGAutocompleteEnabled() ||
             this.isAIEnabledForCommands()
     }
 

@@ -1,7 +1,7 @@
 import * as russh from 'russh'
 import { marker as _ } from '@biesbjerg/ngx-translate-extract-marker'
 import colors from 'ansi-colors'
-import { Component, Injector, HostListener } from '@angular/core'
+import { Component, Injector, } from '@angular/core'
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
 import { Platform, ProfilesService } from 'tabby-core'
 import { BaseTerminalTabComponent, ConnectableTerminalTabComponent } from 'tabby-terminal'
@@ -11,22 +11,26 @@ import { SSHPortForwardingModalComponent } from './sshPortForwardingModal.compon
 import { SSHProfile } from '../api'
 import { SSHShellSession } from '../session/shell'
 import { SSHMultiplexerService } from '../services/sshMultiplexer.service'
+import { SSHAppPanelService } from '../services/sshAppPanel.service'
 
 /** @hidden */
 @Component({
     selector: 'ssh-tab',
-    template: `${BaseTerminalTabComponent.template} ${require('./sshTab.component.pug')}`,
+    template: require('./sshTab.component.pug'),
     styles: [
         ...BaseTerminalTabComponent.styles,
         require('./sshTab.component.scss'),
     ],
-    animations: BaseTerminalTabComponent.animations,
+    animations: [
+        ...BaseTerminalTabComponent.animations,
+    ],
 })
 export class SSHTabComponent extends ConnectableTerminalTabComponent<SSHProfile> {
     Platform = Platform
     sshSession: SSHSession|null = null
     session: SSHShellSession|null = null
     sftpPanelVisible = false
+    sendPanelVisible = false
     sftpPath = '/'
     enableToolbar = true
     activeKIPrompt: KeyboardInteractivePrompt|null = null
@@ -37,14 +41,21 @@ export class SSHTabComponent extends ConnectableTerminalTabComponent<SSHProfile>
         private ngbModal: NgbModal,
         private profilesService: ProfilesService,
         private sshMultiplexer: SSHMultiplexerService,
+        private sshAppPanel: SSHAppPanelService,
     ) {
         super(injector)
         this.sessionChanged$.subscribe(() => {
             this.activeKIPrompt = null
+            if (this.session?.open) {
+                this.sendPanelVisible = true
+                this.sshAppPanel.syncFromTab(this)
+                this.requestTerminalResize()
+            }
         })
     }
 
     ngOnInit (): void {
+        this.sshAppPanel.registerTab(this)
         this.subscribeUntilDestroyed(this.hotkeys.hotkey$, hotkey => {
             if (!this.hasFocus) {
                 return
@@ -71,6 +82,38 @@ export class SSHTabComponent extends ConnectableTerminalTabComponent<SSHProfile>
         })
 
         super.ngOnInit()
+    }
+
+    ngOnDestroy (): void {
+        this.sshAppPanel.unregisterTab(this)
+        super.ngOnDestroy()
+    }
+
+    toggleSendPanel (): void {
+        this.sendPanelVisible = !this.sendPanelVisible
+        this.sshAppPanel.syncFromTab(this)
+        this.requestTerminalResize()
+    }
+
+    onSendPanelClosed (): void {
+        this.sendPanelVisible = false
+        this.sshAppPanel.syncFromTab(this)
+        this.requestTerminalResize()
+    }
+
+    onSftpPanelClosed (): void {
+        this.sftpPanelVisible = false
+        this.sshAppPanel.syncFromTab(this)
+        this.requestTerminalResize()
+    }
+
+    private requestTerminalResize (): void {
+        setTimeout(() => {
+            window.dispatchEvent(new Event('resize'))
+        }, 50)
+        setTimeout(() => {
+            window.dispatchEvent(new Event('resize'))
+        }, 200)
     }
 
     async setupOneSession (injector: Injector, profile: SSHProfile, multiplex = true): Promise<SSHSession> {
@@ -172,6 +215,12 @@ export class SSHTabComponent extends ConnectableTerminalTabComponent<SSHProfile>
         await session.start()
 
         this.session?.resize(this.size.columns, this.size.rows)
+
+        if (this.session?.open) {
+            this.sendPanelVisible = true
+            this.sshAppPanel.syncFromTab(this)
+            this.requestTerminalResize()
+        }
     }
 
     async initializeSession (): Promise<void> {
@@ -219,12 +268,9 @@ export class SSHTabComponent extends ConnectableTerminalTabComponent<SSHProfile>
         this.sftpPath = await this.session?.getWorkingDirectory() ?? this.sftpPath
         setTimeout(() => {
             this.sftpPanelVisible = true
+            this.sshAppPanel.syncFromTab(this)
+            this.requestTerminalResize()
         }, 100)
-    }
-
-    @HostListener('click')
-    onClick (): void {
-        this.sftpPanelVisible = false
     }
 
     protected isSessionExplicitlyTerminated (): boolean {

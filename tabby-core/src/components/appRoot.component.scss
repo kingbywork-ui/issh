@@ -171,23 +171,106 @@ $tab-border-radius: 4px;
     }
 }
 
-.content {
+.app-workspace {
     flex: 1 1 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.app-workspace.left-open {
+    grid-template-columns: 300px minmax(0, 1fr);
+}
+
+.app-workspace.right-open:not(.left-open) {
+    grid-template-columns: minmax(0, 1fr) 400px;
+}
+
+.app-workspace.left-open.right-open {
+    grid-template-columns: 300px minmax(0, 1fr) 400px;
+}
+
+.app-workspace.bottom-open {
+    grid-template-rows: minmax(0, 1fr) 180px;
+}
+
+.app-panel-left {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.app-workspace.left-open .app-panel-left {
+    display: block;
+}
+
+.app-panel-center {
+    grid-column: 1;
+    grid-row: 1;
     position: relative;
     min-height: 0;
     min-width: 0;
+    overflow: hidden;
+}
 
-    > .content-tab {
-        position: absolute;
-        top: 0;
-        width: 100%;
-        height: 100%;
+.app-workspace.left-open:not(.right-open) .app-panel-center {
+    grid-column: 2;
+}
 
-        left: -1000%;
+.app-workspace.right-open:not(.left-open) .app-panel-center {
+    grid-column: 1;
+}
 
-        &.content-tab-active {
-            left: 0;
-        }
+.app-workspace.left-open.right-open .app-panel-center {
+    grid-column: 2;
+}
+
+.app-panel-right {
+    grid-column: 2;
+    grid-row: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: none;
+}
+
+.app-workspace.right-open:not(.left-open) .app-panel-right {
+    display: block;
+    grid-column: 2;
+}
+
+.app-workspace.left-open.right-open .app-panel-right {
+    display: block;
+    grid-column: 3;
+}
+
+.app-panel-bottom {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-height: 0;
+    overflow: hidden;
+    display: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.app-workspace.bottom-open .app-panel-bottom {
+    display: block;
+}
+
+.app-panel-center > .content-tab {
+    position: absolute;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    left: -1000%;
+
+    &.content-tab-active {
+        left: 0;
     }
 }
 

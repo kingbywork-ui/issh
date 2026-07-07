@@ -105,14 +105,12 @@ export class Application {
         }
 
         this.userPluginsPath = path.join(
-            app.getPath('userData'),
+            process.env.TABBY_CONFIG_DIRECTORY ?? app.getPath('userData'),
             'plugins',
         )
         debugLog(`application-ctor:user-plugins-path:${this.userPluginsPath}`)
 
-        if (!fs.existsSync(this.userPluginsPath)) {
-            fs.mkdirSync(this.userPluginsPath)
-        }
+        fs.mkdirSync(this.userPluginsPath, { recursive: true })
 
         app.commandLine.appendSwitch('disable-http-cache')
         app.commandLine.appendSwitch('max-active-webgl-contexts', '9000')

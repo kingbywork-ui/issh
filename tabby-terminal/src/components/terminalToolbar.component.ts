@@ -35,6 +35,11 @@ export class TerminalToolbarComponent {
     }
 
     openBatchInput (): void {
+        const hasToggle = 'toggleSendPanel' in this.tab && typeof (this.tab as { toggleSendPanel?: () => void }).toggleSendPanel === 'function'
+        if (hasToggle) {
+            (this.tab as unknown as { toggleSendPanel: () => void }).toggleSendPanel()
+            return
+        }
         this.batchInput.open(this.tab)
     }
 

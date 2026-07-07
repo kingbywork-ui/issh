@@ -2,43 +2,47 @@
     *ngIf='visible',
     (mousedown)='$event.preventDefault()'
 )
-    .panel-header
-        span(translate) Suggestions
-        .ai-loading(*ngIf='aiLoading')
+    .lightweight-hint(*ngIf='lightweight')
+        span.hint-text(*ngIf='hintText') {{ hintText }}
+        span.hint-loading(*ngIf='!hintText && aiLoading')
             i.fas.fa-circle-notch.fa-spin.me-1
             span(translate) AI...
-        button.btn.btn-sm.btn-link((click)='dismiss.emit()')
-            i.fas.fa-times
+        span.hint-key(*ngIf='hintText') Ctrl+Y
 
-    .suggestion-list(*ngIf='suggestions.length')
-        .suggestion-item(
-            *ngFor='let item of suggestions; let i = index',
-            [class.selected]='i === selectedIndex',
-            (click)='select(item)'
-        )
-            .suggestion-row
-                span.category-tag(
-                    *ngIf='item.category === "history"',
-                    class='history'
-                ) History
-                span.category-tag(
-                    *ngIf='item.category === "ai"',
-                    class='ai'
-                ) AI
-                span.category-tag(
-                    *ngIf='item.category === "script"',
-                    class='script'
-                ) Script
-                span.category-tag(
-                    *ngIf='item.category === "rag"',
-                    class='rag'
-                ) RAG
-                .command {{ item.command }}
-            .description(*ngIf='item.description && item.category !== "history"') {{ item.description }}
+    ng-container(*ngIf='!lightweight')
+        .panel-header
+            span(translate) Suggestions
+            .ai-loading(*ngIf='aiLoading')
+                i.fas.fa-circle-notch.fa-spin.me-1
+                span(translate) AI...
+            button.btn.btn-sm.btn-link((click)='dismiss.emit()')
+                i.fas.fa-times
 
-    .loading-row(*ngIf='aiLoading && !suggestions.length')
-        i.fas.fa-circle-notch.fa-spin.me-2
-        span(translate) Thinking...
+        .suggestion-list(*ngIf='suggestions.length')
+            .suggestion-item(
+                *ngFor='let item of suggestions; let i = index',
+                [class.selected]='i === selectedIndex',
+                (click)='select(item)'
+            )
+                .suggestion-row
+                    span.category-tag(
+                        *ngIf='item.category === "history"',
+                        class='history'
+                    ) History
+                    span.category-tag(
+                        *ngIf='item.category === "ai"',
+                        class='ai'
+                    ) AI
+                    span.category-tag(
+                        *ngIf='item.category === "script"',
+                        class='script'
+                    ) Script
+                    .command {{ item.command }}
+                .description(*ngIf='item.description && item.category !== "history"') {{ item.description }}
 
-    .empty-row(*ngIf='!aiLoading && !suggestions.length')
-        span(translate) No suggestions
+        .loading-row(*ngIf='aiLoading && !suggestions.length')
+            i.fas.fa-circle-notch.fa-spin.me-2
+            span(translate) Thinking...
+
+        .empty-row(*ngIf='!aiLoading && !suggestions.length')
+            span(translate) No suggestions

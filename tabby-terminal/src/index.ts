@@ -21,6 +21,7 @@ import { ColorSchemeSelectorComponent } from './components/colorSchemeSelector.c
 import { InputProcessingSettingsComponent } from './components/inputProcessingSettings.component'
 import { ColorSchemeSettingsForModeComponent } from './components/colorSchemeSettingsForMode.component'
 import { BatchInputModalComponent } from './components/batchInputModal.component'
+import { BatchInputPanelComponent } from './components/batchInputPanel.component'
 
 import { TerminalDecorator } from './api/decorator'
 import { TerminalContextMenuItemProvider } from './api/contextMenuProvider'
@@ -80,6 +81,7 @@ import { DefaultColorSchemes } from './colorSchemes'
         InputProcessingSettingsComponent,
         ColorSchemeSettingsForModeComponent,
         BatchInputModalComponent,
+        BatchInputPanelComponent,
     ],
     exports: [
         ColorPickerComponent,
@@ -89,6 +91,7 @@ import { DefaultColorSchemes } from './colorSchemes'
         LoginScriptsSettingsComponent,
         TerminalToolbarComponent,
         InputProcessingSettingsComponent,
+        BatchInputPanelComponent,
     ],
 })
 export default class TerminalModule { } // eslint-disable-line @typescript-eslint/no-extraneous-class
@@ -106,5 +109,6 @@ export * from './middleware/inputProcessing'
 export * from './api/middleware'
 export * from './session'
 export { LoginScriptsSettingsComponent, StreamProcessingSettingsComponent }
+export { BatchInputPanelComponent } from './components/batchInputPanel.component'
 export { MultifocusService } from './services/multifocus.service'
 export { TerminalColorScheme } from 'tabby-core' // was previously defined in this plugin
