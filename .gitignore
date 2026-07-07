@@ -66,6 +66,12 @@ smoke_test_report.json
 start-dev.cmd
 AGENTS.md
 HANDOFF.md
+smoke_helpers.py
+smoke_test.py
+test_*.py
+test_*.json
+test_screenshots/
+scripts/agent-bridge/
 
 # OS Files
 Thumbs.db
