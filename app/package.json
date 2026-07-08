@@ -1,6 +1,6 @@
 {
-  "name": "tabby",
-  "description": "A terminal for a modern age",
+  "name": "issh",
+  "description": "AI-assisted SSH terminal based on Tabby",
   "private": true,
   "repository": "https://github.com/Eugeny/tabby",
   "author": {
@@ -8,7 +8,7 @@
     "email": "e@ajenti.org"
   },
   "main": "dist/main.js",
-  "version": "1.2.2",
+  "version": "0.0.1",
   "scripts": {
     "postinstall": "patch-package",
     "build": "webpack --progress --color --display-modules",

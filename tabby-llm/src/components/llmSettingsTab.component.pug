@@ -171,37 +171,3 @@ div.mt-4
             [(ngModel)]='config.store.llm.lightweightHintEnabled',
             (ngModelChange)='config.save()'
         )
-
-div.mt-4
-    h3.mb-3 RAG 知识库
-
-    .form-line
-        .header
-            .title RAG 知识库服务
-            .description 配置外部知识库服务地址，供侧边栏 /rag 查询使用。不影响命令补全。
-        input.form-control(
-            type='text',
-            [(ngModel)]='config.store.llm.ragBaseUrl',
-            (keydown.enter)='config.save()'
-        )
-
-    .form-line
-        .header
-            .title RAG 语义检索
-            .description 启用后使用知识库的语义检索能力，否则使用基础关键词检索。
-        toggle(
-            [(ngModel)]='config.store.llm.ragUseSemanticSearch',
-            (ngModelChange)='config.save()'
-        )
-
-    .form-line
-        .header
-            .title RAG 查询数量
-            .description 侧边栏 /rag 查询时从知识库返回的最大结果数。
-        input.form-control(
-            type='number',
-            min='1',
-            max='50',
-            [(ngModel)]='config.store.llm.ragTopK',
-            (keydown.enter)='config.save()'
-        )

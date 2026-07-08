@@ -128,13 +128,13 @@ debugLog('application-constructor-begin')
 const application = new Application(configStore)
 debugLog('application-constructor-done')
 
-// Register tabby:// URL scheme
+// Register issh:// URL scheme.
 if (process.defaultApp) {
     if (process.argv.length >= 2) {
-        app.setAsDefaultProtocolClient('tabby', process.execPath, [process.argv[1]])
+        app.setAsDefaultProtocolClient('issh', process.execPath, [process.argv[1]])
     }
 } else {
-    app.setAsDefaultProtocolClient('tabby')
+    app.setAsDefaultProtocolClient('issh')
 }
 
 ipcMain.on('app:new-window', () => {

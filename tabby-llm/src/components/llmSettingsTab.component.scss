@@ -47,4 +47,60 @@
         opacity: 0.5;
         margin-top: 0.25rem;
     }
+
+    .audit-log-table {
+        max-height: 400px;
+        overflow-y: auto;
+        border: 1px solid rgba(128, 128, 128, 0.2);
+        border-radius: 4px;
+        padding: 0.5rem;
+    }
+
+    .audit-entry {
+        padding: 0.4rem 0.5rem;
+        border-bottom: 1px solid rgba(128, 128, 128, 0.1);
+        font-size: 12px;
+
+        &:last-child {
+            border-bottom: none;
+        }
+    }
+
+    .audit-entry-header {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 2px;
+    }
+
+    .audit-time {
+        font-family: monospace;
+        opacity: 0.7;
+    }
+
+    .audit-method {
+        font-size: 11px;
+    }
+
+    .audit-status {
+        font-size: 11px;
+    }
+
+    .audit-entry-body {
+        margin-top: 2px;
+        padding-left: 0.5rem;
+        border-left: 2px solid rgba(128, 128, 128, 0.15);
+    }
+
+    .audit-params {
+        font-family: monospace;
+        font-size: 11px;
+        word-break: break-all;
+        max-height: 60px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+    }
 }

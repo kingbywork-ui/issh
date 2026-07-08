@@ -17,8 +17,6 @@ import { AutocompletePanelComponent } from './components/autocompletePanel.compo
 import { LLMSettingsTabComponent } from './components/llmSettingsTab.component'
 import { AgentBridgeSettingsTabComponent } from './components/agentBridgeSettingsTab.component'
 import { LLMTerminalHostComponent } from './components/llmTerminalHost.component'
-import { LLMAppSidecarHostComponent } from './components/llmAppSidecarHost.component'
-import { CommandSidecarComponent } from './components/commandSidecar.component'
 
 /** @hidden */
 @NgModule({
@@ -39,8 +37,6 @@ import { CommandSidecarComponent } from './components/commandSidecar.component'
     declarations: [
         AutocompletePanelComponent,
         AgentBridgeSettingsTabComponent,
-        CommandSidecarComponent,
-        LLMAppSidecarHostComponent,
         LLMSettingsTabComponent,
         LLMTerminalHostComponent,
     ],

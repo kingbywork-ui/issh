@@ -72,7 +72,8 @@ export class Window {
         const bwOptions: BrowserWindowConstructorOptions = {
             width: 800,
             height: 600,
-            title: 'Tabby',
+            title: 'issh',
+            icon: path.join(app.getAppPath(), 'assets', 'icon.png'),
             minWidth: 400,
             minHeight: 300,
             webPreferences: {

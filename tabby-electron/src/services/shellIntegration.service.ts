@@ -13,23 +13,23 @@ try {
 
 @Injectable({ providedIn: 'root' })
 export class ShellIntegrationService {
-    private automatorWorkflows = ['Open Tabby here.workflow', 'Paste path into Tabby.workflow']
+    private automatorWorkflows = ['Open issh here.workflow', 'Paste path into issh.workflow']
     private automatorWorkflowsLocation: string
     private automatorWorkflowsDestination: string
     private registryKeys = [
         {
-            path: 'Software\\Classes\\Directory\\Background\\shell\\Tabby',
-            value: 'Open Tabby here',
+            path: 'Software\\Classes\\Directory\\Background\\shell\\issh',
+            value: 'Open issh here',
             command: 'open "%V"',
         },
         {
-            path: 'SOFTWARE\\Classes\\Directory\\shell\\Tabby',
-            value: 'Open Tabby here',
+            path: 'SOFTWARE\\Classes\\Directory\\shell\\issh',
+            value: 'Open issh here',
             command: 'open "%V"',
         },
         {
-            path: 'Software\\Classes\\*\\shell\\Tabby',
-            value: 'Paste path into Tabby',
+            path: 'Software\\Classes\\*\\shell\\issh',
+            value: 'Paste path into issh',
             command: 'paste "%V"',
         },
     ]

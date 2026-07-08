@@ -7,9 +7,7 @@ import { Injectable, NgZone } from '@angular/core'
 import { BehaviorSubject } from 'rxjs'
 import { AppService, BaseTabComponent, ConfigService, LogService, Logger, PlatformService, ProfilesService, SplitTabComponent } from 'tabby-core'
 import { BaseTerminalTabComponent } from 'tabby-terminal'
-import { AutocompleteRequest, AutocompleteSuggestion } from '../api'
 import { TabLLMController } from '../tabLLMController'
-import { RAGCommandService } from './ragCommand.service'
 import { TerminalContextService } from './terminalContext.service'
 import { SensitiveInputService } from './sensitiveInput.service'
 import { DangerousCommandGuard } from './dangerousCommandGuard'
@@ -48,6 +46,25 @@ interface AgentCommandApproval {
     message?: string
 }
 
+interface CachedOutput {
+    outputId: string
+    tabId: string
+    command: string
+    stdout: string
+    createdAt: number
+}
+
+interface SseClient {
+    id: string
+    response: http.ServerResponse
+    createdAt: number
+}
+
+const OUTPUT_TRUNCATE_THRESHOLD = 4000
+const OUTPUT_MAX_ENTRIES = 50
+const OUTPUT_MAX_AGE_MS = 10 * 60 * 1000
+const SSE_KEEPALIVE_INTERVAL_MS = 30 * 1000
+
 /** @hidden */
 @Injectable({ providedIn: 'root' })
 export class AgentBridgeService {
@@ -66,6 +83,9 @@ export class AgentBridgeService {
     private startError: string | null = null
     private readonly statusSubject = new BehaviorSubject<void>(undefined)
     readonly status$ = this.statusSubject.asObservable()
+    private outputCache = new Map<string, CachedOutput>()
+    private sseClients = new Map<string, SseClient>()
+    private sseKeepaliveTimer: NodeJS.Timeout | null = null
 
     constructor (
         private app: AppService,
@@ -73,7 +93,6 @@ export class AgentBridgeService {
         private platform: PlatformService,
         private profiles: ProfilesService,
         private context: TerminalContextService,
-        private rag: RAGCommandService,
         private sensitiveInput: SensitiveInputService,
         private zone: NgZone,
         log: LogService,
@@ -131,6 +150,10 @@ export class AgentBridgeService {
         return this.activePort ? `http://127.0.0.1:${this.activePort}/rpc` : null
     }
 
+    get sseUrl (): string | null {
+        return this.activePort ? `http://127.0.0.1:${this.activePort}/sse` : null
+    }
+
     get accessToken (): string | null {
         return this.token
     }
@@ -178,6 +201,19 @@ export class AgentBridgeService {
             '- Prefer tabby_exec_command for non-interactive SSH checks; use tabby_run_command only when the user needs an interactive terminal command.',
             '- Keep SFTP writes scoped to paths the user named or clearly approved.',
         ].join('\n')
+    }
+
+    get claudeDesktopConfigSnippet (): string {
+        const url = this.sseUrl ?? 'http://127.0.0.1:<port>/sse'
+        return JSON.stringify({
+            mcpServers: {
+                tabby: {
+                    type: 'sse',
+                    url,
+                    headers: { Authorization: `Bearer ${this.token ?? '<token>'}` },
+                },
+            },
+        }, null, 2)
     }
 
     async rotateToken (): Promise<void> {
@@ -290,6 +326,15 @@ export class AgentBridgeService {
         if (clearError) {
             this.startError = null
         }
+        if (this.sseKeepaliveTimer) {
+            clearInterval(this.sseKeepaliveTimer)
+            this.sseKeepaliveTimer = null
+        }
+        for (const [id, client] of this.sseClients) {
+            try { client.response.end() } catch { /* ignore */ }
+            this.sseClients.delete(id)
+        }
+        this.outputCache.clear()
         if (server?.listening) {
             server.close()
         }
@@ -428,7 +473,26 @@ export class AgentBridgeService {
             response.end()
             return
         }
-        if (request.method !== 'POST' || request.url !== '/rpc') {
+        const url = new URL(request.url ?? '/', `http://127.0.0.1:${this.activePort ?? 0}`)
+        const sseEnabled = this.config.store.llm.agentBridgeSseEnabled ?? true
+        if (sseEnabled && request.method === 'GET' && url.pathname === '/sse') {
+            if (!this.isAuthorized(request)) {
+                this.writeJson(response, 401, { error: 'Unauthorized' })
+                return
+            }
+            this.handleSseConnect(request, response)
+            return
+        }
+        if (sseEnabled && request.method === 'POST' && url.pathname === '/messages') {
+            if (!this.isAuthorized(request)) {
+                this.writeJson(response, 401, { error: 'Unauthorized' })
+                return
+            }
+            const sessionId = url.searchParams.get('sessionId') ?? ''
+            void this.handleSseMessage(request, response, sessionId)
+            return
+        }
+        if (request.method !== 'POST' || url.pathname !== '/rpc') {
             this.writeJson(response, 404, { error: 'Not found' })
             return
         }
@@ -449,6 +513,67 @@ export class AgentBridgeService {
                 },
             })
         }
+    }
+
+    private handleSseConnect (request: http.IncomingMessage, response: http.ServerResponse): void {
+        response.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'Access-Control-Allow-Origin': 'http://127.0.0.1',
+        })
+        const clientId = `sse-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        this.sseClients.set(clientId, { id: clientId, response, createdAt: Date.now() })
+        response.write(`event: endpoint\ndata: /messages?sessionId=${clientId}\n\n`)
+        this.ensureSseKeepalive()
+        request.on('close', () => {
+            this.sseClients.delete(clientId)
+        })
+    }
+
+    private async handleSseMessage (request: http.IncomingMessage, response: http.ServerResponse, sessionId: string): Promise<void> {
+        const client = this.sseClients.get(sessionId)
+        if (!client) {
+            this.writeJson(response, 404, { error: 'SSE session not found' })
+            return
+        }
+        try {
+            const rpcRequest = JSON.parse(await this.readBody(request)) as RpcRequest
+            const rpcResponse = await this.handleRpc(rpcRequest)
+            client.response.write(`event: message\ndata: ${JSON.stringify(rpcResponse)}\n\n`)
+            response.writeHead(202)
+            response.end()
+        } catch (error) {
+            const errorResponse: RpcResponse = {
+                id: undefined,
+                error: {
+                    code: 'bad_request',
+                    message: error instanceof Error ? error.message : String(error),
+                },
+            }
+            client.response.write(`event: message\ndata: ${JSON.stringify(errorResponse)}\n\n`)
+            response.writeHead(202)
+            response.end()
+        }
+    }
+
+    private ensureSseKeepalive (): void {
+        if (this.sseKeepaliveTimer) {
+            return
+        }
+        this.sseKeepaliveTimer = setInterval(() => {
+            for (const [id, client] of this.sseClients) {
+                if (client.response.destroyed) {
+                    this.sseClients.delete(id)
+                    continue
+                }
+                client.response.write(`: keepalive\n\n`)
+            }
+            if (this.sseClients.size === 0 && this.sseKeepaliveTimer) {
+                clearInterval(this.sseKeepaliveTimer)
+                this.sseKeepaliveTimer = null
+            }
+        }, SSE_KEEPALIVE_INTERVAL_MS)
     }
 
     private isAuthorized (request: http.IncomingMessage): boolean {
@@ -519,6 +644,9 @@ export class AgentBridgeService {
                 case 'tabby_exec_command':
                     rpcResponse = { id, result: await this.execCommand(request.params ?? {}) }
                     break
+                case 'tabby_get_output':
+                    rpcResponse = { id, result: this.getOutput(request.params ?? {}) }
+                    break
                 case 'tabby_batch_exec':
                     rpcResponse = { id, result: await this.batchExec(request.params ?? {}) }
                     break
@@ -530,9 +658,6 @@ export class AgentBridgeService {
                     break
                 case 'tabby_sftp_write':
                     rpcResponse = { id, result: await this.sftpWrite(request.params ?? {}) }
-                    break
-                case 'tabby_search_rag':
-                    rpcResponse = { id, result: await this.searchRag(request.params ?? {}) }
                     break
                 default:
                     rpcResponse = this.error(id, 'method_not_found', `Unknown method: ${request.method ?? ''}`)
@@ -728,6 +853,9 @@ export class AgentBridgeService {
                 executed: false,
                 timedOut: false,
                 stdout: '',
+                outputId: null,
+                stdoutTruncated: false,
+                outputTotalSize: 0,
                 reason: approval.reason,
                 message: approval.message,
             }
@@ -737,23 +865,87 @@ export class AgentBridgeService {
         const cwd = typeof params.cwd === 'string' ? params.cwd.trim() : ''
         const sshResult = await this.trySshExec(entry, normalized, timeoutMs, cwd)
         if (sshResult) {
-            return {
+            return this.maybeTruncateOutput({
                 ...baseResult,
                 executed: true,
                 mode: 'ssh-exec',
                 stdout: sshResult.stdout,
                 exitCode: sshResult.exitCode,
                 timedOut: sshResult.timedOut,
-            }
+            }, entry.id, command)
         }
         const ptyResult = await this.execViaPty(entry, normalized, timeoutMs)
-        return {
+        return this.maybeTruncateOutput({
             ...baseResult,
             executed: true,
             mode: 'pty',
             stdout: ptyResult.stdout,
             exitCode: null,
             timedOut: ptyResult.timedOut,
+        }, entry.id, command)
+    }
+
+    private maybeTruncateOutput (result: any, tabId: string, command: string): any {
+        const stdout = result.stdout ?? ''
+        if (stdout.length <= OUTPUT_TRUNCATE_THRESHOLD) {
+            return { ...result, outputId: null, stdoutTruncated: false, outputTotalSize: stdout.length }
+        }
+        const outputId = this.storeOutput(tabId, command, stdout)
+        return {
+            ...result,
+            stdout: stdout.slice(0, OUTPUT_TRUNCATE_THRESHOLD),
+            outputId,
+            stdoutTruncated: true,
+            outputTotalSize: stdout.length,
+        }
+    }
+
+    private storeOutput (tabId: string, command: string, stdout: string): string {
+        this.pruneOutputCache()
+        const outputId = `out-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        this.outputCache.set(outputId, { outputId, tabId, command, stdout, createdAt: Date.now() })
+        return outputId
+    }
+
+    private getOutput (params: RpcParams): any {
+        const outputId = String(params.outputId ?? '')
+        if (!outputId) {
+            throw new Error('Missing outputId')
+        }
+        const cached = this.outputCache.get(outputId)
+        if (!cached) {
+            throw new Error(`Output not found or expired: ${outputId}`)
+        }
+        const offset = Math.max(0, Number(params.offset ?? 0))
+        const limit = Math.min(65536, Math.max(1, Number(params.limit ?? 8000)))
+        const content = cached.stdout.slice(offset, offset + limit)
+        return {
+            outputId,
+            offset,
+            limit,
+            content,
+            contentSize: content.length,
+            totalSize: cached.stdout.length,
+            hasMore: offset + limit < cached.stdout.length,
+            command: cached.command,
+            tabId: cached.tabId,
+        }
+    }
+
+    private pruneOutputCache (): void {
+        const now = Date.now()
+        for (const [key, entry] of this.outputCache) {
+            if (now - entry.createdAt > OUTPUT_MAX_AGE_MS) {
+                this.outputCache.delete(key)
+            }
+        }
+        while (this.outputCache.size > OUTPUT_MAX_ENTRIES) {
+            const oldest = [...this.outputCache.values()].sort((a, b) => a.createdAt - b.createdAt)[0]
+            if (oldest) {
+                this.outputCache.delete(oldest.outputId)
+            } else {
+                break
+            }
         }
     }
 
@@ -919,41 +1111,6 @@ export class AgentBridgeService {
             path: remotePath,
             size: buffer.length,
             written: true,
-        }
-    }
-
-    private async searchRag (params: RpcParams): Promise<any> {
-        const query = String(params.query ?? '').trim()
-        if (!query) {
-            throw new Error('Missing query')
-        }
-        const entry = this.resolveTab(params.tab)
-        const ctx = await this.context.collectContext(entry.tab)
-        const request: AutocompleteRequest = {
-            tabKey: `${entry.id}:agent`,
-            partialCommand: query,
-            cwd: ctx.cwd,
-            shell: ctx.shell,
-            os: ctx.os,
-            recentOutput: [],
-            excludeCommands: [],
-            limit: this.getNumber(params.limit, 10),
-        }
-        const results = await this.rag.getAutocompleteSuggestions(request)
-        return {
-            tabId: entry.id,
-            query,
-            results: results.map(result => this.serializeSuggestion(result)),
-        }
-    }
-
-    private serializeSuggestion (suggestion: AutocompleteSuggestion): any {
-        return {
-            id: suggestion.id,
-            command: suggestion.command,
-            description: suggestion.description,
-            category: suggestion.category,
-            confidence: suggestion.confidence,
         }
     }
 
@@ -1268,6 +1425,49 @@ export class AgentBridgeService {
             result[key] = this.redactAuditValue(item)
         }
         return result
+    }
+
+    readAuditLog (limit = 100, offset = 0, filter?: string): { entries: any[], total: number } {
+        if (!this.auditLogFilePath || !fs.existsSync(this.auditLogFilePath)) {
+            return { entries: [], total: 0 }
+        }
+        try {
+            const raw = fs.readFileSync(this.auditLogFilePath, 'utf8')
+            const lines = raw.split('\n').filter(line => line.trim())
+            let parsed: any[] = []
+            for (const line of lines) {
+                try {
+                    parsed.push(JSON.parse(line))
+                } catch {
+                    /* skip invalid lines */
+                }
+            }
+            if (filter) {
+                const lower = filter.toLowerCase()
+                parsed = parsed.filter(entry =>
+                    String(entry.method ?? '').toLowerCase().includes(lower) ||
+                    String(entry.errorCode ?? '').toLowerCase().includes(lower),
+                )
+            }
+            const total = parsed.length
+            const reversed = parsed.reverse()
+            const page = reversed.slice(offset, offset + limit)
+            return { entries: page, total }
+        } catch (error) {
+            this.logger.warn('Agent bridge audit read failed', error)
+            return { entries: [], total: 0 }
+        }
+    }
+
+    clearAuditLog (): void {
+        if (!this.auditLogFilePath) {
+            return
+        }
+        try {
+            fs.writeFileSync(this.auditLogFilePath, '', 'utf8')
+        } catch (error) {
+            this.logger.warn('Agent bridge audit clear failed', error)
+        }
     }
 
     private emitStatus (): void {

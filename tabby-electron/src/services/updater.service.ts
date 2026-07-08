@@ -5,6 +5,7 @@ import { Logger, LogService, ConfigService, UpdaterService, PlatformService, Tra
 import { ElectronService } from '../services/electron.service'
 
 const UPDATES_URL = 'https://api.github.com/repos/eugeny/tabby/releases/latest'
+const UPDATES_ENABLED = false
 
 @Injectable()
 export class ElectronUpdaterService extends UpdaterService {
@@ -23,7 +24,7 @@ export class ElectronUpdaterService extends UpdaterService {
         super()
         this.logger = log.create('updater')
 
-        if (process.platform === 'linux' || process.env.PORTABLE_EXECUTABLE_FILE) {
+        if (!UPDATES_ENABLED || process.platform === 'linux' || process.env.PORTABLE_EXECUTABLE_FILE) {
             this.electronUpdaterAvailable = false
             return
         }
@@ -100,6 +101,10 @@ export class ElectronUpdaterService extends UpdaterService {
             })
 
         } else {
+            if (!UPDATES_ENABLED) {
+                this.logger.info('Updates are disabled for this branded build')
+                return false
+            }
             this.logger.debug('Checking for updates through fallback method.')
             const response = await axios.get(UPDATES_URL)
             const data = response.data
@@ -122,7 +127,7 @@ export class ElectronUpdaterService extends UpdaterService {
             if ((await this.platform.showMessageBox(
                 {
                     type: 'warning',
-                    message: this.translate.instant('Installing the update will close all tabs and restart Tabby.'),
+                    message: this.translate.instant('Installing the update will close all tabs and restart issh.'),
                     buttons: [
                         this.translate.instant('Update'),
                         this.translate.instant('Cancel'),

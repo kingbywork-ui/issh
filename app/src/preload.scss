@@ -46,7 +46,7 @@ app-root {
 .tabby-logo {
   width: 120px;
   height: 120px;
-  background: url('../assets/logo.svg');
+  background: url('../assets/issh-logo.png');
   background-repeat: none;
   background-size: contain;
   margin: auto;
@@ -60,8 +60,4 @@ app-root {
   font-weight: normal;
   font-size: 32px;
   margin: 0;
-
-  sup {
-      color: #842fe0;
-  }
 }

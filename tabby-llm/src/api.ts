@@ -1,4 +1,4 @@
-export type SuggestionCategory = 'history' | 'ai' | 'script' | 'rag'
+export type SuggestionCategory = 'history' | 'ai' | 'script'
 
 export interface AutocompleteSuggestion {
     id: string
@@ -6,17 +6,6 @@ export interface AutocompleteSuggestion {
     description: string
     category: SuggestionCategory
     confidence?: number
-}
-
-export interface CommandDetail {
-    name: string
-    description?: string
-    examples?: string[]
-    options?: Array<{ flag?: string, description?: string }>
-    useCases?: string[]
-    related?: string[]
-    tags?: string[]
-    category?: string
 }
 
 export interface AutocompleteRequest {

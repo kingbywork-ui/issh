@@ -7,7 +7,7 @@ import { NgbActiveModal } from '@ng-bootstrap/ng-bootstrap'
 })
 export class UnlockVaultModalComponent {
     passphrase: string
-    rememberFor = 1
+    rememberFor = 15
     rememberOptions = [1, 5, 15, 60, 1440, 10080]
     @ViewChild('input') input: ElementRef
 
@@ -16,7 +16,7 @@ export class UnlockVaultModalComponent {
     ) { }
 
     ngOnInit (): void {
-        this.rememberFor = parseInt(window.localStorage.vaultRememberPassphraseFor ?? 0)
+        this.rememberFor = parseInt(window.localStorage.vaultRememberPassphraseFor ?? 15)
         setTimeout(() => {
             this.input.nativeElement.focus()
         })

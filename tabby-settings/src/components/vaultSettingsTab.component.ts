@@ -27,8 +27,16 @@ export class VaultSettingsTabComponent extends BaseComponent {
         super()
     }
 
-    async loadVault (): Promise<void> {
-        this.vault.requireReauth()
+    async ngOnInit (): Promise<void> {
+        if (this.vault.isOpen()) {
+            await this.loadVault(false)
+        }
+    }
+
+    async loadVault (requireReauth = true): Promise<void> {
+        if (requireReauth) {
+            this.vault.requireReauth()
+        }
         try {
             this.vaultContents = await this.vault.load()
         } catch {
@@ -127,7 +135,7 @@ export class VaultSettingsTabComponent extends BaseComponent {
             ...secret,
             value: Buffer.from(await transfers[0].readAll()).toString('base64'),
         })
-        this.loadVault()
+        await this.loadVault(false)
     }
 
     async renameFile (secret: VaultFileSecret) {
@@ -148,7 +156,7 @@ export class VaultSettingsTabComponent extends BaseComponent {
             },
         })
 
-        this.loadVault()
+        await this.loadVault(false)
     }
 
     async exportFile (secret: VaultFileSecret) {

@@ -97,6 +97,7 @@ export const VAULT_SECRET_TYPE_FILE = 'file'
 
 // Don't make it accessible through VaultService fields
 let _rememberedPassphrase: string|null = null
+let _rejectedEnvPassphrase: string|null = null
 
 @Injectable({ providedIn: 'root' })
 export class VaultService {
@@ -149,6 +150,9 @@ export class VaultService {
         try {
             return await wrapPromise(this.zone, decryptVault(storage, passphrase))
         } catch (e) {
+            if (passphrase === process.env.TABBY_VAULT_PASSPHRASE) {
+                _rejectedEnvPassphrase = passphrase
+            }
             this.forgetPassphrase()
             if (e.toString().includes('BAD_DECRYPT')) {
                 this.notifications.error('Incorrect passphrase')
@@ -182,7 +186,7 @@ export class VaultService {
 
     async getPassphrase (): Promise<string> {
         const envPassphrase = process.env.TABBY_VAULT_PASSPHRASE
-        if (envPassphrase && (!_rememberedPassphrase || this._requireReauth)) {
+        if (envPassphrase && envPassphrase !== _rejectedEnvPassphrase && (!_rememberedPassphrase || this._requireReauth)) {
             _rememberedPassphrase = envPassphrase
             this._requireReauth = false
             return envPassphrase

@@ -3,11 +3,9 @@ import { ConfigService, HotkeysService, LogService, NotificationsService, Transl
 import { BaseTerminalTabComponent, TerminalDecorator, XTermFrontend } from 'tabby-terminal'
 import { TabLLMController } from './tabLLMController'
 import { LLMService } from './services/llm.service'
-import { RAGCommandService } from './services/ragCommand.service'
 import { TerminalContextService } from './services/terminalContext.service'
 import { HistoryCommandService } from './services/historyCommand.service'
 import { SensitiveInputService } from './services/sensitiveInput.service'
-import { LLMAppPanelService } from './services/llmAppPanel.service'
 import { AgentBridgeService } from './services/agentBridge.service'
 
 /** @hidden */
@@ -17,7 +15,6 @@ export class LLMDecorator extends TerminalDecorator {
 
     constructor (
         private llm: LLMService,
-        private rag: RAGCommandService,
         private context: TerminalContextService,
         private history: HistoryCommandService,
         private sensitiveInput: SensitiveInputService,
@@ -28,7 +25,6 @@ export class LLMDecorator extends TerminalDecorator {
         private injector: EnvironmentInjector,
         private appRef: ApplicationRef,
         private log: LogService,
-        private appPanel: LLMAppPanelService,
         private agentBridge: AgentBridgeService,
     ) {
         super()
@@ -51,7 +47,6 @@ export class LLMDecorator extends TerminalDecorator {
             const controller = new TabLLMController(
                 tab,
                 this.llm,
-                this.rag,
                 this.context,
                 this.history,
                 this.sensitiveInput,
@@ -65,7 +60,6 @@ export class LLMDecorator extends TerminalDecorator {
             controller.mount(content)
             controller.start()
             this.controllers.set(tab, controller)
-            this.appPanel.registerController(tab, controller)
             this.agentBridge.registerController(tab, controller)
 
             this.subscribeUntilDetached(tab, this.hotkeys.hotkey$.subscribe(hotkey => {
@@ -97,7 +91,6 @@ export class LLMDecorator extends TerminalDecorator {
         const controller = this.controllers.get(tab)
         if (controller) {
             controller.destroy()
-            this.appPanel.unregisterController(tab)
             this.agentBridge.unregisterController(tab)
             this.controllers.delete(tab)
         }

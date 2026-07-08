@@ -1,1 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" id="Layer_1" x="0" y="0" version="1.1" viewBox="0 0 1024 1024" xml:space="preserve" style="enable-background:new 0 0 1024 1024"><style type="text/css">.st0{fill:url(#SVGID_1_)}.st1{opacity:.16;fill:url(#SVGID_2_)}.st2{fill:url(#SVGID_3_)}.st3{opacity:.16;fill:url(#SVGID_4_)}.st4{fill:url(#SVGID_5_)}.st5{opacity:.15;fill:url(#SVGID_6_)}.st6{fill:url(#SVGID_7_)}</style><g><linearGradient id="SVGID_1_" x1="260.967" x2="919.184" y1="871.181" y2="491.16" gradientUnits="userSpaceOnUse"><stop offset="0" style="stop-color:#669abd"/><stop offset="1" style="stop-color:#77dbdb"/></linearGradient><polygon points="297.54 934.52 882.6 596.72 882.61 427.82 297.54 765.65" class="st0"/><linearGradient id="SVGID_2_" x1="553.505" x2="626.647" y1="617.828" y2="744.513" gradientUnits="userSpaceOnUse"><stop offset=".559" style="stop-color:#000;stop-opacity:0"/><stop offset="1" style="stop-color:#000"/></linearGradient><polygon points="297.54 934.52 882.6 596.72 882.61 427.82 297.54 765.65" class="st1"/></g><g><linearGradient id="SVGID_3_" x1="114.663" x2="334.091" y1="744.528" y2="871.214" gradientUnits="userSpaceOnUse"><stop offset="0" style="stop-color:#6a8fad"/><stop offset="1" style="stop-color:#669abd"/></linearGradient><polygon points="151.23 681.18 151.22 850.09 297.54 934.52 297.54 765.65" class="st2"/><linearGradient id="SVGID_4_" x1="260.948" x2="187.806" y1="744.528" y2="871.213" gradientUnits="userSpaceOnUse"><stop offset=".559" style="stop-color:#000;stop-opacity:0"/><stop offset="1" style="stop-color:#000"/></linearGradient><polygon points="151.23 681.18 151.22 850.09 297.54 934.52 297.54 765.65" class="st3"/></g><g><linearGradient id="SVGID_5_" x1="114.663" x2="553.503" y1="237.793" y2="491.157" gradientUnits="userSpaceOnUse"><stop offset="0" style="stop-color:#6a8fad"/><stop offset="1" style="stop-color:#669abd"/></linearGradient><polygon points="151.23 174.45 151.21 343.36 443.79 512.27 590.08 427.81" class="st4"/><linearGradient id="SVGID_6_" x1="370.656" x2="297.509" y1="301.128" y2="427.822" gradientUnits="userSpaceOnUse"><stop offset=".559" style="stop-color:#000;stop-opacity:0"/><stop offset="1" style="stop-color:#000"/></linearGradient><polygon points="151.23 174.45 151.21 343.36 443.79 512.27 590.08 427.81" class="st5"/></g><linearGradient id="SVGID_7_" x1="78.091" x2="736.337" y1="554.498" y2="174.459" gradientUnits="userSpaceOnUse"><stop offset="0" style="stop-color:#ccecff"/><stop offset="1" style="stop-color:#9feced"/></linearGradient><polygon points="297.51 765.64 151.23 681.18 590.08 427.81 151.23 174.45 297.5 90 882.61 427.82" class="st6"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="issh logo">
+  <defs>
+    <linearGradient id="bg" x1="164" y1="120" x2="860" y2="904" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1b2733"/>
+      <stop offset="1" stop-color="#0b1118"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="208" y1="210" x2="816" y2="812" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#05c8ff"/>
+      <stop offset="1" stop-color="#55e6ff"/>
+    </linearGradient>
+  </defs>
+  <rect x="96" y="96" width="832" height="832" rx="176" fill="url(#bg)"/>
+  <path d="M278 330c0-52 42-94 94-94h280c52 0 94 42 94 94v214c0 52-42 94-94 94H514" fill="none" stroke="url(#cyan)" stroke-width="42" stroke-linecap="round"/>
+  <path d="M305 407l96 74-96 74" fill="none" stroke="#f8fbff" stroke-width="48" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M462 552h74" stroke="#f8fbff" stroke-width="36" stroke-linecap="round"/>
+  <path d="M512 632l118 44v102c0 76-52 132-118 164-66-32-118-88-118-164V676l118-44z" fill="#10202a" stroke="url(#cyan)" stroke-width="42" stroke-linejoin="round"/>
+  <circle cx="512" cy="742" r="34" fill="#f6a51e"/>
+  <path d="M512 760v72" stroke="#f6a51e" stroke-width="34" stroke-linecap="round"/>
+  <path d="M746 462h70v118l-78 78" fill="none" stroke="url(#cyan)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="746" cy="462" r="24" fill="#10202a" stroke="#55e6ff" stroke-width="18"/>
+  <circle cx="816" cy="580" r="24" fill="#10202a" stroke="#55e6ff" stroke-width="18"/>
+  <circle cx="738" cy="658" r="24" fill="#10202a" stroke="#55e6ff" stroke-width="18"/>
+</svg>

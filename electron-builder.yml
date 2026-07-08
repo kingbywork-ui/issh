@@ -1,12 +1,12 @@
 ---
-appId: org.tabby
-productName: Tabby
+appId: org.issh
+productName: issh
 compression: normal
 npmRebuild: false
 protocols:
-  - name: Tabby URL
+  - name: issh URL
     schemes:
-      - tabby
+      - issh
 files:
 - '**/*'
 - dist
@@ -42,23 +42,23 @@ asarUnpack:
 - node_modules/**/*.node
 win:
   icon: "./build/windows/icon.ico"
-  artifactName: tabby-${version}-portable-${env.ARCH}.${ext}
-  signAndEditExecutable: false
+  artifactName: issh-${version}-portable-${env.ARCH}.${ext}
+  signAndEditExecutable: true
   signtoolOptions:
     rfc3161TimeStampServer: http://timestamp.sectigo.com
 portable:
-  unpackDirName: tabby-portable-runtime
+  unpackDirName: issh-portable-runtime
   splashImage: "./build/windows/portable-splash.bmp"
 nsis:
   oneClick: false
-  artifactName: tabby-${version}-setup-${env.ARCH}.${ext}
+  artifactName: issh-${version}-setup-${env.ARCH}.${ext}
   installerIcon: "./build/windows/icon.ico"
   allowToChangeInstallationDirectory: true
-  shortcutName: Tabby Terminal
+  shortcutName: issh
 mac:
   category: public.app-category.utilities
   icon: "./build/mac/icon.icns"
-  artifactName: tabby-${version}-macos-${env.ARCH}.${ext}
+  artifactName: issh-${version}-macos-${env.ARCH}.${ext}
   hardenedRuntime: true
   entitlements: "./build/mac/entitlements.plist"
   entitlementsInherit: "./build/mac/entitlements.plist"
@@ -78,13 +78,13 @@ mac:
 linux:
   category: "Utility;TerminalEmulator;System"
   icon: "./build/icons"
-  artifactName: tabby-${version}-linux-${env.ARCH}.${ext}
+  artifactName: issh-${version}-linux-${env.ARCH}.${ext}
   executableArgs:
   - "--no-sandbox"
   desktop:
     entry:
-      StartupWMClass: tabby
-      MimeType: x-scheme-handler/tabby
+      StartupWMClass: issh
+      MimeType: x-scheme-handler/issh
 snap:
   plugs:
   - default

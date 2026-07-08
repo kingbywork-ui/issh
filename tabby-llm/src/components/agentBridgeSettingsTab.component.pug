@@ -4,7 +4,7 @@ h3.mb-3 CLI / MCP Agent
     div
         strong Agent Bridge
         span  exposes local Tabby terminal sessions to Codex, Cursor, and the bundled CLI through a token-protected localhost RPC server.
-    div Tools include session list/select, context and buffer read, command preview/insert/run, SSH exec, SFTP read/write, batch exec, and RAG search.
+    div Tools include session list/select, context and buffer read, command preview/insert/run, SSH exec, SFTP read/write, and batch exec.
 
 .form-line
     .header
@@ -59,6 +59,15 @@ ng-container(*ngIf='config.store.llm.agentBridgeEnabled')
             (ngModelChange)='config.save()'
         )
 
+    .form-line
+        .header
+            .title SSE transport
+            .description Enables GET /sse + POST /messages endpoints for SSE-based MCP clients (e.g. Claude Desktop). Disable to restrict to stdio-only transport.
+        toggle(
+            [(ngModel)]='config.store.llm.agentBridgeSseEnabled',
+            (ngModelChange)='config.save()'
+        )
+
     .alert.alert-info
         div
             strong MCP listener:
@@ -66,6 +75,7 @@ ng-container(*ngIf='config.store.llm.agentBridgeEnabled')
             span.text-muted(*ngIf='!agentBridge.running')  starting
         div(*ngIf='agentBridge.listeningPort') Port: {{ agentBridge.listeningPort }}
         div(*ngIf='agentBridge.rpcUrl') RPC URL: {{ agentBridge.rpcUrl }}
+        div(*ngIf='agentBridge.sseUrl') SSE URL: {{ agentBridge.sseUrl }}
         div MCP server: {{ agentBridge.mcpServerScriptPath }}
         div Node requirement: Codex/Cursor must be able to execute the node command.
         div(*ngIf='agentBridge.connectionFile') Connection file: {{ agentBridge.connectionFile }}
@@ -102,6 +112,12 @@ ng-container(*ngIf='config.store.llm.agentBridgeEnabled')
             )
                 i.fas.fa-copy.me-1
                 span Copy Cursor config
+            button.btn.btn-secondary.me-2(
+                type='button',
+                (click)='copyClaudeDesktopConfig()'
+            )
+                i.fas.fa-copy.me-1
+                span Copy Claude Desktop config
             button.btn.btn-secondary(
                 type='button',
                 (click)='copyAgentRulesTemplate()'
@@ -133,6 +149,46 @@ ng-container(*ngIf='config.store.llm.agentBridgeEnabled')
             )
                 i.fas.fa-sync-alt.me-1
                 span Rotate
+
+div.mt-4(*ngIf='agentBridge.auditLogFile')
+    h3.mb-3 Audit Log Viewer
+    .d-flex.align-items-center.mb-2
+        input.form-control.me-2(
+            type='text',
+            placeholder='Filter by method or error code...',
+            [(ngModel)]='auditFilter',
+            (keydown.enter)='refreshAuditLog()'
+        )
+        button.btn.btn-secondary.me-2(type='button', (click)='refreshAuditLog()', [disabled]='auditLoading')
+            i.fas.fa-sync-alt.me-1(*ngIf='!auditLoading')
+            i.fas.fa-circle-notch.fa-spin.me-1(*ngIf='auditLoading')
+            span Refresh
+        button.btn.btn-danger(type='button', (click)='clearAuditLog()')
+            i.fas.fa-trash.me-1
+            span Clear
+    .text-muted.mb-2(*ngIf='auditTotalCount > 0') Showing {{ auditEntries.length }} of {{ auditTotalCount }} entries
+    .text-muted.mb-2(*ngIf='auditTotalCount === 0 && !auditLoading') No audit entries found
+    .audit-log-table(*ngIf='auditEntries.length > 0')
+        .audit-entry(*ngFor='let entry of auditEntries')
+            .audit-entry-header
+                span.audit-time {{ entry.timestamp | date:'short' }}
+                span.audit-method.badge.badge-secondary.ms-2 {{ entry.method }}
+                span.audit-status.ms-2(*ngIf='entry.success', class='text-success')
+                    i.fas.fa-check
+                span.audit-status.ms-2(*ngIf='!entry.success', class='text-danger')
+                    i.fas.fa-times
+                    span.ms-1 {{ entry.errorCode }}
+            .audit-entry-body
+                span.audit-params.text-muted {{ entry.params | json }}
+
+    button.btn.btn-secondary.mt-2(
+        type='button',
+        (click)='loadMoreAuditLog()',
+        *ngIf='auditEntries.length < auditTotalCount',
+        [disabled]='auditLoading'
+    )
+        i.fas.fa-circle-notch.fa-spin.me-1(*ngIf='auditLoading')
+        span Load more
 
     .form-line
         .header

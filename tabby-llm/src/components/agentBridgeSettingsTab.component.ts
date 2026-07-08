@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, HostBinding } from '@angular/core'
+import { ChangeDetectorRef, Component, HostBinding, OnInit } from '@angular/core'
 import { BaseComponent, ConfigService, NotificationsService } from 'tabby-core'
 import { AgentBridgeService } from '../services/agentBridge.service'
 
@@ -8,7 +8,7 @@ import { AgentBridgeService } from '../services/agentBridge.service'
     templateUrl: './agentBridgeSettingsTab.component.pug',
     styleUrls: ['./llmSettingsTab.component.scss'],
 })
-export class AgentBridgeSettingsTabComponent extends BaseComponent {
+export class AgentBridgeSettingsTabComponent extends BaseComponent implements OnInit {
     bridgeStatusVersion = 0
     bridgeTesting = false
     bridgeTestSuccessful: boolean | null = null
@@ -27,6 +27,10 @@ export class AgentBridgeSettingsTabComponent extends BaseComponent {
             this.bridgeStatusVersion++
             this.changeDetector.markForCheck()
         })
+    }
+
+    ngOnInit (): void {
+        void this.loadAuditLog(false)
     }
 
     async copyBridgeToken (): Promise<void> {
@@ -52,6 +56,49 @@ export class AgentBridgeSettingsTabComponent extends BaseComponent {
 
     async copyAgentRulesTemplate (): Promise<void> {
         await this.copyText(this.agentBridge.agentRulesTemplate, 'Agent rules template copied')
+    }
+
+    async copyClaudeDesktopConfig (): Promise<void> {
+        await this.copyText(this.agentBridge.claudeDesktopConfigSnippet, 'Claude Desktop MCP config copied')
+    }
+
+    auditEntries: any[] = []
+    auditLoading = false
+    auditTotalCount = 0
+    auditOffset = 0
+    auditFilter = ''
+    private auditPageSize = 50
+
+    async loadAuditLog (append = false): Promise<void> {
+        this.auditLoading = true
+        try {
+            const offset = append ? this.auditOffset : 0
+            const result = this.agentBridge.readAuditLog(this.auditPageSize, offset, this.auditFilter || undefined)
+            if (append) {
+                this.auditEntries = [...this.auditEntries, ...result.entries]
+            } else {
+                this.auditEntries = result.entries
+            }
+            this.auditTotalCount = result.total
+            this.auditOffset = offset + result.entries.length
+        } finally {
+            this.auditLoading = false
+        }
+    }
+
+    async refreshAuditLog (): Promise<void> {
+        await this.loadAuditLog(false)
+    }
+
+    async loadMoreAuditLog (): Promise<void> {
+        await this.loadAuditLog(true)
+    }
+
+    async clearAuditLog (): Promise<void> {
+        this.agentBridge.clearAuditLog()
+        this.auditEntries = []
+        this.auditTotalCount = 0
+        this.auditOffset = 0
     }
 
     async testBridgeConnection (): Promise<void> {

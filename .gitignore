@@ -47,6 +47,7 @@ crowdin.yml
 
 # Build & Cache
 .electron-builder-cache/
+.electron-builder-cache2/
 .npm-cache/
 
 # Python & AI deps

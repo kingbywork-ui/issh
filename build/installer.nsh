@@ -4,7 +4,7 @@
 
 !macro customInstall
   ; Install Visual C++ Redistributable if vcruntime140.dll is missing.
-  ; Native modules (node-pty) require it; without it Tabby shows the
+  ; Native modules (node-pty) require it; without it issh shows the
   ; splash screen but the terminal never loads. See #10734, #10782.
   IfFileExists "$SYSDIR\vcruntime140.dll" vcredist_installed
 !if /FileExists "${BUILD_RESOURCES_DIR}\vc_redist.exe"

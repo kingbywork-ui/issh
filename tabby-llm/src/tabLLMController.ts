@@ -2,16 +2,13 @@ import { ApplicationRef, ComponentRef, createComponent, EnvironmentInjector } fr
 import { Subject, Subscription, debounce, timer } from 'rxjs'
 import { ConfigService, LogService, Logger, NotificationsService, TranslateService } from 'tabby-core'
 import { BaseTerminalTabComponent, XTermFrontend } from 'tabby-terminal'
-import { AutocompleteSuggestion, CommandDetail } from './api'
+import { AutocompleteSuggestion } from './api'
 import { LLMTerminalHostComponent } from './components/llmTerminalHost.component'
 import { LLMService } from './services/llm.service'
-import { RAGCommandService } from './services/ragCommand.service'
 import { TerminalContextService } from './services/terminalContext.service'
 import { HistoryCommandService } from './services/historyCommand.service'
 import { SensitiveInputService } from './services/sensitiveInput.service'
 import { normalizeCommand } from './services/commandValidation'
-import { LLMAppPanelService } from './services/llmAppPanel.service'
-import { LLMAppSidecarHostComponent } from './components/llmAppSidecarHost.component'
 
 /** @hidden */
 export class TabLLMController {
@@ -20,13 +17,6 @@ export class TabLLMController {
     suggestions: AutocompleteSuggestion[] = []
     selectedIndex = 0
     panelPosition = { x: 8, y: 8 }
-    sidecarVisible = false
-    sidecarInput = ''
-    sidecarLoading = false
-    sidecarRagResults: AutocompleteSuggestion[] = []
-    sidecarCommandDetail: CommandDetail | null = null
-    sidecarSelectedIndex = 0
-    sidecarError = ''
 
     private lineBuffer = ''
     private inputSubscription?: Subscription
@@ -35,8 +25,6 @@ export class TabLLMController {
     private debounceSubscription?: Subscription
     private hostRef: ComponentRef<LLMTerminalHostComponent> | null = null
     private notifyChange: (() => void) | null = null
-    private sidecarNotifyChange: (() => void) | null = null
-    private appPanelService: LLMAppPanelService | null = null
     private keyHandlerAttached = false
     private lastAutocompletePartial = ''
     private pendingFetchGeneration = 0
@@ -44,14 +32,12 @@ export class TabLLMController {
     private tabKey: string
     private inputWasSensitive = false
     private sensitiveInputLatched = false
-    private lastSidecarMoveAt = 0
 
     private logger: Logger
 
     constructor (
         private tab: BaseTerminalTabComponent<any>,
         private llm: LLMService,
-        private rag: RAGCommandService,
         private context: TerminalContextService,
         private history: HistoryCommandService,
         private sensitiveInput: SensitiveInputService,
@@ -71,10 +57,6 @@ export class TabLLMController {
         })
     }
 
-    setAppPanelService (service: LLMAppPanelService): void {
-        this.appPanelService = service
-    }
-
     mount (contentElement: HTMLElement): void {
         if (this.hostRef) {
             return
@@ -89,9 +71,7 @@ export class TabLLMController {
 
     destroy (): void {
         this.llm.cancelPending()
-        this.rag.cancelPending()
         this.llm.clearAutocompleteCache(this.tabKey)
-        this.rag.clearAutocompleteCache(this.tabKey)
         this.history.clearTabHistory(this.tabKey)
         this.inputSubscription?.unsubscribe()
         this.sessionChangedSubscription?.unsubscribe()
@@ -112,26 +92,16 @@ export class TabLLMController {
         this.notifyChange = null
     }
 
-    attachSidecarView (_host: LLMAppSidecarHostComponent, notify: () => void): void {
-        this.sidecarNotifyChange = notify
-    }
-
-    detachSidecarView (_host: LLMAppSidecarHostComponent): void {
-        this.sidecarNotifyChange = null
-    }
-
     start (): void {
         this.attachKeyHandler()
         this.sessionChangedSubscription = this.tab.sessionChanged$.subscribe(() => {
             this.llm.clearAutocompleteCache(this.tabKey)
-            this.rag.clearAutocompleteCache(this.tabKey)
             this.history.clearTabHistory(this.tabKey)
             this.lineBuffer = ''
             this.lastAutocompletePartial = ''
             this.inputWasSensitive = false
             this.sensitiveInputLatched = false
             this.hideAutocomplete()
-            this.hideSidecar()
         })
         this.historyBootstrapPromise = new Promise(resolve => {
             setTimeout(() => {
@@ -156,29 +126,20 @@ export class TabLLMController {
                 }
                 return false
             case 'llm-next-suggestion':
-                if (this.sidecarVisible) {
-                    this.moveSidecarSelection(1)
-                    return true
-                }
                 if (this.showAutocomplete) {
                     this.moveSelection(1)
                     return true
                 }
                 return false
             case 'llm-prev-suggestion':
-                if (this.sidecarVisible) {
-                    this.moveSidecarSelection(-1)
-                    return true
-                }
                 if (this.showAutocomplete) {
                     this.moveSelection(-1)
                     return true
                 }
                 return false
             case 'llm-dismiss':
-                if (this.showAutocomplete || this.sidecarVisible) {
+                if (this.showAutocomplete) {
                     this.hideAutocomplete()
-                    this.hideSidecar()
                     return true
                 }
                 return false
@@ -188,7 +149,7 @@ export class TabLLMController {
     }
 
     handlePanelKeyEvent (event: KeyboardEvent): boolean {
-        if (!this.showAutocomplete && !this.sidecarVisible) {
+        if (!this.showAutocomplete) {
             return false
         }
         if (event.type !== 'keydown') {
@@ -196,30 +157,8 @@ export class TabLLMController {
         }
         if (event.key === 'Escape') {
             this.hideAutocomplete()
-            this.hideSidecar()
             event.preventDefault()
             return true
-        }
-        if (this.sidecarVisible) {
-            if (event.ctrlKey && !event.altKey && !event.metaKey) {
-                const key = event.key.toLowerCase()
-                if (key === 'n') {
-                    this.moveSidecarSelection(1)
-                    event.preventDefault()
-                    return true
-                }
-                if (key === 'u') {
-                    this.moveSidecarSelection(-1)
-                    event.preventDefault()
-                    return true
-                }
-                if (event.key === 'Enter') {
-                    this.insertCurrentSidecarResult(false)
-                    event.preventDefault()
-                    return true
-                }
-            }
-            return false
         }
         if (event.ctrlKey && !event.altKey && !event.metaKey) {
             const key = event.key.toLowerCase()
@@ -248,7 +187,6 @@ export class TabLLMController {
             return
         }
         if (!this.getPartial().trim()) {
-            this.openSidecar()
             return
         }
         if (!this.hasAnyAutocompleteSourceEnabled()) {
@@ -264,7 +202,6 @@ export class TabLLMController {
         this.aiLoading = false
         this.pendingFetchGeneration++
         this.llm.cancelPending()
-        this.rag.cancelPending()
         this.refresh()
     }
 
@@ -289,144 +226,6 @@ export class TabLLMController {
             return suggestion.command.substring(trimmed.length)
         }
         return suggestion.command
-    }
-
-    openSidecar (): void {
-        this.hideAutocomplete()
-        this.sidecarVisible = true
-        if (!this.sidecarInput.trim()) {
-            this.sidecarInput = '/rag '
-        }
-        this.refresh()
-        this.appPanelService?.onSidecarVisibilityChanged(this)
-        this.requestTerminalResize()
-    }
-
-    hideSidecar (): void {
-        this.sidecarVisible = false
-        this.sidecarLoading = false
-        this.llm.cancelPending()
-        this.rag.cancelPending()
-        this.refresh()
-        this.appPanelService?.onSidecarVisibilityChanged(this)
-        this.requestTerminalResize()
-    }
-
-    clearSidecar (): void {
-        this.sidecarInput = '/rag '
-        this.sidecarRagResults = []
-        this.sidecarCommandDetail = null
-        this.sidecarSelectedIndex = 0
-        this.sidecarError = ''
-        this.refresh()
-    }
-
-    async submitSidecarInput (): Promise<void> {
-        const query = this.parseSidecarInput(this.sidecarInput).trim()
-        if (!query) {
-            this.clearSidecar()
-            return
-        }
-        await this.runSidecarRAG(query)
-    }
-
-    async selectSidecarRagResult (suggestion: AutocompleteSuggestion): Promise<void> {
-        const index = this.sidecarRagResults.findIndex(s => s.command === suggestion.command)
-        if (index >= 0) {
-            this.sidecarSelectedIndex = index
-        }
-        this.sidecarCommandDetail = await this.rag.getCommandDetail(suggestion.command)
-        this.refresh()
-    }
-
-    insertSidecarSuggestion (suggestion: AutocompleteSuggestion): void {
-        this.insertCommand(suggestion.command, false)
-        this.lineBuffer = suggestion.command
-        this.refresh()
-    }
-
-    private async runSidecarRAG (query: string): Promise<void> {
-        if (!this.rag.isConfigured()) {
-            this.sidecarError = this.translate.instant('Configure RAG base URL in Settings first')
-            this.sidecarRagResults = []
-            this.sidecarCommandDetail = null
-            this.refresh()
-            return
-        }
-
-        this.sidecarLoading = true
-        this.sidecarError = ''
-        this.sidecarRagResults = []
-        this.sidecarCommandDetail = null
-        this.sidecarSelectedIndex = 0
-        this.refresh()
-
-        try {
-            const ctx = await this.context.collectContext(this.tab)
-            const results = await this.rag.getAutocompleteSuggestions({
-                tabKey: `${this.tabKey}:sidecar`,
-                partialCommand: query,
-                cwd: ctx.cwd,
-                shell: ctx.shell,
-                os: ctx.os,
-                recentOutput: [],
-                excludeCommands: [],
-                limit: 50,
-            })
-            this.sidecarRagResults = results
-            if (results[0]) {
-                this.sidecarCommandDetail = await this.rag.getCommandDetail(results[0].command)
-            }
-            if (!results.length) {
-                this.sidecarError = this.translate.instant('No command knowledge found')
-            }
-        } catch (e) {
-            if (e instanceof DOMException && e.name === 'AbortError') {
-                return
-            }
-            if (e instanceof Error && e.message === 'Request cancelled') {
-                return
-            }
-            this.sidecarError = e instanceof Error ? e.message : String(e)
-        } finally {
-            this.sidecarLoading = false
-            this.refresh()
-        }
-    }
-
-    private parseSidecarInput (text: string): string {
-        const trimmed = text.trim()
-        if (trimmed.toLowerCase().startsWith('/rag')) {
-            return trimmed.substring(4).trim()
-        }
-        return trimmed
-    }
-
-    moveSidecarSelection (delta: number): void {
-        if (!this.sidecarVisible || !this.sidecarRagResults.length) {
-            return
-        }
-        const now = Date.now()
-        if (now - this.lastSidecarMoveAt < 40) {
-            return
-        }
-        this.lastSidecarMoveAt = now
-        const next = this.sidecarSelectedIndex + delta
-        this.sidecarSelectedIndex = Math.max(0, Math.min(this.sidecarRagResults.length - 1, next))
-        const selected = this.sidecarRagResults[this.sidecarSelectedIndex]
-        if (selected) {
-            void this.selectSidecarRagResult(selected)
-        }
-        this.refresh()
-    }
-
-    insertCurrentSidecarResult (execute: boolean): void {
-        const selected = this.sidecarRagResults[this.sidecarSelectedIndex]
-        if (selected) {
-            this.insertCommand(selected.command, execute)
-            this.lineBuffer = execute ? '' : selected.command
-            this.refresh()
-        }
     }
 
     acceptSuggestion (suggestion: AutocompleteSuggestion): void {
@@ -701,16 +500,6 @@ export class TabLLMController {
 
     private refresh (): void {
         this.notifyChange?.()
-        this.sidecarNotifyChange?.()
-    }
-
-    private requestTerminalResize (): void {
-        setTimeout(() => {
-            window.dispatchEvent(new Event('resize'))
-        }, 50)
-        setTimeout(() => {
-            window.dispatchEvent(new Event('resize'))
-        }, 200)
     }
 
     private isSensitiveInputActive (): boolean {
