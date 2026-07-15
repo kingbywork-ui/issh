@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, ChangeDetectionStrategy, OnInit, ChangeDetectorRef } from '@angular/core'
+import { NotificationsService, TranslateService } from 'tabby-core'
 import { KeyboardInteractivePrompt } from '../session/ssh'
 import { SSHProfile } from '../api'
 import { PasswordStorageService } from '../services/passwordStorage.service'
@@ -19,6 +20,8 @@ export class KeyboardInteractiveAuthComponent implements OnInit {
 
     constructor (
         private passwordStorage: PasswordStorageService,
+        private notifications: NotificationsService,
+        private translate: TranslateService,
         private cdr: ChangeDetectorRef,
     ) {}
 
@@ -49,9 +52,14 @@ export class KeyboardInteractiveAuthComponent implements OnInit {
         this.input.nativeElement.focus()
     }
 
-    next (): void {
+    async next (): Promise<void> {
         if (this.isPassword() && this.remember) {
-            this.passwordStorage.savePassword(this.profile, this.prompt.responses[this.step])
+            try {
+                await this.passwordStorage.savePassword(this.profile, this.prompt.responses[this.step])
+            } catch (error) {
+                this.notifications.error(this.translate.instant('Could not save password'), error instanceof Error ? error.message : String(error))
+                return
+            }
         }
 
         if (this.step === this.prompt.prompts.length - 1) {

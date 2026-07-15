@@ -2,7 +2,7 @@ import { marker as _ } from '@biesbjerg/ngx-translate-extract-marker'
 import deepClone from 'clone-deep'
 import { Component, Inject } from '@angular/core'
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
-import { ConfigService, HostAppService, Profile, SelectorService, ProfilesService, PlatformService, BaseComponent, PartialProfile, ProfileProvider, TranslateService, Platform, ProfileGroup, PartialProfileGroup, QuickConnectProfileProvider } from 'tabby-core'
+import { ConfigService, HostAppService, Profile, SelectorService, ProfilesService, PlatformService, BaseComponent, PartialProfile, ProfileProvider, TranslateService, Platform, ProfileGroup, PartialProfileGroup, QuickConnectProfileProvider, NotificationsService } from 'tabby-core'
 import { EditProfileModalComponent } from './editProfileModal.component'
 import { EditProfileGroupModalComponent, EditProfileGroupModalComponentResult } from './editProfileGroupModal.component'
 
@@ -66,6 +66,7 @@ export class ProfilesSettingsTabComponent extends BaseComponent {
         private ngbModal: NgbModal,
         private platform: PlatformService,
         private translate: TranslateService,
+        private notifications: NotificationsService,
     ) {
         super()
         this.profileProviders.sort((a, b) => a.name.localeCompare(b.name))
@@ -600,23 +601,41 @@ export class ProfilesSettingsTabComponent extends BaseComponent {
     }
 
     async bulkSetFavorite (favorite: boolean): Promise<void> {
-        for (const profile of this.getSelectedProfiles()) {
-            profile.favorite = favorite
-            await this.profilesService.writeProfile(profile)
+        const selected = this.getSelectedProfiles()
+        const failures: string[] = []
+        for (const profile of selected) {
+            try {
+                profile.favorite = favorite
+                await this.profilesService.writeProfile(profile)
+            } catch (error) {
+                failures.push(profile.name || profile.id || 'unknown')
+            }
         }
         await this.config.save()
         await this.afterBulkUpdate()
+        if (failures.length) {
+            this.notifications.error(`Failed for ${failures.length} profile(s)`, failures.join(', '))
+        }
     }
 
     async bulkMoveToGroup (): Promise<void> {
         const groupId = this.bulkGroupId || ''
-        for (const profile of this.getSelectedProfiles()) {
-            profile.group = groupId
-            await this.profilesService.writeProfile(profile)
+        const selected = this.getSelectedProfiles()
+        const failures: string[] = []
+        for (const profile of selected) {
+            try {
+                profile.group = groupId
+                await this.profilesService.writeProfile(profile)
+            } catch (error) {
+                failures.push(profile.name || profile.id || 'unknown')
+            }
         }
         await this.config.save()
         this.bulkGroupId = ''
         await this.afterBulkUpdate()
+        if (failures.length) {
+            this.notifications.error(`Failed for ${failures.length} profile(s)`, failures.join(', '))
+        }
     }
 
     async bulkReplaceTags (): Promise<void> {
@@ -624,24 +643,42 @@ export class ProfilesSettingsTabComponent extends BaseComponent {
             .split(',')
             .map(x => x.trim())
             .filter(x => !!x)
-        for (const profile of this.getSelectedProfiles()) {
-            profile.tags = tags
-            await this.profilesService.writeProfile(profile)
+        const selected = this.getSelectedProfiles()
+        const failures: string[] = []
+        for (const profile of selected) {
+            try {
+                profile.tags = tags
+                await this.profilesService.writeProfile(profile)
+            } catch (error) {
+                failures.push(profile.name || profile.id || 'unknown')
+            }
         }
         await this.config.save()
         this.bulkTagsInput = ''
         await this.afterBulkUpdate()
+        if (failures.length) {
+            this.notifications.error(`Failed for ${failures.length} profile(s)`, failures.join(', '))
+        }
     }
 
     async bulkReplaceEnvironment (): Promise<void> {
         const environment = this.bulkEnvironmentInput.trim() || null
-        for (const profile of this.getSelectedProfiles()) {
-            profile.environment = environment
-            await this.profilesService.writeProfile(profile)
+        const selected = this.getSelectedProfiles()
+        const failures: string[] = []
+        for (const profile of selected) {
+            try {
+                profile.environment = environment
+                await this.profilesService.writeProfile(profile)
+            } catch (error) {
+                failures.push(profile.name || profile.id || 'unknown')
+            }
         }
         await this.config.save()
         this.bulkEnvironmentInput = ''
         await this.afterBulkUpdate()
+        if (failures.length) {
+            this.notifications.error(`Failed for ${failures.length} profile(s)`, failures.join(', '))
+        }
     }
 
     async toggleFavorite (profile: PartialProfile<Profile>, favorite?: boolean): Promise<void> {

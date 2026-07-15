@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import { Component, HostBinding } from '@angular/core'
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
-import { BaseComponent, VaultService, VaultSecret, Vault, PlatformService, ConfigService, VAULT_SECRET_TYPE_FILE, PromptModalComponent, VaultFileSecret, TranslateService } from 'tabby-core'
+import { BaseComponent, VaultService, VaultSecret, Vault, PlatformService, ConfigService, NotificationsService, VAULT_SECRET_TYPE_FILE, PromptModalComponent, VaultFileSecret, TranslateService } from 'tabby-core'
 import { SetVaultPassphraseModalComponent } from './setVaultPassphraseModal.component'
 import { ShowSecretModalComponent } from './showSecretModal.component'
 
@@ -16,6 +16,9 @@ export class VaultSettingsTabComponent extends BaseComponent {
     VAULT_SECRET_TYPE_FILE = VAULT_SECRET_TYPE_FILE
 
     @HostBinding('class.content-box') true
+    private sessionUnlocked = false
+    private sessionUnlockTime = 0
+    private readonly SESSION_TIMEOUT_MS = 10 * 60 * 1000
 
     constructor (
         public vault: VaultService,
@@ -23,19 +26,48 @@ export class VaultSettingsTabComponent extends BaseComponent {
         private platform: PlatformService,
         private ngbModal: NgbModal,
         private translate: TranslateService,
+        private notifications: NotificationsService,
     ) {
         super()
     }
 
     async ngOnInit (): Promise<void> {
-        if (this.vault.isOpen()) {
-            await this.loadVault(false)
+        this.vaultContents = null
+    }
+
+    isSessionUnlocked (): boolean {
+        if (!this.sessionUnlocked) {
+            return false
+        }
+        if (Date.now() - this.sessionUnlockTime > this.SESSION_TIMEOUT_MS) {
+            this.sessionUnlocked = false
+            return false
+        }
+        return true
+    }
+
+    async verifyPassphrase (): Promise<boolean> {
+        try {
+            this.vault.requireReauth()
+            await this.vault.getPassphrase()
+            this.sessionUnlocked = true
+            this.sessionUnlockTime = Date.now()
+            return true
+        } catch {
+            return false
         }
     }
 
     async loadVault (requireReauth = true): Promise<void> {
-        if (requireReauth) {
-            this.vault.requireReauth()
+        if (requireReauth && !this.isSessionUnlocked()) {
+            try {
+                await this.vault.getPassphrase()
+                this.sessionUnlocked = true
+                this.sessionUnlockTime = Date.now()
+            } catch {
+                this.vaultContents = null
+                return
+            }
         }
         try {
             this.vaultContents = await this.vault.load()
@@ -54,6 +86,9 @@ export class VaultSettingsTabComponent extends BaseComponent {
     }
 
     async disableVault () {
+        if (!await this.verifyPassphrase()) {
+            return
+        }
         if ((await this.platform.showMessageBox(
             {
                 type: 'warning',
@@ -71,16 +106,31 @@ export class VaultSettingsTabComponent extends BaseComponent {
     }
 
     async changePassphrase () {
+        if (!await this.verifyPassphrase()) {
+            return
+        }
         if (!this.vaultContents) {
-            await this.loadVault()
+            await this.loadVault(false)
         }
         if (!this.vaultContents) {
             return
         }
+        const oldPassphrase = await this.vault.getPassphrase()
         const modal = this.ngbModal.open(SetVaultPassphraseModalComponent)
         const newPassphrase = await modal.result.catch(() => null)
         if (newPassphrase) {
-            this.vault.save(this.vaultContents, newPassphrase)
+            try {
+                await this.vault.save(this.vaultContents, newPassphrase)
+            } catch (error) {
+                try {
+                    await this.vault.save(this.vaultContents, oldPassphrase)
+                    await this.loadVault(false)
+                } catch {
+                    this.vaultContents = null
+                }
+                console.error('Could not change Vault passphrase', error)
+                this.notifications.error(this.translate.instant('Could not change the master passphrase'))
+            }
         }
     }
 
@@ -118,12 +168,18 @@ export class VaultSettingsTabComponent extends BaseComponent {
 
     }
 
-    removeSecret (secret: VaultSecret) {
+    async removeSecret (secret: VaultSecret) {
         if (!this.vaultContents) {
             return
         }
-        this.vaultContents.secrets = this.vaultContents.secrets.filter(x => x !== secret)
-        this.vault.removeSecret(secret.type, secret.key)
+        try {
+            await this.vault.removeSecret(secret.type, secret.key)
+        } catch (error) {
+            console.error('Could not delete Vault secret', error)
+            this.notifications.error(this.translate.instant('Could not delete the secret'))
+        } finally {
+            await this.loadVault(false)
+        }
     }
 
     async replaceFileContent (secret: VaultFileSecret) {

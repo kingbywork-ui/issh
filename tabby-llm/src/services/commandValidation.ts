@@ -10,6 +10,17 @@ const OUTPUT_PREFIXES = [
     'total ',
     'http/',
     'https://',
+    'ssh connecting',
+    'ssh host key',
+    'ssh ecdsa-',
+    'ssh ssh-rsa',
+    'ssh ed25519',
+    'ssh ssh-ed25519',
+    'last login:',
+    'authorized users',
+    'activate the web console',
+    'current passwo',
+    '@@tabby_history_file@@',
 ]
 
 const OUTPUT_PATTERNS = [
@@ -19,6 +30,13 @@ const OUTPUT_PATTERNS = [
     /^(?:directory|volume in drive|serial number is)/i,
     /^(?:bytes free|file\(s\)|dir\(s\))/i,
     /^(?:on branch|nothing to commit|your branch is)/i,
+    /^SSH\s+(?:Connecting|Host key|ecdsa-|ssh-rsa|ED25519|ssh-ed25519)/i,
+    /^Last login:/i,
+    /^@@TABBY_HISTORY_FILE@@\b/i,
+    /^Activate the web console\b/i,
+    /^Authorized users only\b/i,
+    /^Current\s+passwo/i,
+    /^fingerprints?\b/i,
 ]
 
 function stripInlineComment (line: string): string {
@@ -55,13 +73,21 @@ function looksLikeExecutableToken (token: string): boolean {
     if (token === '&&' || token === '||' || token === '|') {
         return false
     }
+    // Flags, editor commands, or pure numbers are not executable names.
+    if (token.startsWith('-') || token.startsWith(':') || /^\d+$/.test(token)) {
+        return false
+    }
     if (/^[([{]/.test(token)) {
         return false
     }
     if (/^[><=]+$/.test(token)) {
         return false
     }
-    return /^[A-Za-z0-9_./~@%:+\\-]+$/.test(token)
+    // Allow command names and common path forms, but not free-form @ markers.
+    if (token.includes('@@')) {
+        return false
+    }
+    return /^(?:[A-Za-z0-9_~.\\/]|[A-Za-z]:\\|%\w+%)[A-Za-z0-9_./~%:+\\-]*$/.test(token)
 }
 
 function shellWords (command: string): string[] {
@@ -192,7 +218,8 @@ function looksLikeCorruptedDockerComposeCommand (command: string): boolean {
     }
 
     const compactPrefix = `${first ?? ''} ${second ?? ''}`
-    return /^(?:do|doc|dock)\s+comp(?:ose|up|down)?\b/.test(compactPrefix)
+    // Catches truncated typing like "doc composlogs" / "doc cker".
+    return /^(?:do|doc|dock)\s+(?:comp|cker|compos)/.test(compactPrefix)
 }
 
 export function isLikelyCompleteCommand (command: string): boolean {

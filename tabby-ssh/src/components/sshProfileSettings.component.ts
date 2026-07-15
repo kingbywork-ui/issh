@@ -3,7 +3,7 @@ import { Component, ViewChild } from '@angular/core'
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
 import { firstBy } from 'thenby'
 
-import { FileProvidersService, Platform, HostAppService, PromptModalComponent, PartialProfile, ProfilesService, ProfileSettingsComponent, FullyDefined, ProxifiedConfig } from 'tabby-core'
+import { FileProvidersService, Platform, HostAppService, NotificationsService, PromptModalComponent, PartialProfile, ProfilesService, ProfileSettingsComponent, FullyDefined, ProxifiedConfig, VaultService } from 'tabby-core'
 import { LoginScriptsSettingsComponent } from 'tabby-terminal'
 import { PasswordStorageService } from '../services/passwordStorage.service'
 import { ForwardedPortConfig, SSHAlgorithmType, SSHProfile } from '../api'
@@ -31,8 +31,10 @@ export class SSHProfileSettingsComponent implements ProfileSettingsComponent<SSH
         public hostApp: HostAppService,
         private profilesService: ProfilesService,
         private passwordStorage: PasswordStorageService,
+        private vault: VaultService,
         private ngbModal: NgbModal,
         private fileProviders: FileProvidersService,
+        private notifications: NotificationsService,
     ) { }
 
     async ngOnInit () {
@@ -71,21 +73,36 @@ export class SSHProfileSettingsComponent implements ProfileSettingsComponent<SSH
     }
 
     async setPassword () {
+        if (this.vault.isEnabled()) {
+            try {
+                await this.vault.getPassphrase()
+            } catch {
+                return
+            }
+        }
         const modal = this.ngbModal.open(PromptModalComponent)
         modal.componentInstance.prompt = `Password for ${this.profile.options.user}@${this.profile.options.host}`
         modal.componentInstance.password = true
         try {
             const result = await modal.result.catch(() => null)
             if (result?.value) {
-                this.passwordStorage.savePassword(this.profile, result.value)
+                await this.passwordStorage.savePassword(this.profile, result.value)
                 this.hasSavedPassword = true
             }
-        } catch { }
+        } catch (error) {
+            console.error('Could not save password', error)
+            this.notifications.error('Could not save password')
+        }
     }
 
-    clearSavedPassword () {
-        this.hasSavedPassword = false
-        this.passwordStorage.deletePassword(this.profile)
+    async clearSavedPassword () {
+        try {
+            await this.passwordStorage.deletePassword(this.profile)
+            this.hasSavedPassword = false
+        } catch (error) {
+            console.error('Could not delete saved password', error)
+            this.notifications.error('Could not delete saved password')
+        }
     }
 
     async addPrivateKey () {

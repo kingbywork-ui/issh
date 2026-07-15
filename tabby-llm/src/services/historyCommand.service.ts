@@ -51,6 +51,10 @@ export class HistoryCommandService {
             const parsed = JSON.parse(data) as HistoryEntry[]
             if (Array.isArray(parsed)) {
                 this.history = this.compactHistory(parsed)
+                // Re-persist if tightened validation dropped polluted entries.
+                if (this.history.length !== parsed.length) {
+                    this.scheduleSave()
+                }
             }
         } catch (e) {
             this.logger.warn('Failed to load command history:', e)
@@ -387,27 +391,19 @@ PY`,
             return []
         }
 
+        // History autocomplete: prefix-only match, return every hit (caller may still pass limit).
         const scored = entries.map((entry, index) => {
             const cmd = entry.command.toLowerCase()
-            let score = 0
-
-            if (cmd === lower) {
-                score = 200
-            } else if (cmd.startsWith(lower)) {
-                score = 100 + lower.length / cmd.length * 50
-            } else if (lower.length >= 4 && this.wordStartsWith(cmd, lower)) {
-                score = 70 + lower.length / cmd.length * 30
-            } else if (lower.length >= 4 && cmd.includes(lower)) {
-                score = 50 + lower.length / cmd.length * 30
-            } else if (lower.length >= 5 && this.fuzzyMatch(lower, cmd)) {
-                score = 20
+            if (!cmd.startsWith(lower) || !this.normalizeHistoryCommand(entry.command)) {
+                return { command: entry.command, score: 0 }
             }
 
-            if (score > 0) {
-                const recencyBonus = Math.max(0, (preferTabLocal ? 14 : 10) - index)
-                const frequencyBonus = Math.min(15, entry.useCount * 3)
-                score += recencyBonus + frequencyBonus + (preferTabLocal ? 20 : 0)
-            }
+            let score = cmd === lower
+                ? 200
+                : 100 + lower.length / Math.max(cmd.length, 1) * 50
+            const recencyBonus = Math.max(0, (preferTabLocal ? 14 : 10) - index)
+            const frequencyBonus = Math.min(15, entry.useCount * 3)
+            score += recencyBonus + frequencyBonus + (preferTabLocal ? 20 : 0)
 
             return { command: entry.command, score }
         })
@@ -415,22 +411,6 @@ PY`,
         return scored
             .filter(s => s.score > 0)
             .sort((a, b) => b.score - a.score)
-    }
-
-    private fuzzyMatch (pattern: string, text: string): boolean {
-        let pi = 0
-        for (let ti = 0; ti < text.length && pi < pattern.length; ti++) {
-            if (text[ti] === pattern[pi]) {
-                pi++
-            }
-        }
-        return pi === pattern.length
-    }
-
-    private wordStartsWith (command: string, partial: string): boolean {
-        return command
-            .split(/[\s/._-]+/)
-            .some(word => word.startsWith(partial))
     }
 
     private limitResults<T> (results: T[], limit?: number): T[] {

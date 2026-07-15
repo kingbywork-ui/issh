@@ -107,8 +107,8 @@ export class SSHProfilesService extends QuickConnectProfileProvider<SSHProfile> 
         return profile.options?.host ?? ''
     }
 
-    deleteProfile (profile: SSHProfile): void {
-        this.passwordStorage.deletePassword(profile)
+    async deleteProfile (profile: SSHProfile): Promise<void> {
+        await this.passwordStorage.deletePassword(profile)
     }
 
     quickConnect (query: string): PartialProfile<SSHProfile> {

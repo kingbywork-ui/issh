@@ -440,7 +440,11 @@ export class Window {
 
         this.on('ready', () => {
             const startupDebugLogPath = path.join(process.env.TABBY_CONFIG_DIRECTORY ?? app.getPath('userData'), 'startup-debug.log')
-            fs.appendFileSync(startupDebugLogPath, `${new Date().toISOString()} [main] ipc-start-sent\n`)
+            try {
+                fs.appendFileSync(startupDebugLogPath, `${new Date().toISOString()} [main] ipc-start-sent\n`)
+            } catch {
+                // Diagnostic logging must not prevent renderer startup.
+            }
             this.window?.webContents.send('start', {
                 config: this.configStore,
                 executable: app.getPath('exe'),

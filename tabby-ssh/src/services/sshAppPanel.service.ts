@@ -15,6 +15,9 @@ export class SSHAppPanelService implements OnDestroy {
     private sendPanelVisible = false
     private sendPanelTab: BaseTerminalTabComponent<any> | null = null
     private activeSplitSubscription?: Subscription
+    private subscriptions = new Subscription()
+    private sftpPanelSubscriptions = new Subscription()
+    private retryTimers = new Set<ReturnType<typeof setTimeout>>()
 
     constructor (
         private appPanel: AppPanelService,
@@ -22,7 +25,7 @@ export class SSHAppPanelService implements OnDestroy {
         private injector: EnvironmentInjector,
         private appRef: ApplicationRef,
     ) {
-        this.app.activeTabChange$.subscribe(tab => {
+        this.subscriptions.add(this.app.activeTabChange$.subscribe(tab => {
             this.watchActiveSplit(tab)
             const activeTerminal = this.resolveTerminalTab(tab)
             if (this.isSshTab(activeTerminal)) {
@@ -35,10 +38,10 @@ export class SSHAppPanelService implements OnDestroy {
                 this.sendRef?.instance.setCurrentTab(activeTerminal)
             }
             this.syncPanels()
-        })
-        this.appPanel.slotRegistered$.subscribe(() => {
+        }))
+        this.subscriptions.add(this.appPanel.slotRegistered$.subscribe(() => {
             this.syncPanels()
-        })
+        }))
         this.watchActiveSplit(this.app.activeTab)
     }
 
@@ -67,7 +70,7 @@ export class SSHAppPanelService implements OnDestroy {
     }
 
     syncFromTab (tab: SSHTabComponent): void {
-        if (!this.tabs.has(tab)) {
+        if (!this.tabs.has(tab) || this.resolveTerminalTab() !== tab) {
             return
         }
         this.activeTab = tab
@@ -88,7 +91,12 @@ export class SSHAppPanelService implements OnDestroy {
     }
 
     ngOnDestroy (): void {
+        this.subscriptions.unsubscribe()
         this.activeSplitSubscription?.unsubscribe()
+        for (const timer of this.retryTimers) {
+            clearTimeout(timer)
+        }
+        this.retryTimers.clear()
         this.destroySftpPanel()
         this.destroySendPanel()
     }
@@ -148,7 +156,7 @@ export class SSHAppPanelService implements OnDestroy {
     private mountSftpPanel (tab: SSHTabComponent): void {
         const slot = this.appPanel.getSlotElement('left')
         if (!slot || !tab.sshSession) {
-            setTimeout(() => this.syncPanels(), 100)
+            this.scheduleSync()
             return
         }
 
@@ -169,12 +177,12 @@ export class SSHAppPanelService implements OnDestroy {
         inst.session = tab.sshSession
         inst.path = tab.sftpPath
         inst.cwdDetectionAvailable = tab.session?.supportsWorkingDirectory() ?? false
-        inst.pathChange.subscribe(path => {
+        this.sftpPanelSubscriptions.add(inst.pathChange.subscribe(path => {
             tab.sftpPath = path
-        })
-        inst.closed.subscribe(() => {
+        }))
+        this.sftpPanelSubscriptions.add(inst.closed.subscribe(() => {
             tab.onSftpPanelClosed()
-        })
+        }))
         this.appRef.attachView(this.sftpRef.hostView)
         slot.appendChild(this.sftpRef.location.nativeElement)
     }
@@ -182,7 +190,7 @@ export class SSHAppPanelService implements OnDestroy {
     private mountSendPanel (tab: BaseTerminalTabComponent<any>): void {
         const slot = this.appPanel.getSlotElement('bottom')
         if (!slot) {
-            setTimeout(() => this.syncPanels(), 100)
+            this.scheduleSync()
             return
         }
 
@@ -218,6 +226,9 @@ export class SSHAppPanelService implements OnDestroy {
         if (!this.sftpRef) {
             return
         }
+        this.sftpPanelSubscriptions.unsubscribe()
+        this.sftpPanelSubscriptions = new Subscription()
+        void this.sftpRef.instance.sftp?.close().catch(() => null)
         this.appRef.detachView(this.sftpRef.hostView)
         this.sftpRef.destroy()
         this.sftpRef = null
@@ -257,5 +268,13 @@ export class SSHAppPanelService implements OnDestroy {
             return tab.getAllTabs().find(item => item instanceof BaseTerminalTabComponent) as BaseTerminalTabComponent<any> | undefined ?? null
         }
         return null
+    }
+
+    private scheduleSync (): void {
+        const timer = setTimeout(() => {
+            this.retryTimers.delete(timer)
+            this.syncPanels()
+        }, 100)
+        this.retryTimers.add(timer)
     }
 }

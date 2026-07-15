@@ -1,6 +1,6 @@
 import { ApplicationRef, ComponentRef, createComponent, EnvironmentInjector } from '@angular/core'
 import { Subject, Subscription, debounce, timer } from 'rxjs'
-import { ConfigService, LogService, Logger, NotificationsService, TranslateService } from 'tabby-core'
+import { ConfigService, LogService, Logger, NotificationsService, PlatformService, TranslateService } from 'tabby-core'
 import { BaseTerminalTabComponent, XTermFrontend } from 'tabby-terminal'
 import { AutocompleteSuggestion } from './api'
 import { LLMTerminalHostComponent } from './components/llmTerminalHost.component'
@@ -8,6 +8,7 @@ import { LLMService } from './services/llm.service'
 import { TerminalContextService } from './services/terminalContext.service'
 import { HistoryCommandService } from './services/historyCommand.service'
 import { SensitiveInputService } from './services/sensitiveInput.service'
+import { DangerousCommandGuard } from './services/dangerousCommandGuard'
 import { normalizeCommand } from './services/commandValidation'
 
 /** @hidden */
@@ -21,6 +22,7 @@ export class TabLLMController {
     private lineBuffer = ''
     private inputSubscription?: Subscription
     private sessionChangedSubscription?: Subscription
+    private alternateScreenSubscription?: Subscription
     private debounceSubject = new Subject<void>()
     private debounceSubscription?: Subscription
     private hostRef: ComponentRef<LLMTerminalHostComponent> | null = null
@@ -34,6 +36,7 @@ export class TabLLMController {
     private sensitiveInputLatched = false
 
     private logger: Logger
+    private guard = new DangerousCommandGuard()
 
     constructor (
         private tab: BaseTerminalTabComponent<any>,
@@ -47,6 +50,7 @@ export class TabLLMController {
         private injector: EnvironmentInjector,
         private appRef: ApplicationRef,
         log: LogService,
+        private platform: PlatformService,
     ) {
         this.logger = log.create('llm-controller')
         this.tabKey = this.history.getTabKey(tab)
@@ -75,6 +79,7 @@ export class TabLLMController {
         this.history.clearTabHistory(this.tabKey)
         this.inputSubscription?.unsubscribe()
         this.sessionChangedSubscription?.unsubscribe()
+        this.alternateScreenSubscription?.unsubscribe()
         this.debounceSubscription?.unsubscribe()
         this.debounceSubject.complete()
         if (this.hostRef) {
@@ -103,6 +108,11 @@ export class TabLLMController {
             this.sensitiveInputLatched = false
             this.hideAutocomplete()
         })
+        this.alternateScreenSubscription = this.tab.alternateScreenActive$.subscribe(() => {
+            this.lineBuffer = ''
+            this.lastAutocompletePartial = ''
+            this.hideAutocomplete()
+        })
         this.historyBootstrapPromise = new Promise(resolve => {
             setTimeout(() => {
                 void this.history.bootstrap(this.tab)
@@ -121,7 +131,7 @@ export class TabLLMController {
                 return true
             case 'llm-accept-suggestion':
                 if (this.showAutocomplete && this.suggestions[this.selectedIndex]) {
-                    this.acceptSuggestion(this.suggestions[this.selectedIndex])
+                    void this.acceptSuggestion(this.suggestions[this.selectedIndex])
                     return true
                 }
                 return false
@@ -173,7 +183,7 @@ export class TabLLMController {
                 return true
             }
             if (key === 'y' && this.suggestions[this.selectedIndex]) {
-                this.acceptSuggestion(this.suggestions[this.selectedIndex])
+                void this.acceptSuggestion(this.suggestions[this.selectedIndex])
                 event.preventDefault()
                 return true
             }
@@ -228,12 +238,45 @@ export class TabLLMController {
         return suggestion.command
     }
 
-    acceptSuggestion (suggestion: AutocompleteSuggestion): void {
+    async acceptSuggestion (suggestion: AutocompleteSuggestion): Promise<void> {
+        const editorMode = this.isEditorMode()
+        const execute = !editorMode && !!this.config.store.llm.executeOnConfirm
+        if (!editorMode) {
+            const allowed = await this.ensureCommandAllowed(suggestion.command, execute)
+            if (!allowed) {
+                return
+            }
+        }
         const partial = this.getPartial()
-        this.insertCommand(suggestion.command, false, partial)
+        this.insertCommand(suggestion.command, execute, partial)
         this.hideAutocomplete()
-        this.lineBuffer = suggestion.command
+        if (!editorMode) {
+            this.lineBuffer = suggestion.command
+        }
         this.refresh()
+    }
+
+    private async ensureCommandAllowed (command: string, execute: boolean): Promise<boolean> {
+        const normalized = normalizeCommand(command) ?? command
+        const danger = this.guard.isDangerous(normalized)
+        if (!danger.dangerous) {
+            return true
+        }
+        if (!execute && !this.config.store.llm.executeOnConfirm) {
+            // Still confirm before inserting known-dangerous suggestions.
+        }
+        const result = await this.platform.showMessageBox({
+            type: 'warning',
+            message: this.translate.instant('Dangerous command requires confirmation'),
+            detail: `${danger.reason ?? 'dangerous'}\n\n${normalized}`,
+            buttons: [
+                this.translate.instant('Allow once'),
+                this.translate.instant('Deny'),
+            ],
+            defaultId: 1,
+            cancelId: 1,
+        })
+        return result.response === 0
     }
 
     private moveSelection (delta: number): void {
@@ -264,11 +307,18 @@ export class TabLLMController {
     }
 
     private getPartial (): string {
+        if (this.isEditorMode()) {
+            return this.context.getEditorPartialText(this.tab)
+        }
         const fromBuffer = this.lineBuffer.trim()
         if (fromBuffer) {
             return fromBuffer
         }
         return this.context.getPartialCommand(this.tab)
+    }
+
+    private isEditorMode (): boolean {
+        return !!this.tab.alternateScreenActive
     }
 
     private async fetchAutocomplete (force = false): Promise<void> {
@@ -277,7 +327,15 @@ export class TabLLMController {
             this.hideAutocomplete()
             return
         }
-        if (!this.hasAnyAutocompleteSourceEnabled()) {
+
+        const editorMode = this.isEditorMode()
+        const aiEnabled = this.isAIEnabledForCommands()
+        if (editorMode && !aiEnabled) {
+            this.lastAutocompletePartial = ''
+            this.hideAutocomplete()
+            return
+        }
+        if (!editorMode && !this.hasAnyAutocompleteSourceEnabled()) {
             this.lastAutocompletePartial = ''
             this.hideAutocomplete()
             return
@@ -300,9 +358,9 @@ export class TabLLMController {
         const previousIndex = this.selectedIndex
         const previousSuggestions = [...this.suggestions]
         const fetchGeneration = ++this.pendingFetchGeneration
-        const historyEnabled = this.isHistoryAutocompleteEnabled()
-        const scriptEnabled = this.isScriptAutocompleteEnabled()
-        const aiEnabled = this.isAIEnabledForCommands()
+        // Full-screen editors (vim/nano): never use history/script candidates.
+        const historyEnabled = !editorMode && this.isHistoryAutocompleteEnabled()
+        const scriptEnabled = !editorMode && this.isScriptAutocompleteEnabled()
 
         this.updatePanelPosition()
         const anySource = historyEnabled || scriptEnabled || aiEnabled
@@ -342,7 +400,13 @@ export class TabLLMController {
             this.preserveSelection(previousIndex, previousSuggestions)
         }
         this.refresh()
-        this.logger.debug('fetchAutocomplete: history=%d script=%d ai_pending=%s', historySuggestions.length, scriptSuggestions.length, aiEnabled)
+        this.logger.debug(
+            'fetchAutocomplete: editor=%s history=%d script=%d ai_pending=%s',
+            editorMode,
+            historySuggestions.length,
+            scriptSuggestions.length,
+            aiEnabled,
+        )
 
         if (!aiEnabled) {
             if (!merged.length) {
@@ -364,6 +428,7 @@ export class TabLLMController {
                 os: ctx.os,
                 recentOutput,
                 excludeCommands: merged.map(s => s.command),
+                mode: editorMode ? 'editor' : 'shell',
             })
             if (fetchGeneration !== this.pendingFetchGeneration) {
                 return
@@ -403,6 +468,7 @@ export class TabLLMController {
 
     private handleInput (data: Buffer): void {
         const text = data.toString('utf-8')
+        const editorMode = this.isEditorMode()
         const isSensitive = this.isSensitiveInputActive()
         if (isSensitive) {
             this.inputWasSensitive = true
@@ -410,6 +476,22 @@ export class TabLLMController {
             this.lineBuffer = ''
             this.lastAutocompletePartial = ''
             this.hideAutocomplete()
+        }
+
+        // In vim/nano, do not treat keystrokes as shell lineBuffer / history.
+        if (editorMode) {
+            this.lineBuffer = ''
+            if (isSensitive) {
+                return
+            }
+            if (text === '\r' || text === '\n') {
+                this.hideAutocomplete()
+                return
+            }
+            if (this.isAIEnabledForCommands() && this.config.store.llm.autoCompleteOnType) {
+                this.debounceSubject.next()
+            }
+            return
         }
 
         if (text.startsWith('\x1b')) {
@@ -583,6 +665,9 @@ export class TabLLMController {
                 category: 'script' as const,
                 confidence: 0.5,
             })
+            if (results.length >= 5) {
+                break
+            }
         }
         return results
     }

@@ -125,4 +125,30 @@ export class AgentBridgeSettingsTabComponent extends BaseComponent implements On
             this.notifications.error('Copy failed', error instanceof Error ? error.message : String(error))
         }
     }
+
+    readonly scopeOptions = ['read', 'write', 'exec', 'sftp']
+
+    hasScope (scope: string): boolean {
+        const scopes = this.config.store.llm.agentBridgeTokenScopes
+        if (!Array.isArray(scopes)) {
+            return true
+        }
+        return scopes.includes(scope)
+    }
+
+    toggleScope (scope: string): void {
+        let scopes = Array.isArray(this.config.store.llm.agentBridgeTokenScopes)
+            ? [...this.config.store.llm.agentBridgeTokenScopes]
+            : [...this.scopeOptions]
+        if (scopes.includes(scope)) {
+            scopes = scopes.filter(item => item !== scope)
+        } else {
+            scopes.push(scope)
+        }
+        if (!scopes.includes('read')) {
+            scopes.unshift('read')
+        }
+        this.config.store.llm.agentBridgeTokenScopes = scopes
+        this.config.save()
+    }
 }

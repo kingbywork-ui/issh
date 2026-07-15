@@ -11,6 +11,7 @@ import { saveConfig } from './config'
 import { Window, WindowOptions } from './window'
 import { pluginManager } from './pluginManager'
 import { PTYManager } from './pty'
+import { ConfigSyncRendererAction, ConfigSyncServer } from './configSyncServer'
 
 /* eslint-disable block-scoped-var */
 
@@ -33,6 +34,8 @@ export class Application {
     private cachedPlasmaVersion?: [number, number] | null
     private globalHotkey$ = new Subject<void>()
     private quitRequested = false
+    private configSyncRenderer?: WebContents
+    private configSyncRequestID = 0
     userPluginsPath: string
 
     // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
@@ -91,6 +94,36 @@ export class Application {
             }
         })
         debugLog('application-ctor:promise-ipc-done')
+
+        const configSyncServer = new ConfigSyncServer((action, payload) => this.requestConfigSyncRenderer(action, payload))
+        ipcMain.handle('config-sync:start', async (event, port: number, syncKey: string, bindAddress?: string) => {
+            const renderer = event.sender
+            const previousRenderer = this.configSyncRenderer
+            this.configSyncRenderer = renderer
+            renderer.once('destroyed', () => {
+                if (this.configSyncRenderer === renderer) {
+                    configSyncServer.stop()
+                    this.configSyncRenderer = undefined
+                }
+            })
+            try {
+                await configSyncServer.start(port, syncKey, bindAddress ?? '127.0.0.1')
+                return { ok: true, ...configSyncServer.getStatus() }
+            } catch (e) {
+                if (this.configSyncRenderer === renderer) {
+                    this.configSyncRenderer = previousRenderer && !previousRenderer.isDestroyed() ? previousRenderer : undefined
+                }
+                return { ok: false, error: e.message }
+            }
+        })
+        ipcMain.handle('config-sync:stop', async () => {
+            configSyncServer.stop()
+            this.configSyncRenderer = undefined
+            return { ok: true }
+        })
+        ipcMain.handle('config-sync:status', async () => {
+            return configSyncServer.getStatus()
+        })
 
         if (process.platform === 'linux') {
             app.commandLine.appendSwitch('no-sandbox')
@@ -208,6 +241,55 @@ export class Application {
             await this.newWindow()
         }
         this.windows.filter(w => !w.isDestroyed())[0].send(event, ...args)
+    }
+
+    private requestConfigSyncRenderer (action: ConfigSyncRendererAction, payload: any): Promise<any> {
+        const renderer = this.configSyncRenderer
+        if (!renderer || renderer.isDestroyed()) {
+            return Promise.reject(new Error('Config sync renderer is not available'))
+        }
+        const requestId = `${Date.now()}-${++this.configSyncRequestID}`
+        return new Promise((resolve, reject) => {
+            const responseChannel = 'config-sync:renderer-response'
+            let timeout: ReturnType<typeof setTimeout>
+            const cleanup = (): void => {
+                clearTimeout(timeout)
+                ipcMain.removeListener(responseChannel, onResponse)
+                renderer.removeListener('destroyed', onDestroyed)
+            }
+            const onDestroyed = (): void => {
+                cleanup()
+                reject(new Error('Config sync renderer window was destroyed'))
+            }
+            const onResponse = (event, response: any): void => {
+                if (event.sender !== renderer || response?.requestId !== requestId) {
+                    return
+                }
+                cleanup()
+                if (response.ok) {
+                    resolve(response.result)
+                } else {
+                    reject(new Error(response.error || 'Config sync renderer request failed'))
+                }
+            }
+            timeout = setTimeout(() => {
+                cleanup()
+                reject(new Error(`Config sync renderer ${action} timed out`))
+            }, 120000)
+
+            ipcMain.on(responseChannel, onResponse)
+            renderer.once('destroyed', onDestroyed)
+            if (renderer.isDestroyed()) {
+                onDestroyed()
+                return
+            }
+            try {
+                renderer.send('config-sync:renderer-request', { requestId, action, payload })
+            } catch (error) {
+                cleanup()
+                reject(error)
+            }
+        })
     }
 
     enableTray (): void {

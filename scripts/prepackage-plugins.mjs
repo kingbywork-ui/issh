@@ -5,6 +5,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import * as vars from './vars.mjs'
 import log from 'npmlog'
+import './patch-node-gyp-vs18.mjs'
 
 import * as url from 'url'
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url))
@@ -14,9 +15,10 @@ sh.rm('-rf', target)
 sh.mkdir('-p', target)
 fs.writeFileSync(path.join(target, 'package.json'), '{}')
 sh.cd(target)
-vars.builtinPlugins.forEach(plugin => {
+
+for (const plugin of vars.builtinPlugins) {
     if (plugin === 'tabby-web') {
-        return
+        continue
     }
     log.info('install', plugin)
     sh.rm('-rf', plugin)
@@ -36,7 +38,7 @@ vars.builtinPlugins.forEach(plugin => {
         }
     }
     if (fs.existsSync('node_modules')) {
-        rebuild({
+        await rebuild({
             buildPath: path.resolve('.'),
             electronVersion: vars.electronVersion,
             arch: process.env.ARCH ?? process.arch,
@@ -45,5 +47,5 @@ vars.builtinPlugins.forEach(plugin => {
         })
     }
     sh.cd('..')
-})
-fs.unlinkSync(path.join(target, 'package.json'), '{}')
+}
+fs.unlinkSync(path.join(target, 'package.json'))

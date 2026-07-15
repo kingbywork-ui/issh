@@ -1,5 +1,5 @@
 import { ApplicationRef, EnvironmentInjector, Injectable } from '@angular/core'
-import { ConfigService, HotkeysService, LogService, NotificationsService, TranslateService } from 'tabby-core'
+import { ConfigService, HotkeysService, LogService, NotificationsService, PlatformService, TranslateService } from 'tabby-core'
 import { BaseTerminalTabComponent, TerminalDecorator, XTermFrontend } from 'tabby-terminal'
 import { TabLLMController } from './tabLLMController'
 import { LLMService } from './services/llm.service'
@@ -26,6 +26,7 @@ export class LLMDecorator extends TerminalDecorator {
         private appRef: ApplicationRef,
         private log: LogService,
         private agentBridge: AgentBridgeService,
+        private platform: PlatformService,
     ) {
         super()
     }
@@ -56,6 +57,7 @@ export class LLMDecorator extends TerminalDecorator {
                 this.injector,
                 this.appRef,
                 this.log,
+                this.platform,
             )
             controller.mount(content)
             controller.start()

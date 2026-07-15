@@ -8,6 +8,8 @@ export interface AutocompleteSuggestion {
     confidence?: number
 }
 
+export type AutocompleteMode = 'shell' | 'editor'
+
 export interface AutocompleteRequest {
     tabKey: string
     partialCommand: string
@@ -17,6 +19,8 @@ export interface AutocompleteRequest {
     recentOutput: string[]
     excludeCommands: string[]
     limit?: number
+    /** shell = command autocomplete; editor = code/text in vim/nano alternate screen */
+    mode?: AutocompleteMode
 }
 
 export interface NL2CommandRequest {

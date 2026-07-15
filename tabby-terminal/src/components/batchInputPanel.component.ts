@@ -54,6 +54,7 @@ export class BatchInputPanelComponent implements OnInit, AfterViewInit {
     }
 
     private selectCurrentTarget (): void {
+        this.selectedTargetIds.clear()
         if (!this.tab) {
             return
         }
@@ -109,6 +110,7 @@ export class BatchInputPanelComponent implements OnInit, AfterViewInit {
             return
         }
 
+        this.refreshTargets()
         const targets = this.selectedTargets
         if (!targets.length) {
             this.notifications.error(this.translate.instant('Select at least one terminal tab'))

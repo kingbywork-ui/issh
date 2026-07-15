@@ -1,9 +1,11 @@
 import * as crypto from 'crypto'
 import * as fs from 'fs'
 import * as http from 'http'
-import * as os from 'os'
 import * as path from 'path'
 import { Injectable, NgZone } from '@angular/core'
+import { Server } from '@modelcontextprotocol/sdk/server/index.js'
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { BehaviorSubject } from 'rxjs'
 import { AppService, BaseTabComponent, ConfigService, LogService, Logger, PlatformService, ProfilesService, SplitTabComponent } from 'tabby-core'
 import { BaseTerminalTabComponent } from 'tabby-terminal'
@@ -42,9 +44,42 @@ interface AgentCommandApproval {
     dangerous: boolean
     dangerReason?: string
     approved?: boolean
+    approvedBy?: 'user' | 'denied' | 'auto'
     reason?: string
     message?: string
 }
+
+type AgentBridgeScope = 'read' | 'write' | 'exec' | 'sftp'
+
+const ALL_SCOPES: AgentBridgeScope[] = ['read', 'write', 'exec', 'sftp']
+const METHOD_SCOPES: Record<string, AgentBridgeScope> = {
+    tabby_health: 'read',
+    tabby_list_sessions: 'read',
+    tabby_list_profiles: 'read',
+    tabby_get_context: 'read',
+    tabby_read_buffer: 'read',
+    tabby_select_session: 'read',
+    tabby_preview_command: 'read',
+    tabby_get_output: 'read',
+    tabby_connect_profile: 'write',
+    tabby_disconnect_session: 'write',
+    tabby_insert_command: 'exec',
+    tabby_run_command: 'exec',
+    tabby_exec_command: 'exec',
+    tabby_batch_exec: 'exec',
+    tabby_sftp_list: 'sftp',
+    tabby_sftp_read: 'sftp',
+    tabby_sftp_write: 'sftp',
+}
+
+const MCP_TOOLS = Object.keys(METHOD_SCOPES).map(name => ({
+    name,
+    description: `Invoke the Tabby Agent Bridge ${name} operation.`,
+    inputSchema: {
+        type: 'object',
+        additionalProperties: true,
+    },
+}))
 
 interface CachedOutput {
     outputId: string
@@ -56,15 +91,14 @@ interface CachedOutput {
 
 interface SseClient {
     id: string
-    response: http.ServerResponse
+    server: Server
+    transport: SSEServerTransport
     createdAt: number
 }
 
 const OUTPUT_TRUNCATE_THRESHOLD = 4000
 const OUTPUT_MAX_ENTRIES = 50
 const OUTPUT_MAX_AGE_MS = 10 * 60 * 1000
-const SSE_KEEPALIVE_INTERVAL_MS = 30 * 1000
-
 /** @hidden */
 @Injectable({ providedIn: 'root' })
 export class AgentBridgeService {
@@ -85,7 +119,6 @@ export class AgentBridgeService {
     readonly status$ = this.statusSubject.asObservable()
     private outputCache = new Map<string, CachedOutput>()
     private sseClients = new Map<string, SseClient>()
-    private sseKeepaliveTimer: NodeJS.Timeout | null = null
 
     constructor (
         private app: AppService,
@@ -172,7 +205,7 @@ export class AgentBridgeService {
             'command = "node"',
             `args = [${this.quoteToml(this.mcpServerScriptPath)}]`,
         ]
-        const discoveryFile = this.publicConnectionFilePath ?? this.getDefaultPublicConnectionFilePath()
+        const discoveryFile = this.getDiscoveryFileForSnippet()
         if (discoveryFile) {
             lines.push('', '[mcp_servers.tabby.env]', `TABBY_AGENT_BRIDGE_FILE = ${this.quoteToml(discoveryFile)}`)
         }
@@ -196,10 +229,11 @@ export class AgentBridgeService {
             '# Tabby Agent Rules',
             '- Use the Tabby MCP tools for terminal state instead of guessing from stale chat context.',
             '- Call tabby_preview_command before tabby_run_command or tabby_exec_command when a command may be destructive.',
-            '- For dangerous commands, only send confirmDangerous=true after an explicit user confirmation in the agent conversation.',
+            '- For dangerous commands, Tabby will show a native confirmation dialog; do not rely on confirmDangerous alone.',
             '- Do not request terminal context or buffer contents while Tabby reports sensitive input is active.',
             '- Prefer tabby_exec_command for non-interactive SSH checks; use tabby_run_command only when the user needs an interactive terminal command.',
             '- Keep SFTP writes scoped to paths the user named or clearly approved.',
+            '- Prefer a single active session for batch_exec; all-ssh requires extra confirmation.',
         ].join('\n')
     }
 
@@ -219,6 +253,7 @@ export class AgentBridgeService {
     async rotateToken (): Promise<void> {
         this.token = this.createToken()
         this.config.store.llm.agentBridgeToken = this.token
+        this.config.store.llm.agentBridgeTokenScopes = ['read']
         await this.config.save()
         if (this.activePort) {
             this.writeConnectionFile('127.0.0.1', this.activePort)
@@ -326,13 +361,12 @@ export class AgentBridgeService {
         if (clearError) {
             this.startError = null
         }
-        if (this.sseKeepaliveTimer) {
-            clearInterval(this.sseKeepaliveTimer)
-            this.sseKeepaliveTimer = null
-        }
-        for (const [id, client] of this.sseClients) {
-            try { client.response.end() } catch { /* ignore */ }
-            this.sseClients.delete(id)
+        const sseClients = [...this.sseClients.values()]
+        this.sseClients.clear()
+        for (const client of sseClients) {
+            void client.server.close().catch(error => {
+                this.logger.warn('Agent bridge SSE session close failed', error)
+            })
         }
         this.outputCache.clear()
         if (server?.listening) {
@@ -398,7 +432,10 @@ export class AgentBridgeService {
             if (!fs.existsSync(dir)) {
                 fs.mkdirSync(dir, { recursive: true })
             }
-            fs.writeFileSync(this.publicConnectionFilePath, JSON.stringify(payload, null, 2), { encoding: 'utf8' })
+            fs.writeFileSync(this.publicConnectionFilePath, JSON.stringify(payload, null, 2), {
+                encoding: 'utf8',
+                mode: 0o600,
+            })
         } catch (error) {
             this.logger.warn('Agent bridge public discovery file write failed', error)
             this.publicConnectionFilePath = null
@@ -406,7 +443,7 @@ export class AgentBridgeService {
     }
 
     private getPublicConnectionFilePath (): string | null {
-        if (this.config.store.llm.agentBridgePublicDiscoveryEnabled === false) {
+        if (this.config.store.llm.agentBridgePublicDiscoveryEnabled !== true) {
             return null
         }
         const configured = this.getString(this.config.store.llm.agentBridgePublicDiscoveryFile)
@@ -415,15 +452,30 @@ export class AgentBridgeService {
     }
 
     private getDefaultPublicConnectionFilePath (): string | null {
-        if (process.platform === 'win32') {
-            return path.join('C:\\tmp', 'tabby-agent-bridge.json')
+        const configPath = this.platform.getConfigPath()
+        const configDir = configPath ? path.dirname(configPath) : process.env.TABBY_CONFIG_DIRECTORY
+        if (!configDir) {
+            return null
         }
-        return path.join(os.tmpdir(), 'tabby-agent-bridge.json')
+        return path.join(configDir, 'agent-bridge-public.json')
     }
 
     private getCursorConfigEnv (): Record<string, string> | undefined {
-        const discoveryFile = this.publicConnectionFilePath ?? this.getDefaultPublicConnectionFilePath()
+        const discoveryFile = this.getDiscoveryFileForSnippet()
         return discoveryFile ? { TABBY_AGENT_BRIDGE_FILE: discoveryFile } : undefined
+    }
+
+    private getDiscoveryFileForSnippet (): string | null {
+        if (this.config.store.llm.agentBridgePublicDiscoveryEnabled === true) {
+            return this.publicConnectionFilePath ?? this.getPublicConnectionFilePath()
+        }
+        return this.connectionFilePath ?? this.getPrivateConnectionFilePath()
+    }
+
+    private getPrivateConnectionFilePath (): string | null {
+        const configPath = this.platform.getConfigPath()
+        const configDir = configPath ? path.dirname(configPath) : process.env.TABBY_CONFIG_DIRECTORY
+        return configDir ? path.join(configDir, 'tabby-agent-bridge.json') : null
     }
 
     private installAgentBridgeScripts (configDir: string): void {
@@ -480,7 +532,7 @@ export class AgentBridgeService {
                 this.writeJson(response, 401, { error: 'Unauthorized' })
                 return
             }
-            this.handleSseConnect(request, response)
+            await this.handleSseConnect(response)
             return
         }
         if (sseEnabled && request.method === 'POST' && url.pathname === '/messages') {
@@ -489,7 +541,7 @@ export class AgentBridgeService {
                 return
             }
             const sessionId = url.searchParams.get('sessionId') ?? ''
-            void this.handleSseMessage(request, response, sessionId)
+            await this.handleSseMessage(request, response, sessionId)
             return
         }
         if (request.method !== 'POST' || url.pathname !== '/rpc') {
@@ -515,20 +567,32 @@ export class AgentBridgeService {
         }
     }
 
-    private handleSseConnect (request: http.IncomingMessage, response: http.ServerResponse): void {
-        response.writeHead(200, {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'Access-Control-Allow-Origin': 'http://127.0.0.1',
-        })
-        const clientId = `sse-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-        this.sseClients.set(clientId, { id: clientId, response, createdAt: Date.now() })
-        response.write(`event: endpoint\ndata: /messages?sessionId=${clientId}\n\n`)
-        this.ensureSseKeepalive()
-        request.on('close', () => {
-            this.sseClients.delete(clientId)
-        })
+    private async handleSseConnect (response: http.ServerResponse): Promise<void> {
+        const transport = new SSEServerTransport('/messages', response)
+        const server = this.createMcpServer()
+        const client: SseClient = {
+            id: transport.sessionId,
+            server,
+            transport,
+            createdAt: Date.now(),
+        }
+        this.sseClients.set(client.id, client)
+        server.onclose = () => {
+            this.sseClients.delete(client.id)
+        }
+        server.onerror = error => {
+            this.logger.warn('Agent bridge MCP SSE server error', error)
+        }
+        try {
+            await server.connect(transport)
+        } catch (error) {
+            this.sseClients.delete(client.id)
+            await server.close().catch(() => undefined)
+            if (!response.headersSent) {
+                this.writeJson(response, 500, { error: 'Failed to establish MCP SSE session' })
+            }
+            this.logger.warn('Agent bridge MCP SSE session failed to start', error)
+        }
     }
 
     private async handleSseMessage (request: http.IncomingMessage, response: http.ServerResponse, sessionId: string): Promise<void> {
@@ -538,47 +602,55 @@ export class AgentBridgeService {
             return
         }
         try {
-            const rpcRequest = JSON.parse(await this.readBody(request)) as RpcRequest
-            const rpcResponse = await this.handleRpc(rpcRequest)
-            client.response.write(`event: message\ndata: ${JSON.stringify(rpcResponse)}\n\n`)
-            response.writeHead(202)
-            response.end()
+            await client.transport.handlePostMessage(request, response)
         } catch (error) {
-            const errorResponse: RpcResponse = {
-                id: undefined,
-                error: {
-                    code: 'bad_request',
-                    message: error instanceof Error ? error.message : String(error),
-                },
-            }
-            client.response.write(`event: message\ndata: ${JSON.stringify(errorResponse)}\n\n`)
-            response.writeHead(202)
-            response.end()
+            this.logger.warn('Agent bridge MCP SSE message failed', error)
         }
     }
 
-    private ensureSseKeepalive (): void {
-        if (this.sseKeepaliveTimer) {
-            return
-        }
-        this.sseKeepaliveTimer = setInterval(() => {
-            for (const [id, client] of this.sseClients) {
-                if (client.response.destroyed) {
-                    this.sseClients.delete(id)
-                    continue
+    private createMcpServer (): Server {
+        const server = new Server(
+            { name: 'tabby-agent-bridge', version: '1.2.3' },
+            { capabilities: { tools: {} } },
+        )
+        server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: MCP_TOOLS }))
+        server.setRequestHandler(CallToolRequestSchema, async request => {
+            const name = request.params.name
+            const args = request.params.arguments ?? {}
+            const rpcResponse = await this.handleRpc({
+                id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                method: name,
+                params: args,
+            })
+            if (rpcResponse.error) {
+                return {
+                    content: [{
+                        type: 'text',
+                        text: JSON.stringify({
+                            error: rpcResponse.error.message,
+                            code: rpcResponse.error.code,
+                            details: rpcResponse.error.details,
+                        }, null, 2),
+                    }],
+                    isError: true,
                 }
-                client.response.write(`: keepalive\n\n`)
             }
-            if (this.sseClients.size === 0 && this.sseKeepaliveTimer) {
-                clearInterval(this.sseKeepaliveTimer)
-                this.sseKeepaliveTimer = null
+            return {
+                content: [{ type: 'text', text: JSON.stringify(rpcResponse.result, null, 2) }],
+                isError: this.isRejectedRpcResult(rpcResponse.result, name),
             }
-        }, SSE_KEEPALIVE_INTERVAL_MS)
+        })
+        return server
     }
 
     private isAuthorized (request: http.IncomingMessage): boolean {
         const authorization = request.headers.authorization ?? ''
-        return !!this.token && authorization === `Bearer ${this.token}`
+        if (!this.token || !authorization.startsWith('Bearer ')) {
+            return false
+        }
+        const supplied = Buffer.from(authorization.slice('Bearer '.length))
+        const expected = Buffer.from(this.token)
+        return supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected)
     }
 
     private readBody (request: http.IncomingMessage): Promise<string> {
@@ -606,6 +678,8 @@ export class AgentBridgeService {
         const id = request.id
         let rpcResponse: RpcResponse
         try {
+            this.ensureScopesMigrated()
+            this.assertMethodScope(request.method)
             this.syncRegisteredTabs()
             switch (request.method) {
                 case 'tabby_health':
@@ -662,10 +736,10 @@ export class AgentBridgeService {
                 default:
                     rpcResponse = this.error(id, 'method_not_found', `Unknown method: ${request.method ?? ''}`)
             }
-        } catch (error) {
+        } catch (error: any) {
             rpcResponse = this.error(
                 id,
-                'request_failed',
+                error?.code === 'forbidden' ? 'forbidden' : 'request_failed',
                 error instanceof Error ? error.message : String(error),
             )
         }
@@ -789,7 +863,8 @@ export class AgentBridgeService {
             normalizedCommand: normalized,
             dangerous: danger.dangerous,
             dangerReason: danger.reason,
-            wouldExecute: !danger.dangerous || params.confirmDangerous === true,
+            wouldExecute: !danger.dangerous,
+            requiresUserConfirmation: danger.dangerous,
         }
     }
 
@@ -812,6 +887,7 @@ export class AgentBridgeService {
                 dangerous: approval.dangerous,
                 dangerReason: approval.dangerReason,
                 approved: approval.approved,
+                approvedBy: approval.approvedBy,
                 reason: approval.reason,
                 message: approval.message,
             }
@@ -826,6 +902,7 @@ export class AgentBridgeService {
             dangerous: approval.dangerous,
             dangerReason: approval.dangerReason,
             approved: approval.approved,
+            approvedBy: approval.approvedBy,
         }
     }
 
@@ -845,6 +922,7 @@ export class AgentBridgeService {
             dangerous: approval.dangerous,
             dangerReason: approval.dangerReason,
             approved: approval.approved,
+            approvedBy: approval.approvedBy,
             ...this.getTabMetadata(entry.tab),
         }
         if (!approval.allowed) {
@@ -1001,7 +1079,29 @@ export class AgentBridgeService {
         if (!command) {
             throw new Error('Missing command')
         }
-        const targets = this.resolveBatchTargets(params.tabs)
+        const tabRefs = params.tabs === undefined || params.tabs === null || params.tabs === ''
+            ? 'active'
+            : params.tabs
+        const targets = this.resolveBatchTargets(tabRefs)
+        if (tabRefs === 'all-ssh' || (Array.isArray(tabRefs) && tabRefs.length > 1) || targets.length > 1) {
+            const confirmed = await this.platform.showMessageBox({
+                type: 'warning',
+                message: 'Run batch command on multiple sessions?',
+                detail: `Targets: ${targets.length}\nCommand: ${command}`,
+                buttons: ['Run', 'Cancel'],
+                defaultId: 1,
+                cancelId: 1,
+            })
+            if (confirmed.response !== 0) {
+                return {
+                    command,
+                    count: 0,
+                    results: [],
+                    cancelled: true,
+                    reason: 'user_cancelled_batch',
+                }
+            }
+        }
         const run = (entry: RegisteredTab) => this.execCommand({
             ...params,
             tab: entry.id,
@@ -1029,7 +1129,7 @@ export class AgentBridgeService {
     private async sftpList (params: RpcParams): Promise<any> {
         const entry = this.resolveTab(params.tab)
         const sftp = await this.openSftp(entry)
-        const remotePath = this.getRemotePath(params.path, '.')
+        const remotePath = await this.resolveSftpPath(sftp, params.path, '.', false)
         const files = await sftp.readdir(remotePath)
         return {
             tabId: entry.id,
@@ -1049,7 +1149,7 @@ export class AgentBridgeService {
     private async sftpRead (params: RpcParams): Promise<any> {
         const entry = this.resolveTab(params.tab)
         const sftp = await this.openSftp(entry)
-        const remotePath = this.getRemotePath(params.path, '')
+        const remotePath = await this.resolveSftpPath(sftp, params.path, '', false)
         const maxBytes = this.getDuration(params.maxBytes, 1024 * 1024)
         const chunks: Buffer[] = []
         let size = 0
@@ -1084,9 +1184,13 @@ export class AgentBridgeService {
     private async sftpWrite (params: RpcParams): Promise<any> {
         const entry = this.resolveTab(params.tab)
         const sftp = await this.openSftp(entry)
-        const remotePath = this.getRemotePath(params.path, '')
+        const remotePath = await this.resolveSftpPath(sftp, params.path, '', true)
         const content = String(params.content ?? '')
         const buffer = Buffer.from(content, params.encoding === 'base64' ? 'base64' : 'utf8')
+        const maxBytes = this.getSftpMaxWriteBytes()
+        if (buffer.length > maxBytes) {
+            throw new Error(`SFTP write exceeds maxBytes=${maxBytes}`)
+        }
         let done = false
         const transfer = {
             read: async () => {
@@ -1126,21 +1230,40 @@ export class AgentBridgeService {
             allowed: true,
             dangerous: danger.dangerous,
             dangerReason: danger.reason,
+            approved: true,
+            approvedBy: 'auto',
         }
     }
 
     private async ensureCommandExecutionAllowed (entry: RegisteredTab, command: string, params: RpcParams): Promise<AgentCommandApproval> {
         const danger = this.guard.isDangerous(command)
         if (!danger.dangerous) {
-            return { allowed: true, dangerous: false, approved: true }
+            return { allowed: true, dangerous: false, approved: true, approvedBy: 'auto' }
         }
+        const agentRequested = params.confirmDangerous === true
+        const result = await this.platform.showMessageBox({
+            type: 'warning',
+            message: 'Dangerous command requires confirmation',
+            detail: [
+                `Session: ${entry.id}`,
+                `Reason: ${danger.reason ?? 'dangerous'}`,
+                agentRequested ? 'Agent requested confirmation.' : 'Agent did not set confirmDangerous.',
+                '',
+                command,
+            ].join('\n'),
+            buttons: ['Allow once', 'Deny'],
+            defaultId: 1,
+            cancelId: 1,
+        })
+        const allowed = result.response === 0
         return {
-            allowed: params.confirmDangerous === true,
+            allowed,
             dangerous: true,
             dangerReason: danger.reason,
-            approved: params.confirmDangerous === true,
-            reason: params.confirmDangerous === true ? undefined : 'confirmation_required',
-            message: params.confirmDangerous === true ? undefined : 'Dangerous command must be confirmed by the Agent with confirmDangerous=true',
+            approved: allowed,
+            approvedBy: allowed ? 'user' : 'denied',
+            reason: allowed ? undefined : 'confirmation_required',
+            message: allowed ? undefined : 'Dangerous command denied by Tabby user confirmation',
         }
     }
 
@@ -1327,7 +1450,68 @@ export class AgentBridgeService {
         if (!remotePath) {
             throw new Error('Missing path')
         }
-        return remotePath
+        if (remotePath.split('/').includes('..')) {
+            throw new Error('Path traversal is not allowed')
+        }
+        const root = this.getString(this.config.store.llm.agentBridgeSftpRoot)
+        if (root) {
+            const normalizedRoot = path.posix.normalize(root)
+            const candidate = path.posix.normalize(remotePath.startsWith('/')
+                ? remotePath
+                : path.posix.join(normalizedRoot, remotePath))
+            if (!this.isPathWithinRoot(candidate, normalizedRoot)) {
+                throw new Error(`Path must be under agentBridgeSftpRoot (${normalizedRoot})`)
+            }
+            return candidate
+        }
+        return path.posix.normalize(remotePath)
+    }
+
+    private async resolveSftpPath (sftp: any, value: any, fallback: string, forWrite: boolean): Promise<string> {
+        const candidate = this.getRemotePath(value, fallback)
+        const configuredRoot = this.getString(this.config.store.llm.agentBridgeSftpRoot)
+        if (!configuredRoot) {
+            return candidate
+        }
+
+        const canonicalize = typeof sftp.canonicalize === 'function'
+            ? sftp.canonicalize.bind(sftp)
+            : typeof sftp.realpath === 'function'
+                ? sftp.realpath.bind(sftp)
+                : null
+        if (!canonicalize) {
+            return candidate
+        }
+
+        const canonicalRoot = path.posix.normalize(String(await canonicalize(path.posix.normalize(configuredRoot))))
+        let canonicalCandidate: string
+        if (forWrite) {
+            try {
+                canonicalCandidate = path.posix.normalize(String(await canonicalize(candidate)))
+            } catch {
+                const parent = path.posix.dirname(candidate)
+                const canonicalParent = path.posix.normalize(String(await canonicalize(parent)))
+                canonicalCandidate = path.posix.join(canonicalParent, path.posix.basename(candidate))
+            }
+        } else {
+            canonicalCandidate = path.posix.normalize(String(await canonicalize(candidate)))
+        }
+        if (!this.isPathWithinRoot(canonicalCandidate, canonicalRoot)) {
+            throw new Error(`Resolved path escapes agentBridgeSftpRoot (${canonicalRoot})`)
+        }
+        return canonicalCandidate
+    }
+
+    private isPathWithinRoot (candidate: string, root: string): boolean {
+        return candidate === root || candidate.startsWith(root.endsWith('/') ? root : `${root}/`)
+    }
+
+    private getSftpMaxWriteBytes (): number {
+        const configured = Number(this.config.store.llm.agentBridgeSftpMaxWriteBytes ?? 1024 * 1024)
+        if (!Number.isFinite(configured) || configured <= 0) {
+            return 1024 * 1024
+        }
+        return Math.floor(configured)
     }
 
     private getProfileOption (tab: BaseTerminalTabComponent<any>, name: string): any {
@@ -1374,10 +1558,14 @@ export class AgentBridgeService {
             ? this.config.store.llm.agentBridgeToken.trim()
             : ''
         if (stored) {
+            // A token that predates scope storage is a genuine legacy token and
+            // keeps its historical full access during one-time migration.
+            this.ensureScopesMigrated()
             return stored
         }
         const token = this.createToken()
         this.config.store.llm.agentBridgeToken = token
+        this.config.store.llm.agentBridgeTokenScopes = ['read']
         void this.config.save()
         return token
     }
@@ -1390,11 +1578,17 @@ export class AgentBridgeService {
         if (!(this.config.store.llm.agentBridgeAuditLogEnabled ?? true) || !this.auditLogFilePath) {
             return
         }
+        const result = response.result
+        const rejected = this.isRejectedRpcResult(result, request.method)
         const entry = {
             timestamp: new Date().toISOString(),
             method: request.method ?? null,
-            ok: !response.error,
+            ok: !response.error && !rejected,
             errorCode: response.error?.code ?? null,
+            executed: typeof result?.executed === 'boolean' ? result.executed : null,
+            approved: typeof result?.approved === 'boolean' ? result.approved : null,
+            approvedBy: result?.approvedBy ?? null,
+            reason: result?.reason ?? (rejected ? 'rejected' : null),
             params: this.redactAuditValue(request.params ?? {}),
         }
         try {
@@ -1404,7 +1598,29 @@ export class AgentBridgeService {
         }
     }
 
+    private isRejectedRpcResult (result: any, method?: string): boolean {
+        if (!result || typeof result !== 'object') {
+            return false
+        }
+        const executionMethod = method === 'tabby_run_command'
+            || method === 'tabby_exec_command'
+            || method === 'tabby_batch_exec'
+        if ((executionMethod && result.executed === false)
+            || result.cancelled === true
+            || result.approved === false
+            || typeof result.error === 'string') {
+            return true
+        }
+        if (Array.isArray(result.results)) {
+            return result.results.some((item: any) => this.isRejectedRpcResult(item, 'tabby_exec_command'))
+        }
+        return false
+    }
+
     private redactAuditValue (value: any): any {
+        if (typeof value === 'string') {
+            return this.guard.redact(value)
+        }
         if (Array.isArray(value)) {
             return value.map(item => this.redactAuditValue(item))
         }
@@ -1422,9 +1638,52 @@ export class AgentBridgeService {
                 result[key] = typeof item === 'string' ? `[${item.length} chars]` : '[content]'
                 continue
             }
+            if (lower === 'command' || lower === 'path' || lower === 'cwd') {
+                result[key] = typeof item === 'string' ? this.guard.redact(item) : this.redactAuditValue(item)
+                continue
+            }
             result[key] = this.redactAuditValue(item)
         }
         return result
+    }
+
+    private ensureScopesMigrated (): void {
+        const scopes = this.config.store.llm.agentBridgeTokenScopes
+        if (Array.isArray(scopes)) {
+            return
+        }
+        const hasToken = typeof this.config.store.llm.agentBridgeToken === 'string' && !!this.config.store.llm.agentBridgeToken.trim()
+        if (hasToken) {
+            this.config.store.llm.agentBridgeTokenScopes = [...ALL_SCOPES]
+            void this.config.save()
+            this.logger.info('Migrated legacy Agent Bridge token to full scopes; consider tightening scopes in settings')
+            return
+        }
+        this.config.store.llm.agentBridgeTokenScopes = ['read']
+    }
+
+    private getTokenScopes (): AgentBridgeScope[] {
+        this.ensureScopesMigrated()
+        const scopes = this.config.store.llm.agentBridgeTokenScopes
+        if (!Array.isArray(scopes) || !scopes.length) {
+            return ['read']
+        }
+        return scopes.filter((scope): scope is AgentBridgeScope => ALL_SCOPES.includes(scope as AgentBridgeScope))
+    }
+
+    private assertMethodScope (method?: string): void {
+        if (!method) {
+            throw new Error('Missing RPC method')
+        }
+        const required = METHOD_SCOPES[method]
+        if (!required) {
+            throw new Error(`Unknown method: ${method}`)
+        }
+        if (!this.getTokenScopes().includes(required)) {
+            const error: any = new Error(`Token scope '${required}' is required for ${method}`)
+            error.code = 'forbidden'
+            throw error
+        }
     }
 
     readAuditLog (limit = 100, offset = 0, filter?: string): { entries: any[], total: number } {

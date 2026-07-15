@@ -1,5 +1,5 @@
 import { posix as path } from 'path'
-import { Component, Input, Output, EventEmitter, Inject, Optional, ChangeDetectorRef, NgZone } from '@angular/core'
+import { Component, Input, Output, EventEmitter, Inject, Optional, ChangeDetectorRef, NgZone, OnDestroy } from '@angular/core'
 import { FileUpload, DirectoryUpload, DirectoryDownload, MenuItemOptions, NotificationsService, PlatformService } from 'tabby-core'
 import { SFTPSession, SFTPFile } from '../session/sftp'
 import { SSHSession } from '../session/ssh'
@@ -17,7 +17,7 @@ interface PathSegment {
     templateUrl: './sftpPanel.component.pug',
     styleUrls: ['./sftpPanel.component.scss'],
 })
-export class SFTPPanelComponent {
+export class SFTPPanelComponent implements OnDestroy {
     @Input() session: SSHSession
     @Output() closed = new EventEmitter<void>()
     sftp: SFTPSession
@@ -32,6 +32,8 @@ export class SFTPPanelComponent {
     filterText = ''
     uploading = false
     activeUploads: {name: string, transfer: FileUpload, progress: number}[] = []
+    private destroyed = false
+    private navigationGeneration = 0
 
     constructor (
         private ngbModal: NgbModal,
@@ -45,17 +47,39 @@ export class SFTPPanelComponent {
     }
 
     async ngOnInit (): Promise<void> {
-        this.sftp = await this.session.openSFTP()
         try {
+            const sftp = await this.session.openSFTP()
+            if (this.destroyed) {
+                await sftp.close()
+                return
+            }
+            this.sftp = sftp
             await this.navigate(this.path)
         } catch (error) {
+            if (this.destroyed) {
+                return
+            }
             console.warn('Could not navigate to', this.path, ':', error)
-            this.notifications.error(error.message)
-            await this.navigate('/')
+            this.notifications.error(this.errorMessage(error))
+            if (this.sftp && this.path !== '/') {
+                await this.navigate('/')
+            }
+        } finally {
+            this.detectChanges()
         }
     }
 
+    ngOnDestroy (): void {
+        this.destroyed = true
+        this.navigationGeneration++
+        for (const upload of this.activeUploads) {
+            upload.transfer.cancel()
+        }
+        void this.sftp?.close().catch(() => null)
+    }
+
     async navigate (newPath: string, fallbackOnError = true): Promise<void> {
+        const generation = ++this.navigationGeneration
         const previousPath = this.path
         this.path = newPath
         this.pathChange.next(this.path)
@@ -75,11 +99,17 @@ export class SFTPPanelComponent {
         this.fileList = null
         this.filteredFileList = []
         try {
-            this.fileList = await this.sftp.readdir(this.path)
+            const fileList = await this.sftp.readdir(this.path)
+            if (!this.isCurrent(generation)) {
+                return
+            }
+            this.fileList = fileList
         } catch (error) {
-            this.notifications.error(error.message)
-            if (previousPath && fallbackOnError) {
-                this.navigate(previousPath, false)
+            if (this.isCurrent(generation)) {
+                this.notifications.error(this.errorMessage(error))
+                if (previousPath && fallbackOnError) {
+                    await this.navigate(previousPath, false)
+                }
             }
             return
         }
@@ -158,18 +188,26 @@ export class SFTPPanelComponent {
     }
 
     async open (item: SFTPFile): Promise<void> {
-        if (item.isDirectory) {
-            await this.navigate(item.fullPath)
-        } else if (item.isSymlink) {
-            const target = path.resolve(this.path, await this.sftp.readlink(item.fullPath))
-            const stat = await this.sftp.stat(target)
-            if (stat.isDirectory) {
+        try {
+            if (item.isDirectory) {
                 await this.navigate(item.fullPath)
+            } else if (item.isSymlink) {
+                const target = path.resolve(this.path, await this.sftp.readlink(item.fullPath))
+                const stat = await this.sftp.stat(target)
+                if (stat.isDirectory) {
+                    await this.navigate(item.fullPath)
+                } else {
+                    await this.download(item.fullPath, stat.mode, stat.size)
+                }
             } else {
-                await this.download(item.fullPath, stat.mode, stat.size)
+                await this.download(item.fullPath, item.mode, item.size)
             }
-        } else {
-            await this.download(item.fullPath, item.mode, item.size)
+        } catch (error) {
+            if (!this.destroyed) {
+                this.notifications.error(`Failed to open ${item.name}: ${this.errorMessage(error)}`)
+            }
+        } finally {
+            this.detectChanges()
         }
     }
 
@@ -207,38 +245,21 @@ export class SFTPPanelComponent {
     }
 
     async upload (): Promise<void> {
-        const transfers = await this.platform.startUpload({ multiple: true })
-        this.uploading = true
-        this.ngZone.runOutsideAngular(async () => {
-            await Promise.all(transfers.map(t => this.uploadOne(t)))
-            this.ngZone.run(() => {
-                this.uploading = false
-                this.cd.detectChanges()
-            })
+        await this.runUpload(async () => {
+            const transfers = await this.platform.startUpload({ multiple: true })
+            await this.ngZone.runOutsideAngular(() => Promise.all(transfers.map(t => this.uploadOne(t))))
         })
     }
 
     async uploadFolder (): Promise<void> {
-        const transfer = await this.platform.startUploadDirectory()
-        this.uploading = true
-        this.ngZone.runOutsideAngular(async () => {
-            await this.uploadOneFolder(transfer)
-            this.ngZone.run(() => {
-                this.uploading = false
-                this.cd.detectChanges()
-            })
+        await this.runUpload(async () => {
+            const transfer = await this.platform.startUploadDirectory()
+            await this.ngZone.runOutsideAngular(() => this.uploadOneFolder(transfer))
         })
     }
 
     async onDropUpload (transfer: DirectoryUpload): Promise<void> {
-        this.uploading = true
-        this.ngZone.runOutsideAngular(async () => {
-            await this.uploadOneFolder(transfer)
-            this.ngZone.run(() => {
-                this.uploading = false
-                this.cd.detectChanges()
-            })
-        })
+        await this.runUpload(() => this.ngZone.runOutsideAngular(() => this.uploadOneFolder(transfer)))
     }
 
     async uploadOneFolder (transfer: DirectoryUpload, accumPath = ''): Promise<void> {
@@ -257,8 +278,10 @@ export class SFTPPanelComponent {
         }
         if (this.path === savedPath) {
             this.ngZone.run(() => {
-                this.navigate(this.path)
-                this.cd.detectChanges()
+                if (!this.destroyed) {
+                    void this.navigate(this.path)
+                    this.detectChanges()
+                }
             })
         }
     }
@@ -270,8 +293,12 @@ export class SFTPPanelComponent {
     private async uploadOneInner (transfer: FileUpload, remotePath: string): Promise<void> {
         const entry = { name: transfer.getName(), transfer, progress: 0 }
         this.ngZone.run(() => {
+            if (this.destroyed) {
+                transfer.cancel()
+                return
+            }
             this.activeUploads.push(entry)
-            this.cd.detectChanges()
+            this.detectChanges()
         })
 
         const progressTimer = setInterval(() => {
@@ -279,7 +306,7 @@ export class SFTPPanelComponent {
             if (size > 0) {
                 entry.progress = Math.min(100, Math.round(100 * transfer.getCompletedBytes() / size))
             }
-            this.ngZone.run(() => { this.cd.detectChanges() })
+            this.ngZone.run(() => this.detectChanges())
         }, 200)
 
         try {
@@ -288,17 +315,26 @@ export class SFTPPanelComponent {
             clearInterval(progressTimer)
             this.ngZone.run(() => {
                 this.activeUploads = this.activeUploads.filter(x => x !== entry)
-                this.cd.detectChanges()
+                this.detectChanges()
             })
         }
     }
 
     async download (itemPath: string, mode: number, size: number): Promise<void> {
-        const transfer = await this.platform.startDownload(path.basename(itemPath), mode, size)
-        if (!transfer) {
-            return
+        try {
+            const transfer = await this.platform.startDownload(path.basename(itemPath), mode, size)
+            if (!transfer || this.destroyed) {
+                transfer?.cancel()
+                return
+            }
+            await this.sftp.download(itemPath, transfer)
+        } catch (error) {
+            if (!this.destroyed) {
+                this.notifications.error(`Failed to download ${path.basename(itemPath)}: ${this.errorMessage(error)}`)
+            }
+        } finally {
+            this.detectChanges()
         }
-        this.sftp.download(itemPath, transfer)
     }
 
     async downloadFolder (folder: SFTPFile): Promise<void> {
@@ -417,5 +453,42 @@ export class SFTPPanelComponent {
         this.filteredFileList = this.fileList.filter(item =>
             item.name.toLowerCase().includes(this.filterText.toLowerCase()),
         )
+    }
+
+    private async runUpload (operation: () => Promise<void>): Promise<void> {
+        if (this.destroyed) {
+            return
+        }
+        this.uploading = true
+        this.detectChanges()
+        try {
+            await operation()
+            if (!this.destroyed) {
+                await this.navigate(this.path)
+            }
+        } catch (error) {
+            if (!this.destroyed) {
+                this.notifications.error(`Upload failed: ${this.errorMessage(error)}`)
+            }
+        } finally {
+            if (!this.destroyed) {
+                this.uploading = false
+                this.detectChanges()
+            }
+        }
+    }
+
+    private isCurrent (generation: number): boolean {
+        return !this.destroyed && generation === this.navigationGeneration
+    }
+
+    private detectChanges (): void {
+        if (!this.destroyed) {
+            this.cd.detectChanges()
+        }
+    }
+
+    private errorMessage (error: unknown): string {
+        return error instanceof Error ? error.message : String(error)
     }
 }

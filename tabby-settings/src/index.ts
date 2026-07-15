@@ -22,8 +22,6 @@ import { ReleaseNotesComponent } from './components/releaseNotesTab.component'
 import { ConfigSyncSettingsTabComponent } from './components/configSyncSettingsTab.component'
 import { ShowSecretModalComponent } from './components/showSecretModal.component'
 
-import { ConfigSyncService } from './services/configSync.service'
-
 import { SettingsTabProvider } from './api'
 import { ButtonProvider } from './buttonProvider'
 import { SettingsHotkeyProvider } from './hotkeys'
@@ -69,7 +67,6 @@ import { HotkeySettingsTabProvider, WindowSettingsTabProvider, VaultSettingsTabP
 })
 export default class SettingsModule {
     constructor (
-        public configSync: ConfigSyncService,
         app: AppService,
         hotkeys: HotkeysService,
     ) {

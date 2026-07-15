@@ -73,4 +73,5 @@ div(*ngIf='vault.isEnabled()')
     .text-center(*ngIf='!vaultContents')
         i.fas.fa-key.fa-3x
         h3.m-3(translate) Vault is locked
+        .m-3(*ngIf='!isSessionUnlocked()', translate) Enter your master passphrase to unlock. Access valid for 10 minutes.
         button.btn.btn-primary.m-2((click)='loadVault()', translate) Show vault contents

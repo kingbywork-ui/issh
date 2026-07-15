@@ -56,7 +56,10 @@ export class SensitiveInputService {
         if (!normalized) {
             return false
         }
-        return !SENSITIVE_COMMAND_PATTERNS.some(pattern => pattern.test(normalized))
+        if (SENSITIVE_COMMAND_PATTERNS.some(pattern => pattern.test(normalized))) {
+            return false
+        }
+        return !this.looksLikeBareSecret(normalized)
     }
 
     looksLikeSensitivePrompt (text: string): boolean {
@@ -69,5 +72,19 @@ export class SensitiveInputService {
         return [normalized, maskedPrompt]
             .filter(Boolean)
             .some(candidate => SENSITIVE_PROMPT_PATTERNS.some(pattern => pattern.test(candidate)))
+    }
+
+    private looksLikeBareSecret (command: string): boolean {
+        // Single-token secrets typed after a password prompt (no shell structure).
+        if (/\s/.test(command) || /[\/\\|=]/.test(command)) {
+            return false
+        }
+        if (/^(?:password|passwd|passphrase|secret|token|Current\s+passwo)/i.test(command)) {
+            return true
+        }
+        if (command.length >= 6 && /[A-Za-z]/.test(command) && /\d/.test(command) && /[@#$%^&*!]/.test(command)) {
+            return true
+        }
+        return false
     }
 }

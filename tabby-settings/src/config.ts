@@ -4,20 +4,11 @@ import { ConfigProvider, Platform } from 'tabby-core'
 export class SettingsConfigProvider extends ConfigProvider {
     defaults = {
         configSync: {
-            host: null,
-            token: null,
-            configID: null,
-            auto: false,
-            parts: {
-                hotkeys: true,
-                appearance: true,
-                vault: true,
-            },
-        },
-        hotkeys: {
-            'settings-tab': {
-                __nonStructural: true,
-            },
+            port: 8765,
+            syncKey: null,
+            bindAddress: '127.0.0.1',
+            peerFingerprint: '',
+            peerIP: '',
         },
     }
 

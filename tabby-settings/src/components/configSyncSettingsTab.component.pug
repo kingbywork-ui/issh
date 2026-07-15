@@ -1,141 +1,225 @@
-h3.mb-3(translate) Config sync
+h3.mb-3(translate) 配置同步
 
-ul.nav-tabs(ngbNav, #nav='ngbNav')
-    li(ngbNavItem)
-        a(ngbNavLink, translate) Sync
-        ng-template(ngbNavContent)
-            .form-line
+.text-center(*ngIf='!hasPassword()')
+    i.fas.fa-network-wired.fa-3x.m-3
+    h3.m-3(translate) 配置同步尚未配置
+    .m-3(translate) 在局域网内的两台电脑之间同步 issh 配置。需要先启用保险库（Vault）并设置主密码。
+    .alert.alert-warning
+        i.fas.fa-exclamation-triangle.me-2
+        span(translate) 请先在「安全」设置中启用保险库。
+
+
+div(*ngIf='hasPassword()')
+    .d-flex.align-items-center.mb-3
+        h3.m-0(translate) 局域网同步（HTTPS）
+        .d-flex.ms-auto.align-items-center
+            .me-3(*ngIf='isVaultOpen()')
+                span.text-success
+                    i.fas.fa-unlock.me-1
+                    span(translate) 保险库已解锁
+            .me-3(*ngIf='!isVaultOpen()')
+                span.text-warning
+                    i.fas.fa-lock.me-1
+                    span(translate) 保险库已锁定
+
+    .alert.alert-info.mb-3
+        i.fas.fa-shield-alt.me-2
+        span(translate) 同步使用自签 TLS。请手动交换证书指纹；指纹不匹配时连接会被拒绝。
+
+    .form-line
+        .header
+            .title(translate) 同步密钥
+            .description(translate) 用于身份验证的共享密钥，两台电脑必须一致。
+        .input-group
+            input.form-control(
+                type='text',
+                [(ngModel)]='config.store.configSync.syncKey',
+                (keydown.enter)='config.save()',
+            )
+            button.btn.btn-secondary((click)='generateSyncKey()')
+                i.fas.fa-fw.fa-dice
+            button.btn.btn-secondary(
+                *ngIf='config.store.configSync.syncKey',
+                (click)='config.save()'
+            )
+                i.fas.fa-fw.fa-check
+
+    .form-line
+        .header
+            .title(translate) 端口
+            .description(translate) 同步服务的 HTTPS 端口，两台电脑必须一致。
+        input.form-control(
+            type='number',
+            [(ngModel)]='config.store.configSync.port',
+            (change)='config.save()',
+            min='1024',
+            max='65535',
+            style='width:120px',
+        )
+
+    .form-line
+        .header
+            .title(translate) 允许局域网访问
+            .description(translate) 默认仅监听 127.0.0.1。勾选后绑定 0.0.0.0（仅限可信局域网）。
+        toggle(
+            [(ngModel)]='bindLan',
+            (ngModelChange)='config.save()',
+        )
+
+    hr
+
+    // ─── 服务端区域 ───
+    .sync-section.mb-4
+        .sync-section-header
+            i.fas.fa-server.me-2
+            span(translate) 服务端（本机）
+        .sync-section-body
+            .form-line.mb-0
                 .header
-                    .title(translate) Sync host
+                    .title(translate) 本机同步服务
+                    .description(*ngIf='!serverStatus.running', translate) 启动同步服务后，其他电脑即可连接到本机。
+                    .description(*ngIf='serverStatus.running')
+                        span.text-success
+                            i.fas.fa-circle.me-1
+                            | {{ '运行中 — ' + serverStatus.bindAddress + ':' + serverStatus.port + '（主机名：' + serverStatus.hostname + '）' }}
 
-                .input-group.w-50
+                button.btn.btn-primary(
+                    *ngIf='!serverStatus.running',
+                    (click)='startServer()',
+                )
+                    i.fas.fa-play.me-2
+                    span(translate) 启动服务
+
+                button.btn.btn-danger(
+                    *ngIf='serverStatus.running',
+                    (click)='stopServer()',
+                )
+                    i.fas.fa-stop.me-2
+                    span(translate) 停止服务
+
+            .form-line(*ngIf='serverStatus.running && serverStatus.fingerprint')
+                .header
+                    .title(translate) 本机 TLS 指纹
+                    .description(translate) 把该指纹发给对端，粘贴到「对端 TLS 指纹」。
+                .input-group
                     input.form-control(
                         type='text',
-                        [(ngModel)]='config.store.configSync.host',
-                        (keydown.enter)='config.save()',
+                        [ngModel]='serverStatus.fingerprint',
+                        readonly,
                     )
-                    button.btn.btn-secondary(
-                        *ngIf='config.store.configSync.host',
-                        (click)='openSyncHost()'
-                    )
-                        i.fas.fa-external-link-alt
+                    button.btn.btn-secondary((click)='copyFingerprint()')
+                        i.fas.fa-fw.fa-copy
 
-            .form-line(*ngIf='config.store.configSync.host')
+    // ─── 客户端区域 ───
+    .sync-section
+        .sync-section-header
+            i.fas.fa-desktop.me-2
+            span(translate) 客户端（连接对端）
+        .sync-section-body
+            .form-line
                 .header
-                    .title(translate) Secret sync token
-                    .description(translate) Get it from the Tabby Web settings window
+                    .title(translate) 对端 TLS 指纹
+                    .description(translate) 从对端「本机 TLS 指纹」复制粘贴，必须完全一致。
+                input.form-control(
+                    type='text',
+                    [(ngModel)]='config.store.configSync.peerFingerprint',
+                    (change)='config.save()',
+                    placeholder='AA:BB:CC:...',
+                )
+
+            .form-line
+                .header
+                    .title(translate) 对端 IP 地址
+                    .description(translate) 输入另一台电脑的局域网 IP 地址。
 
                 .input-group
                     input.form-control(
-                        type='password',
-                        [(ngModel)]='config.store.configSync.token',
-                        (keydown.enter)='config.save(); testConnection()'
+                        type='text',
+                        [(ngModel)]='peerIP',
+                        (change)='config.save()',
+                        placeholder='192.168.1.100',
                     )
-                    .input-group-text(*ngIf='config.store.configSync.token')
-                        i.fas.fa-fw.fa-circle-notch.fa-spin.text-warning(*ngIf='connectionSuccessful === null')
-                        i.fas.fa-fw.fa-check.text-success(*ngIf='connectionSuccessful')
-                        i.fas.fa-fw.fa-exclamation-triangle.text-danger(*ngIf='connectionSuccessful === false')
-
-            .alert.alert-info.d-flex.align-items-center
-                .me-auto
-                    span(translate) Config sync requires an instance of the Tabby Web service.
-                    a.ml-1((click)='openTabbyWebInfo()', href='#', translate) Learn more
-
-            ng-container(*ngIf='config.store.configSync.token')
-                .alert.alert-danger(*ngIf='connectionSuccessful === false')
-                    i.fas.fa-exclamation-triangle
-                    span.ms-2(translate='Connection failed: {error}', [translateParams]='{error: connectionError}')
-
-            ng-container(*ngIf='connectionSuccessful')
-                .form-line
-                    .header
-                        .title(translate) Configs
-
-                div(*ngIf='configs === null')
-                    i.fas.fa-fw.fa-circle-notch.fa-spin
-                    span.ms-2(translate) Loading configs...
-
-                ng-container(*ngIf='configs !== null')
-                    .list-group.list-group-light
-                        .list-group-item.d-flex.align-items-center(
-                            *ngFor='let cfg of configs',
-                            [class.active]='isActiveConfig(cfg)',
-                        )
-                            i.fas.fa-fw.text-success([class.fa-check]='isActiveConfig(cfg)')
-                            i.fas.fa-fw.fa-file
-                            .ms-2.d-flex.flex-column.align-items-start
-                                div {{cfg.name}}
-                                small.text-muted(
-                                    translate='Modified on {date}',
-                                    [translateParams]='{date: cfg.modified_at|tabbyDate}'
-                                )
-                            .me-auto
-                            button.btn.btn-link.ms-1(
-                                (click)='uploadAndSync(cfg)',
-                                [class.hover-reveal]='!isActiveConfig(cfg)'
-                            )
-                                i.fas.fa-arrow-up
-                                span.ms-2(*ngIf='isActiveConfig(cfg)', translate) Upload
-                                span.ms-2(*ngIf='!isActiveConfig(cfg)', translate) Replace
-                            button.btn.btn-link.ms-1(
-                                (click)='downloadAndSync(cfg)',
-                                [class.hover-reveal]='!isActiveConfig(cfg)'
-                            )
-                                i.fas.fa-arrow-down
-                                span.ms-2(translate) Download
-                            button.btn.btn-link.ms-1(
-                                (click)='delete(cfg)',
-                                [class.hover-reveal]='!isActiveConfig(cfg)'
-                            )
-                                i.fas.fa-trash
-                                span.ms-2(translate) Delete
-                        a.list-group-item.list-group-item-action.d-flex.align-items-center(
-                            href='#',
-                            (click)='uploadAsNew()'
-                        )
-                            i.fas.fa-fw
-                            i.fas.fa-fw.fa-cloud-upload-alt
-                            .ms-2(translate) Upload as a new config
-
-            ng-container(*ngIf='hasMatchingRemoteConfig()')
-                .form-line
-                    .header
-                        .title(translate) Sync automatically
-                        .description(translate) Automatically upload changes and check for updates every minute
-
-                    toggle(
-                        [(ngModel)]='config.store.configSync.auto',
-                        (ngModelChange)='config.save()',
+                    button.btn.btn-secondary(
+                        (click)='pingPeer()',
+                        [disabled]='!peerIP || peerPinging',
                     )
+                        i.fas.fa-fw.fa-circle-notch.fa-spin(*ngIf='peerPinging')
+                        i.fas.fa-fw.fa-plug(*ngIf='!peerPinging')
+                        span.ms-2(translate) 测试连接
 
-    li(ngbNavItem)
-        a(ngbNavLink, translate) Advanced
-        ng-template(ngbNavContent)
-            .alert.alert-info(*ngIf='config.store.encrypted')
-                div(translate) Partial config sync is not possible when the config is encrypted via Vault.
+                .mt-2(*ngIf='peerPingResult')
+                    .alert.alert-success.py-1(*ngIf='peerPingResult.ok')
+                        i.fas.fa-check.me-2
+                        span {{ '连接成功 — ' + peerPingResult.hostname }}
+                    .alert.alert-danger.py-1(*ngIf='!peerPingResult.ok')
+                        i.fas.fa-exclamation-triangle.me-2
+                        span {{ '连接失败：' + peerPingResult.error }}
 
-            .form-line(*ngIf='!config.store.encrypted')
+            // ─── 同步模式选择 ───
+            .form-line(*ngIf='peerPingResult?.ok')
                 .header
-                    .title(translate) Sync hotkeys
-                toggle(
-                    [(ngModel)]='config.store.configSync.parts.hotkeys',
-                    (ngModelChange)='config.save()',
-                )
+                    .title(translate) 同步模式
+                .d-flex.flex-column.gap-2
+                    .form-check
+                        input.form-check-input(
+                            type='radio',
+                            id='mode-full',
+                            name='syncMode',
+                            value='full',
+                            [(ngModel)]='syncMode',
+                        )
+                        label.form-check-label(for='mode-full')
+                            span(translate) 整包同步
+                            small.text-muted.ms-2(translate) 传输完整配置，覆盖对端/本地全部设置
 
-            .form-line(*ngIf='!config.store.encrypted')
+                    .form-check
+                        input.form-check-input(
+                            type='radio',
+                            id='mode-partial',
+                            name='syncMode',
+                            value='partial',
+                            [(ngModel)]='syncMode',
+                        )
+                        label.form-check-label(for='mode-partial')
+                            span(translate) 差异同步
+                            small.text-muted.ms-2(translate) 仅同步勾选的内容，其余保持不变
+
+            // ─── 差异同步内容勾选 ───
+            .form-line(*ngIf='peerPingResult?.ok && syncMode === "partial"')
                 .header
-                    .title(translate) Sync window settings
-                toggle(
-                    [(ngModel)]='config.store.configSync.parts.appearance',
-                    (ngModelChange)='config.save()',
-                )
+                    .title(translate) 同步内容
+                    .description(translate) 勾选需要同步的配置项
 
-            .form-line(*ngIf='!config.store.encrypted')
+                .d-flex.flex-wrap.gap-3
+                    .form-check(
+                        *ngFor='let s of syncSections',
+                    )
+                        input.form-check-input(
+                            type='checkbox',
+                            [id]='"section-" + s.key',
+                            [checked]='isSectionSelected(s.key)',
+                            (change)='toggleSection(s.key)',
+                        )
+                        label.form-check-label([for]='"section-" + s.key')
+                            i.fas.fa-fw.me-1([class]='s.icon')
+                            span {{ s.label }}
+
+            .form-line(*ngIf='peerPingResult?.ok')
                 .header
-                    .title(translate) Sync Vault
-                toggle(
-                    [(ngModel)]='config.store.configSync.parts.vault',
-                    (ngModelChange)='config.save()',
-                )
+                    .title(translate) 同步操作
+                .d-flex.gap-2
+                    button.btn.btn-primary(
+                        (click)='pushToPeer()',
+                    )
+                        i.fas.fa-arrow-up.me-2
+                        span(translate) 推送到对端
 
-div([ngbNavOutlet]='nav')
+                    button.btn.btn-primary(
+                        (click)='pullFromPeer()',
+                    )
+                        i.fas.fa-arrow-down.me-2
+                        span(translate) 从对端拉取
+
+    .alert.alert-info.mt-3
+        i.fas.fa-info-circle.me-2
+        span(translate) 推送需对端用户确认后才会写入。拉取会覆盖本机配置，覆盖前请确认。差异同步仅覆盖勾选的内容。

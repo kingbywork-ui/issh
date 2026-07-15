@@ -16,5 +16,8 @@
     "typings"
   ],
   "author": "Tabby Developers",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.12.0"
+  }
 }

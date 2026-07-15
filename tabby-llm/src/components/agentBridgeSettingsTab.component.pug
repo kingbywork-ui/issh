@@ -53,10 +53,35 @@ ng-container(*ngIf='config.store.llm.agentBridgeEnabled')
     .form-line
         .header
             .title Agent-readable discovery file
-            .description Writes a second connection file for sandboxed agents. Disable this only if every agent can read the Tabby config directory.
+            .description Optional second connection file under the Tabby config directory (not C:\\tmp). Keep disabled unless a sandboxed agent cannot read the primary connection file.
         toggle(
             [(ngModel)]='config.store.llm.agentBridgePublicDiscoveryEnabled',
             (ngModelChange)='config.save()'
+        )
+
+    .form-line
+        .header
+            .title Token scopes
+            .description Restrict which RPC families this token may call. Legacy tokens migrate to full access once.
+        .d-flex.flex-wrap.gap-3
+            .form-check(*ngFor='let scope of scopeOptions')
+                input.form-check-input(
+                    type='checkbox',
+                    [id]='"scope-" + scope',
+                    [checked]='hasScope(scope)',
+                    (change)='toggleScope(scope)'
+                )
+                label.form-check-label([for]='"scope-" + scope') {{ scope }}
+
+    .form-line
+        .header
+            .title SFTP root (optional)
+            .description When set, SFTP paths must stay under this prefix.
+        input.form-control(
+            type='text',
+            placeholder='/home/user',
+            [(ngModel)]='config.store.llm.agentBridgeSftpRoot',
+            (blur)='config.save()'
         )
 
     .form-line
@@ -90,7 +115,7 @@ ng-container(*ngIf='config.store.llm.agentBridgeEnabled')
     .form-line.form-line-stacked
         .header
             .title Onboarding
-            .description Copy the MCP config for your agent, then test the bridge. Dangerous commands require confirmDangerous=true from the agent flow.
+            .description Copy the MCP config for your agent, then test the bridge. Dangerous commands always require a Tabby confirmation dialog.
         .btn-toolbar
             button.btn.btn-secondary.me-2(
                 type='button',
@@ -173,9 +198,9 @@ div.mt-4(*ngIf='agentBridge.auditLogFile')
             .audit-entry-header
                 span.audit-time {{ entry.timestamp | date:'short' }}
                 span.audit-method.badge.badge-secondary.ms-2 {{ entry.method }}
-                span.audit-status.ms-2(*ngIf='entry.success', class='text-success')
+                span.audit-status.ms-2(*ngIf='entry.ok', class='text-success')
                     i.fas.fa-check
-                span.audit-status.ms-2(*ngIf='!entry.success', class='text-danger')
+                span.audit-status.ms-2(*ngIf='!entry.ok', class='text-danger')
                     i.fas.fa-times
                     span.ms-1 {{ entry.errorCode }}
             .audit-entry-body

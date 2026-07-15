@@ -37,7 +37,16 @@ export class TerminalContextService {
         if (!xterm) {
             return ''
         }
-        return this.readInputFromBuffer(xterm)
+        return this.readInputFromBuffer(xterm, true)
+    }
+
+    /** Current line text in vim/nano alternate screen (no shell prompt stripping) */
+    getEditorPartialText (tab: BaseTerminalTabComponent<any>): string {
+        const xterm = this.getXterm(tab)
+        if (!xterm) {
+            return ''
+        }
+        return this.readInputFromBuffer(xterm, false).trimEnd()
     }
 
     stripPrompt (line: string): string {
@@ -157,7 +166,7 @@ export class TerminalContextService {
         return tab.frontend.xterm
     }
 
-    private readInputFromBuffer (xterm: XTermFrontend['xterm']): string {
+    private readInputFromBuffer (xterm: XTermFrontend['xterm'], stripShellPrompt: boolean): string {
         const buffer = xterm.buffer.active
         const cursorLineIndex = buffer.cursorY + buffer.viewportY
         const line = buffer.getLine(cursorLineIndex)
@@ -185,7 +194,7 @@ export class TerminalContextService {
                 : currentLine.length
             text += this.readTerminalLine(currentLine, endCol)
         }
-        return this.stripPrompt(text)
+        return stripShellPrompt ? this.stripPrompt(text) : text
     }
 
     private readLogicalLines (buffer: XTermFrontend['xterm']['buffer']['active'], start: number, end: number): string[] {

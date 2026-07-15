@@ -1,8 +1,8 @@
 import axios, { AxiosError } from 'axios'
 import { Injectable } from '@angular/core'
 import { ConfigService, LogService, Logger } from 'tabby-core'
-import { AutocompleteRequest, AutocompleteSuggestion, NL2CommandRequest, NL2CommandResult } from '../api'
-import { AUTOCOMPLETE_SYSTEM_PROMPT, NL2COMMAND_SYSTEM_PROMPT } from '../prompts'
+import { AutocompleteMode, AutocompleteRequest, AutocompleteSuggestion, NL2CommandRequest, NL2CommandResult } from '../api'
+import { AUTOCOMPLETE_SYSTEM_PROMPT, EDITOR_AUTOCOMPLETE_SYSTEM_PROMPT, NL2COMMAND_SYSTEM_PROMPT } from '../prompts'
 import { DangerousCommandGuard } from './dangerousCommandGuard'
 import { SuggestionCache } from './suggestionCache.service'
 import { normalizeCommand } from './commandValidation'
@@ -56,8 +56,10 @@ export class LLMService {
             return []
         }
 
+        const mode: AutocompleteMode = request.mode ?? 'shell'
         const cache = this.getCache(request.tabKey)
         const cacheKey = cache.makeKey(
+            mode,
             request.partialCommand,
             request.cwd,
             request.shell,
@@ -67,13 +69,16 @@ export class LLMService {
             return cached
         }
 
+        const systemPrompt = mode === 'editor'
+            ? EDITOR_AUTOCOMPLETE_SYSTEM_PROMPT
+            : AUTOCOMPLETE_SYSTEM_PROMPT
         const userContent = this.buildAutocompleteUserMessage(request)
         const content = await this.streamChatCompletion([
-            { role: 'system', content: AUTOCOMPLETE_SYSTEM_PROMPT },
+            { role: 'system', content: systemPrompt },
             { role: 'user', content: userContent },
         ], { maxTokens: 512, temperature: 0.2 })
 
-        const suggestions = this.parseAutocompleteResponse(content)
+        const suggestions = this.parseAutocompleteResponse(content, request.partialCommand, mode)
         cache.set(cacheKey, suggestions)
         return suggestions
     }
@@ -107,7 +112,9 @@ export class LLMService {
     }
 
     private buildAutocompleteUserMessage (request: AutocompleteRequest): string {
+        const mode: AutocompleteMode = request.mode ?? 'shell'
         const parts = [
+            `Mode: ${mode}`,
             `OS: ${request.os}`,
             `Shell: ${request.shell}`,
         ]
@@ -115,12 +122,15 @@ export class LLMService {
             parts.push(`Current directory: ${request.cwd}`)
         }
         if (this.config.store.llm.sendContextToCloud && request.recentOutput.length) {
-            parts.push(`Recent terminal output:\n${request.recentOutput.slice(-10).join('\n')}`)
+            const label = mode === 'editor' ? 'Nearby editor / screen context' : 'Recent terminal output'
+            parts.push(`${label}:\n${request.recentOutput.slice(-10).join('\n')}`)
         }
         if (request.excludeCommands.length) {
-            parts.push(`Commands to exclude (already shown from history):\n${request.excludeCommands.map(c => `- ${c}`).join('\n')}`)
+            parts.push(`Items to exclude (already shown):\n${request.excludeCommands.map(c => `- ${c}`).join('\n')}`)
         }
-        parts.push(`Partial command: ${request.partialCommand}`)
+        parts.push(mode === 'editor'
+            ? `Partial text: ${request.partialCommand}`
+            : `Partial command: ${request.partialCommand}`)
         return parts.join('\n')
     }
 
@@ -258,24 +268,62 @@ export class LLMService {
         return cache
     }
 
-    private parseAutocompleteResponse (content: string): AutocompleteSuggestion[] {
+    private parseAutocompleteResponse (
+        content: string,
+        partialCommand = '',
+        mode: AutocompleteMode = 'shell',
+    ): AutocompleteSuggestion[] {
         try {
             const json = this.extractJSON(content)
             const items = JSON.parse(json)
             if (!Array.isArray(items)) {
                 return []
             }
-            return items.slice(0, 5).map((item, index) => ({
-                id: `ai-${index}`,
-                command: normalizeCommand(String(item.command ?? '').trim(), { allowMultiline: true }) ?? '',
-                description: String(item.description ?? ''),
-                category: 'ai' as const,
-                confidence: typeof item.confidence === 'number' ? item.confidence : undefined,
-            })).filter(item => item.command)
+            const lower = partialCommand.trim().toLowerCase()
+            return items.slice(0, 5).map((item, index) => {
+                const raw = String(item.command ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim()
+                const command = mode === 'editor'
+                    ? this.normalizeEditorSuggestion(raw)
+                    : (normalizeCommand(raw, { allowMultiline: true }) ?? '')
+                return {
+                    id: `ai-${index}`,
+                    command,
+                    description: String(item.description ?? ''),
+                    category: 'ai' as const,
+                    confidence: typeof item.confidence === 'number' ? item.confidence : undefined,
+                }
+            }).filter(item => {
+                if (!item.command) {
+                    return false
+                }
+                if (!lower) {
+                    return true
+                }
+                const cmd = item.command.toLowerCase()
+                if (mode === 'editor') {
+                    return cmd.startsWith(lower) || cmd.includes(lower)
+                }
+                return cmd.startsWith(lower) ||
+                    cmd.includes(lower) ||
+                    cmd.split(/[\s/._-]+/).some(word => word.startsWith(lower))
+            })
         } catch (e) {
             this.logger.warn('Failed to parse autocomplete response', content, e)
             return []
         }
+    }
+
+    private normalizeEditorSuggestion (raw: string): string {
+        if (!raw) {
+            return ''
+        }
+        // Keep a single logical line for panel insertion.
+        const singleLine = raw.split('\n').map(line => line.trimEnd()).filter(Boolean)[0] ?? ''
+        const trimmed = singleLine.trim()
+        if (!trimmed || trimmed.length > 500) {
+            return ''
+        }
+        return trimmed
     }
 
     private parseNL2Response (content: string): { command: string, explanation: string } {

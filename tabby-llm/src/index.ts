@@ -11,11 +11,12 @@ import { TerminalDecorator } from 'tabby-terminal'
 
 import { LLMConfigProvider } from './config'
 import { LLMHotkeyProvider } from './hotkeys'
-import { AgentBridgeSettingsTabProvider, LLMSettingsTabProvider } from './settings'
+import { AgentBridgeSettingsTabProvider, LLMSettingsTabProvider, AboutSettingsTabProvider } from './settings'
 import { LLMDecorator } from './decorator'
 import { AutocompletePanelComponent } from './components/autocompletePanel.component'
 import { LLMSettingsTabComponent } from './components/llmSettingsTab.component'
 import { AgentBridgeSettingsTabComponent } from './components/agentBridgeSettingsTab.component'
+import { AboutSettingsTabComponent } from './components/aboutSettingsTab.component'
 import { LLMTerminalHostComponent } from './components/llmTerminalHost.component'
 
 /** @hidden */
@@ -32,11 +33,13 @@ import { LLMTerminalHostComponent } from './components/llmTerminalHost.component
         { provide: HotkeyProvider, useClass: LLMHotkeyProvider, multi: true },
         { provide: SettingsTabProvider, useClass: LLMSettingsTabProvider, multi: true },
         { provide: SettingsTabProvider, useClass: AgentBridgeSettingsTabProvider, multi: true },
+        { provide: SettingsTabProvider, useClass: AboutSettingsTabProvider, multi: true },
         { provide: TerminalDecorator, useClass: LLMDecorator, multi: true },
     ],
     declarations: [
         AutocompletePanelComponent,
         AgentBridgeSettingsTabComponent,
+        AboutSettingsTabComponent,
         LLMSettingsTabComponent,
         LLMTerminalHostComponent,
     ],

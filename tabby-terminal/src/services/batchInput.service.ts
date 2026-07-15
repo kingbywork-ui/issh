@@ -16,6 +16,9 @@ export interface BatchInputTarget {
 /** @hidden */
 @Injectable({ providedIn: 'root' })
 export class BatchInputService {
+    private readonly targetIds = new WeakMap<BaseTerminalTabComponent<any>, string>()
+    private nextTargetId = 1
+
     constructor (
         private app: AppService,
         private ngbModal: NgbModal,
@@ -42,7 +45,7 @@ export class BatchInputService {
         return this.flattenTabs(this.app.tabs)
             .filter(tab => !!tab.session?.open)
             .map((tab, index) => ({
-                id: `terminal-${index}`,
+                id: this.getTargetId(tab),
                 title: tab.customTitle || tab.title,
                 description: this.getDescription(tab, index),
                 icon: tab.icon,
@@ -69,6 +72,15 @@ export class BatchInputService {
             }
             return []
         })
+    }
+
+    private getTargetId (tab: BaseTerminalTabComponent<any>): string {
+        let id = this.targetIds.get(tab)
+        if (!id) {
+            id = `terminal-${this.nextTargetId++}`
+            this.targetIds.set(tab, id)
+        }
+        return id
     }
 
     private getDescription (tab: BaseTerminalTabComponent<any>, index: number): string {

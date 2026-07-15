@@ -70,7 +70,7 @@ export class ProfilesSettingsTabProvider extends SettingsTabProvider {
 @Injectable()
 export class ConfigSyncSettingsTabProvider extends SettingsTabProvider {
     id = 'config-sync'
-    icon = 'cloud'
+    icon = 'network-wired'
     title = this.translate.instant('Config sync')
 
     constructor (private translate: TranslateService) { super() }

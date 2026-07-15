@@ -485,7 +485,11 @@ export class SSHSession {
             this.ssh = authenticatedClient
         } else {
             this.ssh.disconnect()
-            this.passwordStorage.deletePassword(this.profile, this.authUsername ?? undefined)
+            try {
+                await this.passwordStorage.deletePassword(this.profile, this.authUsername ?? undefined)
+            } catch (error) {
+                this.notifications.error('Could not delete the rejected SSH password', String(error))
+            }
             // eslint-disable-next-line @typescript-eslint/no-base-to-string
             throw new Error('Authentication rejected')
         }
@@ -493,11 +497,16 @@ export class SSHSession {
         // auth success
 
         if (this.savedPassword) {
-            this.passwordStorage.savePassword(this.profile, this.savedPassword, this.authUsername ?? undefined)
+            try {
+                await this.passwordStorage.savePassword(this.profile, this.savedPassword, this.authUsername ?? undefined)
+            } catch (error) {
+                this.notifications.error('Could not save the SSH password', String(error))
+                throw error
+            }
         }
 
         for (const fw of this.profile.options.forwardedPorts) {
-            this.addPortForward(Object.assign(new ForwardedPort(), fw))
+            await this.addPortForward(Object.assign(new ForwardedPort(), fw))
         }
 
         this.open = true
@@ -838,7 +847,7 @@ export class SSHSession {
             } catch (err) {
                 // eslint-disable-next-line @typescript-eslint/no-base-to-string
                 this.emitServiceMessage(colors.bgRed.black(' X ') + ` Remote rejected port forwarding for ${fw}: ${err}`)
-                return
+                throw err
             }
             this.emitServiceMessage(colors.bgGreen.black(' <- ') + ` Forwarded ${fw}`)
             this.forwardedPorts.push(fw)
@@ -1093,7 +1102,7 @@ export class SSHSession {
 
                     passphrase = result?.value
                     if (passphrase && result.remember) {
-                        this.passwordStorage.savePrivateKeyPassword(keyHash, passphrase)
+                        await this.passwordStorage.savePrivateKeyPassword(keyHash, passphrase)
                     }
                 } else {
                     this.notifications.error('Could not read the private key', errorText)

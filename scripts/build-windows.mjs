@@ -20,7 +20,7 @@ if (process.env.TABBY_SKIP_PREPACKAGE !== '1') {
 
 builder({
     dir: true,
-    win: ['nsis', 'zip'],
+    win: ['nsis'],
     arm64: process.env.ARCH === 'arm64',
     config: {
         extraMetadata: {
