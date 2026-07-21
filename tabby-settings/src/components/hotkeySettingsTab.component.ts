@@ -33,21 +33,35 @@ export class HotkeySettingsTabComponent {
     }
 
     getHotkeys (id: string): Hotkey[] {
-        let ptr = this.config.store.hotkeys
+        let ptr: any = this.config.store.hotkeys
         for (const token of id.split(/\./g)) {
+            // Nested ids like "settings-tab.ssh" must not throw when intermediate
+            // keys are missing — a CD-time throw freezes ngbNav content switching.
+            if (ptr == null || typeof ptr !== 'object') {
+                return []
+            }
             ptr = ptr[token]
         }
-        return (ptr || []).map(hotkey => this.detectDuplicates(hotkey))
+        if (!Array.isArray(ptr)) {
+            return []
+        }
+        return ptr.map(hotkey => this.detectDuplicates(hotkey))
     }
 
     setHotkeys (id: string, hotkeys: Hotkey[]) {
-        let ptr = this.config.store
-        let prop = 'hotkeys'
-        for (const token of id.split(/\./g)) {
-            ptr = ptr[prop]
-            prop = token
+        const tokens = id.split(/\./g)
+        if (!this.config.store.hotkeys || typeof this.config.store.hotkeys !== 'object') {
+            this.config.store.hotkeys = {}
         }
-        ptr[prop] = hotkeys.map(hotkey =>
+        let parent: any = this.config.store.hotkeys
+        for (let i = 0; i < tokens.length - 1; i++) {
+            const token = tokens[i]
+            if (parent[token] == null || typeof parent[token] !== 'object' || Array.isArray(parent[token])) {
+                parent[token] = {}
+            }
+            parent = parent[token]
+        }
+        parent[tokens[tokens.length - 1]] = hotkeys.map(hotkey =>
             hotkey.strokes.length === 1 && Array.isArray(hotkey.strokes)
                 ? hotkey.strokes[0]
                 : hotkey.strokes,

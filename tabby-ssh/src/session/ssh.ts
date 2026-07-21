@@ -367,14 +367,19 @@ export class SSHSession {
         return null
     }
 
+    private sftpClosed = false
+
     async openSFTP (): Promise<SFTPSession> {
         if (!(this.ssh instanceof russh.AuthenticatedSSHClient)) {
             throw new Error('Cannot open SFTP session before auth')
         }
-        if (!this.sftp) {
+        if (!this.sftp || this.sftpClosed) {
             this.sftp = await this.ssh.activateSFTP(await this.ssh.openSessionChannel())
+            this.sftpClosed = false
         }
-        return new SFTPSession(this.sftp, this.injector)
+        return new SFTPSession(this.sftp, this.injector, () => {
+            this.sftpClosed = true
+        })
     }
 
     async start (): Promise<void> {
@@ -880,6 +885,12 @@ export class SSHSession {
         this.willDestroy.next()
         this.willDestroy.complete()
         this.serviceMessage.complete()
+        try {
+            await this.sftp?.close().catch(() => null)
+            this.sftp = undefined
+        } catch (e) {
+            this.logger.warn('Error closing SFTP during destroy', e)
+        }
         try {
             this.ssh.disconnect()
         } catch (e) {

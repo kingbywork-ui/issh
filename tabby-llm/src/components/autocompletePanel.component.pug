@@ -42,7 +42,10 @@
 
         .loading-row(*ngIf='aiLoading && !suggestions.length')
             i.fas.fa-circle-notch.fa-spin.me-2
-            span(translate) Thinking...
+            span {{ statusText || 'AI is thinking...' }}
 
         .empty-row(*ngIf='!aiLoading && !suggestions.length')
-            span(translate) No suggestions
+            span {{ statusText || 'No suggestions for this input.' }}
+
+        .panel-footer(*ngIf='suggestions.length')
+            span {{ statusText || 'Ctrl+Y 接受 · Ctrl+N/U 选择 · Esc 关闭' }}

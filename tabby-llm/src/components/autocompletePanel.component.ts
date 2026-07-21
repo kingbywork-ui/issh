@@ -1,4 +1,12 @@
-import { AfterViewChecked, Component, ElementRef, EventEmitter, HostBinding, Input, Output } from '@angular/core'
+import {
+    AfterViewChecked,
+    Component,
+    ElementRef,
+    EventEmitter,
+    HostBinding,
+    Input,
+    Output,
+} from '@angular/core'
 import { AutocompleteSuggestion } from '../api'
 
 /** @hidden */
@@ -13,9 +21,11 @@ export class AutocompletePanelComponent implements AfterViewChecked {
     @Input() loading = false
     @Input() aiLoading = false
     @Input() position: { x: number, y: number } = { x: 0, y: 0 }
+    @Input() maxHeight = 320
     @Input() selectedIndex = 0
     @Input() lightweight = false
     @Input() hintText = ''
+    @Input() statusText = ''
 
     @Output() selectSuggestion = new EventEmitter<AutocompleteSuggestion>()
     @Output() dismiss = new EventEmitter<void>()
@@ -41,6 +51,10 @@ export class AutocompletePanelComponent implements AfterViewChecked {
         return this.position.y
     }
 
+    @HostBinding('style.max-height.px') get constrainedMaxHeight (): number {
+        return Math.max(0, this.maxHeight)
+    }
+
     select (suggestion: AutocompleteSuggestion): void {
         this.selectSuggestion.emit(suggestion)
     }
@@ -58,11 +72,30 @@ export class AutocompletePanelComponent implements AfterViewChecked {
     }
 
     ngAfterViewChecked (): void {
-        if (!this.visible || this.selectedIndex === this.lastScrolledIndex) {
+        if (!this.visible) {
+            return
+        }
+        this.constrainToHost()
+        if (this.selectedIndex === this.lastScrolledIndex) {
             return
         }
         const selected = this.element.nativeElement.querySelector('.suggestion-item.selected')
         selected?.scrollIntoView({ block: 'nearest' })
         this.lastScrolledIndex = this.selectedIndex
+    }
+
+    private constrainToHost (): void {
+        const host = this.element.nativeElement
+        const parent = host.offsetParent as HTMLElement | null
+        if (!parent) {
+            return
+        }
+        const margin = 8
+        const maxX = Math.max(margin, parent.clientWidth - host.offsetWidth - margin)
+        const maxY = Math.max(margin, parent.clientHeight - host.offsetHeight - margin)
+        const x = Math.max(margin, Math.min(this.position.x, maxX))
+        const y = Math.max(margin, Math.min(this.position.y, maxY))
+        host.style.left = `${x}px`
+        host.style.top = `${y}px`
     }
 }

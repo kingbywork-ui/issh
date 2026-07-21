@@ -50,7 +50,8 @@
             min-height: 0;
             min-width: 0;
 
-            > ::ng-deep .tab-pane {
+            // Do not force display:flex on inactive panes (breaks Bootstrap hide).
+            > ::ng-deep .tab-pane.active {
                 padding: 0 32px;
                 min-height: 100%;
                 display: flex;
@@ -68,7 +69,7 @@
                 }
             }
 
-            > ::ng-deep .tab-pane > settings-tab-body.full-width {
+            > ::ng-deep .tab-pane.active > settings-tab-body.full-width {
                 padding: 0;
                 margin: 0 -32px;
                 width: calc(100% + 64px);

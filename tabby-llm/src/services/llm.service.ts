@@ -1,7 +1,14 @@
 import axios, { AxiosError } from 'axios'
 import { Injectable } from '@angular/core'
 import { ConfigService, LogService, Logger } from 'tabby-core'
-import { AutocompleteMode, AutocompleteRequest, AutocompleteSuggestion, NL2CommandRequest, NL2CommandResult } from '../api'
+import {
+    AutocompleteMode,
+    AutocompleteRequest,
+    AutocompleteRequestKind,
+    AutocompleteSuggestion,
+    NL2CommandRequest,
+    NL2CommandResult,
+} from '../api'
 import { AUTOCOMPLETE_SYSTEM_PROMPT, EDITOR_AUTOCOMPLETE_SYSTEM_PROMPT, NL2COMMAND_SYSTEM_PROMPT } from '../prompts'
 import { DangerousCommandGuard } from './dangerousCommandGuard'
 import { SuggestionCache } from './suggestionCache.service'
@@ -23,6 +30,7 @@ export class LLMService {
     private caches = new Map<string, SuggestionCache<AutocompleteSuggestion[]>>()
     private guard = new DangerousCommandGuard()
     private abortController: AbortController | null = null
+    private autocompleteAbortControllers = new Map<string, AbortController>()
 
     constructor (
         log: LogService,
@@ -42,6 +50,20 @@ export class LLMService {
     cancelPending (): void {
         this.abortController?.abort()
         this.abortController = null
+        for (const controller of this.autocompleteAbortControllers.values()) {
+            controller.abort()
+        }
+        this.autocompleteAbortControllers.clear()
+    }
+
+    cancelAutocompleteRequests (tabKey: string, requestKind?: AutocompleteRequestKind): void {
+        const prefix = `${tabKey}:`
+        for (const [key, controller] of this.autocompleteAbortControllers) {
+            if (key.startsWith(prefix) && (!requestKind || key === `${prefix}${requestKind}`)) {
+                controller.abort()
+                this.autocompleteAbortControllers.delete(key)
+            }
+        }
     }
 
     async testConnection (): Promise<void> {
@@ -52,7 +74,7 @@ export class LLMService {
     }
 
     async getAutocompleteSuggestions (request: AutocompleteRequest): Promise<AutocompleteSuggestion[]> {
-        if (!this.isConfigured() || !request.partialCommand.trim()) {
+        if (!this.isConfigured() || (!request.partialCommand.trim() && !request.previousCommand?.trim())) {
             return []
         }
 
@@ -61,6 +83,7 @@ export class LLMService {
         const cacheKey = cache.makeKey(
             mode,
             request.partialCommand,
+            request.previousCommand,
             request.cwd,
             request.shell,
         )
@@ -73,12 +96,28 @@ export class LLMService {
             ? EDITOR_AUTOCOMPLETE_SYSTEM_PROMPT
             : AUTOCOMPLETE_SYSTEM_PROMPT
         const userContent = this.buildAutocompleteUserMessage(request)
+        const autocompleteModel = this.config.store.llm.autocompleteModel?.trim() || this.config.store.llm.model
+        const requestKind = request.requestKind ?? 'live'
+        const configuredTimeout = Math.max(250, this.config.store.llm.autocompleteTimeoutMs ?? 3000)
         const content = await this.streamChatCompletion([
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userContent },
-        ], { maxTokens: 512, temperature: 0.2 })
+        ], {
+            maxTokens: 256,
+            temperature: 0.1,
+            model: autocompleteModel,
+            timeoutMs: requestKind === 'prediction'
+                ? Math.max(3000, configuredTimeout)
+                : configuredTimeout,
+            disableThinking: this.config.store.llm.autocompleteDisableThinking ?? true,
+            requestKey: `${request.tabKey}:${requestKind}`,
+        })
 
-        const suggestions = this.parseAutocompleteResponse(content, request.partialCommand, mode)
+        const suggestions = this.parseAutocompleteResponse(
+            this.stripThinkingContent(content),
+            request.partialCommand,
+            mode,
+        )
         cache.set(cacheKey, suggestions)
         return suggestions
     }
@@ -128,6 +167,9 @@ export class LLMService {
         if (request.excludeCommands.length) {
             parts.push(`Items to exclude (already shown):\n${request.excludeCommands.map(c => `- ${c}`).join('\n')}`)
         }
+        if (request.previousCommand?.trim()) {
+            parts.push(`Previous command: ${request.previousCommand.trim()}`)
+        }
         parts.push(mode === 'editor'
             ? `Partial text: ${request.partialCommand}`
             : `Partial command: ${request.partialCommand}`)
@@ -148,12 +190,47 @@ export class LLMService {
 
     private async streamChatCompletion (
         messages: ChatMessage[],
-        options: { maxTokens: number, temperature: number },
+        options: {
+            maxTokens: number
+            temperature: number
+            model?: string
+            timeoutMs?: number
+            disableThinking?: boolean
+            requestKey: string
+        },
     ): Promise<string> {
-        this.cancelPending()
-        this.abortController = new AbortController()
+        this.autocompleteAbortControllers.get(options.requestKey)?.abort()
+        const localController = new AbortController()
+        this.autocompleteAbortControllers.set(options.requestKey, localController)
         const { baseUrl, apiKey, model } = this.config.store.llm
         const url = `${baseUrl.replace(/\/$/, '')}/chat/completions`
+        const requestModel = options.model || model
+        const requestBody: Record<string, unknown> = {
+            model: requestModel,
+            messages,
+            max_tokens: options.maxTokens,
+            temperature: options.temperature,
+            stream: true,
+        }
+        if (options.disableThinking) {
+            if (/qwen/i.test(requestModel)) {
+                requestBody.enable_thinking = false
+            } else if (/^(o\d|gpt-5)|reason/i.test(requestModel)) {
+                requestBody.reasoning_effort = 'minimal'
+            }
+        }
+        const timeoutMs = Math.max(250, options.timeoutMs ?? 0)
+        let timeout: ReturnType<typeof setTimeout> | null = null
+        const restartTimeout = () => {
+            if (!options.timeoutMs) {
+                return
+            }
+            if (timeout) {
+                clearTimeout(timeout)
+            }
+            timeout = setTimeout(() => localController.abort(), timeoutMs)
+        }
+        restartTimeout()
 
         try {
             const response = await fetch(url, {
@@ -162,14 +239,8 @@ export class LLMService {
                     Authorization: `Bearer ${apiKey}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    model,
-                    messages,
-                    max_tokens: options.maxTokens,
-                    temperature: options.temperature,
-                    stream: true,
-                }),
-                signal: this.abortController.signal,
+                body: JSON.stringify(requestBody),
+                signal: localController.signal,
             })
 
             if (!response.ok) {
@@ -198,11 +269,20 @@ export class LLMService {
                     if (done) {
                         break
                     }
+                    restartTimeout()
                     buffer += decoder.decode(value, { stream: true })
                     const lines = buffer.split('\n')
                     buffer = lines.pop() ?? ''
                     content += this.parseStreamLines(lines)
+                    const streamDone = lines.some(line => {
+                        const trimmed = line.trim()
+                        return trimmed.startsWith('data:') && trimmed.substring(5).trim() === '[DONE]'
+                    })
+                    if (streamDone) {
+                        break
+                    }
                 }
+                buffer += decoder.decode()
                 content += this.parseStreamLines([buffer])
 
                 return content.trim()
@@ -217,7 +297,12 @@ export class LLMService {
             this.logger.error('LLM stream request failed', message)
             throw new Error(message)
         } finally {
-            this.abortController = null
+            if (timeout) {
+                clearTimeout(timeout)
+            }
+            if (this.autocompleteAbortControllers.get(options.requestKey) === localController) {
+                this.autocompleteAbortControllers.delete(options.requestKey)
+            }
         }
     }
 
@@ -226,7 +311,8 @@ export class LLMService {
         options: { maxTokens: number, temperature: number },
     ): Promise<string> {
         this.cancelPending()
-        this.abortController = new AbortController()
+        const localController = new AbortController()
+        this.abortController = localController
         const { baseUrl, apiKey, model } = this.config.store.llm
         const url = `${baseUrl.replace(/\/$/, '')}/chat/completions`
 
@@ -242,7 +328,7 @@ export class LLMService {
                     Authorization: `Bearer ${apiKey}`,
                     'Content-Type': 'application/json',
                 },
-                signal: this.abortController.signal,
+                signal: localController.signal,
                 timeout: 60000,
             })
             return response.data.choices[0]?.message?.content?.trim() ?? ''
@@ -255,7 +341,9 @@ export class LLMService {
             this.logger.error('LLM request failed', detail)
             throw new Error(detail)
         } finally {
-            this.abortController = null
+            if (this.abortController === localController) {
+                this.abortController = null
+            }
         }
     }
 
@@ -290,7 +378,9 @@ export class LLMService {
                     command,
                     description: String(item.description ?? ''),
                     category: 'ai' as const,
-                    confidence: typeof item.confidence === 'number' ? item.confidence : undefined,
+                    confidence: typeof item.confidence === 'number'
+                        ? Math.max(0, Math.min(1, item.confidence))
+                        : undefined,
                 }
             }).filter(item => {
                 if (!item.command) {
@@ -384,5 +474,12 @@ export class LLMService {
             }
         }
         return content
+    }
+
+    private stripThinkingContent (content: string): string {
+        return content
+            .replace(/<think\b[^>]*>[\s\S]*?<\/think>/gi, '')
+            .replace(/^\s*<think\b[^>]*>[\s\S]*?(?=[\[{])/i, '')
+            .trim()
     }
 }

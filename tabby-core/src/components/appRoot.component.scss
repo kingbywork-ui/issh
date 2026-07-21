@@ -194,7 +194,7 @@ $tab-border-radius: 4px;
 }
 
 .app-workspace.bottom-open {
-    grid-template-rows: minmax(0, 1fr) 180px;
+    grid-template-rows: minmax(0, 1fr) var(--app-bottom-height, 180px);
 }
 
 .app-panel-left {
@@ -252,6 +252,7 @@ $tab-border-radius: 4px;
 .app-panel-bottom {
     grid-column: 1 / -1;
     grid-row: 2;
+    position: relative;
     min-height: 0;
     overflow: hidden;
     display: none;
@@ -260,6 +261,37 @@ $tab-border-radius: 4px;
 
 .app-workspace.bottom-open .app-panel-bottom {
     display: block;
+}
+
+.app-panel-bottom-resizer {
+    position: absolute;
+    top: -3px;
+    left: 0;
+    right: 0;
+    height: 6px;
+    cursor: ns-resize;
+    z-index: 20;
+    background: transparent;
+
+    &::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: 1px;
+        width: 40px;
+        height: 3px;
+        margin-left: -20px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.18);
+        transition: background 120ms ease, width 120ms ease;
+    }
+
+    &:hover::after,
+    &:active::after {
+        width: 56px;
+        margin-left: -28px;
+        background: rgba(43, 184, 166, 0.75);
+    }
 }
 
 .app-panel-center > .content-tab {

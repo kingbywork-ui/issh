@@ -1,5 +1,11 @@
 .content
-    ul.nav-pills(ngbNav, #nav='ngbNav', [activeId]='activeTab', orientation='vertical')
+    ul.nav-pills(
+        ngbNav,
+        #nav='ngbNav',
+        [(activeId)]='activeTab',
+        [animation]='false',
+        orientation='vertical'
+    )
         li(ngbNavItem='application')
             a(ngbNavLink)
                 i.fas.fa-fw.fa-window-maximize.me-2
@@ -67,8 +73,8 @@
                             (ngModelChange)='config.save()'
                         )
 
-        ng-container(*ngFor='let provider of settingsProviders')
-            li(*ngIf='provider.prioritized', [ngbNavItem]='provider.id')
+        ng-container(*ngFor='let provider of prioritizedProviders; trackBy: trackByProviderId')
+            li([ngbNavItem]='provider.id')
                 a.d-flex.align-items-center(ngbNavLink)
                     i(class='fas fa-fw me-2 fa-{{provider.icon}}')
                     span {{provider.title|translate}}
@@ -80,8 +86,8 @@
 
         .mb-3
 
-        ng-container(*ngFor='let provider of settingsProviders')
-            li(*ngIf='!provider.prioritized', [ngbNavItem]='provider.id')
+        ng-container(*ngFor='let provider of generalProviders; trackBy: trackByProviderId')
+            li([ngbNavItem]='provider.id')
                 a.d-flex.align-items-center(ngbNavLink)
                     i(class='fas fa-fw me-2 fa-{{provider.icon || "puzzle-piece"}}')
                     span {{provider.title|translate}}

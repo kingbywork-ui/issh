@@ -80,7 +80,7 @@ export class HistoryCommandService {
             ...this.getTerminalHistoryOutputCommands(tab),
         ]
         if (commands.length) {
-            this.replaceTabHistory(tabKey, commands)
+            this.mergeTabHistory(tabKey, commands)
         }
     }
 
@@ -463,8 +463,8 @@ PY`,
         this.tabHistory.set(tabKey, entries)
     }
 
-    private replaceTabHistory (tabKey: string, commands: string[]): void {
-        const entries: HistoryEntry[] = []
+    private mergeTabHistory (tabKey: string, commands: string[]): void {
+        const remoteEntries: HistoryEntry[] = []
         const seen = new Set<string>()
         for (const command of commands.slice().reverse()) {
             const normalized = this.normalizeHistoryCommand(command)
@@ -472,12 +472,24 @@ PY`,
                 continue
             }
             seen.add(normalized)
-            entries.push({
+            remoteEntries.push({
                 command: normalized,
-                timestamp: Date.now() - entries.length,
+                timestamp: Date.now() - remoteEntries.length,
                 useCount: 1,
             })
         }
-        this.tabHistory.set(tabKey, entries)
+
+        // Preserve commands recorded in-tab (via addCommand) that the remote
+        // history snapshot did not return (e.g. commands typed in the current
+        // session that the remote shell has not yet flushed to its history).
+        const existing = this.tabHistory.get(tabKey) ?? []
+        const localOnly: HistoryEntry[] = []
+        for (const entry of existing) {
+            if (!seen.has(entry.command)) {
+                localOnly.push(entry)
+            }
+        }
+
+        this.tabHistory.set(tabKey, [...remoteEntries, ...localOnly])
     }
 }

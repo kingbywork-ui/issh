@@ -17,7 +17,7 @@ const DANGEROUS_PATTERNS: { pattern: RegExp, reason: string }[] = [
 const REDACTION_PATTERNS: RegExp[] = [
     /Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi,
     /(?:api[_-]?key|token|password|secret|passwd|pwd)\s*[:=]\s*\S+/gi,
-    /(?:--password|--passwd|-p)\s+\S+/gi,
+    /(?:--password|--passwd)\s+\S+/gi,
     /[A-Fa-f0-9]{32,}/g,
     /-----BEGIN [A-Z ]+-----[\s\S]*?-----END [A-Z ]+-----/g,
 ]

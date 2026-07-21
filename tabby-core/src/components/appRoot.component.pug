@@ -103,6 +103,7 @@ title-bar(
         [class.left-open]='appPanel.leftVisible',
         [class.right-open]='appPanel.rightVisible',
         [class.bottom-open]='appPanel.bottomVisible',
+        [style.--app-bottom-height.px]='appPanel.bottomHeightPx',
     )
         .app-panel-left(#leftPanel)
         .app-panel-center
@@ -117,3 +118,8 @@ title-bar(
             )
         .app-panel-right(#rightPanel)
         .app-panel-bottom(#bottomPanel)
+            .app-panel-bottom-resizer(
+                *ngIf='appPanel.bottomVisible',
+                (mousedown)='startBottomResize($event)',
+                title='Drag to resize Send panel'
+            )

@@ -263,14 +263,9 @@ export class AppHotkeyProvider extends HotkeyProvider {
     ) { super() }
 
     async provide (): Promise<HotkeyDescription[]> {
-        const profiles = await this.profilesService.getProfiles()
         const groups = await this.profilesService.getProfileGroups()
         return [
             ...this.hotkeys,
-            ...profiles.map(profile => ({
-                id: `profile.${ProfilesService.getProfileHotkeyName(profile)}`,
-                name: this.translate.instant('New tab: {profile}', { profile: profile.name }),
-            })),
             ...this.profilesService.getProviders().map(provider => ({
                 id: `profile-selectors.${provider.id}`,
                 name: this.translate.instant('Show {type} profile selector', { type: provider.name }),

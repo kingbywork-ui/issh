@@ -18,6 +18,7 @@ export class TabLLMController {
     suggestions: AutocompleteSuggestion[] = []
     selectedIndex = 0
     panelPosition = { x: 8, y: 8 }
+    panelMaxHeight = 320
 
     private lineBuffer = ''
     private inputSubscription?: Subscription
@@ -34,6 +35,10 @@ export class TabLLMController {
     private tabKey: string
     private inputWasSensitive = false
     private sensitiveInputLatched = false
+    private completedCommandCount = 0
+    private predictedNextCommands: AutocompleteSuggestion[] = []
+    private predictionGeneration = 0
+    private contentElement: HTMLElement | null = null
 
     private logger: Logger
     private guard = new DangerousCommandGuard()
@@ -55,9 +60,9 @@ export class TabLLMController {
         this.logger = log.create('llm-controller')
         this.tabKey = this.history.getTabKey(tab)
         this.debounceSubscription = this.debounceSubject.pipe(
-            debounce(() => timer(this.config.store.llm.debounceMs ?? 300)),
+            debounce(() => timer(this.config.store.llm.debounceMs ?? 600)),
         ).subscribe(() => {
-            void this.fetchAutocomplete()
+            void this.fetchAutocomplete(false, true)
         })
     }
 
@@ -65,6 +70,7 @@ export class TabLLMController {
         if (this.hostRef) {
             return
         }
+        this.contentElement = contentElement
         this.hostRef = createComponent(LLMTerminalHostComponent, {
             environmentInjector: this.injector,
         })
@@ -74,7 +80,7 @@ export class TabLLMController {
     }
 
     destroy (): void {
-        this.llm.cancelPending()
+        this.llm.cancelAutocompleteRequests(this.tabKey)
         this.llm.clearAutocompleteCache(this.tabKey)
         this.history.clearTabHistory(this.tabKey)
         this.inputSubscription?.unsubscribe()
@@ -87,6 +93,7 @@ export class TabLLMController {
             this.hostRef.destroy()
             this.hostRef = null
         }
+        this.contentElement = null
     }
 
     attachView (_host: LLMTerminalHostComponent, notify: () => void): void {
@@ -100,12 +107,16 @@ export class TabLLMController {
     start (): void {
         this.attachKeyHandler()
         this.sessionChangedSubscription = this.tab.sessionChanged$.subscribe(() => {
+            this.llm.cancelAutocompleteRequests(this.tabKey)
             this.llm.clearAutocompleteCache(this.tabKey)
             this.history.clearTabHistory(this.tabKey)
             this.lineBuffer = ''
             this.lastAutocompletePartial = ''
             this.inputWasSensitive = false
             this.sensitiveInputLatched = false
+            this.completedCommandCount = 0
+            this.predictedNextCommands = []
+            this.predictionGeneration++
             this.hideAutocomplete()
         })
         this.alternateScreenSubscription = this.tab.alternateScreenActive$.subscribe(() => {
@@ -211,12 +222,16 @@ export class TabLLMController {
         this.showAutocomplete = false
         this.aiLoading = false
         this.pendingFetchGeneration++
-        this.llm.cancelPending()
+        this.llm.cancelAutocompleteRequests(this.tabKey, 'live')
         this.refresh()
     }
 
     isLightweightHintEnabled (): boolean {
         return this.config.store.llm.lightweightHintEnabled ?? false
+    }
+
+    shouldUseLightweightHint (): boolean {
+        return this.isLightweightHintEnabled() && (!!this.getAutocompleteHintText() || this.aiLoading)
     }
 
     getAutocompleteHintText (): string {
@@ -235,7 +250,23 @@ export class TabLLMController {
         if (trimmed && suggestion.command.startsWith(trimmed)) {
             return suggestion.command.substring(trimmed.length)
         }
-        return suggestion.command
+        return ''
+    }
+
+    getAutocompleteStatusText (): string {
+        if (this.aiLoading && !this.suggestions.length) {
+            return 'Matching commands...'
+        }
+        if (!this.suggestions.length) {
+            if (!this.hasAnyAutocompleteSourceEnabled()) {
+                return 'No autocomplete source is enabled.'
+            }
+            if (!this.llm.isConfigured() && this.config.store.llm.aiAutocompleteEnabled) {
+                return 'No local matches. Configure AI to get generated suggestions.'
+            }
+            return 'No suggestions for this input.'
+        }
+        return ''
     }
 
     async acceptSuggestion (suggestion: AutocompleteSuggestion): Promise<void> {
@@ -321,7 +352,7 @@ export class TabLLMController {
         return !!this.tab.alternateScreenActive
     }
 
-    private async fetchAutocomplete (force = false): Promise<void> {
+    private async fetchAutocomplete (force = false, requestAI = true): Promise<void> {
         if (this.isSensitiveInputActive()) {
             this.lastAutocompletePartial = ''
             this.hideAutocomplete()
@@ -329,8 +360,8 @@ export class TabLLMController {
         }
 
         const editorMode = this.isEditorMode()
-        const aiEnabled = this.isAIEnabledForCommands()
-        if (editorMode && !aiEnabled) {
+        const aiEnabled = this.isAIEnabledForCommands() && (editorMode || this.completedCommandCount > 0)
+        if (editorMode && (!aiEnabled || !this.isEditorAutocompleteEnabled())) {
             this.lastAutocompletePartial = ''
             this.hideAutocomplete()
             return
@@ -352,7 +383,6 @@ export class TabLLMController {
         if (this.historyBootstrapPromise) {
             await this.historyBootstrapPromise
         }
-
         const partialChanged = partial !== this.lastAutocompletePartial
         this.lastAutocompletePartial = partial
         const previousIndex = this.selectedIndex
@@ -363,14 +393,13 @@ export class TabLLMController {
         const scriptEnabled = !editorMode && this.isScriptAutocompleteEnabled()
 
         this.updatePanelPosition()
-        const anySource = historyEnabled || scriptEnabled || aiEnabled
-        this.showAutocomplete = anySource
-        this.aiLoading = aiEnabled
+        this.showAutocomplete = historyEnabled || scriptEnabled || (requestAI && aiEnabled)
+        this.aiLoading = false
         if (partialChanged) {
             this.selectedIndex = 0
         }
 
-        if (historyEnabled && this.history.usesRemoteHistory(this.tab)) {
+        if (historyEnabled && requestAI && this.history.usesRemoteHistory(this.tab)) {
             await this.history.refreshRemoteHistory(this.tab, this.tabKey)
             if (fetchGeneration !== this.pendingFetchGeneration) {
                 return
@@ -378,7 +407,7 @@ export class TabLLMController {
         }
 
         const historyResults = historyEnabled
-            ? this.history.search(partial, undefined, this.tabKey, {
+            ? this.history.search(partial, this.getHistoryAutocompleteLimit(), this.tabKey, {
                 includeGlobal: !this.history.usesRemoteHistory(this.tab),
             })
             : []
@@ -394,8 +423,20 @@ export class TabLLMController {
             ? this.getScriptSuggestions(partial)
             : []
 
-        const merged = this.mergeSuggestions(historySuggestions, scriptSuggestions)
+        const predictedSuggestions = !editorMode
+            ? this.filterPredictedSuggestions(partial)
+            : []
+        const merged = this.rankSuggestions(
+            partial,
+            ...historySuggestions,
+            ...scriptSuggestions,
+            ...predictedSuggestions,
+        )
+        const shouldRequestAI = requestAI && aiEnabled &&
+            (force || editorMode || predictedSuggestions.length === 0)
         this.suggestions = merged
+        this.showAutocomplete = merged.length > 0 || shouldRequestAI
+        this.aiLoading = shouldRequestAI
         if (!partialChanged) {
             this.preserveSelection(previousIndex, previousSuggestions)
         }
@@ -408,7 +449,7 @@ export class TabLLMController {
             aiEnabled,
         )
 
-        if (!aiEnabled) {
+        if (!shouldRequestAI) {
             if (!merged.length) {
                 this.showAutocomplete = false
             }
@@ -428,16 +469,15 @@ export class TabLLMController {
                 os: ctx.os,
                 recentOutput,
                 excludeCommands: merged.map(s => s.command),
+                requestKind: 'live',
                 mode: editorMode ? 'editor' : 'shell',
             })
             if (fetchGeneration !== this.pendingFetchGeneration) {
                 return
             }
-            const existingSet = new Set(merged.map(s => s.command))
-            const deduped = aiSuggestions.filter(s => !existingSet.has(s.command))
             const indexBeforeMerge = this.selectedIndex
             const suggestionsBeforeMerge = [...this.suggestions]
-            this.suggestions = [...merged, ...deduped]
+            this.suggestions = this.rankSuggestions(partial, ...merged, ...aiSuggestions)
             if (partialChanged) {
                 this.selectedIndex = 0
             } else {
@@ -471,6 +511,7 @@ export class TabLLMController {
         const editorMode = this.isEditorMode()
         const isSensitive = this.isSensitiveInputActive()
         if (isSensitive) {
+            this.llm.cancelAutocompleteRequests(this.tabKey)
             this.inputWasSensitive = true
             this.sensitiveInputLatched = true
             this.lineBuffer = ''
@@ -489,6 +530,9 @@ export class TabLLMController {
                 return
             }
             if (this.isAIEnabledForCommands() && this.config.store.llm.autoCompleteOnType) {
+                if (!this.isEditorAutocompleteEnabled()) {
+                    return
+                }
                 this.debounceSubject.next()
             }
             return
@@ -499,35 +543,38 @@ export class TabLLMController {
             if (!this.lineBuffer) {
                 this.hideAutocomplete()
             } else if (this.hasAnyAutocompleteSourceEnabled() && this.config.store.llm.autoCompleteOnType) {
+                void this.fetchAutocomplete(false, false)
                 this.debounceSubject.next()
             }
             return
         }
 
         if (text === '\r' || text === '\n') {
-            if (this.shouldRecordInputHistory()) {
-                this.history.addCommand(this.lineBuffer.trim(), { tabKey: this.tabKey })
-            }
+            const submittedCommand = this.shouldRecordInputHistory() ? this.lineBuffer.trim() : ''
+            this.recordSubmittedCommand(submittedCommand)
             this.lineBuffer = ''
             this.inputWasSensitive = false
             this.sensitiveInputLatched = false
             this.hideAutocomplete()
+            this.startNextCommandPrediction(submittedCommand)
             return
         }
 
         for (const char of text) {
             if (char === '\r' || char === '\n') {
-                if (this.shouldRecordInputHistory()) {
-                    this.history.addCommand(this.lineBuffer.trim(), { tabKey: this.tabKey })
-                }
+                const submittedCommand = this.shouldRecordInputHistory() ? this.lineBuffer.trim() : ''
+                this.recordSubmittedCommand(submittedCommand)
                 this.lineBuffer = ''
                 this.inputWasSensitive = false
                 this.sensitiveInputLatched = false
                 this.hideAutocomplete()
+                this.startNextCommandPrediction(submittedCommand)
                 continue
             }
             if (char === '\x7f' || char === '\b') {
-                this.lineBuffer = this.lineBuffer.slice(0, -1)
+                const chars = Array.from(this.lineBuffer)
+                chars.pop()
+                this.lineBuffer = chars.join('')
             } else if (char === '\x1b') {
                 this.lineBuffer = this.context.getPartialCommand(this.tab)
                 return
@@ -536,6 +583,7 @@ export class TabLLMController {
             }
         }
         if (!isSensitive && this.hasAnyAutocompleteSourceEnabled() && this.config.store.llm.autoCompleteOnType) {
+            void this.fetchAutocomplete(false, false)
             this.debounceSubject.next()
         }
     }
@@ -556,9 +604,37 @@ export class TabLLMController {
     }
 
     private updatePanelPosition (): void {
-        const pos = this.context.getCursorPosition(this.tab)
-        if (pos) {
-            this.panelPosition = { x: Math.max(8, pos.x), y: Math.max(8, pos.y) }
+        const container = this.contentElement
+        const pos = this.context.getCursorPosition(this.tab, container ?? undefined)
+        if (!pos) {
+            return
+        }
+        const margin = 8
+        const containerWidth = container?.clientWidth ?? window.innerWidth
+        const containerHeight = container?.clientHeight ?? window.innerHeight
+        const offsetX = Math.max(0, this.config.store.llm.autocompletePanelOffsetX ?? 32)
+        const offsetY = Math.max(0, this.config.store.llm.autocompletePanelOffsetY ?? 52)
+        const preferredBelowY = pos.y + offsetY
+        const compactBelowY = pos.y + margin
+        const preferredBelowSpace = containerHeight - margin - preferredBelowY
+        const compactBelowSpace = containerHeight - margin - compactBelowY
+        const minimumUsefulHeight = 112
+        const belowY = preferredBelowSpace >= minimumUsefulHeight
+            ? preferredBelowY
+            : compactBelowY
+        const belowSpace = preferredBelowSpace >= minimumUsefulHeight
+            ? preferredBelowSpace
+            : compactBelowSpace
+        const aboveBottom = pos.y - margin
+        const aboveSpace = aboveBottom - margin
+        const useAbove = belowSpace < minimumUsefulHeight && aboveSpace > belowSpace
+        const availableHeight = Math.max(0, useAbove ? aboveSpace : belowSpace)
+        this.panelMaxHeight = Math.min(320, availableHeight)
+        this.panelPosition = {
+            x: Math.max(margin, Math.min(pos.x + offsetX, containerWidth - margin)),
+            y: useAbove
+                ? Math.max(margin, aboveBottom - this.panelMaxHeight)
+                : Math.max(margin, belowY),
         }
     }
 
@@ -592,11 +668,76 @@ export class TabLLMController {
     }
 
     private shouldRecordInputHistory (): boolean {
-        return !!this.lineBuffer.trim() && !this.inputWasSensitive && !this.history.usesRemoteHistory(this.tab)
+        return !!this.lineBuffer.trim() && !this.inputWasSensitive
+    }
+
+    private recordSubmittedCommand (command: string): void {
+        if (!command) {
+            return
+        }
+        this.history.addCommand(command, {
+            tabKey: this.tabKey,
+            persistGlobal: !this.history.usesRemoteHistory(this.tab),
+        })
+        this.completedCommandCount++
+        this.predictedNextCommands = []
+    }
+
+    private startNextCommandPrediction (previousCommand: string): void {
+        if (!previousCommand || !this.isAIEnabledForCommands()) {
+            return
+        }
+        this.llm.cancelAutocompleteRequests(this.tabKey, 'prediction')
+        const generation = ++this.predictionGeneration
+        void this.prefetchNextCommands(previousCommand, generation)
+    }
+
+    private async prefetchNextCommands (previousCommand: string, generation: number): Promise<void> {
+        try {
+            const ctx = await this.context.collectContext(this.tab)
+            if (generation !== this.predictionGeneration) {
+                return
+            }
+            const recentOutput = this.llm.redactOutput(
+                this.context.getRecentOutput(this.tab, this.config.store.llm.maxContextLines ?? 20),
+            )
+            const suggestions = await this.llm.getAutocompleteSuggestions({
+                tabKey: this.tabKey,
+                partialCommand: '',
+                previousCommand,
+                cwd: ctx.cwd,
+                shell: ctx.shell,
+                os: ctx.os,
+                recentOutput,
+                excludeCommands: [previousCommand],
+                requestKind: 'prediction',
+                mode: 'shell',
+            })
+            if (generation === this.predictionGeneration) {
+                this.predictedNextCommands = suggestions.map((suggestion, index) => ({
+                    ...suggestion,
+                    id: `prediction-${generation}-${index}`,
+                }))
+                if (this.getPartial().trim() && this.config.store.llm.autoCompleteOnType) {
+                    void this.fetchAutocomplete(false, false)
+                }
+            }
+        } catch (e) {
+            this.logger.debug('Next-command prediction failed:', e)
+        }
     }
 
     private isHistoryAutocompleteEnabled (): boolean {
         return this.config.store.llm.historyAutocompleteEnabled ?? true
+    }
+
+    private getHistoryAutocompleteLimit (): number {
+        const limit = this.config.store.llm.historyAutocompleteLimit ?? 10
+        return Math.max(1, Math.min(50, limit))
+    }
+
+    private isEditorAutocompleteEnabled (): boolean {
+        return this.config.store.llm.editorAutocompleteEnabled ?? false
     }
 
     private isScriptAutocompleteEnabled (): boolean {
@@ -678,18 +819,51 @@ export class TabLLMController {
             .some(word => word.startsWith(partial))
     }
 
-    private mergeSuggestions (
-        left: AutocompleteSuggestion[],
-        right: AutocompleteSuggestion[],
-    ): AutocompleteSuggestion[] {
-        const merged = [...left]
-        const seen = new Set(merged.map(s => s.command))
-        for (const s of right) {
-            if (!seen.has(s.command)) {
-                merged.push(s)
-                seen.add(s.command)
+    private filterPredictedSuggestions (partial: string): AutocompleteSuggestion[] {
+        const lower = partial.trim().toLowerCase()
+        return this.predictedNextCommands.filter(suggestion => this.matchScore(suggestion.command, lower) > 0)
+    }
+
+    private rankSuggestions (partial: string, ...suggestions: AutocompleteSuggestion[]): AutocompleteSuggestion[] {
+        const lower = partial.trim().toLowerCase()
+        const best = new Map<string, { suggestion: AutocompleteSuggestion, score: number }>()
+        for (const suggestion of suggestions) {
+            const key = this.suggestionKey(suggestion.command)
+            const match = this.matchScore(suggestion.command, lower)
+            if (!key || match <= 0) {
+                continue
+            }
+            const confidence = Math.max(0, Math.min(1, suggestion.confidence ?? 0.65))
+            const score = confidence * match
+            const existing = best.get(key)
+            if (!existing || score > existing.score) {
+                best.set(key, { suggestion, score })
             }
         }
-        return merged
+        return Array.from(best.values())
+            .sort((a, b) => b.score - a.score)
+            .map(item => item.suggestion)
+    }
+
+    private matchScore (command: string, partial: string): number {
+        if (!partial) {
+            return 1
+        }
+        const lower = command.toLowerCase()
+        if (lower === partial) {
+            return 1
+        }
+        if (lower.startsWith(partial)) {
+            return 0.9 + Math.min(0.1, partial.length / Math.max(lower.length, 1) * 0.1)
+        }
+        if (this.wordStartsWith(lower, partial)) {
+            return 0.75
+        }
+        return lower.includes(partial) ? 0.55 : 0
+    }
+
+    private suggestionKey (command: string): string {
+        const normalized = normalizeCommand(command, { allowMultiline: true }) ?? command.trim()
+        return normalized.replace(/\s+/g, ' ').toLowerCase()
     }
 }

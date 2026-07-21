@@ -6,6 +6,7 @@ import { SSHSession } from '../session/ssh'
 import { SFTPContextMenuItemProvider } from '../api'
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
 import { SFTPCreateDirectoryModalComponent } from './sftpCreateDirectoryModal.component'
+import { Subscription } from 'rxjs'
 
 interface PathSegment {
     name: string
@@ -21,6 +22,7 @@ export class SFTPPanelComponent implements OnDestroy {
     @Input() session: SSHSession
     @Output() closed = new EventEmitter<void>()
     sftp: SFTPSession
+    sftpDisconnected = false
     fileList: SFTPFile[]|null = null
     filteredFileList: SFTPFile[] = []
     @Input() path = '/'
@@ -34,6 +36,7 @@ export class SFTPPanelComponent implements OnDestroy {
     activeUploads: {name: string, transfer: FileUpload, progress: number}[] = []
     private destroyed = false
     private navigationGeneration = 0
+    private sftpSubscription = new Subscription()
 
     constructor (
         private ngbModal: NgbModal,
@@ -48,12 +51,7 @@ export class SFTPPanelComponent implements OnDestroy {
 
     async ngOnInit (): Promise<void> {
         try {
-            const sftp = await this.session.openSFTP()
-            if (this.destroyed) {
-                await sftp.close()
-                return
-            }
-            this.sftp = sftp
+            await this.initSFTP()
             await this.navigate(this.path)
         } catch (error) {
             if (this.destroyed) {
@@ -69,9 +67,46 @@ export class SFTPPanelComponent implements OnDestroy {
         }
     }
 
+    private async initSFTP (): Promise<void> {
+        const sftp = await this.session.openSFTP()
+        if (this.destroyed) {
+            await sftp.close()
+            return
+        }
+        this.sftp = sftp
+        this.sftpDisconnected = false
+        this.sftpSubscription.add(sftp.closed$.subscribe(() => {
+            this.handleSFTPClosed()
+        }))
+    }
+
+    private sftpReconnectInProgress = false
+
+    private async handleSFTPClosed (): Promise<void> {
+        if (this.destroyed || this.sftpReconnectInProgress) {
+            return
+        }
+        this.sftpReconnectInProgress = true
+        try {
+            this.notifications.info('SFTP 会话已断开，正在尝试重新连接…')
+            this.sftpSubscription.unsubscribe()
+            this.sftpSubscription = new Subscription()
+            await this.initSFTP()
+            await this.navigate(this.path)
+            this.notifications.notice('SFTP 会话已重新连接')
+        } catch (error) {
+            this.sftpDisconnected = true
+            this.notifications.error('SFTP 会话已断开，SSH 连接可能已丢失')
+        } finally {
+            this.sftpReconnectInProgress = false
+            this.detectChanges()
+        }
+    }
+
     ngOnDestroy (): void {
         this.destroyed = true
         this.navigationGeneration++
+        this.sftpSubscription.unsubscribe()
         for (const upload of this.activeUploads) {
             upload.transfer.cancel()
         }
@@ -79,6 +114,10 @@ export class SFTPPanelComponent implements OnDestroy {
     }
 
     async navigate (newPath: string, fallbackOnError = true): Promise<void> {
+        if (this.sftp?.isClosed) {
+            this.sftpDisconnected = true
+            return
+        }
         const generation = ++this.navigationGeneration
         const previousPath = this.path
         this.path = newPath
@@ -106,6 +145,10 @@ export class SFTPPanelComponent implements OnDestroy {
             this.fileList = fileList
         } catch (error) {
             if (this.isCurrent(generation)) {
+                if (this.sftp?.isClosed || String(error).includes('session closed') || String(error).includes('Object has been destructed')) {
+                    await this.handleSFTPClosed()
+                    return
+                }
                 this.notifications.error(this.errorMessage(error))
                 if (previousPath && fallbackOnError) {
                     await this.navigate(previousPath, false)

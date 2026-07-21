@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
-import { Component, Input, HostListener, HostBinding, ViewChildren, ViewChild, AfterViewInit, AfterViewChecked, ElementRef } from '@angular/core'
+import { Component, Input, HostListener, HostBinding, ViewChildren, ViewChild, AfterViewInit, AfterViewChecked, ElementRef, ChangeDetectorRef } from '@angular/core'
 import { trigger, style, animate, transition, state } from '@angular/animations'
 import { NgbDropdown, NgbModal } from '@ng-bootstrap/ng-bootstrap'
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop'
@@ -79,6 +79,7 @@ export class AppRootComponent implements AfterViewInit, AfterViewChecked {
     updatesAvailable = false
     activeTransfers: FileTransfer[] = []
     private panelSlotsRegistered = false
+    private bottomResizing = false
     private logger: Logger
 
     constructor (
@@ -94,6 +95,7 @@ export class AppRootComponent implements AfterViewInit, AfterViewChecked {
         log: LogService,
         ngbModal: NgbModal,
         _themes: ThemesService,
+        private changeDetector: ChangeDetectorRef,
     ) {
         // document.querySelector('app-root')?.remove()
         this.logger = log.create('main')
@@ -235,6 +237,48 @@ export class AppRootComponent implements AfterViewInit, AfterViewChecked {
         if (this.bottomPanel?.nativeElement) {
             this.appPanel.registerSlot('bottom', this.bottomPanel.nativeElement)
         }
+    }
+
+    startBottomResize (event: MouseEvent): void {
+        if (event.button !== 0 || this.bottomResizing) {
+            return
+        }
+        event.preventDefault()
+        event.stopPropagation()
+
+        const workspace = (event.currentTarget as HTMLElement)?.closest('.app-workspace') as HTMLElement | null
+        const workspaceHeight = workspace?.clientHeight ?? 0
+        const startY = event.clientY
+        const startHeight = this.appPanel.bottomHeightPx
+        this.bottomResizing = true
+        document.body.style.cursor = 'ns-resize'
+        document.body.style.userSelect = 'none'
+
+        const onMove = (moveEvent: MouseEvent) => {
+            const delta = startY - moveEvent.clientY
+            this.appPanel.setBottomHeight(startHeight + delta, {
+                workspaceHeight,
+                persist: false,
+                notify: false,
+            })
+            this.changeDetector.detectChanges()
+        }
+
+        const onUp = () => {
+            document.removeEventListener('mousemove', onMove)
+            document.removeEventListener('mouseup', onUp)
+            document.body.style.cursor = ''
+            document.body.style.userSelect = ''
+            this.bottomResizing = false
+            this.appPanel.setBottomHeight(this.appPanel.bottomHeightPx, {
+                workspaceHeight,
+                persist: true,
+                notify: true,
+            })
+        }
+
+        document.addEventListener('mousemove', onMove)
+        document.addEventListener('mouseup', onUp)
     }
 
     @HostListener('dragover')

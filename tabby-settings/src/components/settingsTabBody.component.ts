@@ -1,4 +1,4 @@
-import { Component, HostBinding, Input, ViewContainerRef, ViewChild, ComponentFactoryResolver, ComponentRef } from '@angular/core'
+import { Component, HostBinding, Input, ViewContainerRef, ViewChild, ComponentFactoryResolver, ComponentRef, OnDestroy, AfterViewInit } from '@angular/core'
 import { SettingsTabProvider } from '../api'
 
 /** @hidden */
@@ -23,10 +23,13 @@ import { SettingsTabProvider } from '../api'
         }
     `],
 })
-export class SettingsTabBodyComponent {
+export class SettingsTabBodyComponent implements AfterViewInit, OnDestroy {
     @Input() provider: SettingsTabProvider
     @ViewChild('placeholder', { read: ViewContainerRef }) placeholder: ViewContainerRef
-    component: ComponentRef<unknown>
+    component: ComponentRef<unknown> | null = null
+
+    private destroyed = false
+    private createHandle: ReturnType<typeof setImmediate> | null = null
 
     @HostBinding('class.full-width')
     get fullWidth (): boolean {
@@ -36,13 +39,29 @@ export class SettingsTabBodyComponent {
     constructor (private componentFactoryResolver: ComponentFactoryResolver) { }
 
     ngAfterViewInit (): void {
-        // run after the change detection finishes
-        setImmediate(() => {
+        // Defer until after CD; cancel if destroyed first (ngbNav destroyOnHide).
+        this.createHandle = setImmediate(() => {
+            this.createHandle = null
+            if (this.destroyed || !this.placeholder || !this.provider?.getComponentType()) {
+                return
+            }
             this.component = this.placeholder.createComponent(
                 this.componentFactoryResolver.resolveComponentFactory(
                     this.provider.getComponentType(),
                 ),
             )
         })
+    }
+
+    ngOnDestroy (): void {
+        this.destroyed = true
+        if (this.createHandle != null) {
+            clearImmediate(this.createHandle)
+            this.createHandle = null
+        }
+        if (this.component) {
+            this.component.destroy()
+            this.component = null
+        }
     }
 }

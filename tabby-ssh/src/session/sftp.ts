@@ -51,12 +51,13 @@ export class SFTPFileHandle {
 
 export class SFTPSession {
     get closed$ (): Observable<void> { return this.closed }
+    get isClosed (): boolean { return this.closedEmitted }
     private closed = new Subject<void>()
     private logger: Logger
     private closePromise: Promise<void>|null = null
     private closedEmitted = false
 
-    constructor (private sftp: russh.SFTP, injector: Injector) {
+    constructor (private sftp: russh.SFTP, injector: Injector, private onClosed?: () => void) {
         this.logger = injector.get(LogService).create('sftp')
         sftp.closed$.subscribe(() => this.emitClosed())
     }
@@ -249,5 +250,6 @@ export class SFTPSession {
         this.closedEmitted = true
         this.closed.next()
         this.closed.complete()
+        this.onClosed?.()
     }
 }

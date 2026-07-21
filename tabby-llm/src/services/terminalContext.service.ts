@@ -55,10 +55,16 @@ export class TerminalContextService {
             return ''
         }
 
-        // POSIX prompts: user@host:~/path$ command, root@host:/path#command
-        const posixPromptMatch = /(?:^|\s)(?:[\w.-]+@[\w.-]+:)?[^\s#$%>]*[#$%]\s*(.*)$/.exec(trimmed)
+        // POSIX prompts: user@host:~/path$ command, root@host:/path# command
+        const posixPromptMatch = /(?:^|\s)(?:[\w.-]+@[\w.-]+:\S+)\s*[#$%]\s*(.*)$/.exec(trimmed)
         if (posixPromptMatch) {
             return posixPromptMatch[1]
+        }
+
+        // Simple root/user prompt at line start: # command, $ command
+        const simplePromptMatch = /^[#$]\s+(.*)$/.exec(trimmed)
+        if (simplePromptMatch) {
+            return simplePromptMatch[1]
         }
 
         // PowerShell: PS C:\path> command
@@ -146,16 +152,28 @@ export class TerminalContextService {
         return commands
     }
 
-    getCursorPosition (tab: BaseTerminalTabComponent<any>): { x: number, y: number } | null {
+    getCursorPosition (
+        tab: BaseTerminalTabComponent<any>,
+        relativeTo?: HTMLElement,
+    ): { x: number, y: number } | null {
         const xterm = this.getXterm(tab)
         if (!xterm?.element) {
             return null
         }
         const buffer = xterm.buffer.active
-        const cellWidth = xterm.options.fontSize ? xterm.options.fontSize * 0.6 : 8
-        const cellHeight = (xterm.options.fontSize ?? 14) * (xterm.options.lineHeight ?? 1)
-        const x = buffer.cursorX * cellWidth
-        const y = (buffer.cursorY + 1) * cellHeight
+        const screen = xterm.element.querySelector<HTMLElement>('.xterm-screen')
+        const screenRect = (screen ?? xterm.element).getBoundingClientRect()
+        const originRect = (relativeTo ?? xterm.element).getBoundingClientRect()
+        const measuredCellWidth = screenRect.width / Math.max(1, xterm.cols)
+        const measuredCellHeight = screenRect.height / Math.max(1, xterm.rows)
+        const cellWidth = measuredCellWidth > 0
+            ? measuredCellWidth
+            : (xterm.options.fontSize ? xterm.options.fontSize * 0.6 : 8)
+        const cellHeight = measuredCellHeight > 0
+            ? measuredCellHeight
+            : (xterm.options.fontSize ?? 14) * (xterm.options.lineHeight ?? 1)
+        const x = screenRect.left - originRect.left + buffer.cursorX * cellWidth
+        const y = screenRect.top - originRect.top + (buffer.cursorY + 1) * cellHeight
         return { x, y }
     }
 

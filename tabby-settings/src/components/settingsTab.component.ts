@@ -38,6 +38,8 @@ export class SettingsTabComponent extends BaseTabComponent {
     updateAvailable = false
     showConfigDefaults = false
     allLanguages = LocaleService.allLanguages
+    prioritizedProviders: SettingsTabProvider[] = []
+    generalProviders: SettingsTabProvider[] = []
     @HostBinding('class.pad-window-controls') padWindowControls = false
 
     constructor (
@@ -57,7 +59,18 @@ export class SettingsTabComponent extends BaseTabComponent {
         this.setTitle(translate.instant(_('Settings')))
         this.settingsProviders = config.enabledServices(this.settingsProviders)
         this.settingsProviders = this.settingsProviders.filter(x => !!x.getComponentType())
+        // Keep first occurrence per id so duplicate plugin loads cannot break ngbNav.
+        const seenIds = new Set<string>()
+        this.settingsProviders = this.settingsProviders.filter(provider => {
+            if (!provider.id || seenIds.has(provider.id)) {
+                return false
+            }
+            seenIds.add(provider.id)
+            return true
+        })
         this.settingsProviders.sort((a, b) => a.weight - b.weight + a.title.localeCompare(b.title))
+        this.prioritizedProviders = this.settingsProviders.filter(p => p.prioritized)
+        this.generalProviders = this.settingsProviders.filter(p => !p.prioritized)
 
         this.configDefaults = yaml.dump(config.getDefaults())
 
@@ -69,6 +82,10 @@ export class SettingsTabComponent extends BaseTabComponent {
 
         this.subscribeUntilDestroyed(config.changed$, onConfigChange)
         onConfigChange()
+    }
+
+    trackByProviderId (_index: number, provider: SettingsTabProvider): string {
+        return provider.id
     }
 
     async ngOnInit () {

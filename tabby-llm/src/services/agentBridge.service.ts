@@ -156,6 +156,7 @@ export class AgentBridgeService {
         const existing = this.tabs.get(tab)
         if (existing) {
             delete existing.controller
+            this.tabs.delete(tab)
         }
     }
 

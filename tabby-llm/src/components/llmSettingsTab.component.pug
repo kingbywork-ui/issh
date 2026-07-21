@@ -21,10 +21,23 @@
             .form-line
                 .header
                     .title 历史命令补全
-                    .description 以当前输入为前缀匹配历史命令，并展示全部命中项。SSH 读远程历史，本地读 shell 历史。全屏编辑器（vim / nano 等）中自动禁用。
+                    .description 以当前输入为前缀匹配历史命令。SSH 读远程历史，本地读 shell 历史。全屏编辑器（vim / nano 等）中自动禁用。
                 toggle(
                     [(ngModel)]='config.store.llm.historyAutocompleteEnabled',
                     (ngModelChange)='config.save()'
+                )
+
+            .form-line(*ngIf='config.store.llm.historyAutocompleteEnabled')
+                .header
+                    .title 历史候选上限
+                    .description 避免长历史记录把补全面板撑满；建议保留 8–12 条。
+                input.form-control(
+                    type='number',
+                    min='1',
+                    max='50',
+                    [(ngModel)]='config.store.llm.historyAutocompleteLimit',
+                    (keydown.enter)='config.save()',
+                    (blur)='config.save()'
                 )
 
             .form-line
@@ -59,11 +72,20 @@
             .form-line
                 .header
                     .title AI 命令补全
-                    .description 调用 LLM 生成补全建议。在 vim / nano 等编辑器中改为代码补全预测；未开启时编辑器内不显示任何补全。
+                    .description 调用 LLM 生成命令补全建议。
                     .section-note(*ngIf='config.store.llm.aiAutocompleteEnabled && !config.store.llm.enabled')
                         | 请先打开上方「启用 AI 功能」。
                 toggle(
                     [(ngModel)]='config.store.llm.aiAutocompleteEnabled',
+                    (ngModelChange)='config.save()'
+                )
+
+            .form-line(*ngIf='config.store.llm.aiAutocompleteEnabled')
+                .header
+                    .title 编辑器内 AI 补全
+                    .description 在 vim / nano 等全屏编辑器中，把 AI 补全用于当前行文本。默认关闭，避免编辑时被面板打断。
+                toggle(
+                    [(ngModel)]='config.store.llm.editorAutocompleteEnabled',
                     (ngModelChange)='config.save()'
                 )
 
@@ -120,6 +142,41 @@
                         placeholder='gpt-4o-mini'
                     )
 
+                .form-line
+                    .header
+                        .title 补全专用模型
+                        .description 建议填写不带深度思考的快速模型；留空时使用上方主模型。
+                    input.form-control(
+                        type='text',
+                        [(ngModel)]='config.store.llm.autocompleteModel',
+                        (keydown.enter)='config.save()',
+                        (blur)='config.save()',
+                        placeholder='留空则使用主模型'
+                    )
+
+                .form-line
+                    .header
+                        .title 补全时关闭思考
+                        .description 对支持的 Qwen/OpenAI 推理模型发送关闭或最低思考参数。
+                    toggle(
+                        [(ngModel)]='config.store.llm.autocompleteDisableThinking',
+                        (ngModelChange)='config.save()'
+                    )
+
+                .form-line
+                    .header
+                        .title AI 补全超时
+                        .description 连续无响应超时后静默使用历史和缓存候选，单位为毫秒。
+                    input.form-control(
+                        type='number',
+                        min='250',
+                        max='10000',
+                        step='100',
+                        [(ngModel)]='config.store.llm.autocompleteTimeoutMs',
+                        (keydown.enter)='config.save()',
+                        (blur)='config.save()'
+                    )
+
                 .llm-subgroup 隐私与上下文
 
                 .form-line
@@ -148,7 +205,7 @@
                 .form-line
                     .header
                         .title 确认时自动执行
-                        .description 关闭后，确认的命令只插入终端，不自动回车执行。
+                        .description 开启后，接受候选会立即回车执行。建议只在你信任当前建议来源时开启。
                     toggle(
                         [(ngModel)]='config.store.llm.executeOnConfirm',
                         (ngModelChange)='config.save()'
@@ -219,8 +276,34 @@
             .form-line
                 .header
                     .title 轻提示模式
-                    .description 低信心时仅显示行内轻提示，不主动展开完整列表。
+                    .description 仅当候选能自然续写当前输入时显示行内 ghost text，否则回退为完整列表。
                 toggle(
                     [(ngModel)]='config.store.llm.lightweightHintEnabled',
                     (ngModelChange)='config.save()'
+                )
+
+            .form-line
+                .header
+                    .title 面板水平偏移
+                    .description 候选框离光标的水平距离，避免遮挡当前输入。
+                input.form-control(
+                    type='number',
+                    min='0',
+                    max='240',
+                    [(ngModel)]='config.store.llm.autocompletePanelOffsetX',
+                    (keydown.enter)='config.save()',
+                    (blur)='config.save()'
+                )
+
+            .form-line
+                .header
+                    .title 面板垂直偏移
+                    .description 候选框离光标的垂直距离。默认更靠下，减少遮挡视线。
+                input.form-control(
+                    type='number',
+                    min='0',
+                    max='240',
+                    [(ngModel)]='config.store.llm.autocompletePanelOffsetY',
+                    (keydown.enter)='config.save()',
+                    (blur)='config.save()'
                 )

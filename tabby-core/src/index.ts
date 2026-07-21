@@ -175,14 +175,7 @@ export default class AppModule { // eslint-disable-line @typescript-eslint/no-ex
         })
 
         hotkeys.hotkey$.subscribe(async hotkey => {
-            if (hotkey.startsWith('profile.')) {
-                const id = hotkey.substring(hotkey.indexOf('.') + 1)
-                const profiles = await profilesService.getProfiles()
-                const profile = profiles.find(x => ProfilesService.getProfileHotkeyName(x) === id)
-                if (profile) {
-                    profilesService.openNewTabForProfile(profile)
-                }
-            } else if (hotkey.startsWith('profile-selectors.')) {
+            if (hotkey.startsWith('profile-selectors.')) {
                 const id = hotkey.substring(hotkey.indexOf('.') + 1)
                 const provider = profilesService.getProviders().find(x => x.id === id)
                 if (!provider) {

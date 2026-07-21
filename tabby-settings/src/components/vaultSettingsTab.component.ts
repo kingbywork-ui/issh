@@ -59,8 +59,9 @@ export class VaultSettingsTabComponent extends BaseComponent {
     }
 
     async loadVault (requireReauth = true): Promise<void> {
-        if (requireReauth && !this.isSessionUnlocked()) {
+        if (requireReauth) {
             try {
+                this.vault.requireReauth()
                 await this.vault.getPassphrase()
                 this.sessionUnlocked = true
                 this.sessionUnlockTime = Date.now()
