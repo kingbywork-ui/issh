@@ -120,10 +120,6 @@ msgstr "Toepassing"
 msgid "Application settings"
 msgstr "Toepassing instellings"
 
-#: tabby-web/src/services/hostWindow.service.ts:19
-msgid "Are you sure you want to close Tabby? You can disable this prompt in Settings -> Window."
-msgstr "Is jy seker jy wil Tabby toemaak? U kan hierdie boodskap deaktiveer in Instellings -> Venster."
-
 #: tabby-core/src/services/config.service.ts:440
 msgid "Are you sure?"
 msgstr "Is jy seker?"
@@ -148,10 +144,6 @@ msgstr "Hoorbaar"
 msgid "Authentication method"
 msgstr "Stawing metode"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:79
-msgid "Author"
-msgstr "Skrywer"
-
 #: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:50
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:78
 msgid "Auto"
@@ -174,10 +166,6 @@ msgstr "Outomatiese Bywerkings"
 #: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:54
 msgid "Automatically upload changes and check for updates every minute"
 msgstr "Laai veranderinge outomaties op en kyk elke minuut vir opdaterings"
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:10
-msgid "Available"
-msgstr "Beskikbaar"
 
 #: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:35
 msgid "Background type"
@@ -226,7 +214,6 @@ msgstr "Plak tussen hakies (vereis dop ondersteuning)"
 msgid "Broadcast mode. Click anywhere to cancel."
 msgstr "Uitsaaimodus. Klik enige plek om te kanselleer."
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:50
 #: tabby-core/src/services/profiles.service.ts:411
 msgid "Built-in"
 msgstr "Ingeboude"
@@ -406,7 +393,6 @@ msgstr "Koppel eers aan 'n ander gasheer en gebruik dit as 'n instaanbediener"
 #: locale/tmp-html/tabby-ssh/src/components/sftpPanel.component.html:19
 #: tabby-serial/src/components/serialTab.component.ts:60
 #: tabby-ssh/src/components/sshTab.component.ts:130
-#: tabby-telnet/src/components/telnetTab.component.ts:54
 msgid "Connecting"
 msgstr "Koppel tans"
 
@@ -620,10 +606,6 @@ msgstr "Toestel"
 msgid "Direct"
 msgstr "Direk"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:57
-msgid "Disable"
-msgstr "Deaktiveer"
-
 #: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:39
 msgid "Disable dynamic tab title"
 msgstr "Deaktiveer dinamiese oortjietitel"
@@ -636,13 +618,8 @@ msgstr "Deaktiveer vlot-agtergrond terwyl jy sleep"
 msgid "Disable GPU acceleration"
 msgstr "Deaktiveer GVE-versnelling"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:50
-msgid "Disabled"
-msgstr "Gediaktiveer"
-
 #: locale/tmp-html/tabby-ssh/src/components/hostKeyPromptModal.component.html:26
 #: tabby-ssh/src/components/sshTab.component.ts:200
-#: tabby-telnet/src/components/telnetTab.component.ts:83
 #: tabby-terminal/src/api/connectableTerminalTab.component.ts:36
 #: tabby-terminal/src/tabContextMenu.ts:106
 #: tabby-terminal/src/tabContextMenu.ts:110
@@ -654,7 +631,6 @@ msgid "Disconnect current tab (Serial/Telnet/SSH)"
 msgstr "Ontkoppel huidige oortjie (Serieel/Telnet/SSH)"
 
 #: tabby-ssh/src/components/sshTab.component.ts:198
-#: tabby-telnet/src/components/telnetTab.component.ts:81
 msgid "Disconnect from {host}?"
 msgstr "Ontkoppel van {host}?"
 
@@ -671,7 +647,6 @@ msgid "Do not abort"
 msgstr "Moenie aborteer nie"
 
 #: tabby-ssh/src/components/sshTab.component.ts:201
-#: tabby-telnet/src/components/telnetTab.component.ts:84
 msgid "Do not close"
 msgstr "Moenie toemaak nie"
 
@@ -738,10 +713,6 @@ msgstr "Wysig"
 msgid "Edit locally"
 msgstr "Wysig plaaslik"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:58
-msgid "Enable"
-msgstr "Aktiveer"
-
 #: locale/tmp-html/tabby-core/src/components/welcomeTab.component.html:32
 #: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:66
 msgid "Enable analytics"
@@ -791,10 +762,6 @@ msgstr "Vee konfigurasie uit"
 #: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:12
 msgid "Erase the Vault"
 msgstr "Vee die Kluis uit"
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:6
-msgid "Error in {plugin}:"
-msgstr "Fout in {plugin}:"
 
 #: locale/tmp-html/tabby-terminal/src/components/loginScriptsSettings.component.html:10
 msgid "Exact match"
@@ -955,21 +922,12 @@ msgstr "Vol"
 
 #: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:3
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:3
-#: locale/tmp-html/tabby-telnet/src/components/telnetProfileSettings.component.html:3
 msgid "General"
 msgstr "Algemeen"
 
 #: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:21
 msgid "Generate a pre-filled GitHub issue"
 msgstr "Genereer 'n vooraf ingevulde GitHub-kwessie"
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:25
-msgid "Get"
-msgstr "Kry"
-
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:18
-msgid "Get it from the Tabby Web settings window"
-msgstr "Kry dit uit die Tabby Web-instellingsvenster"
 
 #: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:29
 msgid "Gives the window a blurred transparent background"
@@ -1028,12 +986,7 @@ msgstr "Versteek venster op fokusverlies"
 msgid "Hides the docked terminal when you click away."
 msgstr "Versteek die gekoppelde terminaal wanneer jy wegklik."
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:26
-msgid "Homepage"
-msgstr "Tuisblad"
-
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:34
-#: locale/tmp-html/tabby-telnet/src/components/telnetProfileSettings.component.html:6
 msgid "Host"
 msgstr "Gasheer"
 
@@ -1092,7 +1045,6 @@ msgstr "Verhoog die vertikale verdelingsgrootte"
 
 #: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:91
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:226
-#: locale/tmp-html/tabby-telnet/src/components/telnetProfileSettings.component.html:21
 msgid "Input"
 msgstr "Invoer"
 
@@ -1107,10 +1059,6 @@ msgstr "Invoermodus"
 #: locale/tmp-html/tabby-terminal/src/components/streamProcessingSettings.component.html:15
 msgid "Input newlines"
 msgstr "Voer nuwe lyne in"
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:39
-msgid "Installed"
-msgstr "Geïnstalleer"
 
 #: tabby-electron/src/services/updater.service.ts:131
 msgid "Installing the update will close all tabs and restart Tabby."
@@ -1252,7 +1200,6 @@ msgstr "Plaaslike terminaal"
 
 #: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:86
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:221
-#: locale/tmp-html/tabby-telnet/src/components/telnetProfileSettings.component.html:16
 msgid "Login scripts"
 msgstr "Aanmelding skripte"
 
@@ -1428,10 +1375,6 @@ msgstr "Aantal lyne wat in die buffer gehou word"
 msgid "Off"
 msgstr "Af"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:81
-msgid "Official"
-msgstr "Amptelik"
-
 #: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:26
 msgid "On GitHub Discussions"
 msgstr "Op GitHub-besprekings"
@@ -1580,16 +1523,7 @@ msgstr "Pad of adres van die plaaslike X11-sok"
 msgid "Pin"
 msgstr "Speld vas"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:3
-msgid "Plugins"
-msgstr "Inproppe"
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:4
-msgid "Plugins folder"
-msgstr "Inprop vouer"
-
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:38
-#: locale/tmp-html/tabby-telnet/src/components/telnetProfileSettings.component.html:10
 msgid "Port"
 msgstr "Poort"
 
@@ -1671,10 +1605,6 @@ msgstr "Vinnig verbind"
 msgid "Quit"
 msgstr "Verlaat"
 
-#: tabby-telnet/src/profiles.ts:50
-msgid "Raw socket connection"
-msgstr "Rou-sok verbinding"
-
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:166
 msgid "Ready Timeout (Milliseconds)"
 msgstr "Gereed-uitteltyd (Millisekondes)"
@@ -1688,7 +1618,6 @@ msgstr "Onlangse"
 #: locale/tmp-html/tabby-serial/src/components/serialTab.component.html:5
 #: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:52
 #: locale/tmp-html/tabby-ssh/src/components/sshTab.component.html:10
-#: locale/tmp-html/tabby-telnet/src/components/telnetTab.component.html:3
 #: tabby-terminal/src/api/connectableTerminalTab.component.ts:32
 #: tabby-terminal/src/tabContextMenu.ts:115
 #: tabby-terminal/src/tabContextMenu.ts:119
@@ -1767,10 +1696,6 @@ msgstr "Herbegin huidige reeks-sessie"
 #: tabby-ssh/src/hotkeys.ts:10
 msgid "Restart current SSH session"
 msgstr "Herbegin huidige SSH-sessie"
-
-#: tabby-telnet/src/hotkeys.ts:10
-msgid "Restart current Telnet session"
-msgstr "Herbegin huidige Telnet-sessie"
 
 #: tabby-core/src/hotkeys.ts:64
 msgid "Restart tab"
@@ -1881,10 +1806,6 @@ msgstr "Soek deur kleurskemas"
 #: tabby-settings/src/components/hotkeySettingsTab.component.ts:12
 msgid "Search hotkeys"
 msgstr "Soek deur sneltoetse"
-
-#: tabby-plugin-manager/src/components/pluginsSettingsTab.component.ts:14
-msgid "Search plugins"
-msgstr "Soek deur inproppe"
 
 #: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:17
 msgid "Secret sync token"
@@ -2245,10 +2166,6 @@ msgstr "Oortjie-ligging"
 msgid "Tabs width"
 msgstr "Oortjie breedte"
 
-#: tabby-telnet/src/profiles.ts:34
-msgid "Telnet session"
-msgstr "Telnet sessie"
-
 #: tabby-terminal/src/api/baseTerminalTab.component.ts:210
 #: tabby-terminal/src/settings.ts:43
 msgid "Terminal"
@@ -2340,10 +2257,6 @@ msgstr "Verander huidige oortjie se ruite in aparte oortjies"
 msgid "Ungrouped"
 msgstr "Ongegroepeer"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:59
-msgid "Uninstall"
-msgstr "Deïnstalleer"
-
 #: tabby-settings/src/components/profilesSettingsTab.component.ts:269
 msgid "Unknown"
 msgstr "Onbekend"
@@ -2364,10 +2277,6 @@ msgstr "Op"
 #: tabby-electron/src/services/updater.service.ts:133
 msgid "Update"
 msgstr "Opdateer"
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:52
-msgid "Upgrade to {version}"
-msgstr "Gradeer op na {version}"
 
 #: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:42
 #: locale/tmp-html/tabby-ssh/src/components/sftpPanel.component.html:10
@@ -2431,10 +2340,6 @@ msgstr "Kluis-hoofwagfrase moet gestel word om geheime te stoor"
 #: locale/tmp-html/tabby-ssh/src/components/sshSettingsTab.component.html:11
 msgid "Verify host keys when connecting"
 msgstr "Verifieer gasheersleutels wanneer jy verbind"
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:75
-msgid "Version"
-msgstr "Weergawe"
 
 #: locale/tmp-html/tabby-core/src/components/startPage.component.html:13
 msgid "Version: {version}"
@@ -2571,4 +2476,3 @@ msgstr "Zoem uit"
 msgctxt "[Dynamic] port forwarding"
 msgid "id.port-forwarding.dynamic"
 msgstr "id.port-forwarding.dynamic"
-

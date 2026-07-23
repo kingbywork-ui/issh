@@ -235,10 +235,6 @@ jobs:
         USE_SYSTEM_FPM: true
         # DEBUG: electron-builder,electron-builder:*
 
-    - name: Build web resources (amd64 only)
-      run: zsh -c 'tar czf tabby-web.tar.gz (tabby-*|web)/dist'
-      if: matrix.build-arch == 'x64'
-
     - name: Upload symbols (amd64 only)
       run: |
         sudo npm install -g @sentry/cli --unsafe-perm
@@ -289,13 +285,6 @@ jobs:
       with:
         name: Linux tarball (${{matrix.arch}})
         path: dist/*.tar.gz
-
-    - uses: actions/upload-artifact@master
-      name: Upload web tarball (amd64 only)
-      with:
-        name: Web tarball
-        path: tabby-web.tar.gz
-      if: matrix.build-arch == 'x64'
 
   Windows-Build:
     runs-on: windows-latest

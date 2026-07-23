@@ -120,10 +120,6 @@ msgstr "Applikation"
 msgid "Application settings"
 msgstr "Applikationsindstillinger"
 
-#: tabby-web/src/services/hostWindow.service.ts:19
-msgid "Are you sure you want to close Tabby? You can disable this prompt in Settings -> Window."
-msgstr "Er du sikker på, at du vil lukke Tabby? Du kan deaktivere denne prompt i Indstillinger -> Vindue."
-
 #: tabby-core/src/services/config.service.ts:440
 msgid "Are you sure?"
 msgstr "Er du sikker?"
@@ -148,10 +144,6 @@ msgstr "Hørbar"
 msgid "Authentication method"
 msgstr "Godkendelsesmetode"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:79
-msgid "Author"
-msgstr "Forfatter"
-
 #: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:50
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:78
 msgid "Auto"
@@ -174,10 +166,6 @@ msgstr "Automatiske opdateringer"
 #: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:54
 msgid "Automatically upload changes and check for updates every minute"
 msgstr "Upload automatisk ændringer og tjek for opdateringer hvert minut"
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:10
-msgid "Available"
-msgstr "Tilgængelig"
 
 #: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:35
 msgid "Background type"
@@ -226,7 +214,6 @@ msgstr ""
 msgid "Broadcast mode. Click anywhere to cancel."
 msgstr ""
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:50
 #: tabby-core/src/services/profiles.service.ts:411
 msgid "Built-in"
 msgstr "Indbygget"
@@ -406,7 +393,6 @@ msgstr "Opret forbindelse til en anden vært først og brug den som en proxy"
 #: locale/tmp-html/tabby-ssh/src/components/sftpPanel.component.html:19
 #: tabby-serial/src/components/serialTab.component.ts:60
 #: tabby-ssh/src/components/sshTab.component.ts:130
-#: tabby-telnet/src/components/telnetTab.component.ts:54
 msgid "Connecting"
 msgstr "Tilslutter"
 
@@ -620,10 +606,6 @@ msgstr "Enhed"
 msgid "Direct"
 msgstr "Direkte"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:57
-msgid "Disable"
-msgstr "Deaktivér"
-
 #: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:39
 msgid "Disable dynamic tab title"
 msgstr "Deaktiver dynamisk fanetitel"
@@ -636,13 +618,8 @@ msgstr ""
 msgid "Disable GPU acceleration"
 msgstr "Deaktivér GPU acceleration"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:50
-msgid "Disabled"
-msgstr "Deaktiveret"
-
 #: locale/tmp-html/tabby-ssh/src/components/hostKeyPromptModal.component.html:26
 #: tabby-ssh/src/components/sshTab.component.ts:200
-#: tabby-telnet/src/components/telnetTab.component.ts:83
 #: tabby-terminal/src/api/connectableTerminalTab.component.ts:36
 #: tabby-terminal/src/tabContextMenu.ts:106
 #: tabby-terminal/src/tabContextMenu.ts:110
@@ -654,7 +631,6 @@ msgid "Disconnect current tab (Serial/Telnet/SSH)"
 msgstr ""
 
 #: tabby-ssh/src/components/sshTab.component.ts:198
-#: tabby-telnet/src/components/telnetTab.component.ts:81
 msgid "Disconnect from {host}?"
 msgstr "Afbryd forbindelsen til {host}?"
 
@@ -671,7 +647,6 @@ msgid "Do not abort"
 msgstr "Afbryd ikke"
 
 #: tabby-ssh/src/components/sshTab.component.ts:201
-#: tabby-telnet/src/components/telnetTab.component.ts:84
 msgid "Do not close"
 msgstr "Luk ikke"
 
@@ -738,10 +713,6 @@ msgstr "Redigér"
 msgid "Edit locally"
 msgstr ""
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:58
-msgid "Enable"
-msgstr "Aktivér"
-
 #: locale/tmp-html/tabby-core/src/components/welcomeTab.component.html:32
 #: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:66
 msgid "Enable analytics"
@@ -791,10 +762,6 @@ msgstr "Slet konfiguration"
 #: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:12
 msgid "Erase the Vault"
 msgstr "Slet Boksen"
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:6
-msgid "Error in {plugin}:"
-msgstr "Fejl i {plugin}:"
 
 #: locale/tmp-html/tabby-terminal/src/components/loginScriptsSettings.component.html:10
 msgid "Exact match"
@@ -955,20 +922,11 @@ msgstr "Fuld"
 
 #: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:3
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:3
-#: locale/tmp-html/tabby-telnet/src/components/telnetProfileSettings.component.html:3
 msgid "General"
 msgstr "Generel"
 
 #: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:21
 msgid "Generate a pre-filled GitHub issue"
-msgstr ""
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:25
-msgid "Get"
-msgstr "Hent"
-
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:18
-msgid "Get it from the Tabby Web settings window"
 msgstr ""
 
 #: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:29
@@ -1028,12 +986,7 @@ msgstr "Skjul vindue ved fokustab"
 msgid "Hides the docked terminal when you click away."
 msgstr ""
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:26
-msgid "Homepage"
-msgstr "Hjemmeside"
-
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:34
-#: locale/tmp-html/tabby-telnet/src/components/telnetProfileSettings.component.html:6
 msgid "Host"
 msgstr "Vært"
 
@@ -1092,7 +1045,6 @@ msgstr ""
 
 #: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:91
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:226
-#: locale/tmp-html/tabby-telnet/src/components/telnetProfileSettings.component.html:21
 msgid "Input"
 msgstr ""
 
@@ -1107,10 +1059,6 @@ msgstr "Inputtilstand"
 #: locale/tmp-html/tabby-terminal/src/components/streamProcessingSettings.component.html:15
 msgid "Input newlines"
 msgstr ""
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:39
-msgid "Installed"
-msgstr "Installeret"
 
 #: tabby-electron/src/services/updater.service.ts:131
 msgid "Installing the update will close all tabs and restart Tabby."
@@ -1252,7 +1200,6 @@ msgstr "Lokal terminal"
 
 #: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:86
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:221
-#: locale/tmp-html/tabby-telnet/src/components/telnetProfileSettings.component.html:16
 msgid "Login scripts"
 msgstr "Login scripts"
 
@@ -1428,10 +1375,6 @@ msgstr "Antal linjer i bufferen"
 msgid "Off"
 msgstr "Slået fra"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:81
-msgid "Official"
-msgstr "Officiel"
-
 #: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:26
 msgid "On GitHub Discussions"
 msgstr "På GitHub Diskussioner"
@@ -1580,16 +1523,7 @@ msgstr "Sti eller adresse på den lokale X11-socket"
 msgid "Pin"
 msgstr "Fastgør"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:3
-msgid "Plugins"
-msgstr "Plugins"
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:4
-msgid "Plugins folder"
-msgstr "Pluginmappe"
-
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:38
-#: locale/tmp-html/tabby-telnet/src/components/telnetProfileSettings.component.html:10
 msgid "Port"
 msgstr "Port"
 
@@ -1671,10 +1605,6 @@ msgstr "Hurtig tilslutning"
 msgid "Quit"
 msgstr "Afslut"
 
-#: tabby-telnet/src/profiles.ts:50
-msgid "Raw socket connection"
-msgstr "Rå socket forbindelse"
-
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:166
 msgid "Ready Timeout (Milliseconds)"
 msgstr ""
@@ -1688,7 +1618,6 @@ msgstr "Seneste"
 #: locale/tmp-html/tabby-serial/src/components/serialTab.component.html:5
 #: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:52
 #: locale/tmp-html/tabby-ssh/src/components/sshTab.component.html:10
-#: locale/tmp-html/tabby-telnet/src/components/telnetTab.component.html:3
 #: tabby-terminal/src/api/connectableTerminalTab.component.ts:32
 #: tabby-terminal/src/tabContextMenu.ts:115
 #: tabby-terminal/src/tabContextMenu.ts:119
@@ -1767,10 +1696,6 @@ msgstr "Genstart nuværende seriel session"
 #: tabby-ssh/src/hotkeys.ts:10
 msgid "Restart current SSH session"
 msgstr "Genstart nuværende SSH-session"
-
-#: tabby-telnet/src/hotkeys.ts:10
-msgid "Restart current Telnet session"
-msgstr "Genstart nuværende Telnet session"
 
 #: tabby-core/src/hotkeys.ts:64
 msgid "Restart tab"
@@ -1880,10 +1805,6 @@ msgstr ""
 
 #: tabby-settings/src/components/hotkeySettingsTab.component.ts:12
 msgid "Search hotkeys"
-msgstr ""
-
-#: tabby-plugin-manager/src/components/pluginsSettingsTab.component.ts:14
-msgid "Search plugins"
 msgstr ""
 
 #: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:17
@@ -2245,10 +2166,6 @@ msgstr "Placering af faner"
 msgid "Tabs width"
 msgstr "Fanebredde"
 
-#: tabby-telnet/src/profiles.ts:34
-msgid "Telnet session"
-msgstr "Telnet session"
-
 #: tabby-terminal/src/api/baseTerminalTab.component.ts:210
 #: tabby-terminal/src/settings.ts:43
 msgid "Terminal"
@@ -2340,10 +2257,6 @@ msgstr ""
 msgid "Ungrouped"
 msgstr "Ugrupperet"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:59
-msgid "Uninstall"
-msgstr "Afinstallér"
-
 #: tabby-settings/src/components/profilesSettingsTab.component.ts:269
 msgid "Unknown"
 msgstr "Ukendt"
@@ -2364,10 +2277,6 @@ msgstr "Op"
 #: tabby-electron/src/services/updater.service.ts:133
 msgid "Update"
 msgstr "Opdatér"
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:52
-msgid "Upgrade to {version}"
-msgstr "Opgradér til {version}"
 
 #: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:42
 #: locale/tmp-html/tabby-ssh/src/components/sftpPanel.component.html:10
@@ -2431,10 +2340,6 @@ msgstr "Boksens master adgangskode skal indstilles for at tillade lagring af hem
 #: locale/tmp-html/tabby-ssh/src/components/sshSettingsTab.component.html:11
 msgid "Verify host keys when connecting"
 msgstr "Verificér værtsnøgler ved tilslutning"
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:75
-msgid "Version"
-msgstr "Version"
 
 #: locale/tmp-html/tabby-core/src/components/startPage.component.html:13
 msgid "Version: {version}"
@@ -2571,4 +2476,3 @@ msgstr "Zoom ud"
 msgctxt "[Dynamic] port forwarding"
 msgid "id.port-forwarding.dynamic"
 msgstr ""
-

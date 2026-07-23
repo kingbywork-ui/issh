@@ -23,6 +23,12 @@ interface ChatCompletionResponse {
     choices: { message: { content: string } }[]
 }
 
+interface AutocompleteParseResult {
+    valid: boolean
+    suggestions: AutocompleteSuggestion[]
+    error?: string
+}
+
 /** @hidden */
 @Injectable({ providedIn: 'root' })
 export class LLMService {
@@ -67,10 +73,43 @@ export class LLMService {
     }
 
     async testConnection (): Promise<void> {
-        await this.chatCompletion([
-            { role: 'system', content: 'Reply with OK only.' },
-            { role: 'user', content: 'ping' },
-        ], { maxTokens: 5, temperature: 0 })
+        const mode: AutocompleteMode = 'shell'
+        const request: AutocompleteRequest = {
+            tabKey: '__connection_test__',
+            partialCommand: 'ec',
+            cwd: null,
+            shell: 'sh',
+            os: 'unknown',
+            recentOutput: [],
+            excludeCommands: [],
+            requestKind: 'live',
+            mode,
+        }
+        const autocompleteModel = this.config.store.llm.autocompleteModel?.trim() || this.config.store.llm.model
+        const content = await this.streamChatCompletion([
+            { role: 'system', content: AUTOCOMPLETE_SYSTEM_PROMPT },
+            { role: 'user', content: this.buildAutocompleteUserMessage(request) },
+        ], {
+            maxTokens: 256,
+            temperature: 0.1,
+            model: autocompleteModel,
+            timeoutMs: Math.max(250, this.config.store.llm.autocompleteTimeoutMs ?? 3000),
+            disableThinking: this.config.store.llm.autocompleteDisableThinking ?? true,
+            requestKey: `${request.tabKey}:live`,
+        }, candidate => this.parseAutocompleteResponse(
+            this.stripThinkingContent(candidate),
+            request.partialCommand,
+            mode,
+        ).suggestions.length > 0)
+
+        const parsed = this.parseAutocompleteResponse(
+            this.stripThinkingContent(content),
+            request.partialCommand,
+            mode,
+        )
+        if (!parsed.valid || !parsed.suggestions.length) {
+            throw new Error(parsed.error ?? 'Autocomplete model returned an invalid response')
+        }
     }
 
     async getAutocompleteSuggestions (request: AutocompleteRequest): Promise<AutocompleteSuggestion[]> {
@@ -79,16 +118,18 @@ export class LLMService {
         }
 
         const mode: AutocompleteMode = request.mode ?? 'shell'
+        const requestKind = request.requestKind ?? 'live'
         const cache = this.getCache(request.tabKey)
-        const cacheKey = cache.makeKey(
+        const cacheKey = cache.makeKey({
+            requestKind,
             mode,
-            request.partialCommand,
-            request.previousCommand,
-            request.cwd,
-            request.shell,
-        )
+            partialCommand: request.partialCommand,
+            previousCommand: request.previousCommand,
+            cwd: request.cwd,
+            shell: request.shell,
+        })
         const cached = cache.get(cacheKey)
-        if (cached) {
+        if (cached?.length) {
             return cached
         }
 
@@ -97,7 +138,6 @@ export class LLMService {
             : AUTOCOMPLETE_SYSTEM_PROMPT
         const userContent = this.buildAutocompleteUserMessage(request)
         const autocompleteModel = this.config.store.llm.autocompleteModel?.trim() || this.config.store.llm.model
-        const requestKind = request.requestKind ?? 'live'
         const configuredTimeout = Math.max(250, this.config.store.llm.autocompleteTimeoutMs ?? 3000)
         const content = await this.streamChatCompletion([
             { role: 'system', content: systemPrompt },
@@ -111,15 +151,28 @@ export class LLMService {
                 : configuredTimeout,
             disableThinking: this.config.store.llm.autocompleteDisableThinking ?? true,
             requestKey: `${request.tabKey}:${requestKind}`,
-        })
+        }, candidate => this.parseAutocompleteResponse(
+            this.stripThinkingContent(candidate),
+            request.partialCommand,
+            mode,
+        ).suggestions.length > 0)
 
-        const suggestions = this.parseAutocompleteResponse(
+        const parsed = this.parseAutocompleteResponse(
             this.stripThinkingContent(content),
             request.partialCommand,
             mode,
         )
-        cache.set(cacheKey, suggestions)
-        return suggestions
+        if (!parsed.valid) {
+            const responseSummary = content.trim()
+                ? `non-empty response (${content.length} characters)`
+                : 'empty response'
+            this.logger.warn('Failed to parse autocomplete response', responseSummary, parsed.error)
+            throw new Error(`Invalid autocomplete response: ${parsed.error ?? 'unknown response format'}`)
+        }
+        if (parsed.suggestions.length) {
+            cache.set(cacheKey, parsed.suggestions)
+        }
+        return parsed.suggestions
     }
 
     clearAutocompleteCache (tabKey: string): void {
@@ -198,6 +251,7 @@ export class LLMService {
             disableThinking?: boolean
             requestKey: string
         },
+        isUsableContent: (content: string) => boolean,
     ): Promise<string> {
         this.autocompleteAbortControllers.get(options.requestKey)?.abort()
         const localController = new AbortController()
@@ -205,18 +259,17 @@ export class LLMService {
         const { baseUrl, apiKey, model } = this.config.store.llm
         const url = `${baseUrl.replace(/\/$/, '')}/chat/completions`
         const requestModel = options.model || model
-        const requestBody: Record<string, unknown> = {
+        const baseRequestBody: Record<string, unknown> = {
             model: requestModel,
             messages,
             max_tokens: options.maxTokens,
             temperature: options.temperature,
-            stream: true,
         }
         if (options.disableThinking) {
             if (/qwen/i.test(requestModel)) {
-                requestBody.enable_thinking = false
+                baseRequestBody.enable_thinking = false
             } else if (/^(o\d|gpt-5)|reason/i.test(requestModel)) {
-                requestBody.reasoning_effort = 'minimal'
+                baseRequestBody.reasoning_effort = 'minimal'
             }
         }
         const timeoutMs = Math.max(250, options.timeoutMs ?? 0)
@@ -233,64 +286,35 @@ export class LLMService {
         restartTimeout()
 
         try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(requestBody),
-                signal: localController.signal,
-            })
-
-            if (!response.ok) {
-                const errorBody = await response.text()
-                let detail = response.statusText
-                try {
-                    detail = JSON.parse(errorBody)?.error?.message ?? detail
-                } catch {
-                    detail = errorBody || detail
-                }
-                throw new Error(detail)
+            const streamedContent = await this.performAutocompleteRequest(
+                url,
+                apiKey,
+                baseRequestBody,
+                true,
+                localController,
+                restartTimeout,
+            )
+            if (streamedContent.trim() && isUsableContent(streamedContent)) {
+                return streamedContent.trim()
+            }
+            if (localController.signal.aborted) {
+                throw new DOMException('Request aborted', 'AbortError')
             }
 
-            const reader = response.body?.getReader()
-            if (!reader) {
-                throw new Error('No response body')
-            }
-
-            try {
-                const decoder = new TextDecoder()
-                let content = ''
-                let buffer = ''
-
-                while (true) {
-                    const { done, value } = await reader.read()
-                    if (done) {
-                        break
-                    }
-                    restartTimeout()
-                    buffer += decoder.decode(value, { stream: true })
-                    const lines = buffer.split('\n')
-                    buffer = lines.pop() ?? ''
-                    content += this.parseStreamLines(lines)
-                    const streamDone = lines.some(line => {
-                        const trimmed = line.trim()
-                        return trimmed.startsWith('data:') && trimmed.substring(5).trim() === '[DONE]'
-                    })
-                    if (streamDone) {
-                        break
-                    }
-                }
-                buffer += decoder.decode()
-                content += this.parseStreamLines([buffer])
-
-                return content.trim()
-            } finally {
-                reader.cancel().catch(() => {})
-            }
+            // The streaming HTTP request completed successfully but did not contain a
+            // usable autocomplete payload. Retry once without streaming, preserving
+            // the same request key and AbortController so cancellation remains scoped.
+            restartTimeout()
+            return (await this.performAutocompleteRequest(
+                url,
+                apiKey,
+                baseRequestBody,
+                false,
+                localController,
+                restartTimeout,
+            )).trim()
         } catch (error) {
-            if (error instanceof DOMException && error.name === 'AbortError') {
+            if (this.isAbortError(error)) {
                 throw error
             }
             const message = error instanceof Error ? error.message : String(error)
@@ -303,6 +327,65 @@ export class LLMService {
             if (this.autocompleteAbortControllers.get(options.requestKey) === localController) {
                 this.autocompleteAbortControllers.delete(options.requestKey)
             }
+        }
+    }
+
+    private async performAutocompleteRequest (
+        url: string,
+        apiKey: string,
+        baseRequestBody: Record<string, unknown>,
+        stream: boolean,
+        controller: AbortController,
+        restartTimeout: () => void,
+    ): Promise<string> {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ ...baseRequestBody, stream }),
+            signal: controller.signal,
+        })
+
+        if (!response.ok) {
+            const errorBody = await response.text()
+            let detail = response.statusText
+            try {
+                detail = JSON.parse(errorBody)?.error?.message ?? detail
+            } catch {
+                detail = errorBody || detail
+            }
+            throw new Error(detail)
+        }
+
+        if (!stream) {
+            return this.parseCompletionBody(await response.text())
+        }
+
+        const reader = response.body?.getReader()
+        if (!reader) {
+            return ''
+        }
+
+        try {
+            const decoder = new TextDecoder()
+            let body = ''
+            while (true) {
+                const { done, value } = await reader.read()
+                if (done) {
+                    break
+                }
+                restartTimeout()
+                body += decoder.decode(value, { stream: true })
+                if (this.hasStreamDone(body)) {
+                    break
+                }
+            }
+            body += decoder.decode()
+            return this.parseCompletionBody(body)
+        } finally {
+            reader.cancel().catch(() => {})
         }
     }
 
@@ -360,26 +443,42 @@ export class LLMService {
         content: string,
         partialCommand = '',
         mode: AutocompleteMode = 'shell',
-    ): AutocompleteSuggestion[] {
+    ): AutocompleteParseResult {
         try {
             const json = this.extractJSON(content)
-            const items = JSON.parse(json)
-            if (!Array.isArray(items)) {
-                return []
+            const payload: unknown = JSON.parse(json)
+            let items: unknown[] | null = null
+            if (Array.isArray(payload)) {
+                items = payload
+            } else if (this.isRecord(payload)) {
+                if (Array.isArray(payload.suggestions)) {
+                    items = payload.suggestions
+                } else if (Array.isArray(payload.commands)) {
+                    items = payload.commands
+                }
+            }
+            if (!items) {
+                return {
+                    valid: false,
+                    suggestions: [],
+                    error: 'Expected a JSON array or a suggestions/commands array',
+                }
             }
             const lower = partialCommand.trim().toLowerCase()
-            return items.slice(0, 5).map((item, index) => {
-                const raw = String(item.command ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim()
+            const suggestions = items.slice(0, 5).map((item, index) => {
+                const itemRecord = this.isRecord(item) ? item : null
+                const rawValue = typeof item === 'string' ? item : itemRecord?.command
+                const raw = String(rawValue ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim()
                 const command = mode === 'editor'
                     ? this.normalizeEditorSuggestion(raw)
                     : (normalizeCommand(raw, { allowMultiline: true }) ?? '')
                 return {
                     id: `ai-${index}`,
                     command,
-                    description: String(item.description ?? ''),
+                    description: String(itemRecord?.description ?? ''),
                     category: 'ai' as const,
-                    confidence: typeof item.confidence === 'number'
-                        ? Math.max(0, Math.min(1, item.confidence))
+                    confidence: typeof itemRecord?.confidence === 'number'
+                        ? Math.max(0, Math.min(1, itemRecord.confidence))
                         : undefined,
                 }
             }).filter(item => {
@@ -397,9 +496,13 @@ export class LLMService {
                     cmd.includes(lower) ||
                     cmd.split(/[\s/._-]+/).some(word => word.startsWith(lower))
             })
+            return { valid: true, suggestions }
         } catch (e) {
-            this.logger.warn('Failed to parse autocomplete response', content, e)
-            return []
+            return {
+                valid: false,
+                suggestions: [],
+                error: e instanceof Error ? e.message : String(e),
+            }
         }
     }
 
@@ -452,28 +555,236 @@ export class LLMService {
         return content.trim()
     }
 
-    private parseStreamLines (lines: string[]): string {
-        let content = ''
-        for (const line of lines) {
-            const trimmed = line.trim()
-            if (!trimmed.startsWith('data:')) {
-                continue
-            }
-            const payload = trimmed.substring(5).trim()
-            if (payload === '[DONE]') {
-                continue
-            }
-            try {
-                const chunk = JSON.parse(payload)
-                const delta = chunk.choices?.[0]?.delta?.content
-                if (delta) {
-                    content += delta
+    private hasStreamDone (body: string): boolean {
+        return /(?:^|\r?\n)\s*data:\s*\[DONE\]\s*(?:\r?\n|$)/.test(body)
+    }
+
+    private parseCompletionBody (body: string): string {
+        const trimmed = body.trim()
+        if (!trimmed) {
+            return ''
+        }
+
+        const dataLines = body.split(/\r?\n/).map(line => line.trim()).filter(line => line.startsWith('data:'))
+        if (dataLines.length) {
+            let content = ''
+            for (const line of dataLines) {
+                const payloadText = line.substring(5).trim()
+                if (!payloadText || payloadText === '[DONE]') {
+                    continue
                 }
-            } catch {
-                // ignore malformed chunks
+                try {
+                    const extracted = this.extractCompletionContent(JSON.parse(payloadText))
+                    if (extracted !== null) {
+                        content += extracted
+                    }
+                } catch {
+                    // A malformed SSE payload makes the accumulated response unusable;
+                    // the caller will retry once using a non-streaming request.
+                }
+            }
+            return content
+        }
+
+        try {
+            const parsed = JSON.parse(trimmed)
+            return this.extractCompletionContent(parsed) ?? trimmed
+        } catch {
+            // Ollama and some OpenAI-compatible gateways stream newline-delimited
+            // JSON without the SSE "data:" prefix.
+            const lines = body.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+            if (lines.length > 1) {
+                let content = ''
+                let parsedLine = false
+                for (const line of lines) {
+                    try {
+                        const extracted = this.extractCompletionContent(JSON.parse(line))
+                        if (extracted !== null) {
+                            content += extracted
+                            parsedLine = true
+                        }
+                    } catch {
+                        return trimmed
+                    }
+                }
+                if (parsedLine) {
+                    return content
+                }
+            }
+            // Some compatible endpoints return the assistant text as a plain body.
+            return trimmed
+        }
+    }
+
+    private extractCompletionContent (payload: unknown): string | null {
+        if (typeof payload === 'string') {
+            return payload
+        }
+        if (Array.isArray(payload)) {
+            return this.extractContentValue(payload) ?? JSON.stringify(payload)
+        }
+        if (!this.isRecord(payload)) {
+            return null
+        }
+
+        const reasoningParts: string[] = []
+        const choices = payload.choices
+        if (Array.isArray(choices)) {
+            let content = ''
+            let found = false
+            for (const choice of choices) {
+                if (!this.isRecord(choice)) {
+                    continue
+                }
+                const delta = this.isRecord(choice.delta) ? choice.delta : null
+                const message = this.isRecord(choice.message) ? choice.message : null
+                for (const reasoningCandidate of [
+                    delta?.reasoning_content,
+                    message?.reasoning_content,
+                    choice.reasoning_content,
+                ]) {
+                    const reasoning = this.extractContentValue(reasoningCandidate)
+                    if (reasoning !== null) {
+                        reasoningParts.push(reasoning)
+                    }
+                }
+                const candidates: unknown[] = [
+                    delta?.content,
+                    delta?.text,
+                    message?.content,
+                    message?.text,
+                    choice.text,
+                ]
+                for (const candidate of candidates) {
+                    const extracted = this.extractContentValue(candidate)
+                    if (extracted !== null && extracted !== '') {
+                        content += extracted
+                        found = true
+                        break
+                    }
+                }
+            }
+            if (found) {
+                return content
             }
         }
-        return content
+
+        const delta = this.isRecord(payload.delta) ? payload.delta : null
+        const directCandidates: unknown[] = [
+            delta?.content,
+            delta?.text,
+            payload.output_text,
+            payload.content,
+            payload.text,
+        ]
+        for (const candidate of directCandidates) {
+            const extracted = this.extractContentValue(candidate)
+            if (extracted !== null && extracted !== '') {
+                return extracted
+            }
+        }
+
+        const output = this.extractContentValue(payload.output)
+        if (output !== null && output !== '') {
+            return output
+        }
+
+        const message = this.isRecord(payload.message) ? payload.message : null
+        const messageContent = this.extractContentValue(message?.content)
+        if (messageContent !== null && messageContent !== '') {
+            return messageContent
+        }
+        const messageText = this.extractContentValue(message?.text)
+        if (messageText !== null && messageText !== '') {
+            return messageText
+        }
+        for (const reasoningCandidate of [
+            delta?.reasoning_content,
+            message?.reasoning_content,
+            payload.reasoning_content,
+        ]) {
+            const reasoning = this.extractContentValue(reasoningCandidate)
+            if (reasoning !== null) {
+                reasoningParts.push(reasoning)
+            }
+        }
+
+        if (payload.response !== undefined) {
+            const response = this.extractCompletionContent(payload.response)
+            if (response !== null && response !== '') {
+                return response
+            }
+        }
+
+        const candidates = payload.candidates
+        if (Array.isArray(candidates)) {
+            const candidateContent = candidates.map(candidate => {
+                if (!this.isRecord(candidate) || !this.isRecord(candidate.content)) {
+                    return null
+                }
+                return this.extractContentValue(candidate.content.parts)
+            }).filter((value): value is string => value !== null).join('')
+            if (candidateContent) {
+                return candidateContent
+            }
+        }
+
+        const reasoningContent = reasoningParts.join('')
+        if (reasoningContent && this.parseAutocompleteResponse(
+            this.stripThinkingContent(reasoningContent),
+            '',
+            'editor',
+        ).suggestions.length > 0) {
+            return reasoningContent
+        }
+
+        return null
+    }
+
+    private extractContentValue (value: unknown): string | null {
+        if (typeof value === 'string') {
+            return value
+        }
+        if (Array.isArray(value)) {
+            let content = ''
+            let found = false
+            for (const item of value) {
+                const extracted = this.extractContentValue(item)
+                if (extracted !== null) {
+                    content += extracted
+                    found = true
+                }
+            }
+            return found ? content : null
+        }
+        if (!this.isRecord(value)) {
+            return null
+        }
+        if (typeof value.text === 'string') {
+            return value.text
+        }
+        if (this.isRecord(value.text) && typeof value.text.value === 'string') {
+            return value.text.value
+        }
+        if (typeof value.output_text === 'string') {
+            return value.output_text
+        }
+        const nestedContent = this.extractContentValue(value.content)
+        if (nestedContent !== null) {
+            return nestedContent
+        }
+        if (typeof value.type === 'string' && /text/i.test(value.type) && typeof value.value === 'string') {
+            return value.value
+        }
+        return null
+    }
+
+    private isRecord (value: unknown): value is Record<string, unknown> {
+        return typeof value === 'object' && value !== null && !Array.isArray(value)
+    }
+
+    private isAbortError (error: unknown): boolean {
+        return this.isRecord(error) && error.name === 'AbortError'
     }
 
     private stripThinkingContent (content: string): string {

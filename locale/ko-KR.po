@@ -120,10 +120,6 @@ msgstr "응용 프로그램"
 msgid "Application settings"
 msgstr "응용 프로그램 설정"
 
-#: tabby-web/src/services/hostWindow.service.ts:19
-msgid "Are you sure you want to close Tabby? You can disable this prompt in Settings -> Window."
-msgstr "Tabby를 정말로 닫으시겠습니까? 더 이상 이 질문을 보지 않으려면 설정 -> 창 에서 변경할 수 있습니다."
-
 #: tabby-core/src/services/config.service.ts:440
 msgid "Are you sure?"
 msgstr "확실한가요?"
@@ -148,10 +144,6 @@ msgstr "소리"
 msgid "Authentication method"
 msgstr "인증 방법"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:79
-msgid "Author"
-msgstr "만든 사람"
-
 #: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:50
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:78
 msgid "Auto"
@@ -174,10 +166,6 @@ msgstr "자동 업데이트"
 #: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:54
 msgid "Automatically upload changes and check for updates every minute"
 msgstr "자동으로 변경사항 업로드 후 매 분마다 갱신 확인"
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:10
-msgid "Available"
-msgstr "사용 가능"
 
 #: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:35
 msgid "Background type"
@@ -226,7 +214,6 @@ msgstr "괄호(Bracketed)식 붙여넣기 (쉘 지원 필요)"
 msgid "Broadcast mode. Click anywhere to cancel."
 msgstr "브로드캐스트 모드. 취소하려면 아무 곳이나 클릭하세요."
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:50
 #: tabby-core/src/services/profiles.service.ts:411
 msgid "Built-in"
 msgstr "빌트인"
@@ -406,7 +393,6 @@ msgstr "다른 호스트에 먼저 연결 후 프록시로 사용"
 #: locale/tmp-html/tabby-ssh/src/components/sftpPanel.component.html:19
 #: tabby-serial/src/components/serialTab.component.ts:60
 #: tabby-ssh/src/components/sshTab.component.ts:130
-#: tabby-telnet/src/components/telnetTab.component.ts:54
 msgid "Connecting"
 msgstr "연결 중"
 
@@ -620,10 +606,6 @@ msgstr "장치"
 msgid "Direct"
 msgstr "직접 연결"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:57
-msgid "Disable"
-msgstr "비활성화"
-
 #: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:39
 msgid "Disable dynamic tab title"
 msgstr "동적 탭 제목 비활성화"
@@ -636,13 +618,8 @@ msgstr "창 이동하는 동안 반투명 배경 끄기"
 msgid "Disable GPU acceleration"
 msgstr "GPU 가속 비활성화"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:50
-msgid "Disabled"
-msgstr "비활성화됨"
-
 #: locale/tmp-html/tabby-ssh/src/components/hostKeyPromptModal.component.html:26
 #: tabby-ssh/src/components/sshTab.component.ts:200
-#: tabby-telnet/src/components/telnetTab.component.ts:83
 #: tabby-terminal/src/api/connectableTerminalTab.component.ts:36
 #: tabby-terminal/src/tabContextMenu.ts:106
 #: tabby-terminal/src/tabContextMenu.ts:110
@@ -654,7 +631,6 @@ msgid "Disconnect current tab (Serial/Telnet/SSH)"
 msgstr "현재 탭 연결 해제 (Serial/Telnet/SSH)"
 
 #: tabby-ssh/src/components/sshTab.component.ts:198
-#: tabby-telnet/src/components/telnetTab.component.ts:81
 msgid "Disconnect from {host}?"
 msgstr "{host} 로부터 연결을 끊으시겠습니까?"
 
@@ -671,7 +647,6 @@ msgid "Do not abort"
 msgstr "중단하지 않음"
 
 #: tabby-ssh/src/components/sshTab.component.ts:201
-#: tabby-telnet/src/components/telnetTab.component.ts:84
 msgid "Do not close"
 msgstr "닫지 않음"
 
@@ -738,10 +713,6 @@ msgstr "편집"
 msgid "Edit locally"
 msgstr "로컬 편집"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:58
-msgid "Enable"
-msgstr "활성화"
-
 #: locale/tmp-html/tabby-core/src/components/welcomeTab.component.html:32
 #: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:66
 msgid "Enable analytics"
@@ -791,10 +762,6 @@ msgstr "설정 지우기"
 #: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:12
 msgid "Erase the Vault"
 msgstr "Vault 지우기"
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:6
-msgid "Error in {plugin}:"
-msgstr "{plugin} 오류:"
 
 #: locale/tmp-html/tabby-terminal/src/components/loginScriptsSettings.component.html:10
 msgid "Exact match"
@@ -955,21 +922,12 @@ msgstr "전체"
 
 #: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:3
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:3
-#: locale/tmp-html/tabby-telnet/src/components/telnetProfileSettings.component.html:3
 msgid "General"
 msgstr "일반"
 
 #: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:21
 msgid "Generate a pre-filled GitHub issue"
 msgstr "미리 지정된 양식을 생성하여 Github 이슈 작성"
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:25
-msgid "Get"
-msgstr "받기"
-
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:18
-msgid "Get it from the Tabby Web settings window"
-msgstr "Tabby 웹 설정 창에서 받기"
 
 #: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:29
 msgid "Gives the window a blurred transparent background"
@@ -1028,12 +986,7 @@ msgstr "포커스 해제 시 창 숨기기"
 msgid "Hides the docked terminal when you click away."
 msgstr "터미널 밖으로 클릭 시 도킹된 터미널 숨기기"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:26
-msgid "Homepage"
-msgstr "홈페이지"
-
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:34
-#: locale/tmp-html/tabby-telnet/src/components/telnetProfileSettings.component.html:6
 msgid "Host"
 msgstr "호스트"
 
@@ -1092,7 +1045,6 @@ msgstr "세로 분할 크기 크게"
 
 #: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:91
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:226
-#: locale/tmp-html/tabby-telnet/src/components/telnetProfileSettings.component.html:21
 msgid "Input"
 msgstr "입력"
 
@@ -1107,10 +1059,6 @@ msgstr "입력 모드"
 #: locale/tmp-html/tabby-terminal/src/components/streamProcessingSettings.component.html:15
 msgid "Input newlines"
 msgstr "개행 입력"
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:39
-msgid "Installed"
-msgstr "설치됨"
 
 #: tabby-electron/src/services/updater.service.ts:131
 msgid "Installing the update will close all tabs and restart Tabby."
@@ -1252,7 +1200,6 @@ msgstr "로컬 터미널"
 
 #: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:86
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:221
-#: locale/tmp-html/tabby-telnet/src/components/telnetProfileSettings.component.html:16
 msgid "Login scripts"
 msgstr "로그인 스크립트"
 
@@ -1428,10 +1375,6 @@ msgstr "버퍼에 유지할 라인 수"
 msgid "Off"
 msgstr "끄기"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:81
-msgid "Official"
-msgstr "공식"
-
 #: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:26
 msgid "On GitHub Discussions"
 msgstr "GitHub 토론에서"
@@ -1580,16 +1523,7 @@ msgstr "로컬 X11 소켓의 경로 혹은 주소"
 msgid "Pin"
 msgstr "고정"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:3
-msgid "Plugins"
-msgstr "플러그인"
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:4
-msgid "Plugins folder"
-msgstr "플러그인 폴더"
-
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:38
-#: locale/tmp-html/tabby-telnet/src/components/telnetProfileSettings.component.html:10
 msgid "Port"
 msgstr "포트"
 
@@ -1671,10 +1605,6 @@ msgstr "빠른 연결"
 msgid "Quit"
 msgstr "끝내기"
 
-#: tabby-telnet/src/profiles.ts:50
-msgid "Raw socket connection"
-msgstr "Raw 소켓 연결"
-
 #: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:166
 msgid "Ready Timeout (Milliseconds)"
 msgstr "타임아웃 (밀리초)"
@@ -1688,7 +1618,6 @@ msgstr "최근"
 #: locale/tmp-html/tabby-serial/src/components/serialTab.component.html:5
 #: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:52
 #: locale/tmp-html/tabby-ssh/src/components/sshTab.component.html:10
-#: locale/tmp-html/tabby-telnet/src/components/telnetTab.component.html:3
 #: tabby-terminal/src/api/connectableTerminalTab.component.ts:32
 #: tabby-terminal/src/tabContextMenu.ts:115
 #: tabby-terminal/src/tabContextMenu.ts:119
@@ -1767,10 +1696,6 @@ msgstr "현재 Serial 세션 재시작"
 #: tabby-ssh/src/hotkeys.ts:10
 msgid "Restart current SSH session"
 msgstr "현재 SSH 세션 재시작"
-
-#: tabby-telnet/src/hotkeys.ts:10
-msgid "Restart current Telnet session"
-msgstr "현재 텔넷 세션 재시작"
 
 #: tabby-core/src/hotkeys.ts:64
 msgid "Restart tab"
@@ -1881,10 +1806,6 @@ msgstr "색상 구성 검색"
 #: tabby-settings/src/components/hotkeySettingsTab.component.ts:12
 msgid "Search hotkeys"
 msgstr "단축키 검색"
-
-#: tabby-plugin-manager/src/components/pluginsSettingsTab.component.ts:14
-msgid "Search plugins"
-msgstr "플러그인 검색"
 
 #: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:17
 msgid "Secret sync token"
@@ -2245,10 +2166,6 @@ msgstr "탭 위치"
 msgid "Tabs width"
 msgstr "탭 너비"
 
-#: tabby-telnet/src/profiles.ts:34
-msgid "Telnet session"
-msgstr "텔넷 세션"
-
 #: tabby-terminal/src/api/baseTerminalTab.component.ts:210
 #: tabby-terminal/src/settings.ts:43
 msgid "Terminal"
@@ -2340,10 +2257,6 @@ msgstr "현재 탭의 창을 별도의 탭으로 전환"
 msgid "Ungrouped"
 msgstr "그룹 해제됨"
 
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:59
-msgid "Uninstall"
-msgstr "설치 제거"
-
 #: tabby-settings/src/components/profilesSettingsTab.component.ts:269
 msgid "Unknown"
 msgstr "알 수 없음"
@@ -2364,10 +2277,6 @@ msgstr "위"
 #: tabby-electron/src/services/updater.service.ts:133
 msgid "Update"
 msgstr "업데이트"
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:52
-msgid "Upgrade to {version}"
-msgstr "{version} 로 업그레이드"
 
 #: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:42
 #: locale/tmp-html/tabby-ssh/src/components/sftpPanel.component.html:10
@@ -2431,10 +2340,6 @@ msgstr "비밀 저장을 허용하려면 Vault 마스터 암호를 설정해야 
 #: locale/tmp-html/tabby-ssh/src/components/sshSettingsTab.component.html:11
 msgid "Verify host keys when connecting"
 msgstr "연결 시 호스트 키 확인"
-
-#: locale/tmp-html/tabby-plugin-manager/src/components/pluginsSettingsTab.component.html:75
-msgid "Version"
-msgstr "버전"
 
 #: locale/tmp-html/tabby-core/src/components/startPage.component.html:13
 msgid "Version: {version}"
@@ -2571,4 +2476,3 @@ msgstr "축소"
 msgctxt "[Dynamic] port forwarding"
 msgid "id.port-forwarding.dynamic"
 msgstr "동적"
-

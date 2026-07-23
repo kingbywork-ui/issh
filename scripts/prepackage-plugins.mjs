@@ -17,9 +17,6 @@ fs.writeFileSync(path.join(target, 'package.json'), '{}')
 sh.cd(target)
 
 for (const plugin of vars.builtinPlugins) {
-    if (plugin === 'tabby-web') {
-        continue
-    }
     log.info('install', plugin)
     sh.rm('-rf', plugin)
     sh.cp('-r', path.join('..', plugin), '.')

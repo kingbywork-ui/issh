@@ -73,9 +73,10 @@ test_*.py
 test_*.json
 test_screenshots/
 scripts/agent-bridge/
+scripts/debug-*
 
 # OS Files
 Thumbs.db
 desktop.ini
 main.js
-.psacowork/
+.psacowork/"tabby-llm/AUTOCOMPLETE_REGRESSION_PLAYBOOK.md"  

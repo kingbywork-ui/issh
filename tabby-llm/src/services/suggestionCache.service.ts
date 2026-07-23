@@ -37,7 +37,20 @@ export class SuggestionCache<T> {
         })
     }
 
-    makeKey (...parts: (string | null | undefined)[]): string {
-        return parts.filter(Boolean).join('\x00')
+    makeKey (parts: { [name: string]: string | null | undefined }): string {
+        return Object.keys(parts).sort().map(name => {
+            const value = parts[name]
+            let encoded: string
+            if (value === undefined) {
+                encoded = '<undefined>'
+            } else if (value === null) {
+                encoded = '<null>'
+            } else if (value === '') {
+                encoded = '<empty>'
+            } else {
+                encoded = JSON.stringify(value)
+            }
+            return `${name}=${encoded}`
+        }).join('\x00')
     }
 }

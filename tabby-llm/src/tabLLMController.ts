@@ -178,24 +178,24 @@ export class TabLLMController {
         }
         if (event.key === 'Escape') {
             this.hideAutocomplete()
-            event.preventDefault()
+            this.consumePanelKeyEvent(event)
             return true
         }
         if (event.ctrlKey && !event.altKey && !event.metaKey) {
             const key = event.key.toLowerCase()
             if (key === 'n') {
                 this.moveSelection(1)
-                event.preventDefault()
+                this.consumePanelKeyEvent(event)
                 return true
             }
             if (key === 'u') {
                 this.moveSelection(-1)
-                event.preventDefault()
+                this.consumePanelKeyEvent(event)
                 return true
             }
             if (key === 'y' && this.suggestions[this.selectedIndex]) {
                 void this.acceptSuggestion(this.suggestions[this.selectedIndex])
-                event.preventDefault()
+                this.consumePanelKeyEvent(event)
                 return true
             }
         }
@@ -282,7 +282,16 @@ export class TabLLMController {
         this.insertCommand(suggestion.command, execute, partial)
         this.hideAutocomplete()
         if (!editorMode) {
-            this.lineBuffer = suggestion.command
+            if (execute) {
+                const submittedCommand = suggestion.command.trim()
+                this.recordSubmittedCommand(submittedCommand)
+                this.lineBuffer = ''
+                this.inputWasSensitive = false
+                this.sensitiveInputLatched = false
+                this.startNextCommandPrediction(submittedCommand)
+            } else {
+                this.lineBuffer = suggestion.command
+            }
         }
         this.refresh()
     }
@@ -446,7 +455,7 @@ export class TabLLMController {
             editorMode,
             historySuggestions.length,
             scriptSuggestions.length,
-            aiEnabled,
+            shouldRequestAI,
         )
 
         if (!shouldRequestAI) {
@@ -477,7 +486,15 @@ export class TabLLMController {
             }
             const indexBeforeMerge = this.selectedIndex
             const suggestionsBeforeMerge = [...this.suggestions]
-            this.suggestions = this.rankSuggestions(partial, ...merged, ...aiSuggestions)
+            const latestPredictedSuggestions = !editorMode
+                ? this.filterPredictedSuggestions(partial)
+                : []
+            this.suggestions = this.rankSuggestions(
+                partial,
+                ...merged,
+                ...latestPredictedSuggestions,
+                ...aiSuggestions,
+            )
             if (partialChanged) {
                 this.selectedIndex = 0
             } else {
@@ -656,6 +673,13 @@ export class TabLLMController {
         this.keyHandlerAttached = true
     }
 
+    private consumePanelKeyEvent (event: KeyboardEvent): void {
+        event.preventDefault()
+        // xterm's custom handler runs before the event bubbles to document, where
+        // HotkeysService would otherwise emit the same Ctrl+N/U/Y action again.
+        event.stopPropagation()
+    }
+
     private refresh (): void {
         this.notifyChange?.()
     }
@@ -718,13 +742,32 @@ export class TabLLMController {
                     ...suggestion,
                     id: `prediction-${generation}-${index}`,
                 }))
-                if (this.getPartial().trim() && this.config.store.llm.autoCompleteOnType) {
-                    void this.fetchAutocomplete(false, false)
-                }
+                this.mergeMatchingPredictionsIntoCurrentAutocomplete()
             }
         } catch (e) {
             this.logger.debug('Next-command prediction failed:', e)
         }
+    }
+
+    private mergeMatchingPredictionsIntoCurrentAutocomplete (): void {
+        if (this.isEditorMode() || this.isSensitiveInputActive() || !this.config.store.llm.autoCompleteOnType) {
+            return
+        }
+        const partial = this.getPartial()
+        if (partial !== this.lastAutocompletePartial || !this.shouldTriggerForPartial(partial, false)) {
+            return
+        }
+        const matchingPredictions = this.filterPredictedSuggestions(partial)
+        if (!matchingPredictions.length) {
+            return
+        }
+        const previousIndex = this.selectedIndex
+        const previousSuggestions = [...this.suggestions]
+        this.suggestions = this.rankSuggestions(partial, ...this.suggestions, ...matchingPredictions)
+        this.preserveSelection(previousIndex, previousSuggestions)
+        this.showAutocomplete = this.suggestions.length > 0
+        this.updatePanelPosition()
+        this.refresh()
     }
 
     private isHistoryAutocompleteEnabled (): boolean {
