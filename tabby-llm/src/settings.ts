@@ -21,7 +21,7 @@ export class LLMSettingsTabProvider extends SettingsTabProvider {
 export class AgentBridgeSettingsTabProvider extends SettingsTabProvider {
     id = 'agent-bridge'
     icon = 'terminal'
-    title = 'CLI / MCP Agent'
+    title = 'CLI / MCP 智能体'
 
     getComponentType (): any {
         return AgentBridgeSettingsTabComponent

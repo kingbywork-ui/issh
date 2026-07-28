@@ -10,18 +10,22 @@ import { SelectorService } from './selector.service'
 import { FileProvider } from '../api/fileProvider'
 import { PlatformService } from '../api/platform'
 
-const PBKDF_ITERATIONS = 100000
+const PBKDF_ITERATIONS_V1 = 100000
+const PBKDF_ITERATIONS_V2 = 310000
 const PBKDF_DIGEST = 'sha512'
 const PBKDF_SALT_LENGTH = 64 / 8
-const CRYPT_ALG = 'aes-256-cbc'
+const CRYPT_ALG_V1 = 'aes-256-cbc'
+const CRYPT_ALG_V2 = 'aes-256-gcm'
 const CRYPT_KEY_LENGTH = 256 / 8
-const CRYPT_IV_LENGTH = 128 / 8
+const CRYPT_IV_LENGTH_V2 = 96 / 8
 
 export interface StoredVault {
     version: number
     contents: string
     keySalt: string
     iv: string
+    authTag?: string
+    keyIterations?: number
 }
 
 export interface VaultSecret {
@@ -52,11 +56,11 @@ function migrateVaultContent (content: any): Vault {
     }
 }
 
-function deriveVaultKey (passphrase: string, salt: Buffer): Promise<Buffer> {
+function deriveVaultKey (passphrase: string, salt: Buffer, iterations: number): Promise<Buffer> {
     return promisify(crypto.pbkdf2)(
         Buffer.from(passphrase),
         salt,
-        PBKDF_ITERATIONS,
+        iterations,
         CRYPT_KEY_LENGTH,
         PBKDF_DIGEST,
     )
@@ -64,31 +68,41 @@ function deriveVaultKey (passphrase: string, salt: Buffer): Promise<Buffer> {
 
 async function encryptVault (content: Vault, passphrase: string): Promise<StoredVault> {
     const keySalt = await promisify(crypto.randomBytes)(PBKDF_SALT_LENGTH)
-    const iv = await promisify(crypto.randomBytes)(CRYPT_IV_LENGTH)
-    const key = await deriveVaultKey(passphrase, keySalt)
+    const iv = await promisify(crypto.randomBytes)(CRYPT_IV_LENGTH_V2)
+    const key = await deriveVaultKey(passphrase, keySalt, PBKDF_ITERATIONS_V2)
 
     const plaintext = JSON.stringify(content)
-    const cipher = crypto.createCipheriv(CRYPT_ALG, key, iv)
+    const cipher = crypto.createCipheriv(CRYPT_ALG_V2, key, iv)
     const encrypted = Buffer.concat([cipher.update(plaintext, 'utf-8'), cipher.final()])
 
     return {
-        version: 1,
+        version: 2,
         contents: encrypted.toString('base64'),
         keySalt: keySalt.toString('hex'),
         iv: iv.toString('hex'),
+        authTag: cipher.getAuthTag().toString('hex'),
+        keyIterations: PBKDF_ITERATIONS_V2,
     }
 }
 
 async function decryptVault (vault: StoredVault, passphrase: string): Promise<Vault> {
-    if (vault.version !== 1) {
-        throw new Error(`Unsupported vault format version ${vault.version}`)
-    }
     const keySalt = Buffer.from(vault.keySalt, 'hex')
-    const key = await deriveVaultKey(passphrase, keySalt)
     const iv = Buffer.from(vault.iv, 'hex')
     const encrypted = Buffer.from(vault.contents, 'base64')
 
-    const decipher = crypto.createDecipheriv(CRYPT_ALG, key, iv)
+    if (vault.version === 1) {
+        const key = await deriveVaultKey(passphrase, keySalt, PBKDF_ITERATIONS_V1)
+        const decipher = crypto.createDecipheriv(CRYPT_ALG_V1, key, iv)
+        const plaintext = decipher.update(encrypted, undefined, 'utf-8') + decipher.final('utf-8')
+        return migrateVaultContent(JSON.parse(plaintext))
+    }
+    if (vault.version !== 2 || !vault.authTag) {
+        throw new Error(`Unsupported vault format version ${vault.version}`)
+    }
+    const iterations = vault.keyIterations ?? PBKDF_ITERATIONS_V2
+    const key = await deriveVaultKey(passphrase, keySalt, iterations)
+    const decipher = crypto.createDecipheriv(CRYPT_ALG_V2, key, iv)
+    decipher.setAuthTag(Buffer.from(vault.authTag, 'hex'))
     const plaintext = decipher.update(encrypted, undefined, 'utf-8') + decipher.final('utf-8')
     return migrateVaultContent(JSON.parse(plaintext))
 }
@@ -154,8 +168,8 @@ export class VaultService {
                 _rejectedEnvPassphrase = passphrase
             }
             this.forgetPassphrase()
-            if (e.toString().includes('BAD_DECRYPT')) {
-                this.notifications.error('Incorrect passphrase')
+            if (/BAD_DECRYPT|authenticate data/i.test(e.toString())) {
+                this.notifications.error('Incorrect passphrase or corrupted vault')
             }
             throw e
         }

@@ -78,9 +78,13 @@ export class Window {
             minHeight: 300,
             webPreferences: {
                 nodeIntegration: true,
+                nodeIntegrationInSubFrames: false,
+                nodeIntegrationInWorker: false,
                 preload: path.join(__dirname, 'sentry.js'),
                 backgroundThrottling: false,
                 contextIsolation: false,
+                navigateOnDragDrop: false,
+                webviewTag: false,
             },
             maximizable: true,
             frame: false,
@@ -208,12 +212,23 @@ export class Window {
 
         enableRemote(this.window.webContents)
 
+        this.window.webContents.on('will-navigate', event => {
+            event.preventDefault()
+        })
         this.window.loadFile(path.join(app.getAppPath(), 'dist', 'index.html'))
 
         this.window.webContents.setVisualZoomLevelLimits(1, 1)
         this.window.webContents.setZoomFactor(1)
-        this.window.webContents.session.setPermissionCheckHandler(() => true)
-        this.window.webContents.session.setDevicePermissionHandler(() => true)
+        const isAllowedPermission = (webContents: WebContents | null, permission: string): boolean => {
+            return webContents === this.window?.webContents && permission === 'clipboard-sanitized-write'
+        }
+        this.window.webContents.session.setPermissionCheckHandler((webContents, permission) => {
+            return isAllowedPermission(webContents, permission)
+        })
+        this.window.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
+            callback(isAllowedPermission(webContents, permission))
+        })
+        this.window.webContents.session.setDevicePermissionHandler(() => false)
         this.window.webContents.session.setSpellCheckerEnabled(false)
 
         if (process.platform === 'darwin') {

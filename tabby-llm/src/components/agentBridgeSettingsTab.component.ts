@@ -38,28 +38,28 @@ export class AgentBridgeSettingsTabComponent extends BaseComponent implements On
         if (!token) {
             return
         }
-        await this.copyText(token, 'Agent Bridge token copied')
+        await this.copyText(token, '智能体桥接令牌已复制')
     }
 
     async rotateBridgeToken (): Promise<void> {
         await this.agentBridge.rotateToken()
-        this.notifications.notice('Agent Bridge token rotated')
+        this.notifications.notice('智能体桥接令牌已轮换')
     }
 
     async copyCodexConfig (): Promise<void> {
-        await this.copyText(this.agentBridge.codexConfigSnippet, 'Codex MCP config copied')
+        await this.copyText(this.agentBridge.codexConfigSnippet, 'Codex MCP 配置已复制')
     }
 
     async copyCursorConfig (): Promise<void> {
-        await this.copyText(this.agentBridge.cursorConfigSnippet, 'Cursor MCP config copied')
+        await this.copyText(this.agentBridge.cursorConfigSnippet, 'Cursor MCP 配置已复制')
     }
 
     async copyAgentRulesTemplate (): Promise<void> {
-        await this.copyText(this.agentBridge.agentRulesTemplate, 'Agent rules template copied')
+        await this.copyText(this.agentBridge.agentRulesTemplate, '智能体规则模板已复制')
     }
 
     async copyClaudeDesktopConfig (): Promise<void> {
-        await this.copyText(this.agentBridge.claudeDesktopConfigSnippet, 'Claude Desktop MCP config copied')
+        await this.copyText(this.agentBridge.claudeDesktopConfigSnippet, 'Claude Desktop MCP 配置已复制')
     }
 
     auditEntries: any[] = []
@@ -108,7 +108,7 @@ export class AgentBridgeSettingsTabComponent extends BaseComponent implements On
         try {
             await this.agentBridge.testConnection()
             this.bridgeTestSuccessful = true
-            this.notifications.notice('Agent Bridge is reachable')
+            this.notifications.notice('智能体桥接连接正常')
         } catch (error) {
             this.bridgeTestSuccessful = false
             this.bridgeTestError = error instanceof Error ? error.message : String(error)
@@ -122,7 +122,7 @@ export class AgentBridgeSettingsTabComponent extends BaseComponent implements On
             await navigator.clipboard.writeText(text)
             this.notifications.notice(successMessage)
         } catch (error) {
-            this.notifications.error('Copy failed', error instanceof Error ? error.message : String(error))
+            this.notifications.error('复制失败', error instanceof Error ? error.message : String(error))
         }
     }
 

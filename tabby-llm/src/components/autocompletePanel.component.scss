@@ -1,7 +1,7 @@
 :host {
     --ac-fg: #f2f4f7;
     --ac-fg-muted: rgba(242, 244, 247, 0.78);
-    --ac-bg: rgba(18, 20, 24, 0.98);
+    --ac-bg: rgba(18, 20, 24, 0.72);
     --ac-border: rgba(255, 255, 255, 0.22);
     --ac-hover: rgba(255, 255, 255, 0.1);
     --ac-selected: rgba(43, 184, 166, 0.22);
@@ -13,6 +13,7 @@
     max-width: min(600px, calc(100% - 16px));
     color: var(--ac-fg);
     background: var(--ac-bg);
+    backdrop-filter: blur(4px) saturate(110%);
     border: 1px solid var(--ac-border);
     border-radius: 6px;
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
@@ -28,6 +29,7 @@
         min-width: 0;
         max-width: min(560px, 80vw);
         background: transparent;
+        backdrop-filter: none;
         border: 0;
         border-radius: 0;
         box-shadow: none;

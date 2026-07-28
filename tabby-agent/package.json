@@ -1,0 +1,14 @@
+{
+  "name": "@issh/tabby-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CLI and stdio MCP client for the issh Tabby Agent Bridge",
+  "bin": {
+    "tabby-agent": "bin/tabby-agent.mjs",
+    "tabby-mcp-server": "bin/tabby-mcp-server.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}

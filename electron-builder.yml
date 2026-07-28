@@ -34,6 +34,12 @@ files:
 extraResources:
 - builtin-plugins
 - extras
+- from: tabby-agent
+  to: tabby-agent
+  filter:
+  - package.json
+  - bin/**
+  - src/**
 - from: node_modules/math-intrinsics
   to: app.asar.unpacked/node_modules/math-intrinsics
 asarUnpack:

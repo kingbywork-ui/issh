@@ -1,15 +1,15 @@
-h3.mb-3 CLI / MCP Agent
+h3.mb-3 CLI / MCP 智能体
 
 .alert.alert-info
     div
-        strong Agent Bridge
-        span  exposes local Tabby terminal sessions to Codex, Cursor, and the bundled CLI through a token-protected localhost RPC server.
-    div Tools include session list/select, context and buffer read, command preview/insert/run, SSH exec, SFTP read/write, and batch exec.
+        strong 智能体桥接
+        span 通过受令牌保护的本机 RPC 服务，将 Tabby 终端会话提供给 Codex、Cursor 和内置 CLI 使用。
+    div 支持会话列表与选择、上下文和缓冲区读取、命令预览、插入与运行、SSH 执行、SFTP 读写和批量执行。
 
 .form-line
     .header
-        .title Enable CLI / MCP Agent
-        .description Starts a local-only bridge on 127.0.0.1 and writes tabby-agent-bridge.json in the Tabby config directory.
+        .title 启用 CLI / MCP 智能体
+        .description 在 127.0.0.1 启动仅限本机访问的桥接服务，并在 Tabby 配置目录中写入 tabby-agent-bridge.json。
     toggle(
         [(ngModel)]='config.store.llm.agentBridgeEnabled',
         (ngModelChange)='config.save()'
@@ -18,8 +18,8 @@ h3.mb-3 CLI / MCP Agent
 ng-container(*ngIf='config.store.llm.agentBridgeEnabled')
     .form-line
         .header
-            .title Agent Bridge port
-            .description 0 selects a free port. TABBY_AGENT_BRIDGE_PORT can override this value.
+            .title 智能体桥接端口
+            .description 设为 0 时自动选择空闲端口；环境变量 TABBY_AGENT_BRIDGE_PORT 可覆盖此值。
         input.form-control(
             type='number',
             min='0',
@@ -31,8 +31,8 @@ ng-container(*ngIf='config.store.llm.agentBridgeEnabled')
 
     .form-line
         .header
-            .title Default exec timeout (seconds)
-            .description tabby_exec_command waits this long for command output by default.
+            .title 默认执行超时（秒）
+            .description tabby_exec_command 默认等待命令输出的最长时间。
         input.form-control(
             type='number',
             min='1',
@@ -43,8 +43,8 @@ ng-container(*ngIf='config.store.llm.agentBridgeEnabled')
 
     .form-line
         .header
-            .title Audit log
-            .description Writes one JSONL entry per RPC call to agent-bridge-audit.jsonl in the Tabby config directory.
+            .title 审计日志
+            .description 每次 RPC 调用都会在 Tabby 配置目录的 agent-bridge-audit.jsonl 中写入一条 JSONL 记录。
         toggle(
             [(ngModel)]='config.store.llm.agentBridgeAuditLogEnabled',
             (ngModelChange)='config.save()'
@@ -52,8 +52,8 @@ ng-container(*ngIf='config.store.llm.agentBridgeEnabled')
 
     .form-line
         .header
-            .title Agent-readable discovery file
-            .description Optional second connection file under the Tabby config directory (not C:\\tmp). Keep disabled unless a sandboxed agent cannot read the primary connection file.
+            .title 智能体可读发现文件
+            .description 可在 Tabby 配置目录下创建第二个连接文件（不会写入 C:\\tmp）。仅当沙箱中的智能体无法读取主连接文件时启用。
         toggle(
             [(ngModel)]='config.store.llm.agentBridgePublicDiscoveryEnabled',
             (ngModelChange)='config.save()'
@@ -61,8 +61,8 @@ ng-container(*ngIf='config.store.llm.agentBridgeEnabled')
 
     .form-line
         .header
-            .title Token scopes
-            .description Restrict which RPC families this token may call. Legacy tokens migrate to full access once.
+            .title 令牌权限范围
+            .description 限制此令牌可以调用的 RPC 能力。旧版令牌首次迁移时会保留完整权限。
         .d-flex.flex-wrap.gap-3
             .form-check(*ngFor='let scope of scopeOptions')
                 input.form-check-input(
@@ -71,12 +71,12 @@ ng-container(*ngIf='config.store.llm.agentBridgeEnabled')
                     [checked]='hasScope(scope)',
                     (change)='toggleScope(scope)'
                 )
-                label.form-check-label([for]='"scope-" + scope') {{ scope }}
+                label.form-check-label([for]='"scope-" + scope') {{ scope === 'read' ? '读取' : scope === 'write' ? '写入' : scope === 'exec' ? '执行' : 'SFTP' }}
 
     .form-line
         .header
-            .title SFTP root (optional)
-            .description When set, SFTP paths must stay under this prefix.
+            .title SFTP 根目录（可选）
+            .description 设置后，所有 SFTP 路径都必须位于此前缀之下。
         input.form-control(
             type='text',
             placeholder='/home/user',
@@ -86,8 +86,8 @@ ng-container(*ngIf='config.store.llm.agentBridgeEnabled')
 
     .form-line
         .header
-            .title SSE transport
-            .description Enables GET /sse + POST /messages endpoints for SSE-based MCP clients (e.g. Claude Desktop). Disable to restrict to stdio-only transport.
+            .title SSE 传输
+            .description 为基于 SSE 的 MCP 客户端（例如 Claude Desktop）启用 GET /sse 和 POST /messages。关闭后仅允许标准输入输出传输。
         toggle(
             [(ngModel)]='config.store.llm.agentBridgeSseEnabled',
             (ngModelChange)='config.save()'
@@ -95,27 +95,31 @@ ng-container(*ngIf='config.store.llm.agentBridgeEnabled')
 
     .alert.alert-info
         div
-            strong MCP listener:
-            span.text-success(*ngIf='agentBridge.running')  running
-            span.text-muted(*ngIf='!agentBridge.running')  starting
-        div(*ngIf='agentBridge.listeningPort') Port: {{ agentBridge.listeningPort }}
-        div(*ngIf='agentBridge.rpcUrl') RPC URL: {{ agentBridge.rpcUrl }}
-        div(*ngIf='agentBridge.sseUrl') SSE URL: {{ agentBridge.sseUrl }}
-        div MCP server: {{ agentBridge.mcpServerScriptPath }}
-        div Node requirement: Codex/Cursor must be able to execute the node command.
-        div(*ngIf='agentBridge.connectionFile') Connection file: {{ agentBridge.connectionFile }}
-        div(*ngIf='agentBridge.publicConnectionFile') Agent discovery file: {{ agentBridge.publicConnectionFile }}
-        div(*ngIf='agentBridge.auditLogFile') Audit log: {{ agentBridge.auditLogFile }}
-        div(*ngIf='!agentBridge.connectionFile') The connection file appears after the bridge starts.
+            strong MCP 监听器：
+            span.text-success(*ngIf='agentBridge.running')  运行中
+            span.text-muted(*ngIf='!agentBridge.running')  启动中
+        div(*ngIf='agentBridge.listeningPort') 端口：{{ agentBridge.listeningPort }}
+        div(*ngIf='agentBridge.rpcUrl') RPC 地址：{{ agentBridge.rpcUrl }}
+        div(*ngIf='agentBridge.sseUrl') SSE 地址：{{ agentBridge.sseUrl }}
+        div MCP 服务端：{{ agentBridge.mcpServerScriptPath }}
+        div Node 要求：Codex/Cursor 必须能够执行 node 命令。
+        div(*ngIf='agentBridge.connectionFile') 连接文件：{{ agentBridge.connectionFile }}
+        div(*ngIf='agentBridge.publicConnectionFile') 智能体发现文件：{{ agentBridge.publicConnectionFile }}
+        div(*ngIf='agentBridge.auditLogFile') 审计日志：{{ agentBridge.auditLogFile }}
+        div(*ngIf='!agentBridge.connectionFile') 桥接服务启动后会显示连接文件。
 
     .alert.alert-danger(*ngIf='agentBridge.startupError')
         i.fas.fa-exclamation-triangle.me-2
         span {{ agentBridge.startupError }}
 
+    .alert.alert-danger(*ngIf='agentBridge.clientError')
+        i.fas.fa-exclamation-triangle.me-2
+        span CLI / MCP 客户端不可用：{{ agentBridge.clientError }}
+
     .form-line.form-line-stacked
         .header
-            .title Onboarding
-            .description Copy the MCP config for your agent, then test the bridge. Dangerous commands always require a Tabby confirmation dialog.
+            .title 接入配置
+            .description 将 MCP 配置复制到智能体后测试桥接连接。危险命令始终需要在 Tabby 确认窗口中批准。
         .btn-toolbar
             button.btn.btn-secondary.me-2(
                 type='button',
@@ -124,38 +128,38 @@ ng-container(*ngIf='config.store.llm.agentBridgeEnabled')
             )
                 i.fas.fa-circle-notch.fa-spin.me-1(*ngIf='bridgeTesting')
                 i.fas.fa-plug.me-1(*ngIf='!bridgeTesting')
-                span Test connection
+                span 测试连接
             button.btn.btn-secondary.me-2(
                 type='button',
                 (click)='copyCodexConfig()'
             )
                 i.fas.fa-copy.me-1
-                span Copy Codex config
+                span 复制 Codex 配置
             button.btn.btn-secondary.me-2(
                 type='button',
                 (click)='copyCursorConfig()'
             )
                 i.fas.fa-copy.me-1
-                span Copy Cursor config
+                span 复制 Cursor 配置
             button.btn.btn-secondary.me-2(
                 type='button',
                 (click)='copyClaudeDesktopConfig()'
             )
                 i.fas.fa-copy.me-1
-                span Copy Claude Desktop config
+                span 复制 Claude Desktop 配置
             button.btn.btn-secondary(
                 type='button',
                 (click)='copyAgentRulesTemplate()'
             )
                 i.fas.fa-copy.me-1
-                span Copy Agent Rules
-        .section-note.text-success(*ngIf='bridgeTestSuccessful') Agent Bridge is reachable.
+                span 复制智能体规则
+        .section-note.text-success(*ngIf='bridgeTestSuccessful') 智能体桥接连接正常。
         .section-note.text-danger(*ngIf='bridgeTestSuccessful === false') {{ bridgeTestError }}
 
     .form-line.form-line-stacked(*ngIf='agentBridge.accessToken')
         .header
-            .title Persistent access token
-            .description Stored locally in config.yaml. Rotate it if you shared the connection file or MCP config with an untrusted process.
+            .title 持久访问令牌
+            .description 令牌仅保存在本机 config.yaml 中。如果连接文件或 MCP 配置曾交给不受信任的程序，请立即轮换令牌。
         .input-group
             input.form-control(
                 type='text',
@@ -167,32 +171,32 @@ ng-container(*ngIf='config.store.llm.agentBridgeEnabled')
                 (click)='copyBridgeToken()'
             )
                 i.fas.fa-copy.me-1
-                span Copy
+                span 复制
             button.btn.btn-secondary(
                 type='button',
                 (click)='rotateBridgeToken()'
             )
                 i.fas.fa-sync-alt.me-1
-                span Rotate
+                span 轮换
 
 div.mt-4(*ngIf='agentBridge.auditLogFile')
-    h3.mb-3 Audit Log Viewer
+    h3.mb-3 审计日志查看器
     .d-flex.align-items-center.mb-2
         input.form-control.me-2(
             type='text',
-            placeholder='Filter by method or error code...',
+            placeholder='按方法或错误代码筛选…',
             [(ngModel)]='auditFilter',
             (keydown.enter)='refreshAuditLog()'
         )
         button.btn.btn-secondary.me-2(type='button', (click)='refreshAuditLog()', [disabled]='auditLoading')
             i.fas.fa-sync-alt.me-1(*ngIf='!auditLoading')
             i.fas.fa-circle-notch.fa-spin.me-1(*ngIf='auditLoading')
-            span Refresh
+            span 刷新
         button.btn.btn-danger(type='button', (click)='clearAuditLog()')
             i.fas.fa-trash.me-1
-            span Clear
-    .text-muted.mb-2(*ngIf='auditTotalCount > 0') Showing {{ auditEntries.length }} of {{ auditTotalCount }} entries
-    .text-muted.mb-2(*ngIf='auditTotalCount === 0 && !auditLoading') No audit entries found
+            span 清空
+    .text-muted.mb-2(*ngIf='auditTotalCount > 0') 当前显示 {{ auditEntries.length }} 条，共 {{ auditTotalCount }} 条
+    .text-muted.mb-2(*ngIf='auditTotalCount === 0 && !auditLoading') 暂无审计日志
     .audit-log-table(*ngIf='auditEntries.length > 0')
         .audit-entry(*ngFor='let entry of auditEntries')
             .audit-entry-header
@@ -213,9 +217,9 @@ div.mt-4(*ngIf='agentBridge.auditLogFile')
         [disabled]='auditLoading'
     )
         i.fas.fa-circle-notch.fa-spin.me-1(*ngIf='auditLoading')
-        span Load more
+        span 加载更多
 
     .form-line
         .header
-            .title CLI quick check
-            .description From the project directory, run npm run tabby-agent -- sessions to verify that current Tabby sessions are visible.
+            .title CLI 快速检查
+            .description 在项目目录运行 npm run tabby-agent -- sessions，确认能够查看当前 Tabby 会话。

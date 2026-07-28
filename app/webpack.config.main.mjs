@@ -47,6 +47,7 @@ const config = {
         'thenify': 'commonjs thenify',
         'thenify-all': 'commonjs thenify-all',
         npm: 'commonjs npm',
+        'npm/package.json': 'commonjs npm/package.json',
         'node:os': 'commonjs os',
         'node-pty': 'commonjs node-pty',
         path: 'commonjs path',

@@ -32,7 +32,11 @@ export class CommandLineEditorComponent {
     }
 
     parseCommand () {
-        const args = shellQuote.parse(this.command)
+        const parsed = shellQuote.parse(this.command)
+        if (parsed.some(arg => typeof arg !== 'string')) {
+            return
+        }
+        const args = parsed as string[]
         this.model.command = args[0] ?? ''
         this.model.args = args.slice(1)
     }

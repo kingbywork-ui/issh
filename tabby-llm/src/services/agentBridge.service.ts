@@ -2,6 +2,7 @@ import * as crypto from 'crypto'
 import * as fs from 'fs'
 import * as http from 'http'
 import * as path from 'path'
+import { execFile } from 'child_process'
 import { Injectable, NgZone } from '@angular/core'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
@@ -14,6 +15,11 @@ import { TerminalContextService } from './terminalContext.service'
 import { SensitiveInputService } from './sensitiveInput.service'
 import { DangerousCommandGuard } from './dangerousCommandGuard'
 import { normalizeCommand } from './commandValidation'
+import {
+    AGENT_BRIDGE_METHOD_SCOPES,
+    AGENT_BRIDGE_PROTOCOL_VERSION,
+    AGENT_BRIDGE_TOOLS,
+} from '../../../tabby-agent/src/protocol'
 
 type RpcParams = Record<string, any>
 
@@ -52,33 +58,11 @@ interface AgentCommandApproval {
 type AgentBridgeScope = 'read' | 'write' | 'exec' | 'sftp'
 
 const ALL_SCOPES: AgentBridgeScope[] = ['read', 'write', 'exec', 'sftp']
-const METHOD_SCOPES: Record<string, AgentBridgeScope> = {
-    tabby_health: 'read',
-    tabby_list_sessions: 'read',
-    tabby_list_profiles: 'read',
-    tabby_get_context: 'read',
-    tabby_read_buffer: 'read',
-    tabby_select_session: 'read',
-    tabby_preview_command: 'read',
-    tabby_get_output: 'read',
-    tabby_connect_profile: 'write',
-    tabby_disconnect_session: 'write',
-    tabby_insert_command: 'exec',
-    tabby_run_command: 'exec',
-    tabby_exec_command: 'exec',
-    tabby_batch_exec: 'exec',
-    tabby_sftp_list: 'sftp',
-    tabby_sftp_read: 'sftp',
-    tabby_sftp_write: 'sftp',
-}
-
-const MCP_TOOLS = Object.keys(METHOD_SCOPES).map(name => ({
-    name,
-    description: `Invoke the Tabby Agent Bridge ${name} operation.`,
-    inputSchema: {
-        type: 'object',
-        additionalProperties: true,
-    },
+const METHOD_SCOPES = AGENT_BRIDGE_METHOD_SCOPES as Record<string, AgentBridgeScope>
+const MCP_TOOLS = AGENT_BRIDGE_TOOLS.map(tool => ({
+    name: tool.name,
+    description: tool.description,
+    inputSchema: tool.inputSchema,
 }))
 
 interface CachedOutput {
@@ -99,6 +83,7 @@ interface SseClient {
 const OUTPUT_TRUNCATE_THRESHOLD = 4000
 const OUTPUT_MAX_ENTRIES = 50
 const OUTPUT_MAX_AGE_MS = 10 * 60 * 1000
+const AUDIT_LOG_MAX_BYTES = 5 * 1024 * 1024
 /** @hidden */
 @Injectable({ providedIn: 'root' })
 export class AgentBridgeService {
@@ -115,6 +100,7 @@ export class AgentBridgeService {
     private requestedPort: number | null = null
     private activePort: number | null = null
     private startError: string | null = null
+    private clientInstallError: string | null = null
     private readonly statusSubject = new BehaviorSubject<void>(undefined)
     readonly status$ = this.statusSubject.asObservable()
     private outputCache = new Map<string, CachedOutput>()
@@ -196,8 +182,12 @@ export class AgentBridgeService {
         return this.startError
     }
 
+    get clientError (): string | null {
+        return this.clientInstallError
+    }
+
     get mcpServerScriptPath (): string {
-        return this.installedMcpServerScriptPath ?? path.join(process.cwd(), 'scripts', 'agent-bridge', 'tabby-mcp-server.mjs')
+        return this.installedMcpServerScriptPath ?? path.join(process.cwd(), 'tabby-agent', 'bin', 'tabby-mcp-server.mjs')
     }
 
     get codexConfigSnippet (): string {
@@ -265,8 +255,15 @@ export class AgentBridgeService {
     async testConnection (): Promise<void> {
         const port = this.activePort
         const token = this.token
-        if (!port || !token) {
+        const connectionFile = this.connectionFilePath
+        const cliScript = this.installedMcpServerScriptPath
+            ? path.join(path.dirname(this.installedMcpServerScriptPath), 'tabby-agent.mjs')
+            : null
+        if (!port || !token || !connectionFile) {
             throw new Error('Agent bridge is not listening yet')
+        }
+        if (this.clientInstallError || !cliScript || !fs.existsSync(cliScript)) {
+            throw new Error(this.clientInstallError ?? 'Agent Bridge CLI client is not installed')
         }
         await new Promise<void>((resolve, reject) => {
             const body = JSON.stringify({ id: Date.now(), method: 'tabby_health', params: {} })
@@ -305,6 +302,7 @@ export class AgentBridgeService {
             request.write(body)
             request.end()
         })
+        await this.testCliClient(cliScript, connectionFile)
     }
 
     private syncServerState (): void {
@@ -386,7 +384,12 @@ export class AgentBridgeService {
         }
         this.installAgentBridgeScripts(configDir)
         this.connectionFilePath = path.join(configDir, 'tabby-agent-bridge.json')
-        this.publicConnectionFilePath = this.getPublicConnectionFilePath()
+        const previousPublicConnectionFilePath = this.publicConnectionFilePath
+        const nextPublicConnectionFilePath = this.getPublicConnectionFilePath()
+        if (previousPublicConnectionFilePath && previousPublicConnectionFilePath !== nextPublicConnectionFilePath) {
+            this.removeFile(previousPublicConnectionFilePath, 'previous public discovery file')
+        }
+        this.publicConnectionFilePath = nextPublicConnectionFilePath
         this.auditLogFilePath = path.join(configDir, 'agent-bridge-audit.jsonl')
         const payload = {
             version: 1,
@@ -397,7 +400,11 @@ export class AgentBridgeService {
             updatedAt: new Date().toISOString(),
         }
         try {
-            fs.writeFileSync(this.connectionFilePath, JSON.stringify(payload, null, 2), { encoding: 'utf8' })
+            fs.writeFileSync(this.connectionFilePath, JSON.stringify(payload, null, 2), {
+                encoding: 'utf8',
+                mode: 0o600,
+            })
+            this.restrictFilePermissions(this.connectionFilePath)
         } catch (error) {
             this.logger.warn('Agent bridge connection file write failed', error)
         }
@@ -411,13 +418,7 @@ export class AgentBridgeService {
             return
         }
         for (const file of files) {
-            try {
-                if (fs.existsSync(file)) {
-                    fs.unlinkSync(file)
-                }
-            } catch (error) {
-                this.logger.warn('Agent bridge connection file removal failed', error)
-            }
+            this.removeFile(file, 'connection file')
         }
         this.connectionFilePath = null
         this.publicConnectionFilePath = null
@@ -437,6 +438,7 @@ export class AgentBridgeService {
                 encoding: 'utf8',
                 mode: 0o600,
             })
+            this.restrictFilePermissions(this.publicConnectionFilePath)
         } catch (error) {
             this.logger.warn('Agent bridge public discovery file write failed', error)
             this.publicConnectionFilePath = null
@@ -481,40 +483,109 @@ export class AgentBridgeService {
 
     private installAgentBridgeScripts (configDir: string): void {
         const targetDir = path.join(configDir, 'agent-bridge')
+        const sourceDir = this.findAgentBridgePackage()
+        this.installedMcpServerScriptPath = null
+        this.clientInstallError = null
+        if (!sourceDir) {
+            this.clientInstallError = 'Bundled Agent Bridge CLI package was not found'
+            this.logger.warn(this.clientInstallError)
+            return
+        }
         try {
-            if (!fs.existsSync(targetDir)) {
-                fs.mkdirSync(targetDir, { recursive: true })
-            }
-            for (const name of ['tabby-mcp-server.mjs', 'tabby-mcp-shared.mjs', 'tabby-agent.mjs']) {
-                const source = this.findAgentBridgeScript(name)
-                if (!source) {
-                    this.logger.warn('Agent bridge script not found: %s', name)
-                    continue
+            const runtimeFiles = [
+                'package.json',
+                path.join('bin', 'tabby-agent.mjs'),
+                path.join('bin', 'tabby-mcp-server.mjs'),
+                path.join('src', 'client.mjs'),
+                path.join('src', 'cli.mjs'),
+                path.join('src', 'mcp-server.mjs'),
+                path.join('src', 'protocol.js'),
+            ]
+            for (const relativePath of runtimeFiles) {
+                const source = path.join(sourceDir, relativePath)
+                if (!fs.existsSync(source)) {
+                    throw new Error(`Agent Bridge client file is missing: ${relativePath}`)
                 }
-                fs.copyFileSync(source, path.join(targetDir, name))
+                const target = path.join(targetDir, relativePath)
+                fs.mkdirSync(path.dirname(target), { recursive: true })
+                fs.copyFileSync(source, target)
             }
-            this.installedMcpServerScriptPath = path.join(targetDir, 'tabby-mcp-server.mjs')
+            const installedPath = path.join(targetDir, 'bin', 'tabby-mcp-server.mjs')
+            if (!fs.existsSync(installedPath)) {
+                throw new Error('Agent Bridge MCP client installation did not produce an executable script')
+            }
+            this.installedMcpServerScriptPath = installedPath
         } catch (error) {
+            this.installedMcpServerScriptPath = null
+            this.clientInstallError = error instanceof Error ? error.message : String(error)
             this.logger.warn('Agent bridge script install failed', error)
         }
     }
 
-    private findAgentBridgeScript (name: string): string | null {
+    private findAgentBridgePackage (): string | null {
         const resourcesPath = (process as any).resourcesPath
         const candidates = [
-            path.join(process.cwd(), 'scripts', 'agent-bridge', name),
-            resourcesPath ? path.join(resourcesPath, 'app.asar', 'scripts', 'agent-bridge', name) : null,
-            resourcesPath ? path.join(resourcesPath, 'app', 'scripts', 'agent-bridge', name) : null,
-            resourcesPath ? path.join(resourcesPath, 'scripts', 'agent-bridge', name) : null,
-            path.join(path.dirname(process.execPath), 'resources', 'app.asar', 'scripts', 'agent-bridge', name),
-            path.join(path.dirname(process.execPath), 'resources', 'app', 'scripts', 'agent-bridge', name),
+            path.join(process.cwd(), 'tabby-agent'),
+            resourcesPath ? path.join(resourcesPath, 'tabby-agent') : null,
+            resourcesPath ? path.join(resourcesPath, 'app.asar', 'tabby-agent') : null,
+            resourcesPath ? path.join(resourcesPath, 'app', 'tabby-agent') : null,
+            path.join(path.dirname(process.execPath), 'resources', 'tabby-agent'),
+            path.join(path.dirname(process.execPath), 'resources', 'app.asar', 'tabby-agent'),
         ]
         for (const candidate of candidates) {
-            if (candidate && fs.existsSync(candidate)) {
+            if (candidate && fs.existsSync(path.join(candidate, 'package.json'))) {
                 return candidate
             }
         }
         return null
+    }
+
+    private testCliClient (cliScript: string, connectionFile: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            execFile('node', [
+                cliScript,
+                'health',
+                '--json',
+                '--bridge-file',
+                connectionFile,
+            ], {
+                timeout: 5000,
+                windowsHide: true,
+            }, (error, stdout) => {
+                if (error) {
+                    reject(new Error(`Agent Bridge CLI check failed: ${error.message}`))
+                    return
+                }
+                try {
+                    const result = JSON.parse(stdout)
+                    if (result?.ok !== true) {
+                        reject(new Error('Agent Bridge CLI health response was invalid'))
+                        return
+                    }
+                    resolve()
+                } catch (parseError) {
+                    reject(new Error(`Agent Bridge CLI returned invalid JSON: ${parseError instanceof Error ? parseError.message : String(parseError)}`))
+                }
+            })
+        })
+    }
+
+    private restrictFilePermissions (file: string): void {
+        try {
+            fs.chmodSync(file, 0o600)
+        } catch (error) {
+            this.logger.warn('Agent bridge could not restrict file permissions: %s', file, error)
+        }
+    }
+
+    private removeFile (file: string, description: string): void {
+        try {
+            if (fs.existsSync(file)) {
+                fs.unlinkSync(file)
+            }
+        } catch (error) {
+            this.logger.warn('Agent bridge %s removal failed: %s', description, file, error)
+        }
     }
 
     private async handleHttpRequest (request: http.IncomingMessage, response: http.ServerResponse): Promise<void> {
@@ -611,7 +682,7 @@ export class AgentBridgeService {
 
     private createMcpServer (): Server {
         const server = new Server(
-            { name: 'tabby-agent-bridge', version: '1.2.3' },
+            { name: 'tabby-agent-bridge', version: AGENT_BRIDGE_PROTOCOL_VERSION },
             { capabilities: { tools: {} } },
         )
         server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: MCP_TOOLS }))
@@ -792,10 +863,19 @@ export class AgentBridgeService {
     private async connectProfile (params: RpcParams): Promise<any> {
         const profile = await this.resolveProfile(params)
         const before = new Set([...this.tabs.values()].map(entry => entry.tab))
+        const timeoutMs = this.getDuration(params.timeoutMs, 15000)
+        const startedAt = Date.now()
         await this.profiles.launchProfile(profile)
-        const entry = await this.waitForProfileSession(profile, before, this.getDuration(params.timeoutMs, 15000))
+        const entry = await this.waitForProfileSession(profile, before, timeoutMs)
+        if (entry) {
+            this.selectSession({ tab: entry.id })
+            const remainingMs = Math.max(0, timeoutMs - (Date.now() - startedAt))
+            await this.waitForConnectedSession(entry, remainingMs)
+        }
+        const connected = !!entry && this.isConnected(entry.tab)
         return {
-            connected: true,
+            connected,
+            timedOut: !connected,
             profile: this.serializeProfile(profile),
             session: entry ? this.serializeSession(entry) : null,
         }
@@ -953,6 +1033,17 @@ export class AgentBridgeService {
                 timedOut: sshResult.timedOut,
             }, entry.id, command)
         }
+        const localResult = await this.tryLocalExec(entry, normalized, timeoutMs, cwd)
+        if (localResult) {
+            return this.maybeTruncateOutput({
+                ...baseResult,
+                executed: true,
+                mode: 'local-exec',
+                stdout: localResult.stdout,
+                exitCode: localResult.exitCode,
+                timedOut: localResult.timedOut,
+            }, entry.id, command)
+        }
         const ptyResult = await this.execViaPty(entry, normalized, timeoutMs)
         return this.maybeTruncateOutput({
             ...baseResult,
@@ -1050,6 +1141,111 @@ export class AgentBridgeService {
             exitCode: null,
             timedOut: output === null,
         }
+    }
+
+    private async tryLocalExec (
+        entry: RegisteredTab,
+        command: string,
+        timeoutMs: number,
+        cwd: string,
+    ): Promise<{ stdout: string, exitCode: number | null, timedOut: boolean } | null> {
+        if (entry.tab.profile?.type !== 'local') {
+            return null
+        }
+
+        const options = (entry.tab.profile as any)?.options ?? {}
+        const configuredCommand = String(options.command ?? '').trim()
+        const shellType = this.detectLocalShellType(options)
+        if (!shellType) {
+            return null
+        }
+        const executable = configuredCommand || (
+            shellType === 'cmd'
+                ? (process.env.ComSpec ?? 'cmd.exe')
+                : shellType === 'powershell'
+                    ? 'powershell.exe'
+                    : (process.env.SHELL ?? '/bin/sh')
+        )
+        const args = this.getLocalExecArgs(executable, shellType, options.args, command)
+        const sessionCwd = await entry.tab.session?.getWorkingDirectory() ?? null
+        const executionCwd = cwd || sessionCwd || (typeof options.cwd === 'string' ? options.cwd : '') || undefined
+        const environment = {
+            ...process.env,
+            ...(this.config.store.terminal?.environment ?? {}),
+            ...(options.env ?? {}),
+        }
+        delete environment.__nonStructural
+
+        return new Promise((resolve, reject) => {
+            execFile(executable, args, {
+                cwd: executionCwd,
+                env: environment,
+                encoding: 'utf8',
+                maxBuffer: 64 * 1024 * 1024,
+                timeout: timeoutMs,
+                windowsHide: true,
+                windowsVerbatimArguments: shellType === 'cmd',
+            }, (error, stdout, stderr) => {
+                const timedOut = !!error?.killed
+                if (error && typeof error.code !== 'number' && !timedOut) {
+                    reject(new Error(`Local command execution failed: ${error.message}`))
+                    return
+                }
+                const standardOutput = String(stdout ?? '')
+                const standardError = String(stderr ?? '')
+                const separator = standardOutput && standardError && !standardOutput.endsWith('\n') ? '\n' : ''
+                resolve({
+                    stdout: `${standardOutput}${separator}${standardError}`,
+                    exitCode: typeof error?.code === 'number' ? error.code : error ? null : 0,
+                    timedOut,
+                })
+            })
+        })
+    }
+
+    private detectLocalShellType (options: any): 'cmd' | 'powershell' | 'unix' | null {
+        if (options.shellType === 'cmd' || options.shellType === 'powershell' || options.shellType === 'unix') {
+            return options.shellType
+        }
+        const command = String(options.command ?? '')
+        if (!command) {
+            return process.platform === 'win32'
+                ? 'cmd'
+                : 'unix'
+        }
+        if (/(?:^|[\\/])(?:powershell|pwsh)(?:\.exe)?$/i.test(command)) {
+            return 'powershell'
+        }
+        if (/(?:^|[\\/])cmd(?:\.exe)?$/i.test(command)) {
+            return 'cmd'
+        }
+        if (/(?:^|[\\/])(?:ba|z|da)?sh(?:\.exe)?$/i.test(command)
+            || /(?:^|[\\/])fish(?:\.exe)?$/i.test(command)
+            || /(?:^|[\\/])wsl(?:\.exe)?$/i.test(command)) {
+            return 'unix'
+        }
+        return null
+    }
+
+    private getLocalExecArgs (
+        executable: string,
+        shellType: 'cmd' | 'powershell' | 'unix',
+        configuredArgs: unknown,
+        command: string,
+    ): string[] {
+        if (shellType === 'cmd') {
+            return ['/d', '/s', '/c', command]
+        }
+        if (shellType === 'powershell') {
+            return ['-NoLogo', '-NonInteractive', '-Command', command]
+        }
+        const args = Array.isArray(configuredArgs)
+            ? configuredArgs.filter(arg => typeof arg === 'string' && !/^(?:-i|--interactive)$/.test(arg))
+            : []
+        if (/(?:^|[\\/])wsl(?:\.exe)?$/i.test(executable)) {
+            return [...args, '--exec', 'sh', '-lc', command]
+        }
+        return [...args, '-lc', command]
     }
 
     private async execViaPty (entry: RegisteredTab, command: string, timeoutMs: number): Promise<{ stdout: string, timedOut: boolean }> {
@@ -1438,6 +1634,13 @@ export class AgentBridgeService {
         return [...this.tabs.values()].find(entry => entry.tab.profile?.id === profile.id || entry.tab.profile?.name === profile.name) ?? null
     }
 
+    private async waitForConnectedSession (entry: RegisteredTab, timeoutMs: number): Promise<void> {
+        const startedAt = Date.now()
+        while (!this.isConnected(entry.tab) && Date.now() - startedAt < timeoutMs) {
+            await this.sleep(250)
+        }
+    }
+
     private async openSftp (entry: RegisteredTab): Promise<any> {
         const openSFTP = (entry.tab as any).sshSession?.openSFTP?.bind((entry.tab as any).sshSession)
         if (typeof openSFTP !== 'function') {
@@ -1521,14 +1724,17 @@ export class AgentBridgeService {
 
     private isConnected (tab: BaseTerminalTabComponent<any>): boolean {
         const sshSession = (tab as any).sshSession
-        if (sshSession) {
+        if (tab.profile?.type === 'ssh') {
+            if (!sshSession || !tab.session) {
+                return false
+            }
             if (typeof sshSession.isConnected === 'boolean') {
-                return sshSession.isConnected
+                return sshSession.isConnected && !!tab.session.open
             }
             if (typeof sshSession.connected === 'boolean') {
-                return sshSession.connected
+                return sshSession.connected && !!tab.session.open
             }
-            return !!sshSession.ssh
+            return !!sshSession.open && !!tab.session.open
         }
         return true
     }
@@ -1593,10 +1799,28 @@ export class AgentBridgeService {
             params: this.redactAuditValue(request.params ?? {}),
         }
         try {
-            fs.appendFileSync(this.auditLogFilePath, `${JSON.stringify(entry)}\n`, { encoding: 'utf8' })
+            const line = `${JSON.stringify(entry)}\n`
+            this.rotateAuditLogIfNeeded(Buffer.byteLength(line, 'utf8'))
+            fs.appendFileSync(this.auditLogFilePath, line, { encoding: 'utf8', mode: 0o600 })
+            this.restrictFilePermissions(this.auditLogFilePath)
         } catch (error) {
             this.logger.warn('Agent bridge audit write failed', error)
         }
+    }
+
+    private rotateAuditLogIfNeeded (nextEntryBytes: number): void {
+        if (!this.auditLogFilePath || !fs.existsSync(this.auditLogFilePath)) {
+            return
+        }
+        if (fs.statSync(this.auditLogFilePath).size + nextEntryBytes <= AUDIT_LOG_MAX_BYTES) {
+            return
+        }
+        const rotatedPath = `${this.auditLogFilePath}.1`
+        if (fs.existsSync(rotatedPath)) {
+            fs.unlinkSync(rotatedPath)
+        }
+        fs.renameSync(this.auditLogFilePath, rotatedPath)
+        this.restrictFilePermissions(rotatedPath)
     }
 
     private isRejectedRpcResult (result: any, method?: string): boolean {

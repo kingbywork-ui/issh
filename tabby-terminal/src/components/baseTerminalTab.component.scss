@@ -11,6 +11,8 @@
         min-width: 0;
         min-height: 0;
         margin: calc(max(0px, 30px * var(--spaciness) - 15px));
+        padding: 0 6px;
+        box-sizing: border-box;
         transition: opacity ease-out 0.25s;
         opacity: 0;
 

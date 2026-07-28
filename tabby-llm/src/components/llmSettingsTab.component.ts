@@ -35,7 +35,7 @@ export class LLMSettingsTabComponent extends BaseComponent {
         try {
             await this.llm.testConnection()
             this.connectionSuccessful = true
-            this.notifications.notice(this.translate.instant('Connection successful'))
+            this.notifications.notice(this.translate.instant('连接成功'))
         } catch (e) {
             this.connectionSuccessful = false
             this.connectionError = e instanceof Error ? e.message : String(e)

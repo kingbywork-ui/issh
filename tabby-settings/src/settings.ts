@@ -42,7 +42,7 @@ export class WindowSettingsTabProvider extends SettingsTabProvider {
 export class VaultSettingsTabProvider extends SettingsTabProvider {
     id = 'vault'
     icon = 'key'
-    title = 'Vault'
+    title = '保险库'
 
     getComponentType (): any {
         return VaultSettingsTabComponent

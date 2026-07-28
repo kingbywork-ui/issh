@@ -27,6 +27,13 @@ const SENSITIVE_COMMAND_PATTERNS = [
     /(?:^|\s)(?:password|passwd|passphrase|token|secret|api[_-]?key)\s*[:=]\s*\S+/i,
     /(?:^|\s)[A-Za-z_][A-Za-z0-9_]*(?:password|passwd|passphrase|token|secret|api[_-]?key)[A-Za-z0-9_]*=\S+/i,
     /(?:^|\s)sshpass(?:\s+-\w+)*\s+(?:-p|--password)\s*\S+/i,
+    /(?:^|\s)(?:-u|--user)(?:=|\s+)\S+:\S+/i,
+    /(?:^|\s)-p(?=\S*[A-Za-z@#$%^&*!])\S+/,
+    /\bAuthorization\s*:\s*(?:Basic|Bearer)\s+\S+/i,
+    /\bCookie\s*:\s*\S+/i,
+    /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/,
+    /\b(?:gh[opusr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})\b/,
+    /\b[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:[^/\s@]+@/i,
 ]
 
 /** @hidden */

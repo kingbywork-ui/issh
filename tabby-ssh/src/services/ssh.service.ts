@@ -38,20 +38,11 @@ export class SSHService {
             uri += `;x-tunnelportnumber=${jumpPort}`
             const jumpUsername = jumpHostProfile.options.user
             uri += `;x-tunnelusername=${jumpUsername}`
-            if (jumpHostProfile.options.auth === 'password') {
-                const jumpPassword = await this.passwordStorage.loadPassword(jumpHostProfile, jumpUsername)
-                if (jumpPassword) {
-                    uri += `;x-tunnelpasswordplain=${encodeURIComponent(jumpPassword)}`
-                }
-            }
             if (jumpHostProfile.options.auth === 'publicKey' && jumpHostProfile.options.privateKeys.length > 0) {
                 const privateKeyPairs = await this.convertPrivateKeyFileToPuTTYFormat(jumpHostProfile)
                 tmpFile = privateKeyPairs.privateKeyFile
                 if (tmpFile) {
                     uri += `;x-tunnelpublickeyfile=${encodeURIComponent(tmpFile.path)}`
-                }
-                if (privateKeyPairs.passphrase != null) {
-                    uri += `;x-tunnelpassphraseplain=${encodeURIComponent(privateKeyPairs.passphrase)}`
                 }
             }
         }
@@ -60,10 +51,6 @@ export class SSHService {
 
     async getWinSCPURI (profile: SSHProfile, cwd?: string, username?: string): Promise<{ uri: string, privateKeyFile?: tmp.FileResult|null }> {
         let uri = `scp://${username ?? profile.options.user}`
-        const password = await this.passwordStorage.loadPassword(profile, username)
-        if (password) {
-            uri += ':' + encodeURIComponent(password)
-        }
         let tmpFile: tmp.FileResult|null = null
         if (profile.options.jumpHost) {
             const jumpHostProfile = this.config.store.profiles.find(x => x.id === profile.options.jumpHost) ?? null
@@ -128,9 +115,6 @@ export class SSHService {
                 tmpFile = privateKeyPairs.privateKeyFile
                 if (tmpFile) {
                     args.push(`/privatekey=${tmpFile.path}`)
-                }
-                if (privateKeyPairs.passphrase != null) {
-                    args.push(`/passphrase=${privateKeyPairs.passphrase}`)
                 }
             }
             await this.platform.exec(path, args)

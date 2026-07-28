@@ -91,7 +91,7 @@ export class OpenPathCLIHandler extends CLIHandler {
 
         const profile = await this.terminal.getDefaultProfile()
 
-        if (opAsPath && (await fs.lstat(opAsPath)).isDirectory()) {
+        if (opAsPath && await fs.exists(opAsPath) && (await fs.lstat(opAsPath)).isDirectory()) {
             this.terminal.openTab(profile, opAsPath)
             this.hostWindow.bringToFront()
             return true

@@ -25,7 +25,7 @@ export class ProfileCLIHandler extends CLIHandler {
             return true
         }
         if (op === 'recent') {
-            this.handleOpenRecentProfile(event.argv.profileNumber!)
+            this.handleOpenRecentProfile(event.argv.index!)
             return true
         }
         if (op === 'quickConnect') {

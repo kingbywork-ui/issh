@@ -44,7 +44,7 @@
                 .header
                     .title
                         | 登录脚本补全
-                        span.llm-badge Beta
+                        span.llm-badge 测试版
                     .description 从当前 Profile 登录脚本提取命令作为本地候选。
                 toggle(
                     [(ngModel)]='config.store.llm.scriptAutocompleteEnabled',
@@ -255,7 +255,7 @@
                     .description 输入达到该字符数后才自动触发。
                 input.form-control(
                     type='number',
-                    min='1',
+                    min='2',
                     max='10',
                     [(ngModel)]='config.store.llm.minTriggerLength',
                     (keydown.enter)='config.save()'

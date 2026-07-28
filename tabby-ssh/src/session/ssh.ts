@@ -395,7 +395,11 @@ export class SSHSession {
         if (this.profile.options.proxyCommand) {
             this.emitServiceMessage(colors.bgBlue.black(' Proxy command ') + ` Using ${this.profile.options.proxyCommand}`)
 
-            const argv = shellQuote.parse(this.profile.options.proxyCommand)
+            const parsedArgv = shellQuote.parse(this.profile.options.proxyCommand)
+            if (!parsedArgv.length || parsedArgv.some(arg => typeof arg !== 'string')) {
+                throw new Error('Proxy command must contain one executable and plain arguments without shell operators')
+            }
+            const argv = parsedArgv as string[]
             transport = await russh.SshTransport.newCommand(argv[0], argv.slice(1))
         } else if (this.jumpChannel) {
             transport = await russh.SshTransport.newSshChannel(this.jumpChannel.take())

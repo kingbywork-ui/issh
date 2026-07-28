@@ -11,13 +11,32 @@ const DANGEROUS_PATTERNS: { pattern: RegExp, reason: string }[] = [
     { pattern: /\bDROP\s+(DATABASE|TABLE)\b/i, reason: 'SQL destructive statement' },
     { pattern: /\bTRUNCATE\s+TABLE\b/i, reason: 'SQL truncate' },
     { pattern: /\bmkfs\.[a-z0-9]+\b/i, reason: 'Filesystem format utility' },
+    { pattern: /\bFormat-Volume\b/i, reason: 'PowerShell volume format' },
+    { pattern: /\bClear-Disk\b/i, reason: 'PowerShell disk wipe' },
+    { pattern: /\bInitialize-Disk\b/i, reason: 'PowerShell disk initialization' },
+    { pattern: /\bRemove-(?:Partition|Volume)\b/i, reason: 'PowerShell storage removal' },
+    { pattern: /\bRemove-Item\b(?=[^\r\n|;]*(?:-Recurse|-r\b))/i, reason: 'PowerShell recursive delete' },
+    { pattern: /\b(?:del|erase)\b(?=[^\r\n|;]*\/s\b)/i, reason: 'Windows recursive delete' },
+    { pattern: /\b(?:rd|rmdir)\b(?=[^\r\n|;]*\/s\b)/i, reason: 'Windows recursive directory delete' },
+    { pattern: /\bformat(?:\.com)?\s+[a-z]:/i, reason: 'Windows volume format' },
+    { pattern: /\bdiskpart(?:\.exe)?\b/i, reason: 'Windows disk management utility' },
+    { pattern: /\b(?:powershell|pwsh)(?:\.exe)?\b[^\r\n]*(?:-EncodedCommand|-enc\b)/i, reason: 'Encoded PowerShell command' },
+    { pattern: /\b(?:wipefs|shred)\b/i, reason: 'Filesystem or file destruction utility' },
+    { pattern: /\bfind\s+\/(?:\s|$)[^\r\n]*(?:-delete\b|-exec\s+rm\b)/i, reason: 'Recursive deletion from filesystem root' },
     { pattern: /\b:\(\)\s*\{\s*:\|:&\s*\}\s*;:/i, reason: 'Fork bomb' },
 ]
 
 const REDACTION_PATTERNS: RegExp[] = [
-    /Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi,
-    /(?:api[_-]?key|token|password|secret|passwd|pwd)\s*[:=]\s*\S+/gi,
-    /(?:--password|--passwd)\s+\S+/gi,
+    /\bAuthorization\s*:\s*(?:Basic|Bearer)\s+\S+/gi,
+    /\b(?:Basic|Bearer)\s+[A-Za-z0-9\-._~+/]+=*/gi,
+    /(?:api[_-]?key|access[_-]?key|client[_-]?secret|token|password|secret|passwd|pwd)\s*[:=]\s*(?:"[^"]*"|'[^']*'|\S+)/gi,
+    /(?:--password|--passwd|--passphrase|--token|--secret)(?:=|\s+)(?:"[^"]*"|'[^']*'|\S+)/gi,
+    /(?:^|\s)(?:-u|--user)(?:=|\s+)\S+:\S+/gi,
+    /(?:^|\s)-p(?=\S*[A-Za-z@#$%^&*!])\S+/g,
+    /\bCookie\s*:\s*[^\r\n]+/gi,
+    /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g,
+    /\b(?:gh[opusr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})\b/g,
+    /\b[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:[^/\s@]+@/gi,
     /[A-Fa-f0-9]{32,}/g,
     /-----BEGIN [A-Z ]+-----[\s\S]*?-----END [A-Z ]+-----/g,
 ]
@@ -53,14 +72,16 @@ export class DangerousCommandGuard {
     private inspectRm (command: string): { dangerous: boolean, reason: string } | null {
         for (const segment of command.split(/(?:&&|\|\||[;|\n])/)) {
             const tokens = this.tokenize(segment.trim())
-            let commandIndex = 0
-            if (tokens[0] === 'sudo') {
-                commandIndex = 1
-                while (tokens[commandIndex]?.startsWith('-')) {
-                    commandIndex++
+            for (const token of tokens) {
+                if (/\s/.test(token)) {
+                    const nested = this.inspectRm(token)
+                    if (nested) {
+                        return nested
+                    }
                 }
             }
-            if (!/(?:^|\/)rm$/.test(tokens[commandIndex] ?? '')) {
+            const commandIndex = tokens.findIndex(token => /(?:^|[\\/])rm(?:\.exe)?$/i.test(token))
+            if (commandIndex < 0) {
                 continue
             }
 

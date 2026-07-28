@@ -27,7 +27,6 @@ export const defaultAlgorithms = {
         'ecdsa-sha2-nistp521',
         'rsa-sha2-256',
         'rsa-sha2-512',
-        'ssh-rsa',
     ],
     [SSHAlgorithmType.CIPHER]: [
         'chacha20-poly1305@openssh.com',
@@ -41,8 +40,6 @@ export const defaultAlgorithms = {
         'hmac-sha2-256-etm@openssh.com',
         'hmac-sha2-512',
         'hmac-sha2-256',
-        'hmac-sha1-etm@openssh.com',
-        'hmac-sha1',
     ],
     [SSHAlgorithmType.COMPRESSION]: [
         'none',

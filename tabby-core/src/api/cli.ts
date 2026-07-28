@@ -11,7 +11,7 @@ export interface CLIEvent {
         query?: string,
         debug?: boolean,
         hidden?: boolean,
-        profileNumber?: number,
+        index?: number,
     }
     cwd: string
     secondInstance: boolean

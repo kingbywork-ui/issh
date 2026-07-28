@@ -113,7 +113,9 @@ export class LLMService {
     }
 
     async getAutocompleteSuggestions (request: AutocompleteRequest): Promise<AutocompleteSuggestion[]> {
-        if (!this.isConfigured() || (!request.partialCommand.trim() && !request.previousCommand?.trim())) {
+        if (!this.isConfigured()
+            || (!request.partialCommand.trim() && !request.previousCommand?.trim())
+            || (!this.config.store.llm.sendContextToCloud && !request.partialCommand.trim())) {
             return []
         }
 
@@ -205,23 +207,22 @@ export class LLMService {
 
     private buildAutocompleteUserMessage (request: AutocompleteRequest): string {
         const mode: AutocompleteMode = request.mode ?? 'shell'
-        const parts = [
-            `Mode: ${mode}`,
-            `OS: ${request.os}`,
-            `Shell: ${request.shell}`,
-        ]
-        if (request.cwd) {
-            parts.push(`Current directory: ${request.cwd}`)
-        }
-        if (this.config.store.llm.sendContextToCloud && request.recentOutput.length) {
-            const label = mode === 'editor' ? 'Nearby editor / screen context' : 'Recent terminal output'
-            parts.push(`${label}:\n${request.recentOutput.slice(-10).join('\n')}`)
-        }
-        if (request.excludeCommands.length) {
-            parts.push(`Items to exclude (already shown):\n${request.excludeCommands.map(c => `- ${c}`).join('\n')}`)
-        }
-        if (request.previousCommand?.trim()) {
-            parts.push(`Previous command: ${request.previousCommand.trim()}`)
+        const parts = [`Mode: ${mode}`]
+        if (this.config.store.llm.sendContextToCloud) {
+            parts.push(`OS: ${request.os}`, `Shell: ${request.shell}`)
+            if (request.cwd) {
+                parts.push(`Current directory: ${request.cwd}`)
+            }
+            if (request.recentOutput.length) {
+                const label = mode === 'editor' ? 'Nearby editor / screen context' : 'Recent terminal output'
+                parts.push(`${label}:\n${request.recentOutput.slice(-10).join('\n')}`)
+            }
+            if (request.excludeCommands.length) {
+                parts.push(`Items to exclude (already shown):\n${request.excludeCommands.map(c => `- ${c}`).join('\n')}`)
+            }
+            if (request.previousCommand?.trim()) {
+                parts.push(`Previous command: ${request.previousCommand.trim()}`)
+            }
         }
         parts.push(mode === 'editor'
             ? `Partial text: ${request.partialCommand}`

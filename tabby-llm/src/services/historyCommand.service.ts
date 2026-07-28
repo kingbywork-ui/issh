@@ -303,7 +303,12 @@ PY`,
         }
         try {
             const data = JSON.stringify(this.history)
-            await fs.writeFile(this.historyFilePath, data, 'utf-8')
+            await fs.writeFile(this.historyFilePath, data, { encoding: 'utf-8', mode: 0o600 })
+            try {
+                await fs.chmod(this.historyFilePath, 0o600)
+            } catch {
+                // Windows ACLs do not use POSIX modes.
+            }
         } catch (e) {
             this.logger.warn('Failed to save command history:', e)
         }

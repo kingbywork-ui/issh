@@ -6,7 +6,7 @@ import { SettingsTabProvider } from 'tabby-settings'
 export class ShellSettingsTabProvider extends SettingsTabProvider {
     id = 'terminal-shell'
     icon = 'list-ul'
-    title = 'Shell'
+    title = '终端 Shell'
 
     getComponentType (): any {
         return null

@@ -10,6 +10,7 @@ import { HistoryCommandService } from './services/historyCommand.service'
 import { SensitiveInputService } from './services/sensitiveInput.service'
 import { DangerousCommandGuard } from './services/dangerousCommandGuard'
 import { normalizeCommand } from './services/commandValidation'
+import { isKnownAgentProcess } from './services/agentProcessDetection'
 
 /** @hidden */
 export class TabLLMController {
@@ -37,8 +38,13 @@ export class TabLLMController {
     private sensitiveInputLatched = false
     private completedCommandCount = 0
     private predictedNextCommands: AutocompleteSuggestion[] = []
+    private pendingPredictionCommand: string | null = null
     private predictionGeneration = 0
     private contentElement: HTMLElement | null = null
+    private lastAgentProcessCheckAt = 0
+    private lastAgentProcessActive = false
+    private agentProcessCheckPromise: Promise<boolean> | null = null
+    private agentCommandActive = false
 
     private logger: Logger
     private guard = new DangerousCommandGuard()
@@ -116,7 +122,11 @@ export class TabLLMController {
             this.sensitiveInputLatched = false
             this.completedCommandCount = 0
             this.predictedNextCommands = []
+            this.pendingPredictionCommand = null
             this.predictionGeneration++
+            this.lastAgentProcessCheckAt = 0
+            this.lastAgentProcessActive = false
+            this.agentCommandActive = false
             this.hideAutocomplete()
         })
         this.alternateScreenSubscription = this.tab.alternateScreenActive$.subscribe(() => {
@@ -255,16 +265,16 @@ export class TabLLMController {
 
     getAutocompleteStatusText (): string {
         if (this.aiLoading && !this.suggestions.length) {
-            return 'Matching commands...'
+            return '正在匹配命令…'
         }
         if (!this.suggestions.length) {
             if (!this.hasAnyAutocompleteSourceEnabled()) {
-                return 'No autocomplete source is enabled.'
+                return '未启用任何补全来源。'
             }
             if (!this.llm.isConfigured() && this.config.store.llm.aiAutocompleteEnabled) {
-                return 'No local matches. Configure AI to get generated suggestions.'
+                return '没有本地匹配项。配置 AI 后可获取生成的建议。'
             }
-            return 'No suggestions for this input.'
+            return '当前输入没有候选建议。'
         }
         return ''
     }
@@ -307,11 +317,11 @@ export class TabLLMController {
         }
         const result = await this.platform.showMessageBox({
             type: 'warning',
-            message: this.translate.instant('Dangerous command requires confirmation'),
+            message: this.translate.instant('危险命令需要确认'),
             detail: `${danger.reason ?? 'dangerous'}\n\n${normalized}`,
             buttons: [
-                this.translate.instant('Allow once'),
-                this.translate.instant('Deny'),
+                this.translate.instant('仅允许本次'),
+                this.translate.instant('拒绝'),
             ],
             defaultId: 1,
             cancelId: 1,
@@ -386,8 +396,19 @@ export class TabLLMController {
             this.lastAutocompletePartial = ''
             return
         }
+        if (await this.isAgentSessionActive()) {
+            this.pendingPredictionCommand = null
+            this.predictedNextCommands = []
+            this.llm.cancelAutocompleteRequests(this.tabKey)
+            this.lastAutocompletePartial = ''
+            this.hideAutocomplete()
+            return
+        }
         if (!force && !this.config.store.llm.autoCompleteOnType) {
             return
+        }
+        if (!editorMode) {
+            this.startDeferredNextCommandPrediction(partial)
         }
         if (this.historyBootstrapPromise) {
             await this.historyBootstrapPromise
@@ -423,7 +444,7 @@ export class TabLLMController {
         const historySuggestions: AutocompleteSuggestion[] = historyResults.map((r, i) => ({
             id: `history-${i}`,
             command: r.command,
-            description: 'History',
+            description: '历史',
             category: 'history' as const,
             confidence: Math.min(1, r.score / 200),
         }))
@@ -508,7 +529,7 @@ export class TabLLMController {
                 return
             }
             if (force) {
-                this.notifications.error(this.translate.instant('AI request failed: {error}', {
+                this.notifications.error(this.translate.instant('AI 请求失败：{error}', {
                     error: e instanceof Error ? e.message : String(e),
                 }))
             }
@@ -699,6 +720,11 @@ export class TabLLMController {
         if (!command) {
             return
         }
+        if (isKnownAgentProcess(command)) {
+            this.agentCommandActive = true
+            this.lastAgentProcessActive = true
+            this.lastAgentProcessCheckAt = Date.now()
+        }
         this.history.addCommand(command, {
             tabKey: this.tabKey,
             persistGlobal: !this.history.usesRemoteHistory(this.tab),
@@ -708,16 +734,31 @@ export class TabLLMController {
     }
 
     private startNextCommandPrediction (previousCommand: string): void {
-        if (!previousCommand || !this.isAIEnabledForCommands()) {
+        this.llm.cancelAutocompleteRequests(this.tabKey, 'prediction')
+        this.predictedNextCommands = []
+        this.predictionGeneration++
+        if (!previousCommand || !this.isAIEnabledForCommands() || isKnownAgentProcess(previousCommand)) {
+            this.pendingPredictionCommand = null
             return
         }
-        this.llm.cancelAutocompleteRequests(this.tabKey, 'prediction')
+        this.pendingPredictionCommand = previousCommand
+    }
+
+    private startDeferredNextCommandPrediction (partial: string): void {
+        if (!this.pendingPredictionCommand || !this.shouldTriggerForPartial(partial, false)) {
+            return
+        }
+        const previousCommand = this.pendingPredictionCommand
+        this.pendingPredictionCommand = null
         const generation = ++this.predictionGeneration
         void this.prefetchNextCommands(previousCommand, generation)
     }
 
     private async prefetchNextCommands (previousCommand: string, generation: number): Promise<void> {
         try {
+            if (await this.isAgentSessionActive()) {
+                return
+            }
             const ctx = await this.context.collectContext(this.tab)
             if (generation !== this.predictionGeneration) {
                 return
@@ -802,7 +843,7 @@ export class TabLLMController {
         if (!trimmed) {
             return false
         }
-        const minLen = this.config.store.llm.minTriggerLength ?? 2
+        const minLen = Math.max(2, this.config.store.llm.minTriggerLength ?? 2)
         if (trimmed.length < minLen) {
             return false
         }
@@ -813,6 +854,46 @@ export class TabLLMController {
             }
         }
         return true
+    }
+
+    private async isAgentSessionActive (): Promise<boolean> {
+        const now = Date.now()
+        if (now - this.lastAgentProcessCheckAt < 750) {
+            return this.lastAgentProcessActive
+        }
+        if (this.agentProcessCheckPromise) {
+            return this.agentProcessCheckPromise
+        }
+
+        const session = this.tab.session as any
+        const getChildProcesses = session?.getChildProcesses
+        if (typeof getChildProcesses !== 'function') {
+            this.lastAgentProcessCheckAt = now
+            this.lastAgentProcessActive = false
+            return false
+        }
+
+        this.agentProcessCheckPromise = Promise.resolve(getChildProcesses.call(session))
+            .then((processes: unknown) => {
+                const processList = Array.isArray(processes) ? processes : []
+                const active = processList.some(
+                    process => isKnownAgentProcess(String(process?.command ?? process?.name ?? '')),
+                ) || (this.agentCommandActive && processList.length > 0)
+                this.lastAgentProcessCheckAt = Date.now()
+                this.lastAgentProcessActive = active
+                this.agentCommandActive = active
+                return active
+            })
+            .catch(error => {
+                this.logger.debug('Agent process detection failed:', error)
+                this.lastAgentProcessCheckAt = Date.now()
+                this.lastAgentProcessActive = this.agentCommandActive
+                return this.agentCommandActive
+            })
+            .finally(() => {
+                this.agentProcessCheckPromise = null
+            })
+        return this.agentProcessCheckPromise
     }
 
     private getScriptSuggestions (partial: string): AutocompleteSuggestion[] {
@@ -845,7 +926,7 @@ export class TabLLMController {
             results.push({
                 id: `script-${results.length}`,
                 command: normalized,
-                description: 'Login Script',
+                description: '登录脚本',
                 category: 'script' as const,
                 confidence: 0.5,
             })

@@ -15,7 +15,11 @@ export class TerminalContextService {
         partialCommand: string
         recentOutput: string[]
     }> {
-        const cwd = await tab.session?.getWorkingDirectory() ?? null
+        const sessionCwd = await tab.session?.getWorkingDirectory() ?? null
+        const cwd = sessionCwd
+            ?? this.detectCwdFromPrompt(tab)
+            ?? tab.profile?.options?.cwd
+            ?? (tab.profile?.type === 'local' ? process.cwd() : null)
         const shell = this.detectShell(tab)
         const os = process.platform
         const partialCommand = this.getPartialCommand(tab)
@@ -71,6 +75,12 @@ export class TerminalContextService {
         const psMatch = /^PS(?: [^>]+)?>\s*(.*)$/i.exec(trimmed)
         if (psMatch) {
             return psMatch[1]
+        }
+
+        // Windows CMD: C:\path> command, \\server\share> command
+        const cmdMatch = /^(?:[A-Z]:[\\/]|\\\\)[^>\r\n]*>\s*(.*)$/i.exec(trimmed)
+        if (cmdMatch) {
+            return cmdMatch[1]
         }
 
         // history command output: "  988  wget http://..."
@@ -264,7 +274,14 @@ export class TerminalContextService {
             return profile.options?.runCommand ? 'custom' : 'bash'
         }
         if (profile?.type === 'local') {
-            const shell = profile.options?.shell ?? ''
+            const shellType = profile.options?.shellType
+            if (shellType === 'powershell' || shellType === 'cmd') {
+                return shellType
+            }
+            if (shellType === 'unix') {
+                return 'bash'
+            }
+            const shell = `${profile.options?.command ?? ''} ${profile.options?.shell ?? ''}`
             if (/powershell|pwsh/i.test(shell)) {
                 return 'powershell'
             }
@@ -280,5 +297,15 @@ export class TerminalContextService {
             return 'bash'
         }
         return 'sh'
+    }
+
+    private detectCwdFromPrompt (tab: BaseTerminalTabComponent<any>): string | null {
+        const xterm = this.getXterm(tab)
+        if (!xterm) {
+            return null
+        }
+        const currentLine = this.readInputFromBuffer(xterm, false).trimEnd()
+        const match = /^(?:PS\s+)?((?:[A-Z]:[\\/]|\\\\)[^>\r\n]*)>\s*.*$/i.exec(currentLine)
+        return match?.[1]?.trim() || null
     }
 }

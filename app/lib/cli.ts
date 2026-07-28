@@ -64,8 +64,8 @@ export function createParserConfig (cwd: string): ParserConfig {
             {
                 command: 'recent [index]',
                 description: 'open a tab with a recent profile',
-                options: {
-                    profileNumber: { type: 'number' },
+                positionals: {
+                    index: { type: 'number' },
                 },
             },
             {

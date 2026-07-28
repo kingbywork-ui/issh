@@ -7,23 +7,23 @@ export class LLMHotkeyProvider extends HotkeyProvider {
     hotkeys: HotkeyDescription[] = [
         {
             id: 'llm-autocomplete',
-            name: this.translate.instant('AI command autocomplete'),
+            name: this.translate.instant('AI 命令补全'),
         },
         {
             id: 'llm-accept-suggestion',
-            name: this.translate.instant('Accept AI suggestion (Ctrl+Y)'),
+            name: this.translate.instant('接受 AI 建议（Ctrl+Y）'),
         },
         {
             id: 'llm-next-suggestion',
-            name: this.translate.instant('Next suggestion (Ctrl+N)'),
+            name: this.translate.instant('下一条建议（Ctrl+N）'),
         },
         {
             id: 'llm-prev-suggestion',
-            name: this.translate.instant('Previous suggestion (Ctrl+U)'),
+            name: this.translate.instant('上一条建议（Ctrl+U）'),
         },
         {
             id: 'llm-dismiss',
-            name: this.translate.instant('Dismiss AI panel'),
+            name: this.translate.instant('关闭 AI 补全面板'),
         },
     ]
 

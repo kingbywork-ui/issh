@@ -64,19 +64,31 @@ __pycache__/
 *.log
 smoke_launch.log
 smoke_test_report.json
+functional_regression_report.json
 start-dev.cmd
 AGENTS.md
 HANDOFF.md
-smoke_helpers.py
-smoke_test.py
 test_*.py
 test_*.json
 test_screenshots/
-scripts/agent-bridge/
 scripts/debug-*
 
 # OS Files
 Thumbs.db
 desktop.ini
 main.js
-.psacowork/"tabby-llm/AUTOCOMPLETE_REGRESSION_PLAYBOOK.md"  
+
+# Cowork/Agent
+.psacowork/
+
+# Tabby LLM
+tabby-llm/AUTOCOMPLETE_REGRESSION_PLAYBOOK.md
+
+# Security audit
+SECURITY_REMEDIATION_*.md
+scripts/security-audit.mjs
+
+# Test scripts
+functional_regression_test.py
+smoke_test.py
+smoke_helpers.py
