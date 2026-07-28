@@ -9,6 +9,7 @@ _('Search color schemes')
 
 /** @hidden */
 @Component({
+    standalone: false,
     selector: 'color-scheme-selector',
     templateUrl: './colorSchemeSelector.component.pug',
     styles: [`

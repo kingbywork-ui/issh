@@ -30,6 +30,7 @@ interface ConnectionInfo {
 
 /** @hidden */
 @Component({
+    standalone: false,
     templateUrl: './profilesSettingsTab.component.pug',
     styleUrls: ['./profilesSettingsTab.component.scss'],
 })

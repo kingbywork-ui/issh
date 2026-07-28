@@ -11,6 +11,7 @@ import {
 
 /** @hidden */
 @Component({
+    standalone: false,
     templateUrl: './sshSettingsTab.component.pug',
 })
 export class SSHSettingsTabComponent {

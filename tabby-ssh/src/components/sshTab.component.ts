@@ -15,6 +15,7 @@ import { SSHAppPanelService } from '../services/sshAppPanel.service'
 
 /** @hidden */
 @Component({
+    standalone: false,
     selector: 'ssh-tab',
     template: require('./sshTab.component.pug'),
     styles: [

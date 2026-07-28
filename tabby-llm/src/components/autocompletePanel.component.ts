@@ -11,6 +11,7 @@ import { AutocompleteSuggestion } from '../api'
 
 /** @hidden */
 @Component({
+    standalone: false,
     selector: 'autocomplete-panel',
     templateUrl: './autocompletePanel.component.pug',
     styleUrls: ['./autocompletePanel.component.scss'],

@@ -4,6 +4,7 @@ import { TabLLMController } from '../tabLLMController'
 
 /** @hidden */
 @Component({
+    standalone: false,
     selector: 'llm-terminal-host',
     templateUrl: './llmTerminalHost.component.pug',
     styleUrls: ['./llmTerminalHost.component.scss'],

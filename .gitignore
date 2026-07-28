@@ -87,6 +87,8 @@ tabby-llm/AUTOCOMPLETE_REGRESSION_PLAYBOOK.md
 # Security audit
 SECURITY_REMEDIATION_*.md
 scripts/security-audit.mjs
+!SECURITY_REMEDIATION_2026-07-28.md
+!scripts/security-audit.mjs
 
 # Test scripts
 functional_regression_test.py

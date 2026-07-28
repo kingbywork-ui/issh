@@ -7,6 +7,7 @@ const FORBIDDEN_HTML_TAGS = ['base', 'embed', 'form', 'iframe', 'input', 'link',
 
 /** @hidden */
 @Directive({
+    standalone: false,
     selector: '[fastHtmlBind]',
 })
 export class FastHtmlBindDirective implements OnChanges {

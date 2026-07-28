@@ -23,12 +23,12 @@
     "ngx-infinite-scroll": "^16"
   },
   "peerDependencies": {
-    "@angular/animations": "^15",
-    "@angular/common": "^15",
-    "@angular/core": "^15",
-    "@angular/forms": "^15",
-    "@angular/platform-browser": "^15",
-    "@ng-bootstrap/ng-bootstrap": "^14",
+    "@angular/animations": "^20",
+    "@angular/common": "^20",
+    "@angular/core": "^20",
+    "@angular/forms": "^20",
+    "@angular/platform-browser": "^20",
+    "@ng-bootstrap/ng-bootstrap": "^19",
     "rxjs": "^7",
     "tabby-core": "*"
   }

@@ -6,6 +6,7 @@ import { ConfigSyncService, SyncServerStatus, SyncMode, SYNC_SECTIONS } from '..
 
 /** @hidden */
 @Component({
+    standalone: false,
     selector: 'config-sync-settings-tab',
     templateUrl: './configSyncSettingsTab.component.pug',
     styleUrls: ['./configSyncSettingsTab.component.scss'],

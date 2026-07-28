@@ -4,6 +4,7 @@ import { AgentBridgeService } from '../services/agentBridge.service'
 
 /** @hidden */
 @Component({
+    standalone: false,
     selector: 'agent-bridge-settings-tab',
     templateUrl: './agentBridgeSettingsTab.component.pug',
     styleUrls: ['./llmSettingsTab.component.scss'],

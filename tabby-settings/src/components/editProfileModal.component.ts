@@ -14,6 +14,7 @@ const iconsClassList = Object.keys(iconsData).map(
 
 /** @hidden */
 @Component({
+    standalone: false,
     templateUrl: './editProfileModal.component.pug',
 })
 export class EditProfileModalComponent<P extends Profile, PP extends ProfileProvider<P>> {

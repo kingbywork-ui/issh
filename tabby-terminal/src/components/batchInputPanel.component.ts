@@ -8,6 +8,7 @@ type BatchInputScope = 'current' | 'all' | 'selected'
 
 /** @hidden */
 @Component({
+    standalone: false,
     selector: 'batch-input-panel',
     templateUrl: './batchInputPanel.component.pug',
     styleUrls: ['./batchInputPanel.component.scss'],

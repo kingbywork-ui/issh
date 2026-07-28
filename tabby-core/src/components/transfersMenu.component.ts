@@ -5,6 +5,7 @@ import { FileDownload, FileTransfer, PlatformService } from '../api/platform'
 
 /** @hidden */
 @Component({
+    standalone: false,
     selector: 'transfers-menu',
     templateUrl: './transfersMenu.component.pug',
     styleUrls: ['./transfersMenu.component.scss'],

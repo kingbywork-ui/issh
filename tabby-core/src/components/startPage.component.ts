@@ -25,6 +25,7 @@ interface ConnectionInfo {
 
 /** @hidden */
 @Component({
+    standalone: false,
     selector: 'start-page',
     templateUrl: './startPage.component.pug',
     styleUrls: ['./startPage.component.scss'],

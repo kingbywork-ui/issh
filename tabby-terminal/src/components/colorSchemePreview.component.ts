@@ -3,6 +3,7 @@ import { BaseComponent, ConfigService, getCSSFontFamily, TerminalColorScheme } f
 
 /** @hidden */
 @Component({
+    standalone: false,
     selector: 'color-scheme-preview',
     templateUrl: './colorSchemePreview.component.pug',
     styleUrls: ['./colorSchemePreview.component.scss'],

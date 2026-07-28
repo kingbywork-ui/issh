@@ -3,6 +3,7 @@ import { BaseComponent, ConfigService, PlatformService } from 'tabby-core'
 import { VersionCheckService, VersionCheckResult } from '../services/versionCheck.service'
 
 @Component({
+    standalone: false,
     selector: 'about-settings-tab',
     templateUrl: './aboutSettingsTab.component.pug',
 })

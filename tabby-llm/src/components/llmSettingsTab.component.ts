@@ -4,6 +4,7 @@ import { LLMService } from '../services/llm.service'
 
 /** @hidden */
 @Component({
+    standalone: false,
     selector: 'llm-settings-tab',
     templateUrl: './llmSettingsTab.component.pug',
     styleUrls: ['./llmSettingsTab.component.scss'],

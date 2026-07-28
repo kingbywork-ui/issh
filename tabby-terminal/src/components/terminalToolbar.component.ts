@@ -6,6 +6,7 @@ import { BatchInputService } from '../services/batchInput.service'
 
 /** @hidden */
 @Component({
+    standalone: false,
     selector: 'terminal-toolbar',
     templateUrl: './terminalToolbar.component.pug',
     styleUrls: ['./terminalToolbar.component.scss'],

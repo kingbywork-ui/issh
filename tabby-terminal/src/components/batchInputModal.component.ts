@@ -9,6 +9,7 @@ type BatchInputScope = 'current' | 'all' | 'selected'
 
 /** @hidden */
 @Component({
+    standalone: false,
     templateUrl: './batchInputModal.component.pug',
     styleUrls: ['./batchInputModal.component.scss'],
 })
