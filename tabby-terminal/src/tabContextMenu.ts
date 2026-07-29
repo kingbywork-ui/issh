@@ -6,7 +6,7 @@ import { TerminalContextMenuItemProvider } from './api/contextMenuProvider'
 import { MultifocusService } from './services/multifocus.service'
 import { BatchInputService } from './services/batchInput.service'
 import { ConnectableTerminalTabComponent } from './api/connectableTerminalTab.component'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'crypto'
 import slugify from 'slugify'
 
 /** @hidden */
@@ -201,7 +201,7 @@ export class SaveAsProfileContextMenu extends TabContextMenuItemProvider {
                             options,
                         }
 
-                        profile.id = `${profile.type}:custom:${slugify(name)}:${uuidv4()}`
+                        profile.id = `${profile.type}:custom:${slugify(name)}:${randomUUID()}`
                         profile.group = tab.profile.group
                         profile.icon = tab.profile.icon
                         profile.color = tab.profile.color

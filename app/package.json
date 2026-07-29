@@ -10,7 +10,7 @@
   "main": "dist/main.js",
   "version": "0.0.7",
   "scripts": {
-    "postinstall": "patch-package",
+    "postinstall": "patch-package && node ../scripts/harden-embedded-npm.mjs",
     "build": "webpack --progress --color --display-modules",
     "watch": "webpack --progress --color --watch"
   },
@@ -21,7 +21,6 @@
     "dunder-proto": "^1",
     "electron-config": "2.0.0",
     "electron-debug": "^3.2.0",
-    "electron-promise-ipc": "^2.2.4",
     "electron-updater": "6.8.9",
     "fontmanager-redux": "1.1.0",
     "glasstron": "0.1.1",
@@ -31,7 +30,7 @@
     "mz": "^2.7.0",
     "native-process-working-directory": "^1.0.2",
     "node-pty": "^1.2.0-beta.8",
-    "npm": "11.13.0",
+    "npm": "11.18.0",
     "russh": "0.1.37",
     "rxjs": "7.8.2",
     "selfsigned": "^5.5.0",
@@ -65,13 +64,16 @@
   },
   "resolutions": {
     "node-abi": "4.9.0",
-    "node-gyp": "12.3.0",
+    "node-gyp": "12.4.0",
     "nan": "2.22.2",
     "node-addon-api": "^8.3.0",
-    "**/tar": "7.5.19",
+    "**/tar": "7.5.22",
     "electron-updater/js-yaml": "4.3.0",
     "keytar/prebuild-install/tar-fs": "2.1.4",
     "patch-package/tmp": "0.2.7",
-    "patch-package/**/picomatch": "2.3.2"
+    "patch-package/**/picomatch": "2.3.2",
+    "patch-package/yaml": "2.9.0",
+    "**/socks": "2.8.9",
+    "**/ip-address": "10.3.1"
   }
 }

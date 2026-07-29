@@ -2,7 +2,6 @@ import * as path from 'path'
 import * as fs from 'fs/promises'
 import * as fsSync from 'fs'
 import * as os from 'os'
-import promiseIpc, { RendererProcessType } from 'electron-promise-ipc'
 import { execFile } from 'mz/child_process'
 import { Injectable, NgZone } from '@angular/core'
 import { PlatformService, ClipboardContent, Platform, MenuItemOptions, MessageBoxOptions, MessageBoxResult, DirectoryUpload, FileUpload, FileDownload, DirectoryDownload, FileUploadOptions, wrapPromise, TranslateService, FileTransfer, PlatformTheme } from 'tabby-core'
@@ -75,11 +74,11 @@ export class ElectronPlatformService extends PlatformService {
     }
 
     async installPlugin (name: string, version: string): Promise<void> {
-        await (promiseIpc as RendererProcessType).send('plugin-manager:install', name, version)
+        await this.electron.ipcRenderer.invoke('plugin-manager:install', name, version)
     }
 
     async uninstallPlugin (name: string): Promise<void> {
-        await (promiseIpc as RendererProcessType).send('plugin-manager:uninstall', name)
+        await this.electron.ipcRenderer.invoke('plugin-manager:uninstall', name)
     }
 
     async isProcessRunning (name: string): Promise<boolean> {

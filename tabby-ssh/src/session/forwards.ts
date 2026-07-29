@@ -1,4 +1,5 @@
-import socksv5 from '@luminati-io/socksv5'
+import * as socksv5 from '@mongodb-js/socksv5/lib/server'
+import noAuthentication from '@mongodb-js/socksv5/lib/auth/None'
 import { Server, Socket, createServer } from 'net'
 
 import { ForwardedPortConfig, PortForwardType } from '../api'
@@ -42,7 +43,7 @@ export class ForwardedPort implements ForwardedPortConfig {
                 }) as Server
                 this.listener.on('error', reject)
                 this.listener.listen(this.port, this.host, resolve)
-                this.listener['useAuth'](socksv5.auth.None())
+                this.listener['useAuth'](noAuthentication())
             })
         } else {
             throw new Error('Invalid forward type for a local listener')

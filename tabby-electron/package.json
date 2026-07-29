@@ -22,7 +22,6 @@
     "tabby-local": "*"
   },
   "dependencies": {
-    "electron-promise-ipc": "^2.2.4",
     "ps-node": "^0.1.6",
     "ssh-config": "^5.0.0",
     "tmp-promise": "^3.0.2",
@@ -34,5 +33,8 @@
     "fontmanager-redux": "1.1.0",
     "native-process-working-directory": "^1.0.2",
     "windows-native-registry": "^3.2.1"
+  },
+  "resolutions": {
+    "**/tmp": "0.2.7"
   }
 }

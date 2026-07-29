@@ -1,5 +1,4 @@
 import { app, ipcMain, Menu, Tray, shell, screen, globalShortcut, MenuItemConstructorOptions, WebContents } from 'electron'
-import promiseIpc from 'electron-promise-ipc'
 import * as remote from '@electron/remote/main'
 import { spawnSync } from 'child_process'
 import { exec } from 'mz/child_process'
@@ -78,15 +77,15 @@ export class Application {
         debugLog('application-ctor:hotkey-subscription-done')
 
         debugLog('application-ctor:promise-ipc-begin')
-        ;(promiseIpc as any).on('plugin-manager:install', (name, version) => {
+        ipcMain.handle('plugin-manager:install', (_event, name, version) => {
             return pluginManager.install(this.userPluginsPath, name, version)
         })
 
-        ;(promiseIpc as any).on('plugin-manager:uninstall', (name) => {
+        ipcMain.handle('plugin-manager:uninstall', (_event, name) => {
             return pluginManager.uninstall(this.userPluginsPath, name)
         })
 
-        ;(promiseIpc as any).on('get-default-mac-shell', async () => {
+        ipcMain.handle('get-default-mac-shell', async () => {
             try {
                 return (await exec(`/usr/bin/dscl . -read /Users/${process.env.LOGNAME} UserShell`))[0].toString().split(' ')[1].trim()
             } catch {

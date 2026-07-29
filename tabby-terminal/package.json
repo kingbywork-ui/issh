@@ -35,7 +35,7 @@
     "dataurl": "0.1.0",
     "hexer": "^1.5.0",
     "ngx-colors": "^3.4.0",
-    "patch-package": "^6.5.0",
+    "patch-package": "8.0.1",
     "runes": "^0.4.2",
     "zmodem.js": "^0.1.9"
   },
@@ -49,5 +49,12 @@
     "rxjs": "^7",
     "tabby-core": "*",
     "tabby-settings": "*"
+  },
+  "resolutions": {
+    "**/micromatch": "4.0.8",
+    "**/braces": "3.0.3",
+    "**/picomatch": "2.3.2",
+    "**/tmp": "0.2.7",
+    "**/yaml": "2.9.0"
   }
 }

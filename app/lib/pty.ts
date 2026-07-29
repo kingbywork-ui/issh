@@ -1,5 +1,5 @@
 import type * as NodePTY from 'node-pty'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'crypto'
 import { ipcMain } from 'electron'
 import { Application } from './app'
 import { UTF8Splitter } from './utfSplitter'
@@ -165,7 +165,7 @@ export class PTYManager {
 
     init (app: Application): void {
         ipcMain.on('pty:spawn', (event, ...options) => {
-            const id = uuidv4().toString()
+            const id = randomUUID()
             try {
                 this.ptys[id] = new PTY(id, app, ...options)
                 event.returnValue = id
