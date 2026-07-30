@@ -27,6 +27,7 @@ export class AutocompletePanelComponent implements AfterViewChecked {
     @Input() lightweight = false
     @Input() hintText = ''
     @Input() statusText = ''
+    @Input() panelOpacity = 62
 
     @Output() selectSuggestion = new EventEmitter<AutocompleteSuggestion>()
     @Output() dismiss = new EventEmitter<void>()
@@ -54,6 +55,19 @@ export class AutocompletePanelComponent implements AfterViewChecked {
 
     @HostBinding('style.max-height.px') get constrainedMaxHeight (): number {
         return Math.max(0, this.maxHeight)
+    }
+
+    @HostBinding('style.--ac-panel-alpha') get panelAlpha (): number {
+        const clamped = Math.max(40, Math.min(100, Math.round(this.panelOpacity)))
+        return clamped / 100
+    }
+
+    @HostBinding('class.opaque') get isOpaque (): boolean {
+        return this.panelOpacity >= 100
+    }
+
+    @HostBinding('class.low-alpha') get isLowAlpha (): boolean {
+        return this.panelOpacity < 50
     }
 
     select (suggestion: AutocompleteSuggestion): void {

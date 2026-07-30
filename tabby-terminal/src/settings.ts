@@ -13,6 +13,7 @@ export class AppearanceSettingsTabProvider extends SettingsTabProvider {
     icon = 'swatchbook'
     title = this.translate.instant('Appearance')
     prioritized = true
+    group = 'appearance' as const
 
     constructor (private translate: TranslateService) { super() }
 
@@ -27,6 +28,7 @@ export class ColorSchemeSettingsTabProvider extends SettingsTabProvider {
     id = 'terminal-color-scheme'
     icon = 'palette'
     title = this.translate.instant('Color scheme')
+    group = 'appearance' as const
 
     constructor (private translate: TranslateService) { super() }
 
@@ -42,6 +44,7 @@ export class TerminalSettingsTabProvider extends SettingsTabProvider {
     icon = 'terminal'
     title = this.translate.instant('Terminal')
     prioritized = true
+    group = 'terminal' as const
 
     constructor (private translate: TranslateService) { super() }
 

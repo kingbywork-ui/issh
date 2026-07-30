@@ -307,3 +307,18 @@
                     (keydown.enter)='config.save()',
                     (blur)='config.save()'
                 )
+
+            .form-line
+                .header
+                    .title 面板不透明度
+                    .description 候选框背景的透明程度，数值越低越通透，终端内容可透出。100% 时关闭毛玻璃效果。
+                .range-control
+                    input.form-range(
+                        type='range',
+                        min='40',
+                        max='100',
+                        step='1',
+                        [(ngModel)]='config.store.llm.autocompletePanelOpacity',
+                        (ngModelChange)='config.save()'
+                    )
+                    .range-value {{config.store.llm.autocompletePanelOpacity ?? 62}}%

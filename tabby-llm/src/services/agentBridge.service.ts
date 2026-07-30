@@ -16,6 +16,11 @@ import { SensitiveInputService } from './sensitiveInput.service'
 import { DangerousCommandGuard } from './dangerousCommandGuard'
 import { normalizeCommand } from './commandValidation'
 import {
+    buildCodexDesktopConfigFields,
+    CodexDesktopConfigFields,
+    formatCodexDesktopConfigGuide,
+} from './codexDesktopConfig'
+import {
     AGENT_BRIDGE_METHOD_SCOPES,
     AGENT_BRIDGE_PROTOCOL_VERSION,
     AGENT_BRIDGE_TOOLS,
@@ -201,6 +206,14 @@ export class AgentBridgeService {
             lines.push('', '[mcp_servers.tabby.env]', `TABBY_AGENT_BRIDGE_FILE = ${this.quoteToml(discoveryFile)}`)
         }
         return lines.join('\n')
+    }
+
+    get codexDesktopConfigFields (): CodexDesktopConfigFields {
+        return buildCodexDesktopConfigFields(this.mcpServerScriptPath, this.getDiscoveryFileForSnippet())
+    }
+
+    get codexDesktopConfigGuide (): string {
+        return formatCodexDesktopConfigGuide(this.codexDesktopConfigFields)
     }
 
     get cursorConfigSnippet (): string {

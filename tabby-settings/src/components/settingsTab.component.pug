@@ -73,7 +73,7 @@
                             (ngModelChange)='config.save()'
                         )
 
-        ng-container(*ngFor='let provider of prioritizedProviders; trackBy: trackByProviderId')
+        ng-container(*ngFor='let provider of commonProviders; trackBy: trackByProviderId')
             li([ngbNavItem]='provider.id')
                 a.d-flex.align-items-center(ngbNavLink)
                     i(class='fas fa-fw me-2 fa-{{provider.icon}}')
@@ -84,18 +84,18 @@
                         [class.full-width]='provider.fullWidth'
                     )
 
-        .mb-3
-
-        ng-container(*ngFor='let provider of generalProviders; trackBy: trackByProviderId')
-            li([ngbNavItem]='provider.id')
-                a.d-flex.align-items-center(ngbNavLink)
-                    i(class='fas fa-fw me-2 fa-{{provider.icon || "puzzle-piece"}}')
-                    span {{provider.title|translate}}
-                ng-template(ngbNavContent)
-                    settings-tab-body(
-                        [provider]='provider',
-                        [class.full-width]='provider.fullWidth'
-                    )
+        ng-container(*ngFor='let group of providerGroups')
+            .nav-group-title {{group.title}}
+            ng-container(*ngFor='let provider of group.providers; trackBy: trackByProviderId')
+                li([ngbNavItem]='provider.id')
+                    a.d-flex.align-items-center(ngbNavLink)
+                        i(class='fas fa-fw me-2 fa-{{provider.icon || "puzzle-piece"}}')
+                        span {{provider.title|translate}}
+                    ng-template(ngbNavContent)
+                        settings-tab-body(
+                            [provider]='provider',
+                            [class.full-width]='provider.fullWidth'
+                        )
 
         li(ngbNavItem='config-file')
             a.d-flex.align-items-center(ngbNavLink)

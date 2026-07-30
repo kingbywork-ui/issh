@@ -240,6 +240,11 @@ export class TabLLMController {
         return this.config.store.llm.lightweightHintEnabled ?? false
     }
 
+    get panelOpacity (): number {
+        const raw = this.config.store.llm.autocompletePanelOpacity ?? 62
+        return Math.max(40, Math.min(100, Math.round(raw)))
+    }
+
     shouldUseLightweightHint (): boolean {
         return this.isLightweightHintEnabled() && (!!this.getAutocompleteHintText() || this.aiLoading)
     }

@@ -37,6 +37,7 @@ export class LLMConfigProvider extends ConfigProvider {
             executeOnConfirm: false,
             autocompletePanelOffsetX: 32,
             autocompletePanelOffsetY: 52,
+            autocompletePanelOpacity: 62,
         },
         about: {
             giteaBaseUrl: '' as string,

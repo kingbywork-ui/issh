@@ -45,13 +45,19 @@ const REDACTION_PATTERNS: RegExp[] = [
 export class DangerousCommandGuard {
     isDangerous (command: string): { dangerous: boolean, reason?: string } {
         const trimmed = command.trim()
-        const dangerousRm = this.inspectRm(trimmed)
-        if (dangerousRm) {
-            return dangerousRm
-        }
-        for (const { pattern, reason } of DANGEROUS_PATTERNS) {
-            if (pattern.test(trimmed)) {
-                return { dangerous: true, reason }
+        const inspectionCandidates = [
+            trimmed,
+            this.deobfuscateForInspection(trimmed),
+        ]
+        for (const candidate of new Set(inspectionCandidates)) {
+            const dangerousRm = this.inspectRm(candidate)
+            if (dangerousRm) {
+                return dangerousRm
+            }
+            for (const { pattern, reason } of DANGEROUS_PATTERNS) {
+                if (pattern.test(candidate)) {
+                    return { dangerous: true, reason }
+                }
             }
         }
         return { dangerous: false }
@@ -67,6 +73,25 @@ export class DangerousCommandGuard {
 
     redactLines (lines: string[]): string[] {
         return lines.map(line => this.redact(line))
+    }
+
+    private deobfuscateForInspection (command: string): string {
+        let result = command
+        for (let i = 0; i < 8; i++) {
+            const folded = result.replace(
+                /(['"])([^'"\r\n]*)\1\s*\+\s*(['"])([^'"\r\n]*)\3/g,
+                '$2$4',
+            )
+            if (folded === result) {
+                break
+            }
+            result = folded
+        }
+        return result
+            .replace(/\$(['"])/g, '$1')
+            .replace(/['"]/g, '')
+            .replace(/\^([^\r\n])/g, '$1')
+            .replace(/\\([^\r\n])/g, '$1')
     }
 
     private inspectRm (command: string): { dangerous: boolean, reason: string } | null {

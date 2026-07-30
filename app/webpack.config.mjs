@@ -72,7 +72,6 @@ export default () => ({
         ],
     },
     externals: {
-        'v8-compile-cache': 'commonjs v8-compile-cache',
         child_process: 'commonjs child_process',
         electron: 'commonjs electron',
         fs: 'commonjs fs',

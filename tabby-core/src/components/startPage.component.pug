@@ -38,7 +38,6 @@
                 *ngFor='let profile of getRightPanelProfiles(); trackBy: profilesTrackBy',
                 [class.host-list-item--risk]='isRiskEnvironment(profile.environment)',
                 (click)='launchProfile(profile)',
-                (mousedown)='onProfileMouseDown($event, profile)',
                 (contextmenu)='onProfileContextMenu($event, profile)'
             )
                 .host-status-rail([class]='getHostStatusRailClass(profile)')
@@ -97,7 +96,6 @@ ng-template(#sidebarGroup let-group let-level='level')
             [style.paddingLeft.rem]='0.75 + (level * 1.1)',
             [class.active]='isGroupActive(group)',
             (click)='selectGroupView(group)',
-            (mousedown)='onGroupMouseDown($event, group)',
             (contextmenu)='onGroupContextMenu($event, group)'
         )
             button.btn.btn-link.tree-toggle(
@@ -112,3 +110,32 @@ ng-template(#sidebarGroup let-group let-level='level')
         ng-container(*ngIf='!group.collapsed')
             ng-container(*ngFor='let child of group.children')
                 ng-container(*ngTemplateOutlet='sidebarGroup; context: {$implicit: child, level: level + 1}')
+
+.context-menu-overlay(
+    *ngIf='contextMenuVisible',
+    (click)='closeContextMenu()',
+    (contextmenu)='$event.preventDefault(); closeContextMenu()'
+)
+.context-menu(
+    #contextMenu,
+    *ngIf='contextMenuVisible',
+    role='menu',
+    tabindex='-1',
+    aria-label='上下文菜单',
+    [attr.aria-activedescendant]='contextMenuSelectedIndex >= 0 ? "start-page-context-item-" + contextMenuSelectedIndex : null',
+    [style.left.px]='contextMenuX',
+    [style.top.px]='contextMenuY',
+    (keydown)='onContextMenuKeyDown($event)'
+)
+    .context-menu-item(
+        *ngFor='let item of contextMenuItems; let i = index',
+        [attr.id]='"start-page-context-item-" + i',
+        [attr.role]='item.type === "separator" ? "separator" : "menuitem"',
+        [attr.aria-disabled]='item.enabled === false ? "true" : null',
+        [class.separator]='item.type === "separator"',
+        [class.disabled]='item.enabled === false',
+        [class.selected]='i === contextMenuSelectedIndex',
+        (mouseenter)='onContextMenuItemMouseEnter(i)',
+        (click)='onContextMenuItemClick(item)'
+    )
+        span(*ngIf='item.type !== "separator"') {{item.label}}

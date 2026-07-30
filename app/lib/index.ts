@@ -68,17 +68,6 @@ function loadStartupModule<T> (name: string, loader: () => T): T {
     }
 }
 
-function loadOptionalStartupModule (name: string, loader: () => unknown): void {
-    try {
-        debugLog(`module-load-begin:${name}`)
-        loader()
-        debugLog(`module-load-done:${name}`)
-    } catch (error) {
-        debugLog(`module-load-skipped:${name}`, serializeError(error))
-    }
-}
-
-loadOptionalStartupModule('v8-compile-cache', () => require('v8-compile-cache'))
 loadStartupModule('source-map-support/register', () => require('source-map-support/register'))
 loadStartupModule('sentry', () => require('./sentry'))
 loadStartupModule('lru', () => require('./lru'))

@@ -36,7 +36,6 @@ const config = {
         ],
     },
     externals: {
-        'v8-compile-cache': 'commonjs v8-compile-cache',
         electron: 'commonjs electron',
         fs: 'commonjs fs',
         glasstron: 'commonjs glasstron',

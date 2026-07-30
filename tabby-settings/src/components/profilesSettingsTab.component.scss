@@ -52,7 +52,7 @@
     background: var(--ops-base, #0b0f14);
 
     .host-sidebar {
-        width: 220px;
+        width: 200px;
         display: flex;
         flex-direction: column;
         background-color: var(--ops-panel, #121821);
@@ -150,15 +150,16 @@
             background: rgba(0, 0, 0, 0.1);
             border-bottom: 1px solid var(--ops-line);
 
-            .host-toolbar-top {
+            .host-toolbar-row {
                 display: flex;
                 align-items: center;
                 gap: 12px;
-                margin-bottom: 12px;
+                flex-wrap: wrap;
 
                 .search-group {
                     flex: 1;
                     max-width: 400px;
+                    min-width: 180px;
 
                     .input-group-text {
                         background: transparent;
@@ -184,10 +185,9 @@
                     }
                 }
 
-                .host-tag-filters {
+                .host-filter-chips {
                     display: flex;
-                    gap: 8px;
-                    flex: 1;
+                    gap: 6px;
                     flex-wrap: wrap;
 
                     .tag-btn {
@@ -213,32 +213,31 @@
                         }
                     }
                 }
-            }
 
-            .host-toolbar-bottom {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-
-                .host-toolbar-filters {
+                .host-filter-toggles {
                     display: flex;
                     align-items: center;
-                    gap: 16px;
+                    gap: 12px;
 
                     .environment-filter {
                         width: auto;
-                        min-width: 150px;
+                        min-width: 130px;
                         background: transparent;
                         border: 1px solid rgba(255, 255, 255, 0.2);
                         color: rgba(255, 255, 255, 0.9);
-                        padding: 6px 10px;
-                        font-size: 0.875rem;
+                        padding: 4px 8px;
+                        font-size: 0.8rem;
 
                         &:focus {
                             border-color: var(--ops-signal);
                             box-shadow: 0 0 0 3px var(--ops-signal-dim);
                         }
                     }
+                }
+
+                .host-clear-btn {
+                    flex: none;
+                    padding: 4px 8px;
                 }
             }
         }
@@ -327,7 +326,7 @@
 
                 .host-table {
                     width: 100%;
-                    min-width: 700px;
+                    min-width: 520px;
                     table-layout: fixed;
                     margin: 0;
                     border-collapse: collapse;
@@ -343,7 +342,7 @@
 
                     th,
                     td {
-                        height: 52px;
+                        height: 44px;
                         padding: 0 10px;
                         border-bottom: 1px solid rgba(255, 255, 255, 0.09);
                         vertical-align: middle;
@@ -383,33 +382,36 @@
                         text-align: center;
                     }
 
+                    .col-name {
+                        .name-row {
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                        }
+
+                        .addr-sub {
+                            font-size: 0.72rem;
+                            color: rgba(255, 255, 255, 0.5);
+                            font-family: 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
+                            margin-top: 2px;
+
+                            .addr-detail {
+                                margin-left: 6px;
+                            }
+                        }
+                    }
+
+                    .col-status {
+                        width: 100px;
+                    }
+
                     .col-fav {
                         width: 38px;
                         text-align: center;
                     }
 
-                    .col-system {
-                        width: 64px;
-                    }
-
-                    .col-name {
-                        width: 24%;
-                    }
-
-                    .col-address {
-                        width: 22%;
-                    }
-
-                    .col-info {
-                        width: 18%;
-                    }
-
-                    .col-env {
-                        width: 90px;
-                    }
-
                     .col-actions {
-                        width: 188px;
+                        width: 130px;
                         text-align: right;
                         overflow: visible;
                     }

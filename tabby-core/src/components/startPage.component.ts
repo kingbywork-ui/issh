@@ -1,4 +1,4 @@
-import { Component, Optional, Inject } from '@angular/core'
+import { Component, ElementRef, Inject, Optional, ViewChild } from '@angular/core'
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
 import { HomeBaseService } from '../services/homeBase.service'
 import { ProfilesService } from '../services/profiles.service'
@@ -31,6 +31,8 @@ interface ConnectionInfo {
     styleUrls: ['./startPage.component.scss'],
 })
 export class StartPageComponent extends BaseComponent {
+    @ViewChild('contextMenu') private contextMenuElement?: ElementRef<HTMLElement>
+
     // Sidebar state
     activeGroupId: string | null = null
     favoritesOnly = false
@@ -39,8 +41,12 @@ export class StartPageComponent extends BaseComponent {
     profileGroups: PartialProfileGroup<CollapsableProfileGroup>[] = []
     customProfiles: PartialProfile<Profile>[] = []
     recentProfileIds = new Set<string>()
-    private lastGroupContextMenuAt = 0
-    private lastProfileContextMenuAt = 0
+    contextMenuVisible = false
+    contextMenuX = 0
+    contextMenuY = 0
+    contextMenuItems: MenuItemOptions[] = []
+    contextMenuSelectedIndex = -1
+    private contextMenuReturnFocus: HTMLElement | null = null
 
     constructor (
         public homeBase: HomeBaseService,
@@ -229,26 +235,122 @@ export class StartPageComponent extends BaseComponent {
         return [...profiles, ...childProfiles].sort((a, b) => a.name.localeCompare(b.name))
     }
 
-    onGroupMouseDown (event: MouseEvent, group: PartialProfileGroup<CollapsableProfileGroup>): void {
-        if (event.button === 2) {
-            this.showGroupContextMenu(event, group)
-        }
-    }
-
     onGroupContextMenu (event: MouseEvent, group: PartialProfileGroup<CollapsableProfileGroup>): void {
-        if (Date.now() - this.lastGroupContextMenuAt < 500) {
-            event.preventDefault()
-            event.stopPropagation()
-            return
-        }
         this.showGroupContextMenu(event, group)
     }
 
     private showGroupContextMenu (event: MouseEvent, group: PartialProfileGroup<CollapsableProfileGroup>): void {
         event.preventDefault()
         event.stopPropagation()
-        this.lastGroupContextMenuAt = Date.now()
-        this.platform.popupContextMenu(this.buildGroupContextMenu(group), event)
+        this.showCustomContextMenu(this.buildGroupContextMenu(group), event)
+    }
+
+    private showCustomContextMenu (items: MenuItemOptions[], event: MouseEvent): void {
+        const margin = 8
+        this.contextMenuItems = items
+        this.contextMenuSelectedIndex = this.findNextContextMenuItem(-1, 1)
+        this.contextMenuReturnFocus = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+        this.contextMenuX = Math.max(margin, Math.min(event.clientX, window.innerWidth - margin))
+        this.contextMenuY = Math.max(margin, Math.min(event.clientY, window.innerHeight - margin))
+        this.contextMenuVisible = true
+        setTimeout(() => this.focusAndConstrainContextMenu())
+    }
+
+    closeContextMenu (restoreFocus = true): void {
+        if (!this.contextMenuVisible) {
+            return
+        }
+        this.contextMenuVisible = false
+        this.contextMenuSelectedIndex = -1
+        const returnFocus = this.contextMenuReturnFocus
+        this.contextMenuReturnFocus = null
+        if (restoreFocus) {
+            setTimeout(() => returnFocus?.focus())
+        }
+    }
+
+    onContextMenuItemClick (item: MenuItemOptions): void {
+        if (item.type === 'separator' || item.enabled === false) { return }
+        this.closeContextMenu(false)
+        item.click?.()
+    }
+
+    onContextMenuItemMouseEnter (index: number): void {
+        if (this.isContextMenuItemActionable(this.contextMenuItems[index])) {
+            this.contextMenuSelectedIndex = index
+        }
+    }
+
+    onContextMenuKeyDown (event: KeyboardEvent): void {
+        switch (event.key) {
+            case 'ArrowDown':
+                event.preventDefault()
+                event.stopPropagation()
+                this.contextMenuSelectedIndex = this.findNextContextMenuItem(this.contextMenuSelectedIndex, 1)
+                break
+            case 'ArrowUp':
+                event.preventDefault()
+                event.stopPropagation()
+                this.contextMenuSelectedIndex = this.findNextContextMenuItem(this.contextMenuSelectedIndex, -1)
+                break
+            case 'Home':
+                event.preventDefault()
+                event.stopPropagation()
+                this.contextMenuSelectedIndex = this.findNextContextMenuItem(-1, 1)
+                break
+            case 'End':
+                event.preventDefault()
+                event.stopPropagation()
+                this.contextMenuSelectedIndex = this.findNextContextMenuItem(0, -1)
+                break
+            case 'Enter':
+            case ' ':
+                event.preventDefault()
+                event.stopPropagation()
+                if (this.contextMenuSelectedIndex >= 0) {
+                    this.onContextMenuItemClick(this.contextMenuItems[this.contextMenuSelectedIndex])
+                }
+                break
+            case 'Escape':
+                event.preventDefault()
+                event.stopPropagation()
+                this.closeContextMenu()
+                break
+            case 'Tab':
+                this.closeContextMenu(false)
+                break
+        }
+    }
+
+    private focusAndConstrainContextMenu (): void {
+        if (!this.contextMenuVisible) {
+            return
+        }
+        const menu = this.contextMenuElement?.nativeElement
+        if (!menu) {
+            return
+        }
+        const margin = 8
+        const maxX = Math.max(margin, window.innerWidth - menu.offsetWidth - margin)
+        const maxY = Math.max(margin, window.innerHeight - menu.offsetHeight - margin)
+        this.contextMenuX = Math.max(margin, Math.min(this.contextMenuX, maxX))
+        this.contextMenuY = Math.max(margin, Math.min(this.contextMenuY, maxY))
+        menu.focus()
+    }
+
+    private findNextContextMenuItem (start: number, direction: 1 | -1): number {
+        const count = this.contextMenuItems.length
+        for (let step = 1; step <= count; step++) {
+            const index = (start + direction * step + count) % count
+            if (this.isContextMenuItemActionable(this.contextMenuItems[index])) {
+                return index
+            }
+        }
+        return -1
+    }
+
+    private isContextMenuItemActionable (item: MenuItemOptions | undefined): boolean {
+        return !!item && item.type !== 'separator' && item.enabled !== false
     }
 
     private buildGroupContextMenu (group: PartialProfileGroup<CollapsableProfileGroup>): MenuItemOptions[] {
@@ -413,7 +515,7 @@ export class StartPageComponent extends BaseComponent {
     onSidebarContextMenu (event: MouseEvent): void {
         event.preventDefault()
         event.stopPropagation()
-        this.platform.popupContextMenu([
+        this.showCustomContextMenu([
             {
                 label: '新建分组',
                 click: () => {
@@ -491,26 +593,14 @@ export class StartPageComponent extends BaseComponent {
         return count
     }
 
-    onProfileMouseDown (event: MouseEvent, profile: PartialProfile<Profile>): void {
-        if (event.button === 2) {
-            this.showProfileContextMenu(event, profile)
-        }
-    }
-
     onProfileContextMenu (event: MouseEvent, profile: PartialProfile<Profile>): void {
-        if (Date.now() - this.lastProfileContextMenuAt < 500) {
-            event.preventDefault()
-            event.stopPropagation()
-            return
-        }
         this.showProfileContextMenu(event, profile)
     }
 
     private showProfileContextMenu (event: MouseEvent, profile: PartialProfile<Profile>): void {
         event.preventDefault()
         event.stopPropagation()
-        this.lastProfileContextMenuAt = Date.now()
-        this.platform.popupContextMenu(this.buildProfileContextMenu(profile), event)
+        this.showCustomContextMenu(this.buildProfileContextMenu(profile), event)
     }
 
     private buildProfileContextMenu (profile: PartialProfile<Profile>): MenuItemOptions[] {

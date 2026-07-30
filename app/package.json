@@ -8,19 +8,19 @@
     "email": "e@ajenti.org"
   },
   "main": "dist/main.js",
-  "version": "0.0.7",
+  "version": "0.0.9",
   "scripts": {
     "postinstall": "patch-package && node ../scripts/harden-embedded-npm.mjs",
     "build": "webpack --progress --color --display-modules",
     "watch": "webpack --progress --color --watch"
   },
   "dependencies": {
-    "@electron/remote": "^2",
+    "@electron/remote": "^2.1.3",
     "any-promise": "^1.3.0",
     "atomically": "^2.0.2",
     "dunder-proto": "^1",
     "electron-config": "2.0.0",
-    "electron-debug": "^3.2.0",
+    "electron-debug": "4.1.0",
     "electron-updater": "6.8.9",
     "fontmanager-redux": "1.1.0",
     "glasstron": "0.1.1",
@@ -35,7 +35,6 @@
     "rxjs": "7.8.2",
     "selfsigned": "^5.5.0",
     "source-map-support": "^0.5.20",
-    "v8-compile-cache": "^2.3.0",
     "yargs": "^17.7.2"
   },
   "optionalDependencies": {
@@ -63,7 +62,7 @@
     "tabby-terminal": "*"
   },
   "resolutions": {
-    "node-abi": "4.9.0",
+    "node-abi": "4.33.0",
     "node-gyp": "12.4.0",
     "nan": "2.22.2",
     "node-addon-api": "^8.3.0",

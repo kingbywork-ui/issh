@@ -12,16 +12,6 @@ function debugLog (message: string, extra?: unknown): void {
     }
 }
 
-try {
-    require('v8-compile-cache')
-    debugLog('v8-compile-cache-loaded')
-} catch (error) {
-    debugLog('v8-compile-cache-skipped', error instanceof Error ? {
-        message: error.message,
-        stack: error.stack,
-    } : String(error))
-}
-
 import '../lib/lru'
 import 'source-sans-pro/source-sans-pro.css'
 import 'source-code-pro/source-code-pro.css'

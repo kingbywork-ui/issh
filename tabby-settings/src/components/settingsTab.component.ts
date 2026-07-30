@@ -17,7 +17,7 @@ import {
     TranslateService,
 } from 'tabby-core'
 
-import { SettingsTabProvider } from '../api'
+import { SettingsTabProvider, SettingsNavGroup } from '../api'
 import { ReleaseNotesComponent } from './releaseNotesTab.component'
 
 /** @hidden */
@@ -39,8 +39,15 @@ export class SettingsTabComponent extends BaseTabComponent {
     updateAvailable = false
     showConfigDefaults = false
     allLanguages = LocaleService.allLanguages
-    prioritizedProviders: SettingsTabProvider[] = []
-    generalProviders: SettingsTabProvider[] = []
+    commonProviders: SettingsTabProvider[] = []
+    providerGroups: { key: SettingsNavGroup, title: string, providers: SettingsTabProvider[] }[] = []
+    private static readonly GROUP_DEFS: { key: SettingsNavGroup, title: string }[] = [
+        { key: 'appearance', title: _('Appearance') },
+        { key: 'terminal', title: _('Terminal') },
+        { key: 'ai', title: _('AI & agents') },
+        { key: 'system', title: _('System') },
+        { key: 'other', title: _('Other') },
+    ]
     @HostBinding('class.pad-window-controls') padWindowControls = false
 
     constructor (
@@ -70,8 +77,17 @@ export class SettingsTabComponent extends BaseTabComponent {
             return true
         })
         this.settingsProviders.sort((a, b) => a.weight - b.weight + a.title.localeCompare(b.title))
-        this.prioritizedProviders = this.settingsProviders.filter(p => p.prioritized)
-        this.generalProviders = this.settingsProviders.filter(p => !p.prioritized)
+        this.commonProviders = this.settingsProviders.filter(p => p.group === 'common')
+        const grouped = new Map<SettingsNavGroup, SettingsTabProvider[]>()
+        for (const p of this.settingsProviders) {
+            const g: SettingsNavGroup = p.group ?? 'other'
+            if (g === 'common') continue
+            if (!grouped.has(g)) grouped.set(g, [])
+            grouped.get(g)!.push(p)
+        }
+        this.providerGroups = SettingsTabComponent.GROUP_DEFS
+            .filter(def => grouped.has(def.key))
+            .map(def => ({ key: def.key, title: translate.instant(def.title), providers: grouped.get(def.key)! }))
 
         this.configDefaults = yaml.dump(config.getDefaults())
 

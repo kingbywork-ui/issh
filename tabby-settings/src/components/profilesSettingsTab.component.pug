@@ -38,7 +38,7 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                     .host-content
                         .host-list-pane
                             .host-toolbar
-                                .host-toolbar-top
+                                .host-toolbar-row
                                     .input-group.search-group
                                         .input-group-text
                                             i.fas.fa-fw.fa-search
@@ -48,7 +48,7 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                                             [(ngModel)]='filter'
                                         )
 
-                                    .host-tag-filters(*ngIf='getAvailableTags().length > 0')
+                                    .host-filter-chips(*ngIf='getAvailableTags().length > 0')
                                         button.tag-btn(
                                             *ngFor='let tag of getAvailableTags()',
                                             (click)='toggleTag(tag)',
@@ -56,26 +56,26 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                                             [class]='getEnvironmentBadgeClass(tag)'
                                         ) {{tag}}
 
-                                    button.btn.btn-sm.btn-outline-secondary((click)='clearFilters()')
-                                        i.fas.fa-fw.fa-rotate-left
-                                        span(translate) Clear
-
-                                .host-toolbar-bottom
-                                    .host-toolbar-filters
+                                    .host-filter-toggles
                                         .host-filter-toggle
                                             checkbox([text]='"SSH only"|translate', [(ngModel)]='sshOnly')
-
                                         .host-filter-toggle
                                             checkbox([text]='"Favorites"|translate', [(ngModel)]='favoritesOnly')
-
-                                        select.form-control.environment-filter([(ngModel)]='environmentFilter')
+                                        select.form-control.form-control-sm.environment-filter([(ngModel)]='environmentFilter')
                                             option(value='') {{'All environments'|translate}}
                                             option(*ngFor='let environment of getAvailableEnvironments()', [value]='environment') {{environment}}
 
-                                    .host-toolbar-actions
-                                        button.btn.btn-sm.btn-primary((click)='newProfile()')
-                                            i.fas.fa-fw.fa-plus
-                                            span(translate) New profile
+                                    button.btn.btn-sm.btn-outline-secondary.host-clear-btn(
+                                        type='button',
+                                        [title]='"Clear"|translate',
+                                        [attr.aria-label]='"Clear"|translate',
+                                        (click)='clearFilters()'
+                                    )
+                                        i.fas.fa-fw.fa-rotate-left
+
+                                    button.btn.btn-sm.btn-primary((click)='newProfile()')
+                                        i.fas.fa-fw.fa-plus
+                                        span(translate) New profile
 
                             .bulk-toolbar(*ngIf='selectedProfileIds.size > 0')
                                 .bulk-info
@@ -158,12 +158,9 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                                 thead
                                     tr
                                         th.col-check
-                                        th.col-fav
-                                        th.col-system System
                                         th.col-name Name
-                                        th.col-address Address
-                                        th.col-info Info
-                                        th.col-env Env
+                                        th.col-status Status
+                                        th.col-fav
                                         th.col-actions Actions
                                 tbody
                                     tr.host-row(
@@ -177,6 +174,26 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                                                 [ngModel]='isSelected(profile)',
                                                 (ngModelChange)='setSelection(profile, $event)'
                                             )
+                                        td.col-name(
+                                            [class.clickable]='!profile.isBuiltin',
+                                            (click)='profile.isBuiltin ? null : editProfile(profile)'
+                                        )
+                                            .name-row
+                                                profile-icon([icon]='profile.icon', [color]='profile.color')
+                                                span.host-name {{profile.name}}
+                                                span.badge.badge-recent(*ngIf='isRecentProfile(profile)')
+                                                    i.fas.fa-clock.me-1
+                                                    | Recent
+                                            .addr-sub(*ngIf='getProfileConnectionInfo(profile) as info')
+                                                span.host-address {{info.host}}
+                                                span.addr-detail(*ngIf='info.user || info.port')
+                                                    span(*ngIf='info.user') {{info.user}}
+                                                    span(*ngIf='info.port') :{{info.port}}
+                                        td.col-status
+                                            span.badge(
+                                                *ngIf='profile.environment',
+                                                [class]='getEnvironmentBadgeClass(profile.environment)'
+                                            ) {{profile.environment}}
                                         td.col-fav
                                             button.btn.btn-link.favorite-toggle(
                                                 *ngIf='!profile.isBuiltin',
@@ -184,43 +201,15 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                                             )
                                                 i.far.fa-star(*ngIf='!profile.favorite')
                                                 i.fas.fa-star.text-warning(*ngIf='profile.favorite')
-                                        td.col-system
-                                            profile-icon([icon]='profile.icon', [color]='profile.color')
-                                        td.col-name(
-                                            [class.clickable]='!profile.isBuiltin',
-                                            (click)='profile.isBuiltin ? null : editProfile(profile)'
-                                        )
-                                            span.host-name {{profile.name}}
-                                            span.badge.badge-recent(*ngIf='isRecentProfile(profile)')
-                                                i.fas.fa-clock.me-1
-                                                | Recent
-                                        td.col-address
-                                            span.host-address(*ngIf='getProfileConnectionInfo(profile) as info') {{info.host}}
-                                            button.btn.btn-link.btn-copy(
-                                                *ngIf='getProfileConnectionInfo(profile) as info',
-                                                (click)='$event.stopPropagation()',
-                                                title='Copy'
-                                            )
-                                                i.far.fa-copy
-                                        td.col-info
-                                            span.info-text(*ngIf='getProfileConnectionInfo(profile) as info')
-                                                span(*ngIf='info.user') {{info.user}}
-                                                span(*ngIf='info.port') :{{info.port}}
-                                        td.col-env
-                                            span.badge(
-                                                *ngIf='profile.environment',
-                                                [class]='getEnvironmentBadgeClass(profile.environment)'
-                                            ) {{profile.environment}}
                                         td.col-actions
                                             button.btn.btn-sm.btn-success.host-connect-btn(*ngIf='!profile.isTemplate', (click)='launchProfile(profile)') Connect
-                                            button.btn.btn-sm.btn-link.host-edit-btn(
-                                                *ngIf='!profile.isBuiltin',
-                                                (click)='editProfile(profile)'
-                                            ) Edit
                                             .hover-reveal(ngbDropdown, placement='bottom-right top-right auto')
-                                                button.btn.btn-sm.btn-link(ngbDropdownToggle) More
-                                                    i.fas.fa-fw.fa-ellipsis-vertical.ms-1
+                                                button.btn.btn-sm.btn-link(ngbDropdownToggle)
+                                                    i.fas.fa-fw.fa-ellipsis-vertical
                                                 div(ngbDropdownMenu)
+                                                    button.dropdown-item(ngbDropdownItem, (click)='editProfile(profile)')
+                                                        i.fas.fa-fw.fa-pencil-alt
+                                                        span(translate) Edit
                                                     button.dropdown-item(ngbDropdownItem, (click)='newProfile(profile)')
                                                         i.fas.fa-fw.fa-copy
                                                         span(translate) Duplicate
@@ -242,8 +231,8 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                                                         *ngIf='!profile.isBuiltin',
                                                         (click)='deleteProfile(profile)'
                                                     )
-                                                        i.fas.fa-fw.fa-trash-alt
-                                                        span(translate) Delete
+                                                        i.fas.fa-fw.fa-trash-alt.text-danger
+                                                        span.text-danger(translate) Delete
 
                             ng-container(*ngFor='let child of group.children')
                                 ng-container(*ngTemplateOutlet='hostGroup; context: {$implicit: child}')

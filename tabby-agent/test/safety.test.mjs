@@ -59,6 +59,39 @@ test('danger guard catches wrapped and cross-platform destructive commands', () 
     }
 })
 
+test('danger guard catches shell-obfuscated destructive commands after normalization', () => {
+    const { normalizeCommand } = loadStandaloneTypeScriptModule(
+        '../../tabby-llm/src/services/commandValidation.ts',
+    )
+    const { DangerousCommandGuard } = loadStandaloneTypeScriptModule(
+        '../../tabby-llm/src/services/dangerousCommandGuard.ts',
+    )
+    const guard = new DangerousCommandGuard()
+    for (const command of [
+        'command r\\m -rf /',
+        'command mkf\\s.ext4 /dev/sda',
+        'command r\'m\' -rf /',
+        'command $\'mkfs.ext4\' /dev/sda',
+        'rm --recurs\'\'ive --fo""rce /',
+        'cmd /c d^el /s /q C:\\*',
+        'powershell -Command "& (\'Remove-\'+\'Item\') C:\\ -Recurse -Force"',
+    ]) {
+        const normalized = normalizeCommand(command, { allowMultiline: true })
+        assert.notEqual(normalized, null, command)
+        assert.equal(guard.isDangerous(normalized).dangerous, true, command)
+    }
+    for (const command of [
+        'command e\\cho safe',
+        'cmd /c e^cho safe',
+        'powershell -Command "Write-Output (\'safe-\'+\'value\')"',
+        'Get-ChildItem C:\\Windows',
+    ]) {
+        const normalized = normalizeCommand(command, { allowMultiline: true })
+        assert.notEqual(normalized, null, command)
+        assert.equal(guard.isDangerous(normalized).dangerous, false, command)
+    }
+})
+
 test('danger guard redacts common command-line credential formats', () => {
     const { DangerousCommandGuard } = loadStandaloneTypeScriptModule(
         '../../tabby-llm/src/services/dangerousCommandGuard.ts',

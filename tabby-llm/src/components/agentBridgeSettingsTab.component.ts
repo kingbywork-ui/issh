@@ -2,6 +2,21 @@ import { ChangeDetectorRef, Component, HostBinding, OnInit } from '@angular/core
 import { BaseComponent, ConfigService, NotificationsService } from 'tabby-core'
 import { AgentBridgeService } from '../services/agentBridge.service'
 
+type AgentConfigId = 'codex-desktop' | 'codex-cli' | 'cursor' | 'claude-desktop'
+
+interface AgentConfigOption {
+    id: AgentConfigId
+    name: string
+    description: string
+}
+
+interface AgentConfigItem {
+    label: string
+    value: string
+    copyValue?: string
+    multiline?: boolean
+}
+
 /** @hidden */
 @Component({
     standalone: false,
@@ -14,6 +29,31 @@ export class AgentBridgeSettingsTabComponent extends BaseComponent implements On
     bridgeTesting = false
     bridgeTestSuccessful: boolean | null = null
     bridgeTestError: string | null = null
+    selectedAgentConfig: AgentConfigId = 'codex-desktop'
+    serviceSettingsExpanded = false
+
+    readonly agentConfigOptions: AgentConfigOption[] = [
+        {
+            id: 'codex-desktop',
+            name: 'Codex Desktop',
+            description: '通过自定义 MCP 表单连接 STDIO 服务',
+        },
+        {
+            id: 'codex-cli',
+            name: 'Codex CLI',
+            description: '在 config.toml 中添加 STDIO MCP 服务',
+        },
+        {
+            id: 'cursor',
+            name: 'Cursor',
+            description: '通过 JSON 配置连接 STDIO MCP 服务',
+        },
+        {
+            id: 'claude-desktop',
+            name: 'Claude Desktop',
+            description: '通过 JSON 配置连接本机 SSE MCP 服务',
+        },
+    ]
 
     @HostBinding('class.content-box') true
 
@@ -42,25 +82,109 @@ export class AgentBridgeSettingsTabComponent extends BaseComponent implements On
         await this.copyText(token, '智能体桥接令牌已复制')
     }
 
+    get maskedAccessToken (): string {
+        const token = this.agentBridge.accessToken
+        if (!token) {
+            return ''
+        }
+        if (token.length <= 8) {
+            return '•'.repeat(token.length)
+        }
+        return `${token.slice(0, 4)}${'•'.repeat(Math.min(16, token.length - 8))}${token.slice(-4)}`
+    }
+
+    toggleServiceSettings (): void {
+        this.serviceSettingsExpanded = !this.serviceSettingsExpanded
+    }
+
+    get primarySnippetItem (): AgentConfigItem | undefined {
+        return this.selectedAgentConfigItems.find(item => item.multiline && item.label.startsWith('完整'))
+    }
+
+    async copyFullAgentConfig (): Promise<void> {
+        const item = this.primarySnippetItem
+        if (item) {
+            await this.copyAgentConfigItem(item)
+        }
+    }
+
     async rotateBridgeToken (): Promise<void> {
         await this.agentBridge.rotateToken()
         this.notifications.notice('智能体桥接令牌已轮换')
     }
 
-    async copyCodexConfig (): Promise<void> {
-        await this.copyText(this.agentBridge.codexConfigSnippet, 'Codex MCP 配置已复制')
+    get selectedAgentOption (): AgentConfigOption {
+        return this.agentConfigOptions.find(option => option.id === this.selectedAgentConfig) ?? this.agentConfigOptions[0]
     }
 
-    async copyCursorConfig (): Promise<void> {
-        await this.copyText(this.agentBridge.cursorConfigSnippet, 'Cursor MCP 配置已复制')
+    get selectedAgentConfigItems (): AgentConfigItem[] {
+        const desktopFields = this.agentBridge.codexDesktopConfigFields
+        const environmentVariable = desktopFields.environmentVariableName
+        const environmentValue = desktopFields.environmentVariableValue
+
+        switch (this.selectedAgentConfig) {
+            case 'codex-desktop':
+                return [
+                    { label: '对接方式', value: '自定义 MCP / STDIO' },
+                    { label: '名称', value: desktopFields.name },
+                    { label: '类型', value: desktopFields.type },
+                    { label: '启动命令', value: desktopFields.command },
+                    { label: '参数', value: desktopFields.argument },
+                    { label: '环境变量名称', value: environmentVariable },
+                    { label: '环境变量值', value: environmentValue },
+                    { label: '环境变量传递', value: '留空', copyValue: '' },
+                    { label: '工作目录', value: '留空', copyValue: '' },
+                    { label: '完整填写参数', value: this.agentBridge.codexDesktopConfigGuide, multiline: true },
+                    { label: '智能体规则（可选）', value: this.agentBridge.agentRulesTemplate, multiline: true },
+                ]
+            case 'codex-cli':
+                return [
+                    { label: '对接方式', value: 'STDIO / TOML' },
+                    { label: '配置文件', value: '%USERPROFILE%\\.codex\\config.toml' },
+                    { label: 'MCP 服务名称', value: 'tabby' },
+                    { label: '启动命令', value: 'node' },
+                    { label: '参数', value: this.agentBridge.mcpServerScriptPath },
+                    { label: '环境变量名称', value: environmentVariable },
+                    { label: '环境变量值', value: environmentValue },
+                    { label: '完整 TOML 配置', value: this.agentBridge.codexConfigSnippet, multiline: true },
+                    { label: '智能体规则（可选）', value: this.agentBridge.agentRulesTemplate, multiline: true },
+                ]
+            case 'cursor':
+                return [
+                    { label: '对接方式', value: 'STDIO / JSON' },
+                    { label: '配置入口', value: 'Cursor MCP 设置' },
+                    { label: 'MCP 服务名称', value: 'tabby' },
+                    { label: '启动命令', value: 'node' },
+                    { label: '参数', value: this.agentBridge.mcpServerScriptPath },
+                    { label: '环境变量名称', value: environmentVariable },
+                    { label: '环境变量值', value: environmentValue },
+                    { label: '完整 JSON 配置', value: this.agentBridge.cursorConfigSnippet, multiline: true },
+                    { label: '智能体规则（可选）', value: this.agentBridge.agentRulesTemplate, multiline: true },
+                ]
+            case 'claude-desktop':
+                return [
+                    { label: '对接方式', value: 'SSE / JSON' },
+                    { label: '配置入口', value: 'Claude Desktop MCP 配置' },
+                    { label: 'MCP 服务名称', value: 'tabby' },
+                    { label: '传输类型', value: 'sse' },
+                    { label: 'SSE 地址', value: this.agentBridge.sseUrl ?? 'http://127.0.0.1:<port>/sse' },
+                    { label: 'Authorization', value: `Bearer ${this.agentBridge.accessToken ?? '<token>'}` },
+                    { label: '完整 JSON 配置', value: this.agentBridge.claudeDesktopConfigSnippet, multiline: true },
+                    { label: '智能体规则（可选）', value: this.agentBridge.agentRulesTemplate, multiline: true },
+                ]
+        }
     }
 
-    async copyAgentRulesTemplate (): Promise<void> {
-        await this.copyText(this.agentBridge.agentRulesTemplate, '智能体规则模板已复制')
+    selectAgentConfig (agent: AgentConfigId): void {
+        this.selectedAgentConfig = agent
     }
 
-    async copyClaudeDesktopConfig (): Promise<void> {
-        await this.copyText(this.agentBridge.claudeDesktopConfigSnippet, 'Claude Desktop MCP 配置已复制')
+    async copyAgentConfigItem (item: AgentConfigItem): Promise<void> {
+        await this.copyText(item.copyValue ?? item.value, `${item.label}已复制`)
+    }
+
+    trackAgentConfigItem (_index: number, item: AgentConfigItem): string {
+        return item.label
     }
 
     auditEntries: any[] = []

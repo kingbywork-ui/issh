@@ -34,11 +34,52 @@
         flex: 1 0 0;
 
         > .nav {
-            padding: 14px 12px;
-            width: 240px;
+            padding: 14px 10px;
+            width: 216px;
             flex: none;
             overflow-y: auto;
             flex-wrap: nowrap;
+            border-right: 1px solid rgba(128, 128, 128, 0.16);
+
+            .nav-group-title {
+                padding: 16px 10px 6px;
+                font-size: 11px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                color: var(--theme-fg-less, #6E7681);
+                user-select: none;
+            }
+
+            li > a.nav-link {
+                display: flex;
+                align-items: center;
+                height: 32px;
+                padding: 0 10px;
+                border-radius: 6px;
+                font-size: 13px;
+                color: var(--theme-fg, inherit);
+                opacity: 0.85;
+                cursor: pointer;
+                transition: background 120ms ease-out, opacity 120ms ease-out;
+
+                i {
+                    width: 18px;
+                    font-size: 13px;
+                    opacity: 0.8;
+                }
+
+                &:hover {
+                    background: rgba(128, 128, 128, 0.12);
+                    opacity: 1;
+                }
+
+                &.active, &.active:hover {
+                    background: color-mix(in srgb, var(--theme-primary) 16%, transparent);
+                    color: var(--theme-primary);
+                    opacity: 1;
+                }
+            }
         }
 
         > .tab-content {
