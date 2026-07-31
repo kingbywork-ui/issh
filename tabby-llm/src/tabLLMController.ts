@@ -1,8 +1,24 @@
 import { ApplicationRef, ComponentRef, createComponent, EnvironmentInjector } from '@angular/core'
 import { Subject, Subscription, debounce, timer } from 'rxjs'
-import { ConfigService, LogService, Logger, NotificationsService, PlatformService, TranslateService } from 'tabby-core'
+import {
+    altKeyName,
+    ConfigService,
+    getKeyName,
+    getKeystrokeName,
+    KeyEventData,
+    LogService,
+    Logger,
+    metaKeyName,
+    NotificationsService,
+    PlatformService,
+    TranslateService,
+} from 'tabby-core'
 import { BaseTerminalTabComponent, XTermFrontend } from 'tabby-terminal'
-import { AutocompleteSuggestion } from './api'
+import {
+    AutocompleteSuggestion,
+    autocompleteSuggestionHotkeyId,
+    MAX_AUTOCOMPLETE_SUGGESTIONS,
+} from './api'
 import { LLMTerminalHostComponent } from './components/llmTerminalHost.component'
 import { LLMService } from './services/llm.service'
 import { TerminalContextService } from './services/terminalContext.service'
@@ -25,6 +41,7 @@ export class TabLLMController {
     private inputSubscription?: Subscription
     private sessionChangedSubscription?: Subscription
     private alternateScreenSubscription?: Subscription
+    private configSubscription?: Subscription
     private debounceSubject = new Subject<void>()
     private debounceSubscription?: Subscription
     private hostRef: ComponentRef<LLMTerminalHostComponent> | null = null
@@ -92,6 +109,7 @@ export class TabLLMController {
         this.inputSubscription?.unsubscribe()
         this.sessionChangedSubscription?.unsubscribe()
         this.alternateScreenSubscription?.unsubscribe()
+        this.configSubscription?.unsubscribe()
         this.debounceSubscription?.unsubscribe()
         this.debounceSubject.complete()
         if (this.hostRef) {
@@ -112,6 +130,7 @@ export class TabLLMController {
 
     start (): void {
         this.attachKeyHandler()
+        this.configSubscription = this.config.changed$.subscribe(() => this.refresh())
         this.sessionChangedSubscription = this.tab.sessionChanged$.subscribe(() => {
             this.llm.cancelAutocompleteRequests(this.tabKey)
             this.llm.clearAutocompleteCache(this.tabKey)
@@ -146,6 +165,10 @@ export class TabLLMController {
     }
 
     handleHotkey (hotkey: string): boolean {
+        const suggestionPosition = this.getSuggestionPositionForHotkey(hotkey)
+        if (suggestionPosition !== null) {
+            return this.acceptSuggestionAt(suggestionPosition - 1)
+        }
         switch (hotkey) {
             case 'llm-autocomplete':
                 void this.triggerAutocomplete()
@@ -185,6 +208,12 @@ export class TabLLMController {
         }
         if (event.type !== 'keydown') {
             return false
+        }
+        const directSuggestionIndex = this.getDirectSuggestionIndex(event)
+        if (directSuggestionIndex !== null) {
+            this.acceptSuggestionAt(directSuggestionIndex)
+            this.consumePanelKeyEvent(event)
+            return true
         }
         if (event.key === 'Escape') {
             this.hideAutocomplete()
@@ -241,8 +270,8 @@ export class TabLLMController {
     }
 
     get panelOpacity (): number {
-        const raw = this.config.store.llm.autocompletePanelOpacity ?? 62
-        return Math.max(40, Math.min(100, Math.round(raw)))
+        const raw = this.config.store.llm.autocompletePanelOpacity ?? 20
+        return Math.max(5, Math.min(100, Math.round(raw)))
     }
 
     shouldUseLightweightHint (): boolean {
@@ -341,6 +370,78 @@ export class TabLLMController {
         const next = this.selectedIndex + delta
         this.selectedIndex = Math.max(0, Math.min(this.suggestions.length - 1, next))
         this.refresh()
+    }
+
+    private acceptSuggestionAt (index: number): boolean {
+        const suggestion = this.suggestions[index]
+        if (!this.showAutocomplete || !suggestion) {
+            return false
+        }
+        this.selectedIndex = index
+        this.refresh()
+        void this.acceptSuggestion(suggestion)
+        return true
+    }
+
+    private getSuggestionPositionForHotkey (hotkey: string): number | null {
+        const match = /^llm-select-suggestion-([1-9])$/.exec(hotkey)
+        return match ? Number(match[1]) : null
+    }
+
+    private getDirectSuggestionIndex (event: KeyboardEvent): number | null {
+        const stroke = this.getKeyboardEventStroke(event)
+        for (let position = 1; position <= MAX_AUTOCOMPLETE_SUGGESTIONS; position++) {
+            if (this.hasSingleStrokeHotkey(autocompleteSuggestionHotkeyId(position), stroke)) {
+                return position - 1
+            }
+        }
+        return null
+    }
+
+    private getKeyboardEventStroke (event: KeyboardEvent): string {
+        const eventData: KeyEventData = {
+            ctrlKey: event.ctrlKey,
+            metaKey: event.metaKey,
+            altKey: event.altKey,
+            shiftKey: event.shiftKey,
+            key: event.key,
+            code: event.code,
+            eventName: event.type,
+            time: event.timeStamp,
+            registrationTime: performance.now(),
+        }
+        const keys = [getKeyName(eventData)]
+        if (event.ctrlKey) {
+            keys.push('Ctrl')
+        }
+        if (event.metaKey) {
+            keys.push(metaKeyName)
+        }
+        if (event.altKey) {
+            keys.push(altKeyName)
+        }
+        if (event.shiftKey) {
+            keys.push('Shift')
+        }
+        return getKeystrokeName([...new Set(keys)])
+    }
+
+    private hasSingleStrokeHotkey (hotkeyId: string, stroke: string): boolean {
+        const configured = this.config.store.hotkeys?.[hotkeyId]
+        if (typeof configured === 'string') {
+            return configured.toLowerCase() === stroke.toLowerCase()
+        }
+        if (!Array.isArray(configured)) {
+            return false
+        }
+        return configured.some(binding => {
+            if (typeof binding === 'string') {
+                return binding.toLowerCase() === stroke.toLowerCase()
+            }
+            return Array.isArray(binding) && binding.length === 1 &&
+                typeof binding[0] === 'string' &&
+                binding[0].toLowerCase() === stroke.toLowerCase()
+        })
     }
 
     private preserveSelection (previousIndex: number, previousSuggestions: AutocompleteSuggestion[]): void {
@@ -702,7 +803,7 @@ export class TabLLMController {
     private consumePanelKeyEvent (event: KeyboardEvent): void {
         event.preventDefault()
         // xterm's custom handler runs before the event bubbles to document, where
-        // HotkeysService would otherwise emit the same Ctrl+N/U/Y action again.
+        // HotkeysService would otherwise emit the same panel action again.
         event.stopPropagation()
     }
 
@@ -972,6 +1073,7 @@ export class TabLLMController {
         return Array.from(best.values())
             .sort((a, b) => b.score - a.score)
             .map(item => item.suggestion)
+            .slice(0, MAX_AUTOCOMPLETE_SUGGESTIONS)
     }
 
     private matchScore (command: string, partial: string): number {

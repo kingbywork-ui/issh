@@ -2,6 +2,13 @@ import { loadConnection, rpc } from './client.mjs'
 import { AGENT_BRIDGE_PROTOCOL_VERSION, getMcpTools } from './protocol.js'
 
 const MAX_MESSAGE_BYTES = 1024 * 1024
+const COMMAND_ARGUMENT_TOOLS = new Set([
+    'tabby_preview_command',
+    'tabby_insert_command',
+    'tabby_run_command',
+    'tabby_exec_command',
+    'tabby_batch_exec',
+])
 
 export async function handleMcpMessage (message) {
     if (!message || typeof message !== 'object') {
@@ -31,6 +38,10 @@ export async function handleMcpMessage (message) {
         const args = message.params?.arguments ?? {}
         if (!getMcpTools().some(tool => tool.name === name)) {
             return makeError(message.id, -32601, `Unknown tool: ${name ?? ''}`)
+        }
+        const validationError = validateMcpToolArguments(name, args)
+        if (validationError) {
+            return makeToolError(message.id, 'invalid_params', validationError)
         }
         try {
             const connection = loadConnection()
@@ -115,6 +126,26 @@ function makeResult (id, result) {
 
 function makeError (id, code, message) {
     return { jsonrpc: '2.0', id, error: { code, message } }
+}
+
+function makeToolError (id, code, message) {
+    return makeResult(id, {
+        content: [{ type: 'text', text: JSON.stringify({ code, error: message }, null, 2) }],
+        isError: true,
+    })
+}
+
+function validateMcpToolArguments (name, args) {
+    if (!COMMAND_ARGUMENT_TOOLS.has(name)) {
+        return null
+    }
+    if (!args || typeof args !== 'object' || Array.isArray(args)) {
+        return 'Tool arguments must be an object.'
+    }
+    if (typeof args.command !== 'string' || !args.command.trim()) {
+        return 'The command argument is required and must be a non-empty string.'
+    }
+    return null
 }
 
 function getRpcTimeout (name, args) {

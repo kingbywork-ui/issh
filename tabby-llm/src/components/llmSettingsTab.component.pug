@@ -222,6 +222,9 @@
         .llm-section-body
             .llm-hotkeys
                 .llm-hotkey
+                    kbd Ctrl+1-9
+                    span 快速选择对应序号
+                .llm-hotkey
                     kbd Ctrl+Shift+Space
                     span 手动触发
                 .llm-hotkey
@@ -315,10 +318,10 @@
                 .range-control
                     input.form-range(
                         type='range',
-                        min='40',
+                        min='5',
                         max='100',
                         step='1',
                         [(ngModel)]='config.store.llm.autocompletePanelOpacity',
                         (ngModelChange)='config.save()'
                     )
-                    .range-value {{config.store.llm.autocompletePanelOpacity ?? 62}}%
+                    .range-value {{config.store.llm.autocompletePanelOpacity ?? 20}}%

@@ -4,6 +4,7 @@ import path from 'node:path'
 import readline from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { after, before, test } from 'node:test'
+import { handleMcpMessage } from '../src/mcp-server.mjs'
 
 let child
 let lines
@@ -47,6 +48,24 @@ test('stdio MCP uses newline-delimited JSON and exposes current schemas', async 
         listed.result.tools.find(tool => tool.name === 'tabby_sftp_write').inputSchema.required,
         ['path', 'content'],
     )
+})
+
+test('MCP rejects command tools with missing command arguments before RPC', async () => {
+    const response = await handleMcpMessage({
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+            name: 'tabby_run_command',
+            arguments: {},
+        },
+    })
+    assert.equal(response.id, 3)
+    assert.equal(response.result.isError, true)
+    assert.deepEqual(JSON.parse(response.result.content[0].text), {
+        code: 'invalid_params',
+        error: 'The command argument is required and must be a non-empty string.',
+    })
 })
 
 function waitForLine () {

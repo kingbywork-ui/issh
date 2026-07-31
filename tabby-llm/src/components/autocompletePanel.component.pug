@@ -25,6 +25,7 @@
                 (click)='select(item)'
             )
                 .suggestion-row
+                    span.suggestion-index {{ i + 1 }}
                     span.category-tag(
                         *ngIf='item.category === "history"',
                         class='history'
@@ -48,4 +49,4 @@
             span {{ statusText || '当前输入没有候选建议。' }}
 
         .panel-footer(*ngIf='suggestions.length')
-            span {{ statusText || 'Ctrl+Y 接受 · Ctrl+N/U 选择 · Esc 关闭' }}
+            span {{ statusText || 'Ctrl+1-9 快速选择 · Ctrl+Y 接受 · Ctrl+N/U 选择 · Esc 关闭' }}

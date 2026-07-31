@@ -765,6 +765,7 @@ export class AgentBridgeService {
         try {
             this.ensureScopesMigrated()
             this.assertMethodScope(request.method)
+            this.assertRequiredRpcParams(request.method, request.params ?? {})
             this.syncRegisteredTabs()
             switch (request.method) {
                 case 'tabby_health':
@@ -824,7 +825,9 @@ export class AgentBridgeService {
         } catch (error: any) {
             rpcResponse = this.error(
                 id,
-                error?.code === 'forbidden' ? 'forbidden' : 'request_failed',
+                error?.code === 'forbidden'
+                    ? 'forbidden'
+                    : error?.code === 'invalid_params' ? 'invalid_params' : 'request_failed',
                 error instanceof Error ? error.message : String(error),
             )
         }
@@ -834,6 +837,24 @@ export class AgentBridgeService {
 
     private error (id: string | number | undefined, code: string, message: string, details?: any): RpcResponse {
         return { id, error: { code, message, details } }
+    }
+
+    private assertRequiredRpcParams (method: string | undefined, params: RpcParams): void {
+        const commandMethods = new Set([
+            'tabby_preview_command',
+            'tabby_insert_command',
+            'tabby_run_command',
+            'tabby_exec_command',
+            'tabby_batch_exec',
+        ])
+        if (!commandMethods.has(method ?? '')) {
+            return
+        }
+        if (typeof params.command !== 'string' || !params.command.trim()) {
+            const error: any = new Error('The command argument is required and must be a non-empty string.')
+            error.code = 'invalid_params'
+            throw error
+        }
     }
 
     private health (): any {
@@ -1800,11 +1821,13 @@ export class AgentBridgeService {
         }
         const result = response.result
         const rejected = this.isRejectedRpcResult(result, request.method)
+        const auditErrorMessage = response.error?.message ?? result?.message ?? result?.error ?? null
         const entry = {
             timestamp: new Date().toISOString(),
             method: request.method ?? null,
             ok: !response.error && !rejected,
             errorCode: response.error?.code ?? null,
+            errorMessage: typeof auditErrorMessage === 'string' ? this.redactAuditValue(auditErrorMessage) : null,
             executed: typeof result?.executed === 'boolean' ? result.executed : null,
             approved: typeof result?.approved === 'boolean' ? result.approved : null,
             approvedBy: result?.approvedBy ?? null,
@@ -1943,7 +1966,8 @@ export class AgentBridgeService {
                 const lower = filter.toLowerCase()
                 parsed = parsed.filter(entry =>
                     String(entry.method ?? '').toLowerCase().includes(lower) ||
-                    String(entry.errorCode ?? '').toLowerCase().includes(lower),
+                    String(entry.errorCode ?? '').toLowerCase().includes(lower) ||
+                    String(entry.errorMessage ?? '').toLowerCase().includes(lower),
                 )
             }
             const total = parsed.length

@@ -1,5 +1,6 @@
 import { Component, ElementRef, Inject, Optional, ViewChild } from '@angular/core'
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
+import { TranslateService } from '@ngx-translate/core'
 import { HomeBaseService } from '../services/homeBase.service'
 import { ProfilesService } from '../services/profiles.service'
 import { ConfigService } from '../services/config.service'
@@ -56,6 +57,7 @@ export class StartPageComponent extends BaseComponent {
         private platform: PlatformService,
         private selector: SelectorService,
         private ngbModal: NgbModal,
+        private translate: TranslateService,
         @Optional() @Inject(ProfileEditorService) private profileEditor: ProfileEditorService | null,
     ) {
         super()
@@ -176,17 +178,10 @@ export class StartPageComponent extends BaseComponent {
     // Right panel: filtered host list
     getRightPanelProfiles (): PartialProfile<Profile>[] {
         if (this.favoritesOnly) {
-            return this.customProfiles.filter(p => !!p.favorite && !p.isTemplate)
-                .sort((a, b) => a.name.localeCompare(b.name))
+            return this.sortProfilesByIPAddressAsc(this.customProfiles.filter(p => !!p.favorite && !p.isTemplate))
         }
         if (this.recentOnly) {
-            return this.customProfiles.filter(p => !!p.id && this.recentProfileIds.has(p.id) && !p.isTemplate)
-                .sort((a, b) => {
-                    const recent = this.profilesService.getRecentProfiles()
-                    const aIndex = recent.findIndex(r => r.id === a.id)
-                    const bIndex = recent.findIndex(r => r.id === b.id)
-                    return aIndex - bIndex
-                })
+            return this.sortProfilesByIPAddressAsc(this.customProfiles.filter(p => !!p.id && this.recentProfileIds.has(p.id) && !p.isTemplate))
         }
         if (this.activeGroupId) {
             const group = this.findGroupById(this.activeGroupId, this.rootGroups)
@@ -196,8 +191,7 @@ export class StartPageComponent extends BaseComponent {
             return []
         }
         // Default: show all
-        return this.customProfiles.filter(p => !p.isTemplate)
-            .sort((a, b) => a.name.localeCompare(b.name))
+        return this.sortProfilesByIPAddressAsc(this.customProfiles.filter(p => !p.isTemplate))
     }
 
     getRightPanelTitle (): string {
@@ -232,7 +226,40 @@ export class StartPageComponent extends BaseComponent {
         const childProfiles = (group.children ?? []).reduce<PartialProfile<Profile>[]>((acc, child) => {
             return acc.concat(this.collectProfilesFromGroup(child))
         }, [])
-        return [...profiles, ...childProfiles].sort((a, b) => a.name.localeCompare(b.name))
+        return this.sortProfilesByIPAddressAsc([...profiles, ...childProfiles])
+    }
+
+    private sortProfilesByIPAddressAsc (profiles: PartialProfile<Profile>[]): PartialProfile<Profile>[] {
+        return [...profiles].sort((a, b) => {
+            const aIP = this.getIPv4SortValue(a)
+            const bIP = this.getIPv4SortValue(b)
+            if (aIP !== null && bIP !== null && aIP !== bIP) {
+                return aIP - bIP
+            }
+            if (aIP !== null && bIP === null) {
+                return -1
+            }
+            if (aIP === null && bIP !== null) {
+                return 1
+            }
+            return a.name.localeCompare(b.name)
+        })
+    }
+
+    private getIPv4SortValue (profile: PartialProfile<Profile>): number | null {
+        const host = profile.type === 'ssh' ? profile.options?.host : null
+        if (!host) {
+            return null
+        }
+        const match = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+        if (!match) {
+            return null
+        }
+        const parts = match.slice(1).map(x => Number(x))
+        if (parts.some(x => x < 0 || x > 255)) {
+            return null
+        }
+        return parts.reduce((value, part) => value * 256 + part, 0)
     }
 
     onGroupContextMenu (event: MouseEvent, group: PartialProfileGroup<CollapsableProfileGroup>): void {
@@ -619,6 +646,13 @@ export class StartPageComponent extends BaseComponent {
                 },
             },
             {
+                label: '克隆',
+                enabled: !profile.isBuiltin && !!this.profileEditor,
+                click: () => {
+                    void this.cloneProfile(profile)
+                },
+            },
+            {
                 label: '更改分组',
                 enabled: !profile.isBuiltin,
                 click: () => {
@@ -688,6 +722,30 @@ export class StartPageComponent extends BaseComponent {
         }
 
         await this.profilesService.writeProfile(result)
+        await this.config.save()
+        await this.refreshAll()
+    }
+
+    private async cloneProfile (profile: PartialProfile<Profile>): Promise<void> {
+        if (profile.isBuiltin || !this.profileEditor) {
+            return
+        }
+
+        const result = await this.profileEditor.newProfile({
+            ...profile,
+            name: this.translate.instant('{name} copy', profile),
+        })
+        if (!result) {
+            return
+        }
+
+        if (!result.name) {
+            const provider = this.profilesService.providerForProfile(result)
+            const cfgProxy = this.profilesService.getConfigProxyForProfile(result)
+            result.name = provider?.getSuggestedName?.(cfgProxy) ?? this.translate.instant('{name} copy', profile)
+        }
+
+        await this.profilesService.newProfile(result)
         await this.config.save()
         await this.refreshAll()
     }

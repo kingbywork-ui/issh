@@ -271,6 +271,7 @@ ng-container(*ngIf='config.store.llm.agentBridgeEnabled')
                         span.audit-status.ms-2(*ngIf='!entry.ok', class='text-danger')
                             i.fas.fa-times
                             span.ms-1 {{ entry.errorCode }}
+                            span.ms-2.text-muted(*ngIf='entry.errorMessage') {{ entry.errorMessage }}
                     .audit-entry-body
                         span.audit-params.text-muted {{ entry.params | json }}
 

@@ -77,15 +77,7 @@
             .empty-text 当前分组没有主机
 
 footer.d-flex.align-items-center
-    .btn-group.me-auto
-        button.btn.btn-link((click)='homeBase.openGitHub()')
-            i.fab.fa-github
-            span GitHub
-        button.btn.btn-link((click)='homeBase.reportBug()')
-            i.fas.fa-bug
-            span(translate) Report a problem
-
-    .form-control-static.selectable.no-drag(
+    .form-control-static.selectable.no-drag.ms-auto(
         translate='Version: {version}',
         [translateParams]='{ version: this.homeBase.appVersion }'
     )

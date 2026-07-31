@@ -1,4 +1,13 @@
 import { ConfigProvider } from 'tabby-core'
+import { autocompleteSuggestionHotkeyId, MAX_AUTOCOMPLETE_SUGGESTIONS } from './api'
+
+const autocompleteSuggestionHotkeys = Array.from(
+    { length: MAX_AUTOCOMPLETE_SUGGESTIONS },
+    (_, index) => index + 1,
+).reduce<Record<string, string[]>>((hotkeys, position) => {
+    hotkeys[autocompleteSuggestionHotkeyId(position)] = [`Ctrl-${position}`]
+    return hotkeys
+}, {})
 
 /** @hidden */
 export class LLMConfigProvider extends ConfigProvider {
@@ -37,7 +46,7 @@ export class LLMConfigProvider extends ConfigProvider {
             executeOnConfirm: false,
             autocompletePanelOffsetX: 32,
             autocompletePanelOffsetY: 52,
-            autocompletePanelOpacity: 62,
+            autocompletePanelOpacity: 20,
         },
         about: {
             giteaBaseUrl: '' as string,
@@ -49,6 +58,7 @@ export class LLMConfigProvider extends ConfigProvider {
             'llm-next-suggestion': ['Ctrl-N'],
             'llm-prev-suggestion': ['Ctrl-U'],
             'llm-dismiss': [],
+            ...autocompleteSuggestionHotkeys,
         },
     }
 

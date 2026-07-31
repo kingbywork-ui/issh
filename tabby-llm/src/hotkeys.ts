@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core'
 import { HotkeyDescription, HotkeyProvider, TranslateService } from 'tabby-core'
+import { autocompleteSuggestionHotkeyId, MAX_AUTOCOMPLETE_SUGGESTIONS } from './api'
 
 /** @hidden */
 @Injectable()
@@ -25,6 +26,15 @@ export class LLMHotkeyProvider extends HotkeyProvider {
             id: 'llm-dismiss',
             name: this.translate.instant('关闭 AI 补全面板'),
         },
+        ...Array.from(
+            { length: MAX_AUTOCOMPLETE_SUGGESTIONS },
+            (_, index): HotkeyDescription => ({
+                id: autocompleteSuggestionHotkeyId(index + 1),
+                name: this.translate.instant('快速选择第 {position} 条补全建议', {
+                    position: index + 1,
+                }),
+            }),
+        ),
     ]
 
     constructor (private translate: TranslateService) { super() }

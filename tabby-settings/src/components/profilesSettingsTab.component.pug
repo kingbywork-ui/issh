@@ -110,12 +110,13 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                             .host-list
                                 .host-grid-wrapper
                                     ng-container(*ngFor='let group of rootGroups')
-                                        ng-container(*ngTemplateOutlet='hostGroup; context: {$implicit: group}')
+                                        ng-container(*ngTemplateOutlet='hostGroup; context: {$implicit: group, level: 0}')
 
             ng-template(#sidebarGroup let-group let-level='level')
                 ng-container(*ngIf='isSidebarGroupVisible(group)')
                     .host-tree-item(
                         [style.paddingLeft.rem]='0.75 + (level * 1.1)',
+                        [class.host-tree-item--child]='level > 0',
                         [class.active]='isGroupActive(group)',
                         (click)='selectGroupView(group)'
                     )
@@ -132,9 +133,12 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                         ng-container(*ngFor='let child of group.children')
                             ng-container(*ngTemplateOutlet='sidebarGroup; context: {$implicit: child, level: level + 1}')
 
-            ng-template(#hostGroup let-group)
+            ng-template(#hostGroup let-group let-level='level')
                 ng-container(*ngIf='isGroupVisible(group)')
-                    .host-group-section
+                    .host-group-section(
+                        [class.host-group-section--nested]='level > 0',
+                        [style.marginLeft.rem]='level * 1.25'
+                    )
                         .host-group-header((click)='toggleGroupCollapse(group)')
                             .host-group-title
                                 i.fas.fa-fw([class.fa-chevron-right]='group.collapsed', [class.fa-chevron-down]='!group.collapsed')
@@ -235,7 +239,7 @@ ul.nav-tabs(ngbNav, #nav='ngbNav')
                                                         span.text-danger(translate) Delete
 
                             ng-container(*ngFor='let child of group.children')
-                                ng-container(*ngTemplateOutlet='hostGroup; context: {$implicit: child}')
+                                ng-container(*ngTemplateOutlet='hostGroup; context: {$implicit: child, level: level + 1}')
 
     li(ngbNavItem)
         a(ngbNavLink, translate) Advanced

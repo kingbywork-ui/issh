@@ -704,14 +704,16 @@ export class ProfilesSettingsTabComponent extends BaseComponent {
 
     private sortProfiles (profiles: PartialProfile<Profile>[]): PartialProfile<Profile>[] {
         return [...profiles].sort((a, b) => {
-            const favoriteDelta = Number(!!b.favorite) - Number(!!a.favorite)
-            if (favoriteDelta !== 0) {
-                return favoriteDelta
+            const aIP = this.getIPv4SortValue(a)
+            const bIP = this.getIPv4SortValue(b)
+            if (aIP !== null && bIP !== null && aIP !== bIP) {
+                return aIP - bIP
             }
-
-            const recentDelta = Number(this.isRecentProfile(b)) - Number(this.isRecentProfile(a))
-            if (recentDelta !== 0) {
-                return recentDelta
+            if (aIP !== null && bIP === null) {
+                return -1
+            }
+            if (aIP === null && bIP !== null) {
+                return 1
             }
 
             const nameDelta = (a.name ?? '').localeCompare(b.name ?? '')
@@ -721,6 +723,22 @@ export class ProfilesSettingsTabComponent extends BaseComponent {
 
             return (a.id ?? '').localeCompare(b.id ?? '')
         })
+    }
+
+    private getIPv4SortValue (profile: PartialProfile<Profile>): number | null {
+        const host = profile.type === 'ssh' ? profile.options?.host : null
+        if (!host) {
+            return null
+        }
+        const match = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+        if (!match) {
+            return null
+        }
+        const parts = match.slice(1).map(x => Number(x))
+        if (parts.some(x => x < 0 || x > 255)) {
+            return null
+        }
+        return parts.reduce((value, part) => value * 256 + part, 0)
     }
 
     private compareGroups (a: PartialProfileGroup<CollapsableProfileGroup>, b: PartialProfileGroup<CollapsableProfileGroup>): number {

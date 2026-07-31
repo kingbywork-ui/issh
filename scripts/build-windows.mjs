@@ -3,7 +3,7 @@
 import { build as builder } from 'electron-builder'
 import * as vars from './vars.mjs'
 import { execFileSync, execSync } from 'child_process'
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, renameSync, rmSync } from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
 
@@ -68,6 +68,59 @@ function getLocalElectronDist (targetArchitecture) {
     }
 }
 
+function isWindowsLockError (error) {
+    return error?.code === 'EBUSY' || error?.code === 'EPERM'
+}
+
+function describeWindowsLockError (target, error) {
+    return [
+        `Unable to clean ${target}: ${error.message}`,
+        'Close any running app from dist\\win-unpacked, close Explorer windows opened inside dist\\win-unpacked, and retry the build.',
+        'If antivirus/indexing is scanning app.asar, wait a few seconds and retry.',
+    ].join('\n')
+}
+
+function getStaleWinUnpackedPath (target) {
+    const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14)
+    let staleTarget = `${target}.locked-${stamp}`
+    let suffix = 1
+    while (existsSync(staleTarget)) {
+        staleTarget = `${target}.locked-${stamp}-${suffix}`
+        suffix++
+    }
+    return staleTarget
+}
+
+function cleanPreviousWinUnpacked () {
+    const repositoryRoot = fileURLToPath(new URL('..', import.meta.url))
+    const target = path.join(repositoryRoot, 'dist', 'win-unpacked')
+    if (!existsSync(target)) {
+        return
+    }
+
+    try {
+        rmSync(target, {
+            recursive: true,
+            force: true,
+            maxRetries: 10,
+            retryDelay: 500,
+        })
+    } catch (error) {
+        if (isWindowsLockError(error)) {
+            const staleTarget = getStaleWinUnpackedPath(target)
+            try {
+                renameSync(target, staleTarget)
+                console.warn(`Previous win-unpacked is locked; moved it aside for this build: ${staleTarget}`)
+                console.warn('Delete the moved directory after Windows releases the lock.')
+                return
+            } catch {
+                throw new Error(describeWindowsLockError(target, error))
+            }
+        }
+        throw error
+    }
+}
+
 const isTag = (process.env.GITHUB_REF || process.env.BUILD_SOURCEBRANCH || '').startsWith('refs/tags/')
 const keypair = process.env.SM_KEYPAIR_ALIAS
 
@@ -78,6 +131,8 @@ console.log('Signing enabled:', !!keypair)
 console.log(electronDist
     ? `Electron source: validated local runtime (${electronDist})`
     : 'Electron source: download cache/network fallback')
+cleanPreviousWinUnpacked()
+
 if (process.env.TABBY_SKIP_PREPACKAGE !== '1') {
     console.log('Refreshing builtin plugins...')
     execFileSync(process.execPath, ['scripts/prepackage-plugins.mjs'], {
@@ -138,6 +193,10 @@ builder({
 
     publish: (process.env.KEYGEN_TOKEN && isTag) ? 'always' : 'never',
 }).catch(e => {
-    console.error(e)
+    if (isWindowsLockError(e)) {
+        console.error(describeWindowsLockError(path.join(fileURLToPath(new URL('..', import.meta.url)), 'dist', 'win-unpacked'), e))
+    } else {
+        console.error(e)
+    }
     process.exit(1)
 })

@@ -1,5 +1,11 @@
 export type SuggestionCategory = 'history' | 'ai' | 'script'
 
+export const MAX_AUTOCOMPLETE_SUGGESTIONS = 9
+
+export function autocompleteSuggestionHotkeyId (position: number): string {
+    return `llm-select-suggestion-${position}`
+}
+
 export interface AutocompleteSuggestion {
     id: string
     command: string

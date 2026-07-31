@@ -104,6 +104,20 @@
                     flex-shrink: 0;
                     margin-left: 8px;
                 }
+
+                &.host-tree-item--child {
+                    font-size: 0.82rem;
+                    color: rgba(255, 255, 255, 0.62);
+
+                    &::before {
+                        content: '';
+                        width: 10px;
+                        height: 1px;
+                        margin-right: 2px;
+                        background: rgba(255, 255, 255, 0.16);
+                        flex: none;
+                    }
+                }
             }
 
             .tree-toggle {
@@ -275,6 +289,30 @@
                 gap: 0;
                 width: 100%;
                 min-width: 0;
+                position: relative;
+
+                &.host-group-section--nested {
+                    width: auto;
+                    border-left: 1px solid rgba(89, 217, 142, 0.26);
+
+                    &::before {
+                        content: '';
+                        position: absolute;
+                        top: 18px;
+                        left: 0;
+                        width: 12px;
+                        height: 1px;
+                        background: rgba(89, 217, 142, 0.26);
+                    }
+
+                    .host-group-header {
+                        background: rgba(89, 217, 142, 0.045);
+
+                        &:hover {
+                            background: rgba(89, 217, 142, 0.075);
+                        }
+                    }
+                }
 
                 .host-group-header {
                     padding: 8px 12px;
