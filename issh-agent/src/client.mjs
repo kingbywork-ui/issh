@@ -6,29 +6,54 @@ import { fileURLToPath } from 'node:url'
 
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])
+const CONNECTION_FILE_NAME = 'issh-agent-bridge.json'
+const LEGACY_CONNECTION_FILE_NAME = 'tabby-agent-bridge.json'
+const warnedLegacyEnvironmentVariables = new Set()
+
+function getEnvironmentVariable (primaryName, legacyName) {
+    if (process.env[primaryName] !== undefined) {
+        return process.env[primaryName]
+    }
+    const legacyValue = process.env[legacyName]
+    if (legacyValue !== undefined && !warnedLegacyEnvironmentVariables.has(legacyName)) {
+        warnedLegacyEnvironmentVariables.add(legacyName)
+        process.stderr.write(`[deprecated] ${legacyName} is deprecated; use ${primaryName}.\n`)
+    }
+    return legacyValue
+}
 
 export function candidateConnectionFiles () {
-    const candidates = []
-    if (process.env.TABBY_AGENT_BRIDGE_FILE) {
-        candidates.push(process.env.TABBY_AGENT_BRIDGE_FILE)
+    const explicitCandidates = []
+    const primaryCandidates = []
+    const legacyCandidates = []
+    const bridgeFile = getEnvironmentVariable('ISSH_AGENT_BRIDGE_FILE', 'TABBY_AGENT_BRIDGE_FILE')
+    if (bridgeFile) {
+        explicitCandidates.push(bridgeFile)
     }
-    if (process.env.TABBY_CONFIG_DIRECTORY) {
-        candidates.push(path.join(process.env.TABBY_CONFIG_DIRECTORY, 'tabby-agent-bridge.json'))
+    const configDirectory = getEnvironmentVariable('ISSH_CONFIG_DIRECTORY', 'TABBY_CONFIG_DIRECTORY')
+    if (configDirectory) {
+        primaryCandidates.push(path.join(configDirectory, CONNECTION_FILE_NAME))
+        legacyCandidates.push(path.join(configDirectory, LEGACY_CONNECTION_FILE_NAME))
     }
-    candidates.push(...workspaceConnectionFiles())
+    const workspaceCandidates = workspaceConnectionFiles()
+    primaryCandidates.push(...workspaceCandidates.primary)
+    legacyCandidates.push(...workspaceCandidates.legacy)
     if (process.env.APPDATA) {
-        candidates.push(path.join(process.env.APPDATA, 'issh', 'tabby-agent-bridge.json'))
-        candidates.push(path.join(process.env.APPDATA, 'Tabby', 'tabby-agent-bridge.json'))
-        candidates.push(path.join(process.env.APPDATA, 'tabby', 'tabby-agent-bridge.json'))
+        primaryCandidates.push(path.join(process.env.APPDATA, 'issh', CONNECTION_FILE_NAME))
+        legacyCandidates.push(path.join(process.env.APPDATA, 'issh', LEGACY_CONNECTION_FILE_NAME))
+        legacyCandidates.push(path.join(process.env.APPDATA, 'Tabby', LEGACY_CONNECTION_FILE_NAME))
+        legacyCandidates.push(path.join(process.env.APPDATA, 'tabby', LEGACY_CONNECTION_FILE_NAME))
     }
     if (process.env.LOCALAPPDATA) {
-        candidates.push(path.join(process.env.LOCALAPPDATA, 'issh', 'tabby-agent-bridge.json'))
-        candidates.push(path.join(process.env.LOCALAPPDATA, 'Tabby', 'tabby-agent-bridge.json'))
+        primaryCandidates.push(path.join(process.env.LOCALAPPDATA, 'issh', CONNECTION_FILE_NAME))
+        legacyCandidates.push(path.join(process.env.LOCALAPPDATA, 'issh', LEGACY_CONNECTION_FILE_NAME))
+        legacyCandidates.push(path.join(process.env.LOCALAPPDATA, 'Tabby', LEGACY_CONNECTION_FILE_NAME))
     }
-    candidates.push(path.join(os.homedir(), '.config', 'issh', 'tabby-agent-bridge.json'))
-    candidates.push(path.join(os.homedir(), '.config', 'tabby', 'tabby-agent-bridge.json'))
-    candidates.push(path.join(os.homedir(), '.tabby', 'tabby-agent-bridge.json'))
-    return uniquePaths(candidates)
+    primaryCandidates.push(path.join(os.homedir(), '.config', 'issh', CONNECTION_FILE_NAME))
+    legacyCandidates.push(path.join(os.homedir(), '.config', 'issh', LEGACY_CONNECTION_FILE_NAME))
+    legacyCandidates.push(path.join(os.homedir(), '.config', 'tabby', LEGACY_CONNECTION_FILE_NAME))
+    legacyCandidates.push(path.join(os.homedir(), '.tabby', LEGACY_CONNECTION_FILE_NAME))
+    return uniquePaths([...explicitCandidates, ...primaryCandidates, ...legacyCandidates])
 }
 
 export function loadConnection (bridgeFile = undefined) {
@@ -137,11 +162,13 @@ function normalizeTimeout (value) {
 }
 
 function workspaceConnectionFiles () {
-    const candidates = []
+    const primary = []
+    const legacy = []
     for (const start of [process.cwd(), path.dirname(fileURLToPath(import.meta.url))]) {
         let current = path.resolve(start)
         while (true) {
-            candidates.push(path.join(current, '.tabby-agent-bridge.json'))
+            primary.push(path.join(current, '.issh-agent-bridge.json'))
+            legacy.push(path.join(current, '.tabby-agent-bridge.json'))
             const parent = path.dirname(current)
             if (parent === current) {
                 break
@@ -149,7 +176,7 @@ function workspaceConnectionFiles () {
             current = parent
         }
     }
-    return candidates
+    return { primary, legacy }
 }
 
 function uniquePaths (values) {

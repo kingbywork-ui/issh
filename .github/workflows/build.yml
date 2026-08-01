@@ -245,17 +245,6 @@ jobs:
         SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
         SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
 
-    - name: Upload packages to packagecloud.io
-      uses: TykTechnologies/packagecloud-action@7add92bc6a06914be404cf7fa00a6ccb302e6ac5 # main
-      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-      env:
-        PACKAGECLOUD_TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
-      with:
-        repo: 'eugeny/tabby'
-        dir: 'dist'
-        rpmvers: 'el/9 el/8 ol/6 ol/7'
-        debvers: 'ubuntu/bionic ubuntu/focal ubuntu/hirsute ubuntu/impish ubuntu/jammy ubuntu/kinetic ubuntu/noble ubuntu/oracular debian/jessie debian/stretch debian/buster debian/bullseye debian/bookworm debian/trixie debian/forky debian/duke debian/forky debian/sid'
-
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       name: Upload AppImage (${{matrix.arch}})
       with:

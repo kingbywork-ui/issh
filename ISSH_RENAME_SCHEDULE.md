@@ -24,13 +24,13 @@
 |---|---|---|---|---|
 | D1 | 全员 | 冻结基线；建立改名映射、兼容矩阵、残留白名单；运行基线验证 | 范围、风险、基线结果均已记录 | 已完成（2026-07-31） |
 | D2 | A 主导，B/C 复核 | 一次性重命名第一方插件目录、包名、依赖、导入和基础构建列表 | 基础提交可通过相关 TypeScript 检查 | 已完成（2026-08-01） |
-| D3–D4 | A | 插件发现、Webpack、typings、预打包、安全审计与跨平台构建脚本迁移 | `issh-*` 插件可完整构建和预打包 | 进行中（D3 已完成） |
-| D3–D4 | B | `issh-agent`、`issh_*` 工具、新环境变量与兼容层 | 新旧客户端均通过协议与安全测试 | 进行中（D3 已完成） |
-| D3–D4 | C | 用户可见品牌、样式标识、文档、元数据和 locale 再生成 | 产品可见面不存在未批准的 Tabby 文案 | 进行中（D3 已完成） |
-| D5 | A+B | 配置、发现文件、插件标记和用户数据迁移；集成三条工作流 | 旧配置可读取，新写入只使用 issh 命名 | 未开始 |
-| D6 | 全员 | 十个内置插件类型检查、完整构建、Agent/迁移/安全测试 | 所有自动化验证通过或有明确阻断记录 | 未开始 |
-| D7 | A+C | Windows 打包、升级安装与 SSH/Vault/补全/Agent Bridge 人工验收 | 产物内容、版本、运行时和核心流程正确 | 未开始 |
-| D8 | 全员 | 全仓残留扫描、白名单审查、发布候选和文档收口 | 只剩批准残留，形成 RC | 未开始 |
+| D3–D4 | A | 插件发现、Webpack、typings、预打包、安全审计与跨平台构建脚本迁移 | `issh-*` 插件可完整构建和预打包 | 已完成（2026-08-01） |
+| D3–D4 | B | `issh-agent`、`issh_*` 工具、新环境变量与兼容层 | 新旧客户端均通过协议与安全测试 | 已完成（2026-08-01） |
+| D3–D4 | C | 用户可见品牌、样式标识、文档、元数据和 locale 再生成 | 产品可见面不存在未批准的 Tabby 文案 | 已完成（2026-08-01） |
+| D5 | A+B | 配置、发现文件、插件标记和用户数据迁移；集成三条工作流 | 旧配置可读取，新写入只使用 issh 命名 | 已完成（2026-08-01） |
+| D6 | 全员 | 十个内置插件类型检查、完整构建、Agent/迁移/安全测试 | 所有自动化验证通过或有明确阻断记录 | 已完成（2026-08-01） |
+| D7 | A+C | Windows 打包、升级安装与 SSH/Vault/补全/Agent Bridge 人工验收 | 产物内容、版本、运行时和核心流程正确 | 已完成（用户手工打包/安装，2026-08-01） |
+| D8 | 全员 | 全仓残留扫描、白名单审查、发布候选和文档收口 | 只剩批准残留，形成 RC | 已完成（2026-08-01，RC） |
 | D9 | 按需 | 只处理集成、打包或验收阻断 | 发布缓冲 | 预留 |
 
 ## 阶段依赖
@@ -278,3 +278,220 @@
 - 当前工作树仍未暂存/提交：699 个旧路径删除、54 个已跟踪文件修改、702 个未跟踪文件（699 个移动后的文件、排班文件和两个新 Agent bin）。未修改任何版本号或依赖。
 
 D3 出口条件已经满足；D4 继续完成预打包、安全审计和跨平台脚本的剩余迁移，以及 Agent 新环境变量兼容层的准备工作，但不提前执行 D5 的配置/用户数据写入迁移。
+
+### D4 — 环境变量兼容、跨平台构建与预打包验证
+
+状态：已完成（2026-08-01）
+
+#### 实施范围
+
+- 新增应用启动兼容入口 `app/lib/environment.ts`，覆盖 13 个实际运行时、构建和测试环境变量后缀。主进程启动时采用 `ISSH_*` 优先、`TABBY_*` 回退策略；使用旧名时只输出变量名级别的弃用提示，不输出变量值。
+- app main/renderer、Core Vault、Electron 插件、LLM Agent Bridge、根开发脚本、`.env` 与 smoke 启动环境全部改为读取或发布 `ISSH_*` 主名称。
+- Agent CLI 独立运行时优先读取 `ISSH_AGENT_BRIDGE_FILE` 和 `ISSH_CONFIG_DIRECTORY`，旧变量仅作为带弃用提示的回退；Codex/Cursor 配置片段和设置页改为发布 `ISSH_AGENT_BRIDGE_FILE` / `ISSH_AGENT_BRIDGE_PORT`。
+- 新增 `scripts/environment.mjs`，Windows、Linux、macOS 三个打包入口统一以 `ISSH_SKIP_PREPACKAGE` 为主、`TABBY_SKIP_PREPACKAGE` 为回退；README/HACKING/AGENTS 示例同步使用新变量。
+- 将 SSH 只读执行的内部退出码标记由 `__TABBY_EXIT_CODE_*` 改为 `__ISSH_EXIT_CODE_*`，生成与解析仍保持同一单路径。
+- 新增环境变量兼容回归脚本；Agent 测试增加新名称优先和旧名称回退两种连接文件发现用例。
+- 未改动 D5 范围：`tabby-agent-bridge.json`、旧 AppData/config 发现目录、`tabby://`、旧插件 prefix/keyword、旧配置键和用户数据写入路径继续保留。
+
+#### 构建、预打包与安全结果
+
+- 完整根构建首次因沙箱无法读取 Corepack `lastKnownGood.json` 失败；授权读取同一缓存后原命令成功，未修改依赖或构建配置。
+- `node scripts/prepackage-plugins.mjs` 首次在同一 Corepack 权限边界中断；授权后从头刷新成功。十个 `issh-*` builtin 插件全部复制并安装 production 依赖，native rebuild 完成，`windows-process-tree` 的 Spectre 配置已移除。
+- 预打包结果为 10 个 `issh-*` 目录、0 个旧 `tabby-*` 目录；临时 `builtin-plugins/package.json` 已删除，LLM/SSH/Core 新环境变量和退出码标识均进入预打包 dist。
+- 本地 embedded npm hardening 检查通过：`tar@7.5.22`、`brace-expansion@5.0.8`、`minimatch@10.2.6` 均符合预期；Agent 安全专项 7/7 通过。
+- 用户明确授权依赖元数据外发后，完整 `npm audit` 成功检查根目录、app 和十个内置插件共 12 个工作区；所有工作区均为 0 条 advisory，info/low/moderate/high/critical 全部为 0。随后 embedded npm hardening 再次通过。
+
+#### D4 验证结果
+
+| 验证 | 结果 |
+|---|---|
+| 环境变量兼容回归 | 通过；验证 `ISSH_*` 优先、`TABBY_*` 回退且不覆盖显式新值 |
+| Agent 协议/CLI/MCP/环境兼容测试 | 20/20 通过 |
+| Codex Desktop MCP 配置测试 | 通过；输出 `ISSH_AGENT_BRIDGE_FILE` |
+| app main + renderer TypeScript | 2/2 通过 |
+| 十个 builtin 插件 + `issh-serial` `tsc --noEmit` | 11/11 通过 |
+| 跨平台/安全/兼容脚本语法 | 8/8 通过 |
+| 根目录 ESLint | 0 错误、2 个既有复杂度警告 |
+| `corepack.cmd yarn run build` | 通过，约 163.2 秒；typings、app 和十个 builtin 插件全部成功 |
+| `node scripts/prepackage-plugins.mjs` | 通过，约 110.3 秒；10 个 builtin 与 native rebuild 全部完成 |
+| embedded npm hardening | 通过；3 个受控依赖版本全部验证 |
+| `python smoke_test.py` | 12/12 通过；0 console error，隔离配置清理成功，使用新的 `ISSH_*` 启动环境 |
+| 外部 registry 依赖审计 | 通过；12/12 工作区、0 条 advisory、所有严重级别均为 0 |
+
+#### D4 残留边界与出口
+
+- 活动代码中的直接旧环境变量读取只存在于三份 Webpack 配置的 `ISSH_DEV ?? TABBY_DEV` 构建兼容入口和 Agent 兼容测试；其余旧变量文本只存在于集中兼容 helper、旧名回归测试与文档兼容说明。
+- `FIREBASE_SERVICE_ACCOUNT_TABBY_DOCS` 是现有外部 GitHub/Firebase secret 名，不能在没有外部凭据迁移的情况下擅自改名；继续归入 D8 外部协调白名单。
+- `@tabby-gang/*` 仍是正式第三方包名；预打包中的该路径和 Spectre patch 不属于第一方品牌残留。
+- 应用版本保持用户刚指定的 `0.1.0`；子插件版本与 Agent 版本未改变。未生成安装包、未暂存、未提交。
+
+D4 的代码、构建、预打包、安全审计和 GUI 验证已经全部完成，出口条件满足；下一阶段可进入 D5 的配置、发现文件、插件标记和用户数据兼容迁移。
+
+### D5 — 配置、发现文件、插件标记与用户数据迁移
+
+状态：已完成（2026-08-01）
+
+#### 配置与用户数据迁移
+
+- `app/lib/config.ts` 在新的 `issh/config.yaml` 不存在时，按顺序查找旧的 `Tabby` / `tabby` AppData、`~/.config/tabby`、`~/.tabby` 和历史 Terminus 配置；只复制首个可用旧配置，不覆盖已存在的新配置，也不删除旧配置。后续保存仍只写当前 `issh` 配置路径。
+- 配置迁移日志只记录来源路径，不读取或输出配置内容；候选路径在 Windows 上按大小写无关方式去重。
+- App Panel 高度以 `issh.appPanel.bottomHeightPx` 为主键。新键缺失时一次性读取并校验旧 `tabby.appPanel.bottomHeightPx`，迁移到新键后删除旧键；新键存在时不读取旧值。
+- 旧 `https://api.tabby.sh` 仅作为历史 config-sync 默认值的迁移哨兵；命中后删除旧 host/token，使后续配置保存不再写回该旧服务地址。
+
+#### Agent discovery 迁移
+
+- Agent 客户端以 `issh-agent-bridge.json` 和工作区 `.issh-agent-bridge.json` 为主；所有新候选都排在旧候选之前，避免旧文件抢占已存在的新配置。
+- 兼容期内仍可只读发现 `tabby-agent-bridge.json`、`.tabby-agent-bridge.json`、旧 `%APPDATA%/Tabby`、`%APPDATA%/tabby`、`~/.config/tabby` 和 `~/.tabby`；显式旧环境变量路径仍可加载并输出弃用提示。
+- Agent Bridge 服务只写 `issh-agent-bridge.json`。新文件成功写入并完成权限收紧后，清理同一配置目录中的旧临时 connection file；不会向旧目录或旧文件名写入新状态。
+- Codex Desktop 测试样例、smoke 隔离配置与 Agent README 已同步新文件名，并明确旧发现入口只保留一个兼容发布周期。
+
+#### 插件标记与 URL 兼容
+
+- 新增集中式插件兼容分类器：`issh-`、`issh-plugin`、`issh-builtin-plugin` 为主接口；旧 `tabby-` / `terminus-` 前缀与旧关键词只作为带弃用警告的识别入口。
+- 十个内置插件和可选 `issh-serial` 的发布清单只包含 `issh-builtin-plugin`，不再发布旧 builtin marker；第三方旧插件仍可在兼容期加载。
+- 应用只注册并生成 `issh://` URL；`tabby://` 仅保留解析兼容，并在首次使用时输出一次弃用提示。
+- 新增 `scripts/test-issh-migrations.mjs`，覆盖配置不覆盖迁移、插件分类/清单、URL、localStorage、Agent discovery 写入/清理和旧 config-sync 哨兵。
+
+#### D5 验证结果
+
+| 验证 | 结果 |
+|---|---|
+| D5 配置/发现/插件/URL/用户数据迁移回归 | 通过 |
+| Agent 协议/CLI/MCP/发现兼容测试 | 22/22 通过 |
+| 环境变量兼容与 Codex Desktop 配置测试 | 2/2 通过 |
+| 十个 builtin 插件 + `issh-serial` `tsc --noEmit` | 11/11 通过 |
+| 根目录 ESLint | 0 错误、2 个既有复杂度警告 |
+| `corepack.cmd yarn run build` | 通过，约 154.2 秒；主进程、renderer、typings 和十个 builtin 插件全部成功 |
+| dist 迁移标识核对 | 通过；app、Core、LLM 的新写入标识与旧兼容读取标识均进入当前产物 |
+| `node scripts/prepackage-plugins.mjs` | 通过，约 124.9 秒；10 个 builtin 清单与 dist 已刷新，native rebuild 完成 |
+| builtin 产物核对 | 通过；10/10 清单只发布新 marker，LLM discovery 产物为当前版本 |
+| `python smoke_test.py` | 12/12 通过；0 失败，新 discovery 文件已写入、旧文件已清理，隔离配置清理成功 |
+| GUI 截图复核 | 通过；issh 品牌、中文设置页与 Agent Bridge 运行状态正常 |
+| `git diff --check` | 通过，仅有 Windows 行尾提示 |
+
+#### D5 残留边界与出口
+
+- 活动代码中的旧发现文件、旧 URL、旧插件标记和旧 config-sync host 均集中在兼容常量/迁移分支与回归测试中；第一方插件清单和正常写入路径不再发布或写入这些旧名称。
+- 旧 Agent discovery、旧插件前缀/关键词和 `tabby://` 只保留一个兼容发布周期，后续移除应作为单独的破坏性变更执行。
+- 永久白名单仍包括正式第三方 `@tabby-gang/*` 包名和真实上游/法律归属；Windows 旧注册表字符串只用于卸载清理。
+- 应用版本保持 `0.1.0`；子插件和 Agent 版本未改变。D5 未改依赖、未生成安装包、未暂存、未提交。
+
+D5 出口条件已经满足：旧配置和 discovery 可兼容读取，所有新的产品写入、发布标记和 URL 均使用 `issh` 命名。下一阶段进入 D6 的全量自动化验收与残留白名单复核，不在 D5 提前执行 Windows 安装包发布。
+
+### D6 — 集中自动化验收与残留白名单复核
+
+状态：已完成（2026-08-01）
+
+#### 验收范围
+
+- 从 D5 当前工作树独立重跑 Agent 协议/CLI/MCP/安全测试、配置与 discovery 迁移、环境变量兼容、Codex Desktop 配置、embedded npm 加固、app/插件 TypeScript、脚本语法、ESLint、完整 Webpack 构建、依赖安全审计和隔离 GUI 冒烟。
+- 核对 app、Core、LLM、SSH 的当前 dist 标识、十个 `builtin-plugins` 清单和旧 source-map/typings 路径，避免只凭源码或 D5 的历史结果通过验收。
+- 对活动仓库执行大小写无关的 `tabby` 残留扫描，区分兼容入口、第三方正式名称、上游/法律归属、外部服务配置和禁止的新写入/发布残留。
+- D6 不执行 Windows 打包、安装/升级或人工 SSH/Vault/补全验收；这些操作仍属于 D7。
+
+#### D6 发现并修正的残留
+
+- 中文 README 仍有旧安装包名、`tabby-llm`、Tabby 会话和 `Tabby.exe` 便携说明；统一改为版本 `0.1.0` 的 `issh` 名称，并移除顶部图片到上游产品站点的无必要跳转。
+- 英文 README 的示例安装包版本仍为 `1.0.7`；改为当前应用版本 `0.1.0`。上游 Tabby 基线与致谢继续保留真实来源名称。
+- `app/dev-app-update.yml` 的本地 updater cache 仍使用旧产品目录名；改为 `issh-updater`。未知的新发布仓库不能在 D6 中凭空创建，因此 owner/repo 仍归入 D8 外部协调项。
+- GitHub issue 模板仍要求跳转上游 Tabby issue/release；改为当前项目的通用 issue 搜索和最新 `issh` 版本说明，不伪造尚未提供的新仓库 URL。
+
+#### 自动化验收结果
+
+| 验证 | 结果 |
+|---|---|
+| Agent 协议/CLI/MCP/discovery/安全回归 | 22/22 通过；旧工具和旧环境变量兼容用例会输出预期弃用提示 |
+| D5 迁移回归 | 通过；配置、discovery、插件、URL 与用户数据迁移全部成功 |
+| 环境变量兼容 + Codex Desktop 配置 | 2/2 通过 |
+| embedded npm hardening | 通过；`tar@7.5.22`、`brace-expansion@5.0.8`、`minimatch@10.2.6` |
+| app main + renderer TypeScript | 2/2 通过 |
+| 十个 builtin 插件 + `issh-serial` `tsc --noEmit` | 11/11 通过 |
+| 改名相关 Node 脚本语法 | 8/8 通过 |
+| 根目录 ESLint | 0 错误、2 个既有复杂度警告 |
+| `corepack.cmd yarn run build` | 通过，约 136.5 秒；typings、app 和十个 builtin 插件全部成功 |
+| dist/builtin 产物核对 | 通过；主/兼容标识齐全，10/10 清单只发布新 marker，无旧 builtin 目录或 stale moved-path/source-map 标识 |
+| npm 依赖安全审计 | 通过；根、app 和十个 builtin 共 12/12 工作区，所有严重级别均为 0 advisory |
+| `python smoke_test.py` | 12/12 通过；版本 `0.1.0`、0 console error、隔离配置清理成功 |
+| GUI 截图复核 | 通过；`issh` 品牌、中文设置页、loopback Agent Bridge 与连接健康状态正常 |
+| `git diff --check` | 通过，仅有 Windows 行尾提示 |
+
+#### 残留白名单审查
+
+- 排除 `node_modules`、`builtin-plugins`、dist/source map、lockfile、历史排班/交接、locale catalog、许可证与 smoke 产物后，共 51 个活动文件包含大小写无关的 `tabby`，均已逐项归类。
+- 活动路径名只剩 `issh-agent/bin/tabby-agent.mjs` 与 `issh-agent/bin/tabby-mcp-server.mjs` 两个旧包装入口；二者有明确弃用提示、Agent 回归测试和一版兼容期限。
+- 兼容白名单包括旧 MCP/RPC 名、`TABBY_*`、旧 config/discovery 路径、`tabby://`、旧插件 prefix/keyword、localStorage/config-sync 迁移哨兵、旧 Windows registry/Updater 卸载清理，以及相应测试。
+- 永久或外部白名单包括正式 `@tabby-gang/*` 包名、真实上游 Tabby 来源/Issue/文档链接、Contributor/Funding/Crowdin 元数据、外部 `FIREBASE_SERVICE_ACCOUNT_TABBY_DOCS` secret 和历史安全记录。
+- 尚需 D8 外部协调复核的发布面包括：Git origin/仓库元数据、GitHub workflow 的 packagecloud/docs 配置、`dev-app-update.yml` 的上游 repo、Release Notes/Updater 的上游 release endpoint。仓库中没有获批的 issh 对应服务地址，D6 不伪造替代值；其中 Electron updater 当前由 `UPDATES_ENABLED = false` 禁用。
+- 禁止残留检查已通过：无旧版本安装包名、`tabby-llm`、`Tabby.exe`、Tabby 会话文案、旧 updater cache、第一方旧包名或第一方清单旧 builtin marker。
+
+#### D6 出口
+
+D6 所有自动化验证通过，无代码、构建、安全或 GUI 阻断；可以进入 D7 的 Windows 打包与安装/升级人工验收。应用版本保持 `0.1.0`，子插件和 Agent 版本未改变；未修改依赖、未生成安装包、未暂存、未提交。D8 仍需对上述外部服务和上游归属白名单作最终发布决策。
+
+### D7 — Windows 打包、安装与已安装实例验收
+
+状态：已完成（用户手工打包/安装，2026-08-01）
+
+#### 用户执行与产物核对
+
+- 用户明确报告已手工执行 `node scripts/build-windows.mjs`，打包过程顺利；随后安装生成的 issh，并打开了一个 tab，指示直接进入 D8。
+- 工作区产物为 `dist/issh-0.1.0-setup-x64.exe`，大小 163,001,910 字节，生成时间 2026-08-01 17:34:36，SHA-256 为 `08F45F12A3A0934AF1588888F35BD00D06DEF6DA0C3E70BA95E219B78DEA6D54`。
+- 安装器 PE 元数据为 `ProductName=issh`、`ProductVersion=0.1.0`、`FileVersion=0.1.0`；`latest.yml` 的版本、路径、大小与安装器一致。
+- electron-builder effective config 核对通过：`appId=org.issh`、`productName=issh`、协议、安装包名、快捷方式和跨平台 artifact 模板均使用 issh。
+
+#### 已安装实例实机验收
+
+- 运行进程来自用户程序目录中的 `issh.exe`；已安装 `app.asar` 清单为 `name=issh`、`version=0.1.0`，包含 10 个 `issh-*` 内置插件、0 个旧 builtin 目录和当前 `issh-agent` 资源。
+- 当前私有 Agent Bridge discovery 使用 `%APPDATA%/issh/issh-agent-bridge.json`，旧同目录 connection file 不存在；健康检查成功并识别到 1 个已连接、聚焦中的 SSH tab。
+- 在不输出远程地址、用户名、终端内容或 token 的前提下，完成以下无副作用实测：Profile 清单读取；context 和终端 buffer 读取；交互 tab 回显命令执行并从缓冲读回标记；独立 SSH exec 回显及退出码；SFTP 根目录只读列表；执行后的 Bridge 再次健康检查。
+- 危险命令仅通过 preview 检查：被正确识别为危险、`wouldExecute=false` 且要求用户确认；没有执行危险命令。
+- 安装版与 D7 构建强一致性通过：`app/dist/main.js`、`bundle.js`、`preload.js` 3/3 哈希一致；10/10 内置插件身份和 dist 哈希一致；Agent `bin/src` 9/9 文件哈希一致。打包后的 app 清单只按预期裁剪 `scripts` 和 `devDependencies`，产品身份字段一致。
+- 安装目录所有含旧名的路径均命中白名单：asar 内 26 条全部属于正式 `@tabby-gang/*` 第三方包；asar 外 131 条全部属于同一第三方包树或两个兼容 Agent 包装器，未批准路径为 0。
+
+#### 验收边界
+
+- `computer-use` 安全规则禁止自动接管终端类应用，因此未通过鼠标/键盘向 issh 终端注入输入；实机终端、SSH、SFTP 与危险命令检查全部通过项目自身的 token 保护 Agent Bridge 完成。
+- 未读取或修改 Vault 密钥，未写远程文件，未执行破坏性命令。用户确认完成了安装并打开 tab，但未说明这是覆盖升级还是全新安装；本记录不虚构独立的旧版覆盖升级证据。
+
+D7 的用户手工打包/安装、产物身份、已安装资源一致性和当前 SSH tab 核心功能验证均通过。按用户指示进入 D8。
+
+### D8 — 全仓残留白名单、发布候选与文档收口
+
+状态：已完成（2026-08-01，RC）
+
+#### 发布配置与文档收口
+
+- 移除 GitHub tag workflow 中向上游 `eugeny/tabby` Packagecloud 发布的步骤；保留本地构建和 GitHub Artifact 上传。
+- 移除 docs workflow 中使用上游 `tabby-docs` Firebase project/secret 的部署步骤；保留文档构建。仓库未提供获批的 issh Packagecloud/Firebase 目标，D8 不伪造服务地址。
+- `app/dev-app-update.yml` 的本地缓存目录使用 `issh-updater`。上游 repository/dev-update/release 地址只作为明确的来源或已禁用开发配置保留；Electron updater 继续由 `UPDATES_ENABLED=false` 禁用，不影响已验证安装包。
+- 更新被 Git 忽略但仍属当前项目的 `AGENTS.md` 版本为 `0.1.0`；用户手册改为 `issh-mcp-server.mjs` 和 `ISSH_AGENT_BRIDGE_FILE`；旧 functional regression 资产改为使用 `issh_*` 主方法和 `issh-llm` 路径。
+
+#### 可重复残留审计
+
+- 新增 `scripts/audit-issh-residuals.mjs` 和 `npm run audit:rename`，递归扫描受控文本，排除依赖、构建缓存、dist、历史协作目录与 smoke 产物；任何未归类的大小写无关 `tabby` 命中、旧产品安装包名、旧第一方插件清单、旧 updater cache 或未批准发布配置都会使命令失败。
+- 最终门禁扫描 1,489 个文本文件；170 条残留分布于 54 个文件，全部进入以下批准类别：一版兼容入口、兼容回归测试、正式第三方名称、真实上游归属、法律署名、历史安全记录和审计规则自身。
+- 活动路径名只允许两个经过测试和弃用提示的兼容包装器：`issh-agent/bin/tabby-agent.mjs`、`issh-agent/bin/tabby-mcp-server.mjs`。
+- 一版兼容白名单：旧 MCP/RPC 方法、`TABBY_*` 环境变量、旧 config/discovery 路径、`tabby://`、旧插件 prefix/keyword、localStorage/config-sync 迁移哨兵、旧 Windows registry/Updater 清理字符串及其测试。
+- 永久/上游白名单：`@tabby-gang/*` 正式包名与物理路径、README/帮助/源码注释中的真实上游 Tabby 来源、LICENSE 署名、Contributor/Funding/Crowdin 元数据和历史安全记录。
+- 当前 Git origin 仍为外部维护的旧路径 `https://hnittestgit.isoftstone.com/it/tabby.git`；未提供新的 issh remote，D8 不擅自修改远端。它不进入应用发布产物，作为仓库管理员后续外部协调项记录。
+
+#### D8 最终验证
+
+| 验证 | 结果 |
+|---|---|
+| `npm run audit:rename` | 通过；1,489 文件、54 个批准残留文件、0 未批准残留 |
+| Agent 协议/CLI/MCP/安全回归 | 22/22 通过 |
+| 配置/发现/插件/URL/用户数据迁移 | 通过 |
+| 环境变量兼容与 Codex Desktop 配置 | 2/2 通过 |
+| workflow / app-update / electron-builder YAML | 4/4 语法通过 |
+| D7 安装器身份与 latest metadata | 通过；版本 `0.1.0`、名称和哈希一致 |
+| 已安装 app 运行 bundle 哈希 | 3/3 与当前 D7 构建一致 |
+| 已安装 builtin 插件 | 10/10 身份/dist 一致，0 旧 builtin 目录 |
+| 已安装 Agent 资源 | 9/9 `bin/src` 文件哈希一致 |
+| 已安装路径白名单 | asar 26/26、外部 131/131 均获批准；0 未批准路径 |
+| 当前实例实机功能 | Bridge、session、profile、context、buffer、tab run、SSH exec、SFTP list、危险 preview 全部通过 |
+| `git diff --check` | 通过，仅有 Windows 行尾提示 |
+
+#### RC 结论
+
+issh `0.1.0` 已满足 D1–D8 改名、兼容迁移、构建、安全、安装产物、已安装实例功能和残留白名单门槛，形成 RC。只保留有期限的兼容入口、正式第三方名称、真实上游/法律归属和明确的外部仓库协调项。未暂存、未提交、未推送；D9 仅在后续集成、提交或发布发现阻断时启用。

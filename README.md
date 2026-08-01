@@ -10,8 +10,8 @@ Based on Tabby v1.0.7, with UI enhancements and bug fixes for daily SSH manageme
 
 Pre-built Windows artifacts (located in `dist/` after building):
 
-- `issh-1.0.7-setup-x64.exe` — NSIS installer
-- `issh-1.0.7-portable-x64.zip` — portable archive
+- `issh-0.1.0-setup-x64.exe` — NSIS installer
+- `issh-0.1.0-portable-x64.zip` — portable archive
 
 ## Features
 
@@ -154,7 +154,7 @@ node scripts/build-windows.mjs
 If `prepackage-plugins.mjs` fails due to native module rebuild issues, use the skip flag:
 
 ```bash
-set TABBY_SKIP_PREPACKAGE=1&&node scripts/build-windows.mjs
+set ISSH_SKIP_PREPACKAGE=1&&node scripts/build-windows.mjs
 ```
 
 ## Changes from Upstream Tabby

@@ -27,13 +27,13 @@ if (process.platform === 'win32' && !('HOME' in process.env)) {
     process.env.HOME = `${process.env.HOMEDRIVE}${process.env.HOMEPATH}`
 }
 
-if (process.env.TABBY_DEV && !process.env.TABBY_FORCE_ANGULAR_PROD) {
+if (process.env.ISSH_DEV && !process.env.ISSH_FORCE_ANGULAR_PROD) {
     console.warn('Running in debug mode')
 } else {
     enableProdMode()
 }
 
-const bootstrapDebugLogPath = path.join(process.env.TABBY_CONFIG_DIRECTORY || process.cwd(), 'bootstrap-debug.log')
+const bootstrapDebugLogPath = path.join(process.env.ISSH_CONFIG_DIRECTORY || process.cwd(), 'bootstrap-debug.log')
 
 function debugLog (message: string, extra?: unknown): void {
     const line = `${new Date().toISOString()} [renderer] ${message}${extra === undefined ? '' : ` ${JSON.stringify(extra)}`}\n`
@@ -47,7 +47,7 @@ function debugLog (message: string, extra?: unknown): void {
 debugLog('entry-loaded', {
     pid: process.pid,
     platform: process.platform,
-    dev: !!process.env.TABBY_DEV,
+    dev: !!process.env.ISSH_DEV,
 })
 
 async function bootstrap (bootstrapData: BootstrapData, plugins: PluginInfo[], safeMode = false): Promise<NgModuleRef<any>> {
@@ -81,7 +81,7 @@ async function bootstrap (bootstrapData: BootstrapData, plugins: PluginInfo[], s
         { provide: BOOTSTRAP_DATA, useValue: bootstrapData },
     ]).bootstrapModule(module)
     debugLog('angular-bootstrap-done')
-    if (process.env.TABBY_DEV) {
+    if (process.env.ISSH_DEV) {
         const applicationRef = moduleRef.injector.get(ApplicationRef)
         const componentRef = applicationRef.components[0]
         enableDebugTools(componentRef)
@@ -98,7 +98,7 @@ ipcRenderer.once('start', async (_$event, bootstrapData: BootstrapData) => {
     })
 
     if (bootstrapData.vaultPassphrase) {
-        process.env.TABBY_VAULT_PASSPHRASE = bootstrapData.vaultPassphrase
+        process.env.ISSH_VAULT_PASSPHRASE = bootstrapData.vaultPassphrase
     }
 
     initModuleLookup(bootstrapData.userPluginsPath)

@@ -164,7 +164,7 @@ export class VaultService {
         try {
             return await wrapPromise(this.zone, decryptVault(storage, passphrase))
         } catch (e) {
-            if (passphrase === process.env.TABBY_VAULT_PASSPHRASE) {
+            if (passphrase === process.env.ISSH_VAULT_PASSPHRASE) {
                 _rejectedEnvPassphrase = passphrase
             }
             this.forgetPassphrase()
@@ -199,7 +199,7 @@ export class VaultService {
     }
 
     async getPassphrase (): Promise<string> {
-        const envPassphrase = process.env.TABBY_VAULT_PASSPHRASE
+        const envPassphrase = process.env.ISSH_VAULT_PASSPHRASE
         if (envPassphrase && envPassphrase !== _rejectedEnvPassphrase && (!_rememberedPassphrase || this._requireReauth)) {
             _rememberedPassphrase = envPassphrase
             this._requireReauth = false

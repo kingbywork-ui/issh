@@ -6,13 +6,17 @@ import * as path from 'path'
 // as controlled runtime requires so config paths and logging are initialized first.
 require('dotenv/config')
 require('./portable')
-process.env.TABBY_PLUGINS ??= ''
-process.env.TABBY_CONFIG_DIRECTORY ??= app.getPath('userData')
-if (process.env.TABBY_CONFIG_DIRECTORY) {
-    fs.mkdirSync(process.env.TABBY_CONFIG_DIRECTORY, { recursive: true })
-    app.setPath('userData', process.env.TABBY_CONFIG_DIRECTORY)
+const { promoteLegacyEnvironmentVariables } = require('./environment')
+for (const { legacyName, primaryName } of promoteLegacyEnvironmentVariables()) {
+    console.warn(`[deprecated] ${legacyName} is deprecated; use ${primaryName}.`)
 }
-if (process.env.TABBY_SMOKE_DISABLE_GPU) {
+process.env.ISSH_PLUGINS ??= ''
+process.env.ISSH_CONFIG_DIRECTORY ??= app.getPath('userData')
+if (process.env.ISSH_CONFIG_DIRECTORY) {
+    fs.mkdirSync(process.env.ISSH_CONFIG_DIRECTORY, { recursive: true })
+    app.setPath('userData', process.env.ISSH_CONFIG_DIRECTORY)
+}
+if (process.env.ISSH_SMOKE_DISABLE_GPU) {
     app.commandLine.appendSwitch('disable-gpu')
     app.commandLine.appendSwitch('disable-gpu-compositing')
     app.commandLine.appendSwitch('disable-software-rasterizer')
@@ -20,14 +24,14 @@ if (process.env.TABBY_SMOKE_DISABLE_GPU) {
 }
 
 function ensureDevMode (): void {
-    if (process.env.TABBY_DEV) {
+    if (process.env.ISSH_DEV) {
         return
     }
     try {
         const appPath = app.getAppPath()
         const repoRoot = path.dirname(appPath)
         if (fs.existsSync(path.join(repoRoot, 'issh-core', 'package.json'))) {
-            process.env.TABBY_DEV = '1'
+            process.env.ISSH_DEV = '1'
         }
     } catch {
         // ignore — packaged app path may not be ready yet
@@ -35,7 +39,7 @@ function ensureDevMode (): void {
 }
 ensureDevMode()
 
-const startupDebugLogPath = path.join(process.env.TABBY_CONFIG_DIRECTORY ?? app.getPath('userData'), 'startup-debug.log')
+const startupDebugLogPath = path.join(process.env.ISSH_CONFIG_DIRECTORY ?? app.getPath('userData'), 'startup-debug.log')
 
 function debugLog (message: string, extra?: unknown): void {
     const line = `${new Date().toISOString()} [main] ${message}${extra === undefined ? '' : ` ${JSON.stringify(extra)}`}\n`
@@ -79,7 +83,7 @@ const { loadConfig } = loadStartupModule('config', () => require('./config'))
 
 function parseStartupArgs (): any {
     debugLog('args-parse-begin', process.argv)
-    if (!process.env.TABBY_DEV) {
+    if (!process.env.ISSH_DEV) {
         const args = process.argv.slice(1)
         const parsed = {
             d: args.includes('-d') || args.includes('--debug'),

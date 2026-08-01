@@ -1,4 +1,4 @@
-[![](docs/readme.png)](https://tabby.sh)
+![](docs/readme.png)
 
 ---
 
@@ -10,8 +10,8 @@
 
 预构建的 Windows 产物（构建后位于 `dist/` 目录）：
 
-- `tabby-1.0.7-setup-x64.exe` — NSIS 安装程序
-- `tabby-1.0.7-portable-x64.zip` — 便携版压缩包
+- `issh-0.1.0-setup-x64.exe` — NSIS 安装程序
+- `issh-0.1.0-portable-x64.zip` — 便携版压缩包
 
 ## 功能特性
 
@@ -46,7 +46,7 @@
 - 增强的主机管理界面，采用卡片式布局
 - 改进的配置文件设置页，简化配置流程
 
-### AI 助手（tabby-llm）
+### AI 助手（issh-llm）
 
 基于大语言模型的命令自动补全、下一条命令预测和本地 CLI/MCP Agent Bridge，直接内嵌于终端。
 
@@ -58,7 +58,7 @@
 - **敏感信息脱敏**：终端输出中的 API 密钥、令牌、密码和私钥在发送给 LLM 前就地脱敏。
 - **命令历史**：读取本地 shell 历史和 SSH 历史，记录当前 tab 最近命令，并限制历史候选数量，避免补全面板过载。
 - **建议缓存**：补全结果缓存 5 分钟，减少 API 调用。
-- **CLI / MCP Agent Bridge**：可选的 localhost agent bridge，可供 Codex、Cursor、Claude Desktop 等外部 agent 访问 Tabby 会话，并通过 token scope 和审计日志保护。
+- **CLI / MCP Agent Bridge**：可选的 localhost agent bridge，可供 Codex、Cursor、Claude Desktop 等外部 agent 访问 issh 会话，并通过 token scope 和审计日志保护。
 
 #### 配置
 
@@ -112,11 +112,11 @@
 1. **命令补全**：插件从 xterm.js 缓冲区读取当前部分命令，收集终端上下文（操作系统、shell、工作目录、最近输出），并将历史、登录脚本、AI 预取和 live AI 候选去重排序后展示。
 2. **下一条命令预测**：每个 shell 会话的第一条命令不触发 live AI 补全。提交命令后，AI 会基于上一条命令和当前上下文预取可能的后续命令，并在你开始输入时优先复用缓存。
 3. **隐私**：启用「发送终端上下文到 API」时，最近终端输出会被包含以提升建议质量。敏感模式（API 密钥、令牌、密码、私钥）在发送前就地脱敏。禁用此选项则仅发送命令片段，不附带最近输出。
-4. **Agent Bridge**：可选 CLI/MCP bridge 通过 localhost 暴露 Tabby 会话给外部 agent，使用 token scope、SFTP 限制、危险命令确认和审计日志保护。
+4. **Agent Bridge**：可选 CLI/MCP bridge 通过 localhost 暴露 issh 会话给外部 agent，使用 token scope、SFTP 限制、危险命令确认和审计日志保护。
 
 ## 便携式应用
 
-如果在 Tabby.exe 所在的目录创建一个名为 `data` 的文件夹，Tabby 将可以在 Windows 上作为便携式应用程序运行。
+如果在 `issh.exe` 所在的目录创建一个名为 `data` 的文件夹，issh 将可以在 Windows 上作为便携式应用程序运行。
 
 ## 从源码构建
 
@@ -134,15 +134,15 @@
 yarn
 
 # 冒烟测试：TypeScript 类型检查
-npx tsc -p tabby-core/tsconfig.json --noEmit
-npx tsc -p tabby-settings/tsconfig.json --noEmit
-npx tsc -p tabby-terminal/tsconfig.json --noEmit
-npx tsc -p tabby-ssh/tsconfig.json --noEmit
-npx tsc -p tabby-local/tsconfig.json --noEmit
-npx tsc -p tabby-electron/tsconfig.json --noEmit
-npx tsc -p tabby-linkifier/tsconfig.json --noEmit
-npx tsc -p tabby-auto-sudo-password/tsconfig.json --noEmit
-npx tsc -p tabby-community-color-schemes/tsconfig.json --noEmit
+npx tsc -p issh-core/tsconfig.json --noEmit
+npx tsc -p issh-settings/tsconfig.json --noEmit
+npx tsc -p issh-terminal/tsconfig.json --noEmit
+npx tsc -p issh-ssh/tsconfig.json --noEmit
+npx tsc -p issh-local/tsconfig.json --noEmit
+npx tsc -p issh-electron/tsconfig.json --noEmit
+npx tsc -p issh-linkifier/tsconfig.json --noEmit
+npx tsc -p issh-auto-sudo-password/tsconfig.json --noEmit
+npx tsc -p issh-community-color-schemes/tsconfig.json --noEmit
 
 # 冒烟测试：Webpack 构建
 yarn run build
@@ -154,7 +154,7 @@ node scripts/build-windows.mjs
 如果 `prepackage-plugins.mjs` 因原生模块重建失败，可使用跳过标志：
 
 ```bash
-set TABBY_SKIP_PREPACKAGE=1&&node scripts/build-windows.mjs
+set ISSH_SKIP_PREPACKAGE=1&&node scripts/build-windows.mjs
 ```
 
 ## 相对于上游 Tabby 的变更
@@ -165,7 +165,7 @@ set TABBY_SKIP_PREPACKAGE=1&&node scripts/build-windows.mjs
 - **重新设计的启动页**：快速连接快捷方式，改进的布局
 - **增强的主机管理器**：卡片式主机管理，简化的配置文件配置流程
 - **私钥修复**：解决 RSA-SHA2 私钥认证失败问题
-- **AI 助手（tabby-llm）**：基于 LLM 的命令补全、下一条命令预测、CLI/MCP Agent Bridge、危险命令检测和敏感信息脱敏
+- **AI 助手（issh-llm）**：基于 LLM 的命令补全、下一条命令预测、CLI/MCP Agent Bridge、危险命令检测和敏感信息脱敏
 
 ## 致谢
 

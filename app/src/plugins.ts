@@ -4,6 +4,12 @@ import * as path from 'path'
 import * as remote from '@electron/remote'
 import { PluginInfo } from '../../issh-core/src/api/mainProcess'
 import { PLUGIN_BLACKLIST } from './pluginBlacklist'
+import {
+    classifyPluginPackage,
+    getPluginName,
+    isPluginPackageName,
+    PLUGIN_PREFIXES,
+} from './pluginCompatibility'
 
 const nodeModule = require('module') // eslint-disable-line @typescript-eslint/no-var-requires
 
@@ -19,12 +25,12 @@ function normalizePath (p: string): string {
 }
 
 function resolveBuiltinPluginsPath (): string {
-    if (process.env.TABBY_DEV) {
+    if (process.env.ISSH_DEV) {
         return path.dirname(remote.app.getAppPath())
     }
     const repoRoot = path.dirname(remote.app.getAppPath())
     if (fsSync.existsSync(path.join(repoRoot, 'issh-core', 'package.json'))) {
-        process.env.TABBY_DEV = '1'
+        process.env.ISSH_DEV = '1'
         return repoRoot
     }
     return path.join((process as any).resourcesPath, 'builtin-plugins')
@@ -59,19 +65,6 @@ const builtinModules = [
     'issh-terminal',
 ]
 
-const PLUGIN_PREFIX = 'issh-'
-const LEGACY_TABBY_PLUGIN_PREFIX = 'tabby-'
-const LEGACY_TERMINUS_PLUGIN_PREFIX = 'terminus-'
-const PLUGIN_PREFIXES = [PLUGIN_PREFIX, LEGACY_TABBY_PLUGIN_PREFIX, LEGACY_TERMINUS_PLUGIN_PREFIX]
-const PLUGIN_KEYWORDS = [
-    'issh-plugin',
-    'issh-builtin-plugin',
-    'tabby-plugin',
-    'tabby-builtin-plugin',
-    'terminus-plugin',
-    'terminus-builtin-plugin',
-]
-
 function cachePluginModule (packageName: string, packageModule: any): void {
     cachedBuiltinModules[packageName] = packageModule
 
@@ -84,11 +77,6 @@ function cachePluginModule (packageName: string, packageModule: any): void {
             break
         }
     }
-}
-
-function getPluginName (packageName: string): string {
-    const prefix = PLUGIN_PREFIXES.find(x => packageName.startsWith(x))
-    return prefix ? packageName.substring(prefix.length) : packageName
 }
 
 const originalRequire = (global as any).require
@@ -117,14 +105,14 @@ export function initModuleLookup (userPluginsPath: string): void {
     paths.unshift(path.join(userPluginsPath, 'node_modules'))
     paths.unshift(path.join(remote.app.getAppPath(), 'node_modules'))
 
-    if (process.env.TABBY_DEV) {
+    if (process.env.ISSH_DEV) {
         paths.unshift(path.dirname(remote.app.getAppPath()))
     }
 
     paths.unshift(builtinPluginsPath)
     // paths.unshift(path.join((process as any).resourcesPath, 'app.asar', 'node_modules'))
-    if (process.env.TABBY_PLUGINS) {
-        process.env.TABBY_PLUGINS.split(':').map(x => paths.push(normalizePath(x)))
+    if (process.env.ISSH_PLUGINS) {
+        process.env.ISSH_PLUGINS.split(':').map(x => paths.push(normalizePath(x)))
     }
 
     const nodePath = process.env.NODE_PATH ? `${process.env.NODE_PATH}${path.delimiter}` : ''
@@ -152,7 +140,7 @@ async function getCandidateLocationsInPluginDir (pluginDir: any): Promise<{ plug
         const promises = []
 
         for (const packageName of pluginNames) {
-            if (PLUGIN_PREFIXES.some(x => packageName.startsWith(x)) && !PLUGIN_BLACKLIST.includes(packageName)) {
+            if (isPluginPackageName(packageName) && !PLUGIN_BLACKLIST.includes(packageName)) {
                 const pluginPath = path.join(pluginDir, packageName)
                 const infoPath = path.join(pluginPath, 'package.json')
                 promises.push(fs.exists(infoPath).then(result => {
@@ -203,8 +191,13 @@ async function parsePluginInfo (pluginDir: string, packageName: string): Promise
     try {
         const info = JSON.parse(await fs.readFile(infoPath, { encoding: 'utf-8' }))
 
-        if (!info.keywords || !PLUGIN_KEYWORDS.some(x => info.keywords.includes(x))) {
+        const compatibility = classifyPluginPackage(packageName, info.keywords)
+        if (!compatibility.supported) {
             return null
+        }
+
+        if (compatibility.legacy) {
+            console.warn(`[deprecated] Plugin ${packageName} uses a legacy package prefix or keyword; migrate it to issh naming.`)
         }
 
         let author = info.author
@@ -216,7 +209,7 @@ async function parsePluginInfo (pluginDir: string, packageName: string): Promise
             name: name,
             packageName: packageName,
             isBuiltin: pluginDir === resolveBuiltinPluginsPath(),
-            isLegacy: packageName.startsWith(LEGACY_TABBY_PLUGIN_PREFIX) || packageName.startsWith(LEGACY_TERMINUS_PLUGIN_PREFIX),
+            isLegacy: compatibility.legacy,
             version: info.version,
             description: info.description,
             author,

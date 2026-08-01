@@ -2,6 +2,7 @@
 /* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
 import { build as builder } from 'electron-builder'
 import * as vars from './vars.mjs'
+import { getISSHEnvironmentVariable } from './environment.mjs'
 import { execFileSync, execSync } from 'child_process'
 import { existsSync, readFileSync, renameSync, rmSync } from 'fs'
 import * as path from 'path'
@@ -133,7 +134,7 @@ console.log(electronDist
     : 'Electron source: download cache/network fallback')
 cleanPreviousWinUnpacked()
 
-if (process.env.TABBY_SKIP_PREPACKAGE !== '1') {
+if (getISSHEnvironmentVariable('SKIP_PREPACKAGE') !== '1') {
     console.log('Refreshing builtin plugins...')
     execFileSync(process.execPath, ['scripts/prepackage-plugins.mjs'], {
         cwd: new URL('..', import.meta.url),

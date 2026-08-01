@@ -27,7 +27,7 @@ const {
 } = module.exports
 
 const scriptPath = 'C:\\Users\\tester\\AppData\\Roaming\\issh\\agent-bridge\\bin\\issh-mcp-server.mjs'
-const bridgeFile = 'C:\\Users\\tester\\AppData\\Roaming\\issh\\tabby-agent-bridge.json'
+const bridgeFile = 'C:\\Users\\tester\\AppData\\Roaming\\issh\\issh-agent-bridge.json'
 const fields = buildCodexDesktopConfigFields(scriptPath, bridgeFile)
 
 assert.deepEqual({ ...fields }, {
@@ -35,7 +35,7 @@ assert.deepEqual({ ...fields }, {
     type: 'STDIO',
     command: 'node',
     argument: scriptPath,
-    environmentVariableName: 'TABBY_AGENT_BRIDGE_FILE',
+    environmentVariableName: 'ISSH_AGENT_BRIDGE_FILE',
     environmentVariableValue: bridgeFile,
     environmentVariablePassthrough: '',
     workingDirectory: '',
@@ -44,7 +44,7 @@ assert.deepEqual({ ...fields }, {
 const guide = formatCodexDesktopConfigGuide(fields)
 assert.match(guide, /类型：STDIO/)
 assert.match(guide, /启动命令：node/)
-assert.match(guide, /TABBY_AGENT_BRIDGE_FILE=/)
+assert.match(guide, /ISSH_AGENT_BRIDGE_FILE=/)
 assert.doesNotMatch(guide, /流式 HTTP|\/sse/)
 
 const pendingFields = buildCodexDesktopConfigFields(scriptPath, null)

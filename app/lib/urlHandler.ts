@@ -1,15 +1,24 @@
 import { createParserConfig } from './cli'
 import { parse as parseShellCommand } from 'shell-quote'
 
+const PRIMARY_URL_PREFIX = 'issh://'
+const LEGACY_URL_PREFIX = 'tabby://'
+let legacyURLWarningEmitted = false
+
 export function isISSHURL (arg: string): boolean {
     const lowerArg = arg.toLowerCase()
-    return lowerArg.startsWith('issh://') || lowerArg.startsWith('tabby://')
+    return lowerArg.startsWith(PRIMARY_URL_PREFIX) || lowerArg.startsWith(LEGACY_URL_PREFIX)
 }
 
 export function parseISSHURL (url: string, cwd: string = process.cwd()): any {
     try {
         if (!isISSHURL(url)) {
             return null
+        }
+
+        if (url.toLowerCase().startsWith(LEGACY_URL_PREFIX) && !legacyURLWarningEmitted) {
+            legacyURLWarningEmitted = true
+            console.warn('[deprecated] tabby:// URLs are deprecated; use issh://.')
         }
 
         // NOTE: the url host may be lowercased (xdg-open), need to use the original command

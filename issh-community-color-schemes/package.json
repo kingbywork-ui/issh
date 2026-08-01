@@ -3,7 +3,7 @@
   "version": "1.0.231-nightly.0",
   "description": "Community color schemes for issh",
   "keywords": [
-    "tabby-builtin-plugin"
+    "issh-builtin-plugin"
   ],
   "main": "dist/index.js",
   "typings": "typings/index.d.ts",

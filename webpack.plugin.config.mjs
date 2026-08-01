@@ -3,6 +3,7 @@ import * as path from 'path'
 import wp from 'webpack'
 import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer'
 import { AngularWebpackPlugin } from '@ngtools/webpack'
+process.env.ISSH_DEV ??= process.env.TABBY_DEV
 
 const bundleAnalyzer = new BundleAnalyzerPlugin({
     analyzerPort: 0,
@@ -32,11 +33,11 @@ export default options => {
         sourceMapOptions.append = '\n//# sourceMappingURL=../../../app.asar.unpacked/assets/webpack/[url]'
     }
 
-    if ((process.platform === 'win32' || process.platform === 'linux') && process.env.TABBY_DEV) {
+    if ((process.platform === 'win32' || process.platform === 'linux') && process.env.ISSH_DEV) {
         devtoolPlugin = wp.EvalSourceMapDevToolPlugin
     }
 
-    const isDev = !!process.env.TABBY_DEV
+    const isDev = !!process.env.ISSH_DEV
     const config = {
         target: 'node',
         entry: 'src/index.ts',

@@ -18,7 +18,7 @@ export function buildCodexDesktopConfigFields (
         type: 'STDIO',
         command: 'node',
         argument: mcpServerScriptPath,
-        environmentVariableName: 'TABBY_AGENT_BRIDGE_FILE',
+        environmentVariableName: 'ISSH_AGENT_BRIDGE_FILE',
         environmentVariableValue: connectionFile ?? '<桥接服务启动后显示的连接文件路径>',
         environmentVariablePassthrough: '',
         workingDirectory: '',

@@ -3,7 +3,8 @@ import { Subject } from 'rxjs'
 
 export type AppPanelSlot = 'left' | 'right' | 'bottom'
 
-const BOTTOM_HEIGHT_STORAGE_KEY = 'tabby.appPanel.bottomHeightPx'
+const BOTTOM_HEIGHT_STORAGE_KEY = 'issh.appPanel.bottomHeightPx'
+const LEGACY_BOTTOM_HEIGHT_STORAGE_KEY = 'tabby.appPanel.bottomHeightPx'
 const BOTTOM_HEIGHT_DEFAULT = 180
 const BOTTOM_HEIGHT_MIN = 96
 const BOTTOM_HEIGHT_MAX_HARD = 480
@@ -106,7 +107,11 @@ export class AppPanelService {
 
     private loadBottomHeight (): number {
         try {
-            const raw = localStorage.getItem(BOTTOM_HEIGHT_STORAGE_KEY)
+            let raw = localStorage.getItem(BOTTOM_HEIGHT_STORAGE_KEY)
+            const isLegacy = !raw
+            if (isLegacy) {
+                raw = localStorage.getItem(LEGACY_BOTTOM_HEIGHT_STORAGE_KEY)
+            }
             if (!raw) {
                 return BOTTOM_HEIGHT_DEFAULT
             }
@@ -114,7 +119,12 @@ export class AppPanelService {
             if (!Number.isFinite(parsed)) {
                 return BOTTOM_HEIGHT_DEFAULT
             }
-            return this.clampBottomHeight(parsed)
+            const migrated = this.clampBottomHeight(parsed)
+            if (isLegacy) {
+                localStorage.setItem(BOTTOM_HEIGHT_STORAGE_KEY, String(migrated))
+                localStorage.removeItem(LEGACY_BOTTOM_HEIGHT_STORAGE_KEY)
+            }
+            return migrated
         } catch {
             return BOTTOM_HEIGHT_DEFAULT
         }

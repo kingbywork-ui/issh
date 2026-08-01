@@ -47,7 +47,7 @@ export class ElectronUpdaterService extends UpdaterService {
         })
 
         config.ready$.toPromise().then(() => {
-            if (config.store.enableAutomaticUpdates && this.electronUpdaterAvailable && !process.env.TABBY_DEV) {
+            if (config.store.enableAutomaticUpdates && this.electronUpdaterAvailable && !process.env.ISSH_DEV) {
                 this.logger.debug('Checking for updates')
                 try {
                     this.electron.ipcRenderer.send('updater:check-for-updates')

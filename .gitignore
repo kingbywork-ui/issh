@@ -57,6 +57,7 @@ __pycache__/
 *.pyc
 
 # Smoke test / debug
+.issh-smoke/
 .tabby-smoke/
 .cursor/
 .workbuddy/
@@ -82,7 +83,7 @@ main.js
 # Cowork/Agent
 .psacowork/
 
-# Tabby LLM
+# issh LLM
 issh-llm/AUTOCOMPLETE_REGRESSION_PLAYBOOK.md
 
 # Security audit

@@ -3,6 +3,7 @@ import wp from 'webpack'
 import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer'
 import * as url from 'url'
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url))
+process.env.ISSH_DEV ??= process.env.TABBY_DEV
 
 const config = {
     name: 'issh-main',
@@ -10,7 +11,7 @@ const config = {
     entry: {
         main: path.resolve(__dirname, 'lib/index.ts'),
     },
-    mode: process.env.TABBY_DEV ? 'development' : 'production',
+    mode: process.env.ISSH_DEV ? 'development' : 'production',
     context: __dirname,
     devtool: 'source-map',
     output: {

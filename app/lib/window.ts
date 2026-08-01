@@ -59,7 +59,7 @@ export class Window {
 
         this.windowConfig = new ElectronConfig({ name: 'window' })
         this.windowBounds = this.windowConfig.get('windowBoundaries')
-        const glasstron = process.platform !== 'darwin' && !process.env.TABBY_DISABLE_GLASSTRON ? (() => {
+        const glasstron = process.platform !== 'darwin' && !process.env.ISSH_DISABLE_GLASSTRON ? (() => {
             try {
                 return require('glasstron')
             } catch (error) {
@@ -125,7 +125,7 @@ export class Window {
 
         this.webContents = this.window.webContents
 
-        const startupDebugLogPath = path.join(process.env.TABBY_CONFIG_DIRECTORY ?? app.getPath('userData'), 'startup-debug.log')
+        const startupDebugLogPath = path.join(process.env.ISSH_CONFIG_DIRECTORY ?? app.getPath('userData'), 'startup-debug.log')
         const debugLog = (message: string): void => {
             try {
                 fs.appendFileSync(startupDebugLogPath, `${new Date().toISOString()} [main] ${message}\n`)
@@ -454,7 +454,7 @@ export class Window {
         })
 
         this.on('ready', () => {
-            const startupDebugLogPath = path.join(process.env.TABBY_CONFIG_DIRECTORY ?? app.getPath('userData'), 'startup-debug.log')
+            const startupDebugLogPath = path.join(process.env.ISSH_CONFIG_DIRECTORY ?? app.getPath('userData'), 'startup-debug.log')
             try {
                 fs.appendFileSync(startupDebugLogPath, `${new Date().toISOString()} [main] ipc-start-sent\n`)
             } catch {
@@ -466,7 +466,7 @@ export class Window {
                 windowID: this.window.id,
                 isMainWindow: this.isMainWindow,
                 userPluginsPath: this.application.userPluginsPath,
-                vaultPassphrase: process.env.TABBY_VAULT_PASSPHRASE || undefined,
+                vaultPassphrase: process.env.ISSH_VAULT_PASSPHRASE || undefined,
             })
         })
 

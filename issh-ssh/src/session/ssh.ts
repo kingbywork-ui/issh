@@ -940,7 +940,7 @@ export class SSHSession {
 
         const channel: any = await this.ssh.activateChannel(await this.ssh.openSessionChannel())
         const outputChunks: Buffer[] = []
-        const marker = `__TABBY_EXIT_CODE_${Date.now()}_${Math.random().toString(16).slice(2)}__`
+        const marker = `__ISSH_EXIT_CODE_${Date.now()}_${Math.random().toString(16).slice(2)}__`
         const wrappedCommand = `sh -lc ${this.quotePosixShellArg(`${command}\n_issh_ec=$?\nprintf '\\n${marker}:%s\\n' "$_issh_ec"`)}`
 
         const result = new Promise<ReadonlyCommandResult>(resolve => {

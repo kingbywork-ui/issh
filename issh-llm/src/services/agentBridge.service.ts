@@ -90,6 +90,8 @@ const OUTPUT_TRUNCATE_THRESHOLD = 4000
 const OUTPUT_MAX_ENTRIES = 50
 const OUTPUT_MAX_AGE_MS = 10 * 60 * 1000
 const AUDIT_LOG_MAX_BYTES = 5 * 1024 * 1024
+const CONNECTION_FILE_NAME = 'issh-agent-bridge.json'
+const LEGACY_CONNECTION_FILE_NAME = 'tabby-agent-bridge.json'
 /** @hidden */
 @Injectable({ providedIn: 'root' })
 export class AgentBridgeService {
@@ -204,7 +206,7 @@ export class AgentBridgeService {
         ]
         const discoveryFile = this.getDiscoveryFileForSnippet()
         if (discoveryFile) {
-            lines.push('', '[mcp_servers.issh.env]', `TABBY_AGENT_BRIDGE_FILE = ${this.quoteToml(discoveryFile)}`)
+            lines.push('', '[mcp_servers.issh.env]', `ISSH_AGENT_BRIDGE_FILE = ${this.quoteToml(discoveryFile)}`)
         }
         return lines.join('\n')
     }
@@ -391,13 +393,14 @@ export class AgentBridgeService {
 
     private writeConnectionFile (host: string, port: number): void {
         const configPath = this.platform.getConfigPath()
-        const configDir = configPath ? path.dirname(configPath) : process.env.TABBY_CONFIG_DIRECTORY
+        const configDir = configPath ? path.dirname(configPath) : process.env.ISSH_CONFIG_DIRECTORY
         if (!configDir) {
             this.logger.warn('Agent bridge connection file skipped: no config directory')
             return
         }
         this.installAgentBridgeScripts(configDir)
-        this.connectionFilePath = path.join(configDir, 'tabby-agent-bridge.json')
+        this.connectionFilePath = path.join(configDir, CONNECTION_FILE_NAME)
+        const legacyConnectionFilePath = path.join(configDir, LEGACY_CONNECTION_FILE_NAME)
         const previousPublicConnectionFilePath = this.publicConnectionFilePath
         const nextPublicConnectionFilePath = this.getPublicConnectionFilePath()
         if (previousPublicConnectionFilePath && previousPublicConnectionFilePath !== nextPublicConnectionFilePath) {
@@ -419,6 +422,7 @@ export class AgentBridgeService {
                 mode: 0o600,
             })
             this.restrictFilePermissions(this.connectionFilePath)
+            this.removeFile(legacyConnectionFilePath, 'legacy connection file')
         } catch (error) {
             this.logger.warn('Agent bridge connection file write failed', error)
         }
@@ -464,13 +468,13 @@ export class AgentBridgeService {
             return null
         }
         const configured = this.getString(this.config.store.llm.agentBridgePublicDiscoveryFile)
-            ?? this.getString(process.env.TABBY_AGENT_BRIDGE_PUBLIC_FILE)
+            ?? this.getString(process.env.ISSH_AGENT_BRIDGE_PUBLIC_FILE)
         return configured ?? this.getDefaultPublicConnectionFilePath()
     }
 
     private getDefaultPublicConnectionFilePath (): string | null {
         const configPath = this.platform.getConfigPath()
-        const configDir = configPath ? path.dirname(configPath) : process.env.TABBY_CONFIG_DIRECTORY
+        const configDir = configPath ? path.dirname(configPath) : process.env.ISSH_CONFIG_DIRECTORY
         if (!configDir) {
             return null
         }
@@ -479,7 +483,7 @@ export class AgentBridgeService {
 
     private getCursorConfigEnv (): Record<string, string> | undefined {
         const discoveryFile = this.getDiscoveryFileForSnippet()
-        return discoveryFile ? { TABBY_AGENT_BRIDGE_FILE: discoveryFile } : undefined
+        return discoveryFile ? { ISSH_AGENT_BRIDGE_FILE: discoveryFile } : undefined
     }
 
     private getDiscoveryFileForSnippet (): string | null {
@@ -491,8 +495,8 @@ export class AgentBridgeService {
 
     private getPrivateConnectionFilePath (): string | null {
         const configPath = this.platform.getConfigPath()
-        const configDir = configPath ? path.dirname(configPath) : process.env.TABBY_CONFIG_DIRECTORY
-        return configDir ? path.join(configDir, 'tabby-agent-bridge.json') : null
+        const configDir = configPath ? path.dirname(configPath) : process.env.ISSH_CONFIG_DIRECTORY
+        return configDir ? path.join(configDir, CONNECTION_FILE_NAME) : null
     }
 
     private installAgentBridgeScripts (configDir: string): void {
@@ -1798,7 +1802,7 @@ export class AgentBridgeService {
 
     private getBridgePort (): number {
         const configured = this.config.store.llm.agentBridgePort
-        const parsed = Number(process.env.TABBY_AGENT_BRIDGE_PORT ?? configured ?? 0)
+        const parsed = Number(process.env.ISSH_AGENT_BRIDGE_PORT ?? configured ?? 0)
         if (!Number.isFinite(parsed) || parsed < 0 || parsed > 65535) {
             return 0
         }

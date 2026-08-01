@@ -434,7 +434,8 @@ export class ConfigService {
             config.version = 6
         }
         if (config.version < 7) {
-            if (!config.configSync?.host || config.configSync?.host === 'https://api.tabby.sh') {
+            const legacyConfigSyncHost = 'https://api.tabby.sh'
+            if (!config.configSync?.host || config.configSync?.host === legacyConfigSyncHost) {
                 config.configSync ??= {}
                 delete config.configSync.host
                 delete config.configSync.token

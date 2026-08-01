@@ -137,7 +137,7 @@ export class Application {
         }
 
         this.userPluginsPath = path.join(
-            process.env.TABBY_CONFIG_DIRECTORY ?? app.getPath('userData'),
+            process.env.ISSH_CONFIG_DIRECTORY ?? app.getPath('userData'),
             'plugins',
         )
         debugLog(`application-ctor:user-plugins-path:${this.userPluginsPath}`)
@@ -486,7 +486,7 @@ export class Application {
             },
         ]
 
-        if (process.env.TABBY_DEV) {
+        if (process.env.ISSH_DEV) {
             template[2].submenu['unshift']({ role: 'reload' })
         }
 

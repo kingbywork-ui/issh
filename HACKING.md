@@ -89,11 +89,11 @@ issh-pluginname
 
 # Plugins
 
-The app will load all plugins from the source checkout in the dev mode, from the user's plugins directory at all times (click `Open Plugins Directory` under `Settings` > `Plugins`) and from the directory specified by the `TABBY_PLUGINS` environment var.
+The app will load all plugins from the source checkout in the dev mode, from the user's plugins directory at all times (click `Open Plugins Directory` under `Settings` > `Plugins`) and from the directory specified by the `ISSH_PLUGINS` environment var. The legacy `TABBY_PLUGINS` name remains a fallback for one compatibility release.
 
 Only modules whose `package.json` file contains an `issh-plugin` keyword will be loaded. Legacy `tabby-plugin` markers remain accepted for one compatibility release.
 
-If you're currently in your plugin's directory, start issh as `TABBY_PLUGINS=$(pwd) issh --debug`
+If you're currently in your plugin's directory, start issh as `ISSH_PLUGINS=$(pwd) issh --debug`
 
 A plugin should only provide a default export, which should be a `NgModule` class (or a `NgModuleWithDependencies` where applicable). This module will be injected as a dependency to the app's root module.
 

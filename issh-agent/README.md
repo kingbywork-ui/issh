@@ -15,3 +15,8 @@ RPC client, CLI mapping, and stdio MCP tests.
 
 The legacy `tabby-agent`, `tabby-mcp-server`, and `tabby_*` tool aliases remain
 available for one compatibility release.
+
+New discovery files use `issh-agent-bridge.json` in configuration directories
+and `.issh-agent-bridge.json` in workspaces. The legacy Tabby file names and
+configuration directories remain read-only discovery fallbacks for one
+compatibility release; iSSH only writes the new file name.

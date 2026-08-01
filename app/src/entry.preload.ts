@@ -1,7 +1,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 
-const preloadDebugLogPath = path.join(process.env.TABBY_CONFIG_DIRECTORY || process.cwd(), 'bootstrap-debug.log')
+const preloadDebugLogPath = path.join(process.env.ISSH_CONFIG_DIRECTORY || process.cwd(), 'bootstrap-debug.log')
 
 function debugLog (message: string, extra?: unknown): void {
     const line = `${new Date().toISOString()} [preload] ${message}${extra === undefined ? '' : ` ${JSON.stringify(extra)}`}\n`
