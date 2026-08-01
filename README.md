@@ -1,8 +1,8 @@
-[![](docs/readme.png)](https://tabby.sh)
+![](docs/readme.png)
 
 ---
 
-A customized fork of [Tabby](https://tabby.sh) (formerly **Terminus**), focused on SSH and terminal workflows for Windows.
+issh is a customized fork of [Tabby](https://tabby.sh) (formerly **Terminus**), focused on SSH and terminal workflows for Windows.
 
 Based on Tabby v1.0.7, with UI enhancements and bug fixes for daily SSH management.
 
@@ -10,8 +10,8 @@ Based on Tabby v1.0.7, with UI enhancements and bug fixes for daily SSH manageme
 
 Pre-built Windows artifacts (located in `dist/` after building):
 
-- `tabby-1.0.7-setup-x64.exe` — NSIS installer
-- `tabby-1.0.7-portable-x64.zip` — portable archive
+- `issh-1.0.7-setup-x64.exe` — NSIS installer
+- `issh-1.0.7-portable-x64.zip` — portable archive
 
 ## Features
 
@@ -46,7 +46,7 @@ Pre-built Windows artifacts (located in `dist/` after building):
 - Enhanced host management interface with card-based layout
 - Improved profile settings tab with streamlined configuration flow
 
-### AI Assistant (tabby-llm)
+### AI Assistant (issh-llm)
 
 LLM-powered command autocomplete, next-command prediction, and local CLI/MCP agent bridge, built directly into the terminal.
 
@@ -112,11 +112,11 @@ All hotkeys are customizable in **Settings → Hotkeys**.
 1. **Autocomplete**: The plugin reads the current partial command from the xterm.js buffer, collects terminal context (OS, shell, working directory, recent output), and merges history, login-script, cached prediction, and live AI candidates with deduplication and ranking.
 2. **Next-command prediction**: The first command in a shell session does not trigger live AI autocomplete. Once a command is submitted, AI prefetches likely follow-up commands from the previous command and current context, then reuses that cache while you type.
 3. **Privacy**: When "Send terminal context to API" is enabled, recent terminal output is included to improve suggestion quality. Sensitive patterns (API keys, tokens, passwords, private keys) are redacted locally before sending. Disable this option to send only command fragments without recent output.
-4. **Agent Bridge**: The optional CLI/MCP bridge exposes local Tabby sessions to external agents over localhost using token scopes, SFTP limits, dangerous-command confirmation, and audit logging.
+4. **Agent Bridge**: The optional CLI/MCP bridge exposes local issh sessions to external agents over localhost using token scopes, SFTP limits, dangerous-command confirmation, and audit logging.
 
 ## Portable
 
-Tabby will run as a portable app on Windows if you create a `data` folder in the same location where `Tabby.exe` lives.
+issh will run as a portable app on Windows if you create a `data` folder in the same location where `issh.exe` lives.
 
 ## Building from Source
 
@@ -134,15 +134,15 @@ Tabby will run as a portable app on Windows if you create a `data` folder in the
 yarn
 
 # Smoke test: TypeScript type-checks
-npx tsc -p tabby-core/tsconfig.json --noEmit
-npx tsc -p tabby-settings/tsconfig.json --noEmit
-npx tsc -p tabby-terminal/tsconfig.json --noEmit
-npx tsc -p tabby-ssh/tsconfig.json --noEmit
-npx tsc -p tabby-local/tsconfig.json --noEmit
-npx tsc -p tabby-electron/tsconfig.json --noEmit
-npx tsc -p tabby-linkifier/tsconfig.json --noEmit
-npx tsc -p tabby-auto-sudo-password/tsconfig.json --noEmit
-npx tsc -p tabby-community-color-schemes/tsconfig.json --noEmit
+npx tsc -p issh-core/tsconfig.json --noEmit
+npx tsc -p issh-settings/tsconfig.json --noEmit
+npx tsc -p issh-terminal/tsconfig.json --noEmit
+npx tsc -p issh-ssh/tsconfig.json --noEmit
+npx tsc -p issh-local/tsconfig.json --noEmit
+npx tsc -p issh-electron/tsconfig.json --noEmit
+npx tsc -p issh-linkifier/tsconfig.json --noEmit
+npx tsc -p issh-auto-sudo-password/tsconfig.json --noEmit
+npx tsc -p issh-community-color-schemes/tsconfig.json --noEmit
 
 # Smoke test: Webpack build
 yarn run build
@@ -165,7 +165,7 @@ set TABBY_SKIP_PREPACKAGE=1&&node scripts/build-windows.mjs
 - **Redesigned start page**: Quick-connect shortcuts with improved layout
 - **Enhanced host manager**: Card-based host management with streamlined profile configuration
 - **Private key fix**: Resolved RSA-SHA2 private key authentication failures
-- **AI Assistant (tabby-llm)**: LLM-powered command autocomplete, next-command prediction, CLI/MCP Agent Bridge, dangerous command detection, and sensitive data redaction
+- **AI Assistant (issh-llm)**: LLM-powered command autocomplete, next-command prediction, CLI/MCP Agent Bridge, dangerous command detection, and sensitive data redaction
 
 ## Acknowledgements
 

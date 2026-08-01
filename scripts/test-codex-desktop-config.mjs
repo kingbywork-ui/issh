@@ -4,7 +4,7 @@ import path from 'node:path'
 import vm from 'node:vm'
 import ts from 'typescript'
 
-const sourcePath = path.resolve('tabby-llm/src/services/codexDesktopConfig.ts')
+const sourcePath = path.resolve('issh-llm/src/services/codexDesktopConfig.ts')
 const source = fs.readFileSync(sourcePath, 'utf8')
 const compiled = ts.transpileModule(source, {
     compilerOptions: {
@@ -26,12 +26,12 @@ const {
     formatCodexDesktopConfigGuide,
 } = module.exports
 
-const scriptPath = 'C:\\Users\\tester\\AppData\\Roaming\\issh\\agent-bridge\\bin\\tabby-mcp-server.mjs'
+const scriptPath = 'C:\\Users\\tester\\AppData\\Roaming\\issh\\agent-bridge\\bin\\issh-mcp-server.mjs'
 const bridgeFile = 'C:\\Users\\tester\\AppData\\Roaming\\issh\\tabby-agent-bridge.json'
 const fields = buildCodexDesktopConfigFields(scriptPath, bridgeFile)
 
 assert.deepEqual({ ...fields }, {
-    name: 'iSSH',
+    name: 'issh',
     type: 'STDIO',
     command: 'node',
     argument: scriptPath,
@@ -51,7 +51,7 @@ const pendingFields = buildCodexDesktopConfigFields(scriptPath, null)
 assert.match(pendingFields.environmentVariableValue, /桥接服务启动后/)
 
 const template = fs.readFileSync(
-    path.resolve('tabby-llm/src/components/agentBridgeSettingsTab.component.pug'),
+    path.resolve('issh-llm/src/components/agentBridgeSettingsTab.component.pug'),
     'utf8',
 )
 assert.match(template, /选择你的 AI 客户端/)

@@ -34,8 +34,8 @@ files:
 extraResources:
 - builtin-plugins
 - extras
-- from: tabby-agent
-  to: tabby-agent
+- from: issh-agent
+  to: issh-agent
   filter:
   - package.json
   - bin/**

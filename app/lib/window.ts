@@ -11,7 +11,7 @@ import { compare as compareVersions } from 'compare-versions'
 
 import type { Application } from './app'
 import { parseArgs } from './cli'
-import { parseTabbyURL, isTabbyURL } from './urlHandler'
+import { parseISSHURL, isISSHURL } from './urlHandler'
 
 let DwmEnableBlurBehindWindow: any = null
 if (process.platform === 'win32') {
@@ -29,7 +29,7 @@ export interface WindowOptions {
 const macOSVibrancyType: any = process.platform === 'darwin' ? compareVersions(macOSRelease().version || '0.0', '10.14', '>=') ? 'fullscreen-ui' : 'dark' : null
 
 const activityIcon = nativeImage.createFromPath(`${app.getAppPath()}/assets/activity.png`)
-type TabbyBrowserWindow = BrowserWindow & {
+type ISSHBrowserWindow = BrowserWindow & {
     blurType?: string | null
     setBlur?: (_: boolean) => void
 }
@@ -40,7 +40,7 @@ export class Window {
     webContents: WebContents
     private visible = new Subject<boolean>()
     private closed = new Subject<void>()
-    private window?: TabbyBrowserWindow
+    private window?: ISSHBrowserWindow
     private windowConfig: ElectronConfig
     private windowBounds?: Rectangle
     private closing = false
@@ -357,9 +357,9 @@ export class Window {
     }
 
     passCliArguments (argv: string[], cwd: string, secondInstance: boolean): void {
-        const urlArg = argv.find(arg => isTabbyURL(arg))
+        const urlArg = argv.find(arg => isISSHURL(arg))
         if (urlArg) {
-            this.send('cli', parseTabbyURL(urlArg, cwd), cwd, secondInstance)
+            this.send('cli', parseISSHURL(urlArg, cwd), cwd, secondInstance)
         } else {
             this.send('cli', parseArgs(argv, cwd), cwd, secondInstance)
         }

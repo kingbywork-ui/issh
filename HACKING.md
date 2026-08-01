@@ -1,6 +1,6 @@
 # Some background
 
-Tabby is an Electron app, with the frontend written in Typescript with the help of Angular framework. It's built using Webpack.
+issh is an Electron app, with the frontend written in Typescript with the help of Angular framework. It's built using Webpack.
 
 # Getting started
 
@@ -10,7 +10,7 @@ First of all, clone this repository.
 - [Node.js](https://nodejs.org/en/download/) **version 15 or newer*
 - [Yarn](https://yarnpkg.com/)
 
-First, from within the `tabby` directory install the dependencies via yarn:
+First, from within the `issh` directory install the dependencies via yarn:
 
 ```
 # macOS & Windows:
@@ -25,13 +25,13 @@ yarn
 
 _⚠️Note: If you forked this repository, you may need to pull down the tags from this repository before installing node modules. `git pull --tags upstream master`_
 
-Build Tabby:
+Build issh:
 
 ```
 yarn run build
 ```
 
-Start Tabby
+Start issh
 
 ```
 yarn start
@@ -55,24 +55,24 @@ The artifacts will be produced in the `dist` folder.
 
 # Project layout
 ```
-tabby
+issh
 ├─ app                                  # Electron app, just the bare essentials
 |  ├─ src                               # Electron renderer code
 |  └─ main.js                           # Electron main entry point
 ├─ build
 ├─ clink                                # Clink distribution, for Windows
 ├─ scripts                              # Maintenance scripts
-├─ tabby-community-color-schemes     # Plugin that provides color schemes
-├─ tabby-core                        # Plugin that provides base UI and tab management
-├─ tabby-electron                    # Plugin that provides Electron-specific functions
-├─ tabby-local                       # Plugin that provides local shells and profiles
-├─ tabby-settings                    # Plugin that provides the settings tab
-├─ tabby-terminal                    # Plugin that provides terminal tabs
+├─ issh-community-color-schemes     # Plugin that provides color schemes
+├─ issh-core                        # Plugin that provides base UI and tab management
+├─ issh-electron                    # Plugin that provides Electron-specific functions
+├─ issh-local                       # Plugin that provides local shells and profiles
+├─ issh-settings                    # Plugin that provides the settings tab
+├─ issh-terminal                    # Plugin that provides terminal tabs
 ```
 
 # Plugin layout
 ```
-tabby-pluginname
+issh-pluginname
 ├─ src                                  # Typescript code
 |  ├─ components                        # Angular components
 |  |  ├─ foo.component.ts               # Code
@@ -91,9 +91,9 @@ tabby-pluginname
 
 The app will load all plugins from the source checkout in the dev mode, from the user's plugins directory at all times (click `Open Plugins Directory` under `Settings` > `Plugins`) and from the directory specified by the `TABBY_PLUGINS` environment var.
 
-Only modules whose `package.json` file contains a `tabby-plugin` keyword will be loaded.
+Only modules whose `package.json` file contains an `issh-plugin` keyword will be loaded. Legacy `tabby-plugin` markers remain accepted for one compatibility release.
 
-If you're currently in your plugin's directory, start Tabby as `TABBY_PLUGINS=$(pwd) tabby --debug`
+If you're currently in your plugin's directory, start issh as `TABBY_PLUGINS=$(pwd) issh --debug`
 
 A plugin should only provide a default export, which should be a `NgModule` class (or a `NgModuleWithDependencies` where applicable). This module will be injected as a dependency to the app's root module.
 
@@ -113,7 +113,7 @@ Plugins provide functionality by exporting singular or multi providers:
 
 ```javascript
 import { NgModule, Injectable } from '@angular/core'
-import { ToolbarButtonProvider, ToolbarButton } from 'tabby-core'
+import { ToolbarButtonProvider, ToolbarButton } from 'issh-core'
 
 @Injectable()
 export class MyButtonProvider extends ToolbarButtonProvider {
@@ -138,8 +138,8 @@ export default class MyModule { }
 ```
 
 
-See `tabby-core/src/api.ts`, `tabby-settings/src/api.ts`, `tabby-local/src/api.ts` and `tabby-terminal/src/api.ts` for the available extension points.
+See `issh-core/src/api.ts`, `issh-settings/src/api.ts`, `issh-local/src/api.ts` and `issh-terminal/src/api.ts` for the available extension points.
 
 Also check out [the example plugin](https://github.com/Eugeny/tabby-clippy).
 
-Publish your plugin on NPM with a `tabby-plugin` keyword to make it appear in the Plugin Manager.
+Publish your plugin on NPM with an `issh-plugin` keyword to make it appear in the Plugin Manager.

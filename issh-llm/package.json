@@ -1,0 +1,24 @@
+{
+  "name": "issh-llm",
+  "version": "1.0.231-nightly.0",
+  "description": "LLM-powered command autocomplete and natural language to command for issh",
+  "keywords": [
+    "tabby-builtin-plugin"
+  ],
+  "main": "dist/index.js",
+  "typings": "typings/index.d.ts",
+  "scripts": {
+    "build": "node ../node_modules/webpack/bin/webpack.js --progress --color",
+    "watch": "node ../node_modules/webpack/bin/webpack.js --progress --color --watch"
+  },
+  "files": [
+    "dist",
+    "typings"
+  ],
+  "author": "issh Developers",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "zod": "4.4.3"
+  }
+}

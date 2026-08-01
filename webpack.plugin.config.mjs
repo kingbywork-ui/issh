@@ -24,7 +24,7 @@ export default options => {
     const sourceMapOptions = {
         exclude: [/node_modules/, /vendor/],
         filename: '[file].map',
-        moduleFilenameTemplate: `webpack-tabby-${options.name}:///[resource-path]`,
+        moduleFilenameTemplate: `webpack-issh-${options.name}:///[resource-path]`,
     }
     let devtoolPlugin = wp.SourceMapDevToolPlugin
 
@@ -164,7 +164,7 @@ export default options => {
             /^@angular(?!\/common\/locales)/,
             /^@ng-bootstrap/,
             /^rxjs/,
-            /^tabby-/,
+            /^issh-/,
             ...options.externals || [],
         ],
         plugins: [

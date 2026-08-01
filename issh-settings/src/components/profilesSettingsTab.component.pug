@@ -1,0 +1,310 @@
+h3.mb-3(translate) Host manager
+
+ul.nav-tabs(ngbNav, #nav='ngbNav')
+    li(ngbNavItem)
+        a(ngbNavLink, translate) Host manager
+        ng-template(ngbNavContent)
+            .host-manager-layout
+                .host-sidebar
+                    .host-tree
+                        .host-tree-item.root-item(
+                            (click)='showAllHosts()',
+                            [class.active]='!activeGroupId && !favoritesOnly && !recentOnly'
+                        )
+                            i.fas.fa-fw.fa-server
+                            span.ms-2(translate) All
+                            span.count.ms-auto {{getVisibleCustomProfilesCount()}}
+
+                        .host-tree-item.root-item(
+                            (click)='showFavorites()',
+                            [class.active]='favoritesOnly'
+                        )
+                            i.fas.fa-fw.fa-star
+                            span.ms-2(translate) Favorites
+                            span.count.ms-auto {{getFavoriteVisibleCount()}}
+
+                        .host-tree-item.root-item(
+                            (click)='showRecentHosts()',
+                            [class.active]='recentOnly'
+                        )
+                            i.fas.fa-fw.fa-history
+                            span.ms-2(translate) Recent
+                            span.count.ms-auto {{getRecentVisibleCount()}}
+
+                        ng-container(*ngFor='let group of rootGroups')
+                            ng-container(*ngTemplateOutlet='sidebarGroup; context: {$implicit: group, level: 0}')
+
+                .host-main
+                    .host-content
+                        .host-list-pane
+                            .host-toolbar
+                                .host-toolbar-row
+                                    .input-group.search-group
+                                        .input-group-text
+                                            i.fas.fa-fw.fa-search
+                                        input.form-control(
+                                            type='search',
+                                            [placeholder]='"Filter"|translate',
+                                            [(ngModel)]='filter'
+                                        )
+
+                                    .host-filter-chips(*ngIf='getAvailableTags().length > 0')
+                                        button.tag-btn(
+                                            *ngFor='let tag of getAvailableTags()',
+                                            (click)='toggleTag(tag)',
+                                            [class.active]='isTagSelected(tag)',
+                                            [class]='getEnvironmentBadgeClass(tag)'
+                                        ) {{tag}}
+
+                                    .host-filter-toggles
+                                        .host-filter-toggle
+                                            checkbox([text]='"SSH only"|translate', [(ngModel)]='sshOnly')
+                                        .host-filter-toggle
+                                            checkbox([text]='"Favorites"|translate', [(ngModel)]='favoritesOnly')
+                                        select.form-control.form-control-sm.environment-filter([(ngModel)]='environmentFilter')
+                                            option(value='') {{'All environments'|translate}}
+                                            option(*ngFor='let environment of getAvailableEnvironments()', [value]='environment') {{environment}}
+
+                                    button.btn.btn-sm.btn-outline-secondary.host-clear-btn(
+                                        type='button',
+                                        [title]='"Clear"|translate',
+                                        [attr.aria-label]='"Clear"|translate',
+                                        (click)='clearFilters()'
+                                    )
+                                        i.fas.fa-fw.fa-rotate-left
+
+                                    button.btn.btn-sm.btn-primary((click)='newProfile()')
+                                        i.fas.fa-fw.fa-plus
+                                        span(translate) New profile
+
+                            .bulk-toolbar(*ngIf='selectedProfileIds.size > 0')
+                                .bulk-info
+                                    .bulk-title {{selectedProfileIds.size}} selected
+                                    .bulk-quick-actions
+                                        button.btn.btn-sm.btn-outline-secondary((click)='selectVisibleProfiles()') Select visible
+                                        button.btn.btn-sm.btn-outline-secondary((click)='clearSelection()') Clear selection
+                                .bulk-actions
+                                    .bulk-actions-group
+                                        button.btn.btn-sm.btn-outline-warning((click)='bulkSetFavorite(true)') Favorite
+                                        button.btn.btn-sm.btn-outline-dark((click)='bulkSetFavorite(false)') Unfavorite
+                                    .bulk-actions-group
+                                        select.form-control.form-control-sm.bulk-select([(ngModel)]='bulkGroupId')
+                                            option(value='') Move to ungrouped
+                                            option(*ngFor='let group of profileGroups', [value]='group.id') {{group.name || ("Ungrouped"|translate)}}
+                                        button.btn.btn-sm.btn-outline-primary((click)='bulkMoveToGroup()') Apply group
+                                    .bulk-actions-group
+                                        input.form-control.form-control-sm.bulk-input(
+                                            type='text',
+                                            [placeholder]='"Comma-separated tags"|translate',
+                                            [(ngModel)]='bulkTagsInput'
+                                        )
+                                        button.btn.btn-sm.btn-outline-primary((click)='bulkReplaceTags()') {{'Apply tags'|translate}}
+                                    .bulk-actions-group
+                                        input.form-control.form-control-sm.bulk-input(
+                                            type='text',
+                                            [placeholder]='"Apply environment"|translate',
+                                            [(ngModel)]='bulkEnvironmentInput'
+                                        )
+                                        button.btn.btn-sm.btn-outline-primary((click)='bulkReplaceEnvironment()') {{'Apply environment'|translate}}
+
+                            .host-list
+                                .host-grid-wrapper
+                                    ng-container(*ngFor='let group of rootGroups')
+                                        ng-container(*ngTemplateOutlet='hostGroup; context: {$implicit: group, level: 0}')
+
+            ng-template(#sidebarGroup let-group let-level='level')
+                ng-container(*ngIf='isSidebarGroupVisible(group)')
+                    .host-tree-item(
+                        [style.paddingLeft.rem]='0.75 + (level * 1.1)',
+                        [class.host-tree-item--child]='level > 0',
+                        [class.active]='isGroupActive(group)',
+                        (click)='selectGroupView(group)'
+                    )
+                        button.btn.btn-link.tree-toggle(
+                            *ngIf='group.children && group.children.length > 0',
+                            (click)='$event.stopPropagation(); toggleGroupCollapse(group)'
+                        )
+                            i.fas.fa-fw([class.fa-chevron-right]='group.collapsed', [class.fa-chevron-down]='!group.collapsed')
+                        i.far.fa-fw([class.fa-folder]='group.collapsed', [class.fa-folder-open]='!group.collapsed')
+                        span.ms-2 {{group.name || ("Ungrouped"|translate)}}
+                        span.count.ms-auto {{getGroupVisibleProfileCount(group)}}
+
+                    ng-container(*ngIf='!group.collapsed')
+                        ng-container(*ngFor='let child of group.children')
+                            ng-container(*ngTemplateOutlet='sidebarGroup; context: {$implicit: child, level: level + 1}')
+
+            ng-template(#hostGroup let-group let-level='level')
+                ng-container(*ngIf='isGroupVisible(group)')
+                    .host-group-section(
+                        [class.host-group-section--nested]='level > 0',
+                        [style.marginLeft.rem]='level * 1.25'
+                    )
+                        .host-group-header((click)='toggleGroupCollapse(group)')
+                            .host-group-title
+                                i.fas.fa-fw([class.fa-chevron-right]='group.collapsed', [class.fa-chevron-down]='!group.collapsed')
+                                i.far.fa-fw([class.fa-folder]='group.collapsed', [class.fa-folder-open]='!group.collapsed')
+                                span.ms-2 {{group.name || ("Ungrouped"|translate)}}
+                                span.host-group-count {{getGroupVisibleProfileCount(group)}}
+                            .host-group-actions
+                                button.btn.btn-sm.btn-link(
+                                    *ngIf='group.editable && group.name',
+                                    (click)='$event.stopPropagation(); editProfileGroup(group)'
+                                )
+                                    i.fas.fa-pencil-alt
+                                button.btn.btn-sm.btn-link(
+                                    *ngIf='group.editable && group.name',
+                                    (click)='$event.stopPropagation(); deleteProfileGroup(group)'
+                                )
+                                    i.fas.fa-trash-alt
+
+                        ng-container(*ngIf='!group.collapsed')
+                            table.host-table
+                                thead
+                                    tr
+                                        th.col-check
+                                        th.col-name Name
+                                        th.col-status Status
+                                        th.col-fav
+                                        th.col-actions Actions
+                                tbody
+                                    tr.host-row(
+                                        *ngFor='let profile of getVisibleProfiles(group)',
+                                        [class.selected]='isSelected(profile)',
+                                        [class.is-builtin]='profile.isBuiltin'
+                                    )
+                                        td.col-check
+                                            checkbox(
+                                                *ngIf='!profile.isBuiltin',
+                                                [ngModel]='isSelected(profile)',
+                                                (ngModelChange)='setSelection(profile, $event)'
+                                            )
+                                        td.col-name(
+                                            [class.clickable]='!profile.isBuiltin',
+                                            (click)='profile.isBuiltin ? null : editProfile(profile)'
+                                        )
+                                            .name-row
+                                                profile-icon([icon]='profile.icon', [color]='profile.color')
+                                                span.host-name {{profile.name}}
+                                                span.badge.badge-recent(*ngIf='isRecentProfile(profile)')
+                                                    i.fas.fa-clock.me-1
+                                                    | Recent
+                                            .addr-sub(*ngIf='getProfileConnectionInfo(profile) as info')
+                                                span.host-address {{info.host}}
+                                                span.addr-detail(*ngIf='info.user || info.port')
+                                                    span(*ngIf='info.user') {{info.user}}
+                                                    span(*ngIf='info.port') :{{info.port}}
+                                        td.col-status
+                                            span.badge(
+                                                *ngIf='profile.environment',
+                                                [class]='getEnvironmentBadgeClass(profile.environment)'
+                                            ) {{profile.environment}}
+                                        td.col-fav
+                                            button.btn.btn-link.favorite-toggle(
+                                                *ngIf='!profile.isBuiltin',
+                                                (click)='toggleFavorite(profile); $event.stopPropagation()'
+                                            )
+                                                i.far.fa-star(*ngIf='!profile.favorite')
+                                                i.fas.fa-star.text-warning(*ngIf='profile.favorite')
+                                        td.col-actions
+                                            button.btn.btn-sm.btn-success.host-connect-btn(*ngIf='!profile.isTemplate', (click)='launchProfile(profile)') Connect
+                                            .hover-reveal(ngbDropdown, placement='bottom-right top-right auto')
+                                                button.btn.btn-sm.btn-link(ngbDropdownToggle)
+                                                    i.fas.fa-fw.fa-ellipsis-vertical
+                                                div(ngbDropdownMenu)
+                                                    button.dropdown-item(ngbDropdownItem, (click)='editProfile(profile)')
+                                                        i.fas.fa-fw.fa-pencil-alt
+                                                        span(translate) Edit
+                                                    button.dropdown-item(ngbDropdownItem, (click)='newProfile(profile)')
+                                                        i.fas.fa-fw.fa-copy
+                                                        span(translate) Duplicate
+                                                    button.dropdown-item(
+                                                        ngbDropdownItem,
+                                                        *ngIf='profile.id && !isProfileBlacklisted(profile)',
+                                                        (click)='blacklistProfile(profile)'
+                                                    )
+                                                        i.fas.fa-fw.fa-eye-slash
+                                                        span(translate) Hide
+                                                    button.dropdown-item(
+                                                        ngbDropdownItem,
+                                                        *ngIf='profile.id && isProfileBlacklisted(profile)',
+                                                        (click)='unblacklistProfile(profile)'
+                                                    )
+                                                        i.fas.fa-fw.fa-eye
+                                                        span(translate) Show
+                                                    button.dropdown-item(
+                                                        *ngIf='!profile.isBuiltin',
+                                                        (click)='deleteProfile(profile)'
+                                                    )
+                                                        i.fas.fa-fw.fa-trash-alt.text-danger
+                                                        span.text-danger(translate) Delete
+
+                            ng-container(*ngFor='let child of group.children')
+                                ng-container(*ngTemplateOutlet='hostGroup; context: {$implicit: child, level: level + 1}')
+
+    li(ngbNavItem)
+        a(ngbNavLink, translate) Advanced
+        ng-template(ngbNavContent)
+            .form-line.content-box(*ngIf='config.store.profiles.length > 0')
+                .header
+                    .title(translate) Show recent profiles in selector
+                    .description(translate) Set to 0 to disable recent profiles
+
+                input.form-control(
+                    type='number',
+                    min='0',
+                    step='1',
+                    [(ngModel)]='config.store.terminal.showRecentProfiles',
+                    (ngModelChange)='config.save()'
+                )
+
+            .form-line.content-box(*ngIf='config.store.profiles.length > 0')
+                .header
+                    .title(translate) Show built-in profiles in selector
+                    .description(translate) If disabled, only custom profiles will show up in the profile selector
+
+                toggle(
+                    [(ngModel)]='config.store.terminal.showBuiltinProfiles',
+                    (ngModelChange)='config.save()'
+                )
+
+            .form-line.content-box(*ngIf='hostApp.platform === Platform.Windows')
+                .header
+                    .title(translate) Terminal identification
+                    .description(translate) How issh presents itself through environment vars
+
+                select.form-control(
+                    [(ngModel)]='config.store.terminal.identification',
+                    (ngModelChange)='config.save()',
+                )
+                    option(ngValue='wt', translation) Windows Terminal
+                    option(ngValue='cygwin', translation) Cygwin
+
+            .form-line
+                .header
+                    .title(translate) Default "Connect to" type
+                    .description(translate) Default connection type used by quick connect feature (ex. SSH, Telnet)
+
+                select.form-control(
+                    [(ngModel)]='config.store.defaultQuickConnectProvider',
+                    (ngModelChange)='config.save()',
+                )
+                    option(
+                        *ngFor='let provider of getQuickConnectProviders()',
+                        [ngValue]='provider.id'
+                    ) {{provider.name}}
+
+            .form-line.content-box
+                .header
+                    .title(translate) Default profile settings
+                    .description(translate) These apply to all profiles of a given type
+
+            .list-group.mt-3.mb-3.content-box
+                a.list-group-item.list-group-item-action.d-flex.align-items-center(
+                    (click)='editDefaults(provider)',
+                    *ngFor='let provider of profileProviders'
+                ) {{provider.name|translate}}
+                    .me-auto
+                    button.btn.btn-link.hover-reveal.ms-1((click)='$event.stopPropagation(); deleteDefaults(provider)')
+                        i.fas.fa-trash-arrow-up
+
+div([ngbNavOutlet]='nav')

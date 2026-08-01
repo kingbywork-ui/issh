@@ -1,11 +1,10 @@
 {
   "name": "issh",
-  "description": "AI-assisted SSH terminal based on Tabby",
+  "description": "AI-assisted SSH terminal",
   "private": true,
   "repository": "https://github.com/Eugeny/tabby",
   "author": {
-    "name": "Tabby Developers",
-    "email": "e@ajenti.org"
+    "name": "issh Developers"
   },
   "main": "dist/main.js",
   "version": "0.0.9",
@@ -52,14 +51,14 @@
     "@types/node": "22.15.21"
   },
   "peerDependencies": {
-    "tabby-community-color-schemes": "*",
-    "tabby-core": "*",
-    "tabby-electron": "*",
-    "tabby-local": "*",
-    "tabby-serial": "*",
-    "tabby-settings": "*",
-    "tabby-ssh": "*",
-    "tabby-terminal": "*"
+    "issh-community-color-schemes": "*",
+    "issh-core": "*",
+    "issh-electron": "*",
+    "issh-local": "*",
+    "issh-serial": "*",
+    "issh-settings": "*",
+    "issh-ssh": "*",
+    "issh-terminal": "*"
   },
   "resolutions": {
     "node-abi": "4.33.0",

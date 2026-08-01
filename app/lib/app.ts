@@ -477,7 +477,7 @@ export class Application {
                 role: 'help',
                 submenu: [
                     {
-                        label: 'Website',
+                        label: 'Upstream project',
                         click () {
                             shell.openExternal('https://eugeny.github.io/tabby')
                         },

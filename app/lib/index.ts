@@ -26,7 +26,7 @@ function ensureDevMode (): void {
     try {
         const appPath = app.getAppPath()
         const repoRoot = path.dirname(appPath)
-        if (fs.existsSync(path.join(repoRoot, 'tabby-core', 'package.json'))) {
+        if (fs.existsSync(path.join(repoRoot, 'issh-core', 'package.json'))) {
             process.env.TABBY_DEV = '1'
         }
     } catch {

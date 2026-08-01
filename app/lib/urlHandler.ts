@@ -1,14 +1,14 @@
 import { createParserConfig } from './cli'
 import { parse as parseShellCommand } from 'shell-quote'
 
-export function isTabbyURL (arg: string): boolean {
+export function isISSHURL (arg: string): boolean {
     const lowerArg = arg.toLowerCase()
     return lowerArg.startsWith('issh://') || lowerArg.startsWith('tabby://')
 }
 
-export function parseTabbyURL (url: string, cwd: string = process.cwd()): any {
+export function parseISSHURL (url: string, cwd: string = process.cwd()): any {
     try {
-        if (!isTabbyURL(url)) {
+        if (!isISSHURL(url)) {
             return null
         }
 

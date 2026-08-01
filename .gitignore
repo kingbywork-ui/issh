@@ -32,6 +32,7 @@ docs/api
 *.ntvs*
 *.njsproj
 *.sln
+!issh-uac/UAC.sln
 .travis.ssh.key
 *.code-workspace
 .idea/
@@ -82,7 +83,7 @@ main.js
 .psacowork/
 
 # Tabby LLM
-tabby-llm/AUTOCOMPLETE_REGRESSION_PLAYBOOK.md
+issh-llm/AUTOCOMPLETE_REGRESSION_PLAYBOOK.md
 
 # Security audit
 SECURITY_REMEDIATION_*.md

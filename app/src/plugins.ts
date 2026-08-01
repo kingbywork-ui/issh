@@ -2,7 +2,7 @@ import * as fsSync from 'fs'
 import * as fs from 'mz/fs'
 import * as path from 'path'
 import * as remote from '@electron/remote'
-import { PluginInfo } from '../../tabby-core/src/api/mainProcess'
+import { PluginInfo } from '../../issh-core/src/api/mainProcess'
 import { PLUGIN_BLACKLIST } from './pluginBlacklist'
 
 const nodeModule = require('module') // eslint-disable-line @typescript-eslint/no-var-requires
@@ -23,7 +23,7 @@ function resolveBuiltinPluginsPath (): string {
         return path.dirname(remote.app.getAppPath())
     }
     const repoRoot = path.dirname(remote.app.getAppPath())
-    if (fsSync.existsSync(path.join(repoRoot, 'tabby-core', 'package.json'))) {
+    if (fsSync.existsSync(path.join(repoRoot, 'issh-core', 'package.json'))) {
         process.env.TABBY_DEV = '1'
         return repoRoot
     }
@@ -53,11 +53,43 @@ const cachedBuiltinModules = {
 
 const builtinModules = [
     ...Object.keys(cachedBuiltinModules),
-    'tabby-core',
-    'tabby-local',
-    'tabby-settings',
-    'tabby-terminal',
+    'issh-core',
+    'issh-local',
+    'issh-settings',
+    'issh-terminal',
 ]
+
+const PLUGIN_PREFIX = 'issh-'
+const LEGACY_TABBY_PLUGIN_PREFIX = 'tabby-'
+const LEGACY_TERMINUS_PLUGIN_PREFIX = 'terminus-'
+const PLUGIN_PREFIXES = [PLUGIN_PREFIX, LEGACY_TABBY_PLUGIN_PREFIX, LEGACY_TERMINUS_PLUGIN_PREFIX]
+const PLUGIN_KEYWORDS = [
+    'issh-plugin',
+    'issh-builtin-plugin',
+    'tabby-plugin',
+    'tabby-builtin-plugin',
+    'terminus-plugin',
+    'terminus-builtin-plugin',
+]
+
+function cachePluginModule (packageName: string, packageModule: any): void {
+    cachedBuiltinModules[packageName] = packageModule
+
+    for (const prefix of PLUGIN_PREFIXES) {
+        if (packageName.startsWith(prefix)) {
+            const suffix = packageName.substring(prefix.length)
+            for (const aliasPrefix of PLUGIN_PREFIXES) {
+                cachedBuiltinModules[`${aliasPrefix}${suffix}`] = packageModule
+            }
+            break
+        }
+    }
+}
+
+function getPluginName (packageName: string): string {
+    const prefix = PLUGIN_PREFIXES.find(x => packageName.startsWith(x))
+    return prefix ? packageName.substring(prefix.length) : packageName
+}
 
 const originalRequire = (global as any).require
 ;(global as any).require = function (query: string) {
@@ -100,14 +132,10 @@ export function initModuleLookup (userPluginsPath: string): void {
     nodeModule._initPaths()
 
     builtinModules.forEach(m => {
-        if (!cachedBuiltinModules[m]) {
-            cachedBuiltinModules[m] = nodeRequire(m)
-        }
+        const packageModule = cachedBuiltinModules[m] ?? nodeRequire(m)
+        cachePluginModule(m, packageModule)
     })
 }
-
-const PLUGIN_PREFIX = 'tabby-'
-const LEGACY_PLUGIN_PREFIX = 'terminus-'
 
 async function getCandidateLocationsInPluginDir (pluginDir: any): Promise<{ pluginDir: string, packageName: string }[]> {
     const candidateLocations: { pluginDir: string, packageName: string }[] = []
@@ -124,7 +152,7 @@ async function getCandidateLocationsInPluginDir (pluginDir: any): Promise<{ plug
         const promises = []
 
         for (const packageName of pluginNames) {
-            if ((packageName.startsWith(PLUGIN_PREFIX) || packageName.startsWith(LEGACY_PLUGIN_PREFIX)) && !PLUGIN_BLACKLIST.includes(packageName)) {
+            if (PLUGIN_PREFIXES.some(x => packageName.startsWith(x)) && !PLUGIN_BLACKLIST.includes(packageName)) {
                 const pluginPath = path.join(pluginDir, packageName)
                 const infoPath = path.join(pluginPath, 'package.json')
                 promises.push(fs.exists(infoPath).then(result => {
@@ -170,12 +198,12 @@ async function parsePluginInfo (pluginDir: string, packageName: string): Promise
     const pluginPath = path.join(pluginDir, packageName)
     const infoPath = path.join(pluginPath, 'package.json')
 
-    const name = packageName.startsWith(PLUGIN_PREFIX) ? packageName.substring(PLUGIN_PREFIX.length) : packageName.substring(LEGACY_PLUGIN_PREFIX.length)
+    const name = getPluginName(packageName)
 
     try {
         const info = JSON.parse(await fs.readFile(infoPath, { encoding: 'utf-8' }))
 
-        if (!info.keywords || !(info.keywords.includes('terminus-plugin') || info.keywords.includes('terminus-builtin-plugin') || info.keywords.includes('tabby-plugin') || info.keywords.includes('tabby-builtin-plugin'))) {
+        if (!info.keywords || !PLUGIN_KEYWORDS.some(x => info.keywords.includes(x))) {
             return null
         }
 
@@ -188,7 +216,7 @@ async function parsePluginInfo (pluginDir: string, packageName: string): Promise
             name: name,
             packageName: packageName,
             isBuiltin: pluginDir === resolveBuiltinPluginsPath(),
-            isLegacy: info.keywords.includes('terminus-plugin') || info.keywords.includes('terminus-builtin-plugin'),
+            isLegacy: packageName.startsWith(LEGACY_TABBY_PLUGIN_PREFIX) || packageName.startsWith(LEGACY_TERMINUS_PLUGIN_PREFIX),
             version: info.version,
             description: info.description,
             author,
@@ -255,9 +283,7 @@ export async function loadPlugins (foundPlugins: PluginInfo[], progress: Progres
             console.info(`Loading ${foundPlugin.name}: ${nodeRequire.resolve(foundPlugin.path)}`)
             try {
                 const packageModule = nodeRequire(foundPlugin.path)
-                if (foundPlugin.packageName.startsWith('tabby-')) {
-                    cachedBuiltinModules[foundPlugin.packageName.replace('tabby-', 'terminus-')] = packageModule
-                }
+                cachePluginModule(foundPlugin.packageName, packageModule)
                 const pluginModule = packageModule.default.forRoot ? packageModule.default.forRoot() : packageModule.default
                 pluginModule.pluginName = foundPlugin.name
                 pluginModule.bootstrap = packageModule.bootstrap

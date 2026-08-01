@@ -16,7 +16,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 
 import { getRootModule } from './app.module'
-import { BootstrapData, BOOTSTRAP_DATA, PluginInfo } from '../../tabby-core/src/api/mainProcess'
+import { BootstrapData, BOOTSTRAP_DATA, PluginInfo } from '../../issh-core/src/api/mainProcess'
 
 // Always land on the start view
 location.hash = ''

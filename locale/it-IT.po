@@ -1,2479 +1,2850 @@
 msgid ""
 msgstr ""
-"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Type: text/plain; charset=utf-8\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
-"X-Crowdin-Project: tabby\n"
-"X-Crowdin-Project-ID: 493349\n"
-"X-Crowdin-Language: it\n"
-"X-Crowdin-File: /locale/app.pot\n"
-"X-Crowdin-File-ID: 75\n"
-"Project-Id-Version: tabby\n"
+"Project-Id-Version: issh\n"
 "Language-Team: Italian\n"
 "Language: it_IT\n"
 "PO-Revision-Date: 2025-01-22 22:02\n"
 
-#: tabby-local/src/components/terminalTab.component.ts:113
+#: issh-local/src/components/terminalTab.component.ts:114
 msgid "\"{command}\" is still running. Close?"
 msgstr "\"{command}\" è ancora in esecuzione. Chiudere?"
 
-#: tabby-settings/src/components/profilesSettingsTab.component.ts:78
-#: tabby-settings/src/components/profilesSettingsTab.component.ts:88
-msgid "{name} copy"
-msgstr "{name} copia"
-
-#: locale/tmp-html/tabby-terminal/src/components/appearanceSettingsTab.component.html:77
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:77
 msgid "A second font family used to display characters missing in the main font"
-msgstr "Un set di caratteri secondario usato per mostrare quelli mancanti del font principale"
+msgstr ""
+"Un set di caratteri secondario usato per mostrare quelli mancanti del font "
+"principale"
 
-#: tabby-core/src/components/transfersMenu.component.ts:49
+#: issh-settings/src/components/settingsTab.component.ts:47
+msgid "AI & agents"
+msgstr ""
+
+#: issh-llm/src/hotkeys.ts:11
+msgid "AI 命令补全"
+msgstr ""
+
+#: issh-llm/src/tabLLMController.ts:638
+msgid "AI 请求失败：{error}"
+msgstr ""
+
+#: issh-core/src/components/transfersMenu.component.ts:55
 msgid "Abort all"
 msgstr "Annulla tutto"
 
-#: locale/tmp-html/tabby-ssh/src/components/hostKeyPromptModal.component.html:24
+#: issh-terminal/src/features/zmodem.ts:41
+msgid "Accept"
+msgstr ""
+
+#: issh-terminal/src/features/zmodem.ts:38
+msgid "Accept a ZMODEM session?"
+msgstr ""
+
+#: locale/tmp-html/issh-ssh/src/components/hostKeyPromptModal.component.html:24
 msgid "Accept and remember key"
 msgstr "Accetta e ricorda chiave"
 
-#: locale/tmp-html/tabby-ssh/src/components/hostKeyPromptModal.component.html:25
+#: locale/tmp-html/issh-ssh/src/components/hostKeyPromptModal.component.html:25
 msgid "Accept just this once"
 msgstr "Accetta solo questa volta"
 
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:84
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:44
 msgid "Accessibility"
 msgstr "Accessibilità"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:27
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:27
 msgid "Acrylic background"
 msgstr "Sfondo acrilico"
 
-#: locale/tmp-html/tabby-local/src/components/commandLineEditor.component.html:24
-#: locale/tmp-html/tabby-local/src/components/environmentEditor.component.html:11
+#: locale/tmp-html/issh-local/src/components/commandLineEditor.component.html:24
+#: locale/tmp-html/issh-local/src/components/environmentEditor.component.html:11
 msgid "Add"
 msgstr "Aggiungi"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshPortForwardingConfig.component.html:16
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:16
 msgid "Add a port forward"
 msgstr "Configura un inoltro di porta"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:115
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:134
 msgid "Add a private key"
 msgstr "Aggiungi una chiave privata"
 
-#: locale/tmp-html/tabby-settings/src/components/multiHotkeyInput.component.html:8
+#: locale/tmp-html/issh-settings/src/components/multiHotkeyInput.component.html:8
 msgid "Add..."
 msgstr "Aggiungi..."
 
-#: locale/tmp-html/tabby-terminal/src/components/appearanceSettingsTab.component.html:84
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:84
 msgid "Additional space between lines"
 msgstr "Spazio aggiuntivo tra le righe"
 
-#: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:22
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:61
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:64
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:124
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:159
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:143
 msgid "Advanced"
 msgstr "Avanzate"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:90
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:109
 msgid "Agent"
 msgstr "Agente"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:134
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:153
 msgid "Agent forwarding"
 msgstr "Inoltro dell'agente"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshSettingsTab.component.html:35
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:51
 msgid "Agent pipe path"
 msgstr "Percorso pipe agente"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshSettingsTab.component.html:24
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:40
 msgid "Agent type"
 msgstr "Tipo di agente"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:169
-msgid "Allows opening .bat files in tabs, but breaks some shells"
-msgstr "Permetti l'apertura di file .bat nelle schede, potrebbe bloccare alcune shell"
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:9
+msgid "All"
+msgstr ""
 
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:60
+#: issh-settings/src/components/profilesSettingsTab.component.ts:15
+msgid "All environments"
+msgstr ""
+
+#: issh-terminal/src/components/batchInputModal.component.ts:113
+#: issh-terminal/src/components/batchInputPanel.component.ts:134
+msgid "All tabs"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:176
+msgid "Allows opening .bat files in tabs, but breaks some shells"
+msgstr ""
+"Permetti l'apertura di file .bat nelle schede, potrebbe bloccare alcune "
+"shell"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:20
 msgid "Allows quickly opening a terminal in the selected folder"
 msgstr "Permetti l'apertura rapida di un terminale nella cartella selezionata"
 
-#: locale/tmp-html/tabby-core/src/components/welcomeTab.component.html:25
-#: locale/tmp-html/tabby-terminal/src/components/colorSchemeSettingsTab.component.html:11
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:25
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:11
 msgid "Always dark"
 msgstr "Sempre scuro"
 
-#: locale/tmp-html/tabby-core/src/components/welcomeTab.component.html:27
-#: locale/tmp-html/tabby-terminal/src/components/colorSchemeSettingsTab.component.html:13
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:27
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:13
 msgid "Always light"
 msgstr "Sempre chiaro"
 
-#: locale/tmp-html/tabby-terminal/src/components/appearanceSettingsTab.component.html:2
-#: tabby-terminal/src/settings.ts:14
+#: issh-settings/src/components/settingsTab.component.ts:45
+#: issh-terminal/src/settings.ts:14
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:2
 msgid "Appearance"
 msgstr "Aspetto"
 
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:4
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:4
 msgid "Application"
 msgstr "Applicazione"
 
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:47
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:7
 msgid "Application settings"
 msgstr "Impostazioni applicazione"
 
-#: tabby-core/src/services/config.service.ts:440
+#: issh-settings/src/components/profilesSettingsTab.component.ts:16
+msgid "Apply environment"
+msgstr ""
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:17
+msgid "Apply tags"
+msgstr ""
+
+#: issh-core/src/services/config.service.ts:486
 msgid "Are you sure?"
 msgstr "Sei sicuro?"
 
-#: locale/tmp-html/tabby-local/src/components/commandLineEditor.component.html:18
+#: locale/tmp-html/issh-local/src/components/commandLineEditor.component.html:18
 msgid "Arguments"
 msgstr "Argomenti"
 
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:26
-msgid "Ask a question"
-msgstr "Fai una domanda"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:20
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:20
 msgid "Ask before closing the browser tab"
 msgstr "Chiedi conferma prima di chiudere una scheda"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:141
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:148
 msgid "Audible"
 msgstr "Sonore"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:74
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:93
 msgid "Authentication method"
 msgstr "Metodo di autenticazione"
 
-#: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:50
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:78
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:50
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:97
 msgid "Auto"
 msgstr "Automatico"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:153
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:160
 msgid "Auto-open a terminal on app start"
 msgstr "Apertura automatica di un terminale all'avvio dell'app"
 
-#: locale/tmp-html/tabby-core/src/components/welcomeTab.component.html:13
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:53
-#: locale/tmp-html/tabby-ssh/src/components/sshSettingsTab.component.html:28
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:13
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:13
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:44
 msgid "Automatic"
 msgstr "Automatico"
 
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:73
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:33
 msgid "Automatic Updates"
 msgstr "Aggiornamenti automatici"
 
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:54
-msgid "Automatically upload changes and check for updates every minute"
-msgstr "Carica automaticamente le modifiche e controlla gli aggiornamenti ogni minuto"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:35
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:35
 msgid "Background type"
 msgstr "Tipo di sfondo"
 
-#: locale/tmp-html/tabby-terminal/src/components/inputProcessingSettings.component.html:4
+#: locale/tmp-html/issh-terminal/src/components/inputProcessingSettings.component.html:4
 msgid "Backspace key mode"
 msgstr "Modalità tasto backspace"
 
-#: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:14
-#: tabby-serial/src/components/serialTab.component.ts:93
-#: tabby-serial/src/profiles.ts:88
+#: issh-serial/src/components/serialTab.component.ts:94
+#: issh-serial/src/profiles.ts:88
 msgid "Baud rate"
 msgstr "Velocità trasmissione"
 
-#: tabby-terminal/src/hotkeys.ts:22
+#: issh-terminal/src/hotkeys.ts:22
 msgid "Beginning of the line"
 msgstr "Inizio della riga"
 
-#: locale/tmp-html/tabby-terminal/src/components/appearanceSettingsTab.component.html:64
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:88
+msgid "Bind to all interfaces (0.0.0.0)?"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:64
 msgid "Blink cursor"
 msgstr "Cursore lampeggiante"
 
-#: tabby-core/src/utils.ts:60
+#: issh-core/src/utils.ts:60
 msgid "Blue"
 msgstr "Blu"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:39
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:39
 msgid "Blur"
 msgstr "Sfocatura"
 
-#: locale/tmp-html/tabby-terminal/src/components/appearanceSettingsTab.component.html:28
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:28
 msgid "Bold font weight"
 msgstr "Peso del carattere in grassetto"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:132
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:80
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:139
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:87
 msgid "Bottom"
 msgstr "In basso"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:109
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:109
 msgid "Bracketed paste (requires shell support)"
 msgstr "Incolla tra parentesi (richiede una shell che lo supporti)"
 
-#: tabby-terminal/src/services/multifocus.service.ts:19
+#: issh-terminal/src/services/multifocus.service.ts:19
 msgid "Broadcast mode. Click anywhere to cancel."
 msgstr "Modalità broadcast. Fai clic ovunque per disabilitare."
 
-#: tabby-core/src/services/profiles.service.ts:411
+#: issh-core/src/services/profiles.service.ts:524
 msgid "Built-in"
 msgstr "Integrato"
 
-#: locale/tmp-html/tabby-core/src/components/renameTabModal.component.html:7
-#: locale/tmp-html/tabby-settings/src/components/editProfileGroupModal.component.html:28
-#: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:71
-#: locale/tmp-html/tabby-settings/src/components/hotkeyInputModal.component.html:14
-#: locale/tmp-html/tabby-settings/src/components/setVaultPassphraseModal.component.html:12
-#: locale/tmp-html/tabby-ssh/src/components/sftpCreateDirectoryModal.component.html:10
-#: locale/tmp-html/tabby-ssh/src/components/sftpDeleteModal.component.html:7
-#: locale/tmp-html/tabby-terminal/src/components/colorSchemeSettingsForMode.component.html:31
-#: tabby-electron/src/services/updater.service.ts:134
-#: tabby-local/src/components/terminalTab.component.ts:118
-#: tabby-settings/src/components/configSyncSettingsTab.component.ts:117
-#: tabby-settings/src/components/configSyncSettingsTab.component.ts:79
-#: tabby-settings/src/components/configSyncSettingsTab.component.ts:99
-#: tabby-ssh/src/sftpContextMenu.ts:40
-#: tabby-terminal/src/api/baseTerminalTab.component.ts:522
+#: issh-electron/src/services/platform.service.ts:180
+#: issh-electron/src/services/updater.service.ts:133
+#: issh-local/src/cli.ts:53
+#: issh-local/src/components/terminalTab.component.ts:119
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:203
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:92
+#: issh-ssh/src/sftpContextMenu.ts:58
+#: issh-terminal/src/api/baseTerminalTab.component.ts:556
+#: issh-terminal/src/cli.ts:34
+#: locale/tmp-html/issh-core/src/components/renameTabModal.component.html:7
+#: locale/tmp-html/issh-settings/src/components/editProfileGroupModal.component.html:51
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:72
+#: locale/tmp-html/issh-settings/src/components/hotkeyInputModal.component.html:14
+#: locale/tmp-html/issh-settings/src/components/setVaultPassphraseModal.component.html:12
+#: locale/tmp-html/issh-ssh/src/components/sftpCreateDirectoryModal.component.html:10
+#: locale/tmp-html/issh-ssh/src/components/sftpDeleteModal.component.html:7
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsForMode.component.html:31
 msgid "Cancel"
 msgstr "Annulla"
 
-#: locale/tmp-html/tabby-serial/src/components/serialTab.component.html:4
-msgid "Change baud rate"
-msgstr "Modifica velocità di trasmissione"
-
-#: tabby-core/src/tabContextMenu.ts:133
+#: issh-core/src/tabContextMenu.ts:133
 msgid "Change tab color"
 msgstr "Modifica il colore della scheda"
 
-#: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:12
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:12
 msgid "Change the master passphrase"
 msgstr "Modifica la frase segreta principale"
 
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:13
-msgid "Check for updates"
-msgstr "Verifica aggiornamenti"
-
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:172
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:176
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:191
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:195
 msgid "Ciphers"
 msgstr "Crittografie"
 
-#: locale/tmp-html/tabby-terminal/src/components/colorSchemeSelector.component.html:5
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSelector.component.html:5
 msgid "Clear"
 msgstr "Azzera"
 
-#: tabby-core/src/services/profiles.service.ts:248
+#: issh-core/src/services/profiles.service.ts:272
 msgid "Clear recent profiles"
 msgstr "Cancella profili recenti"
 
-#: tabby-terminal/src/hotkeys.ts:50
+#: issh-terminal/src/hotkeys.ts:50
 msgid "Clear terminal"
 msgstr "Azzera contenuto terminale"
 
-#: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:58
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:58
 msgid "Clear terminal after connection"
 msgstr "Azzera contenuto terminale dopo la connessione"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:94
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:94
 msgid "Clipboard"
 msgstr "Appunti"
 
-#: locale/tmp-html/tabby-core/src/components/safeModeModal.component.html:7
-#: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:53
-#: locale/tmp-html/tabby-settings/src/components/showSecretModal.component.html:10
-#: tabby-core/src/tabContextMenu.ts:33
+#: issh-core/src/tabContextMenu.ts:33
+#: locale/tmp-html/issh-core/src/components/safeModeModal.component.html:7
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:53
+#: locale/tmp-html/issh-settings/src/components/showSecretModal.component.html:10
+#: locale/tmp-html/issh-terminal/src/components/batchInputModal.component.html:35
 msgid "Close"
 msgstr "Chiudi"
 
-#: locale/tmp-html/tabby-core/src/components/welcomeTab.component.html:45
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:45
 msgid "Close and never show again"
 msgstr "Chiudi e non visualizzare più"
 
-#: tabby-core/src/hotkeys.ts:240
+#: issh-core/src/hotkeys.ts:240
 msgid "Close focused pane"
 msgstr "Chiudi riquadro in evidenza"
 
-#: tabby-core/src/tabContextMenu.ts:48
+#: issh-core/src/tabContextMenu.ts:48
 msgid "Close other tabs"
 msgstr "Chiudi le altre schede"
 
-#: tabby-core/src/hotkeys.ts:28
-#: tabby-core/src/tabContextMenu.ts:34
+#: issh-core/src/hotkeys.ts:28
+#: issh-core/src/tabContextMenu.ts:34
 msgid "Close tab"
 msgstr "Chiudi scheda"
 
-#: tabby-core/src/tabContextMenu.ts:64
+#: issh-core/src/tabContextMenu.ts:64
 msgid "Close tabs to the left"
 msgstr "Chiudi schede a sinistra"
 
-#: tabby-core/src/tabContextMenu.ts:56
+#: issh-core/src/tabContextMenu.ts:56
 msgid "Close tabs to the right"
 msgstr "Chiudi schede a destra"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:182
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:189
 msgid "Close the window after closing the last tab"
 msgstr "Chiude la finestra dopo aver chiuso l'ultima scheda"
 
-#: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:33
-#: tabby-core/src/tabContextMenu.ts:132
+#: issh-core/src/tabContextMenu.ts:132
+#: locale/tmp-html/issh-settings/src/components/editProfileGroupModal.component.html:29
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:33
 msgid "Color"
 msgstr "Colore"
 
-#: tabby-terminal/src/settings.ts:29
+#: issh-terminal/src/settings.ts:30
 msgid "Color scheme"
 msgstr "Tema terminale"
 
-#: locale/tmp-html/tabby-terminal/src/components/colorSchemeSettingsTab.component.html:2
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:2
 msgid "Color schemes"
 msgstr "Schemi colore"
 
-#: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:81
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:216
+#: locale/tmp-html/issh-local/src/components/localProfileSettings.component.html:25
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:245
 msgid "Colors"
 msgstr "Colori"
 
-#: tabby-core/src/hotkeys.ts:72
+#: issh-core/src/hotkeys.ts:72
 msgid "Combine all tabs into the current tab"
 msgstr "Unisci tutte le schede all'interno della scheda attuale"
 
-#: locale/tmp-html/tabby-local/src/components/commandLineEditor.component.html:4
+#: issh-settings/src/components/profilesSettingsTab.component.ts:18
+msgid "Comma-separated tags"
+msgstr ""
+
+#: issh-terminal/src/components/batchInputModal.component.ts:92
+#: issh-terminal/src/components/batchInputPanel.component.ts:110
+msgid "Command cannot be empty"
+msgstr ""
+
+#: locale/tmp-html/issh-local/src/components/commandLineEditor.component.html:4
 msgid "Command line"
 msgstr "Riga di comando"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:13
+#: locale/tmp-html/issh-terminal/src/components/batchInputModal.component.html:8
+msgid "Command or input"
+msgstr ""
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:13
 msgid "Command's stdin/stdout is used instead of a network connection"
 msgstr "Viene usato lo stdin/stdout invece di una connessione di rete"
 
-#: tabby-core/src/services/commands.service.ts:105
+#: issh-core/src/services/commands.service.ts:105
 msgid "Commands"
 msgstr "Comandi"
 
-#: tabby-core/src/theme.ts:16
-msgid "Compact (legacy)"
-msgstr "Compatto (legacy)"
-
-#: tabby-settings/src/components/configSyncSettingsTab.component.ts:126
-msgid "Config deleted"
-msgstr "Configurazione eliminata"
-
-#: tabby-settings/src/components/configSyncSettingsTab.component.ts:108
-msgid "Config downloaded"
-msgstr "Configurazione scaricata"
-
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:115
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:120
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:77
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:82
 msgid "Config file"
 msgstr "File configurazione"
 
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:2
-#: tabby-settings/src/settings.ts:73
+#: issh-settings/src/settings.ts:78
 msgid "Config sync"
 msgstr "Backup configurazione"
 
-#: tabby-settings/src/components/configSyncSettingsTab.component.ts:90
-msgid "Config uploaded"
-msgstr "Configurazione caricata"
-
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:31
-msgid "Configs"
-msgstr "Configurazioni"
-
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:21
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:21
 msgid "Connect through a proxy server"
 msgstr "Connetti tramite un server proxy"
 
-#: tabby-core/src/index.ts:220
-#: tabby-core/src/services/profiles.service.ts:296
+#: issh-core/src/index.ts:222
+#: issh-core/src/services/profiles.service.ts:320
 msgid "Connect to \"%s\"..."
 msgstr "Connessione a \"%s\"..."
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:17
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:17
 msgid "Connect to a different host first and use it as a proxy"
 msgstr "Connettiti prima ad un altro host e usalo come proxy"
 
-#: locale/tmp-html/tabby-ssh/src/components/sftpPanel.component.html:19
-#: tabby-serial/src/components/serialTab.component.ts:60
-#: tabby-ssh/src/components/sshTab.component.ts:130
+#: issh-serial/src/components/serialTab.component.ts:61
+#: issh-ssh/src/components/sshTab.component.ts:182
 msgid "Connecting"
 msgstr "In connessione"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:7
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:7
 msgid "Connection"
 msgstr "Connessione"
 
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:26
-msgid "Connection failed: {error}"
-msgstr "Connessione fallita: {error}"
-
-#: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:40
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:40
 msgid "Connection name will be used instead"
 msgstr "Verrà usato il nome della connessione"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:61
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:61
 msgid "Context menu"
 msgstr "Menu contestuale"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:14
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:91
+msgid "Continue"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:14
 msgid "Controls the amount of space between elements"
 msgstr "Controlla la quantità di spazio tra gli elementi"
 
-#: tabby-terminal/src/api/baseTerminalTab.component.ts:240
-#: tabby-terminal/src/api/baseTerminalTab.component.ts:248
-#: tabby-terminal/src/api/baseTerminalTab.component.ts:591
-#: tabby-terminal/src/api/baseTerminalTab.component.ts:811
-#: tabby-terminal/src/tabContextMenu.ts:34
+#: issh-terminal/src/api/baseTerminalTab.component.ts:243
+#: issh-terminal/src/api/baseTerminalTab.component.ts:251
+#: issh-terminal/src/api/baseTerminalTab.component.ts:619
+#: issh-terminal/src/api/baseTerminalTab.component.ts:839
+#: issh-terminal/src/tabContextMenu.ts:35
 msgid "Copied"
 msgstr "Copiato"
 
-#: tabby-terminal/src/tabContextMenu.ts:30
+#: issh-terminal/src/tabContextMenu.ts:31
 msgid "Copy"
 msgstr "Copia"
 
-#: tabby-terminal/src/hotkeys.ts:70
-#: tabby-terminal/src/tabContextMenu.ts:70
+#: issh-terminal/src/hotkeys.ts:70
+#: issh-terminal/src/tabContextMenu.ts:72
 msgid "Copy current path"
 msgstr "Copia percorso attuale"
 
-#: tabby-electron/src/sftpContextMenu.ts:29
+#: issh-electron/src/sftpContextMenu.ts:29
 msgid "Copy full path"
 msgstr "Copia percorso completo"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:97
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:97
 msgid "Copy on select"
 msgstr "Copia sulla selezione"
 
-#: tabby-terminal/src/hotkeys.ts:10
+#: issh-terminal/src/hotkeys.ts:10
 msgid "Copy to clipboard"
 msgstr "Copia negli appunti"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:103
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:103
 msgid "Copy with formatting"
 msgstr "Copia formattazione"
 
-#: tabby-core/src/services/config.service.ts:425
+#: issh-settings/src/components/vaultSettingsTab.component.ts:134
+msgid "Could not change the master passphrase"
+msgstr ""
+
+#: issh-core/src/services/config.service.ts:471
 msgid "Could not decrypt config"
 msgstr "Impossibile decifrare la configurazione"
 
-#: locale/tmp-html/tabby-ssh/src/components/sftpCreateDirectoryModal.component.html:9
+#: issh-settings/src/components/vaultSettingsTab.component.ts:181
+msgid "Could not delete the secret"
+msgstr ""
+
+#: issh-ssh/src/components/keyboardInteractiveAuthPanel.component.ts:61
+msgid "Could not save password"
+msgstr ""
+
+#: locale/tmp-html/issh-ssh/src/components/sftpCreateDirectoryModal.component.html:9
 msgid "Create"
 msgstr "Crea"
 
-#: locale/tmp-html/tabby-ssh/src/components/sftpPanel.component.html:7
-#: tabby-ssh/src/sftpContextMenu.ts:29
+#: issh-ssh/src/sftpContextMenu.ts:30
 msgid "Create directory"
 msgstr "Crea cartella"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:90
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:97
 msgid "Current"
 msgstr "Attuale"
 
-#: locale/tmp-html/tabby-terminal/src/components/colorSchemeSettingsForMode.component.html:3
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsForMode.component.html:3
 msgid "Current color scheme"
 msgstr "Tema in uso"
 
-#: locale/tmp-html/tabby-ssh/src/components/hostKeyPromptModal.component.html:17
+#: locale/tmp-html/issh-ssh/src/components/hostKeyPromptModal.component.html:17
 msgid "Current host key fingerprint"
 msgstr "Firma chiave host attuale"
 
-#: tabby-core/src/tabContextMenu.ts:184
+#: issh-core/src/tabContextMenu.ts:184
 msgid "Current process: {name}"
 msgstr "Processo attuale: {name}"
 
-#: locale/tmp-html/tabby-terminal/src/components/appearanceSettingsTab.component.html:51
+#: issh-terminal/src/components/batchInputModal.component.ts:112
+#: issh-terminal/src/components/batchInputPanel.component.ts:133
+msgid "Current tab"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:51
 msgid "Cursor shape"
 msgstr "Forma cursore"
 
-#: locale/tmp-html/tabby-terminal/src/components/colorSchemeSettingsForMode.component.html:46
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsForMode.component.html:46
 msgid "Custom"
 msgstr "Personalizzato"
 
-#: locale/tmp-html/tabby-terminal/src/components/appearanceSettingsTab.component.html:90
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:90
 msgid "Custom CSS"
 msgstr "CSS personalizzato"
 
-#: locale/tmp-html/tabby-terminal/src/components/colorSchemeSettingsTab.component.html:17
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:31
 msgid "Dark mode"
 msgstr "Tema scuro"
 
-#: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:26
-msgid "Data bits"
-msgstr "Bit di dati"
-
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:80
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:40
 msgid "Debugging"
 msgstr "Debugging"
 
-#: tabby-core/src/hotkeys.ts:256
+#: issh-core/src/hotkeys.ts:256
 msgid "Decrease horizontal split size"
 msgstr "Riduci la divisione orizzontale"
 
-#: tabby-core/src/hotkeys.ts:248
+#: issh-core/src/hotkeys.ts:248
 msgid "Decrease vertical split size"
 msgstr "Riduci la divisione verticale"
 
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:92
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:187
 msgid "Default \"Connect to\" type"
 msgstr "\"Connetti a\" predefinito"
 
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:93
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:188
 msgid "Default connection type used by quick connect feature (ex. SSH, Telnet)"
-msgstr "Tipo di connessione predefinita usato dalla funzione di connessione rapida (es. SSH, Telnet)"
+msgstr ""
+"Tipo di connessione predefinita usato dalla funzione di connessione rapida "
+"(es. SSH, Telnet)"
 
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:8
-msgid "Default profile for new tabs"
-msgstr "Profilo predefinito per le nuove schede"
-
-#: locale/tmp-html/tabby-settings/src/components/editProfileGroupModal.component.html:16
+#: locale/tmp-html/issh-settings/src/components/editProfileGroupModal.component.html:39
 msgid "Default profile group settings"
 msgstr "Impostazioni predefinite profilo di gruppo"
 
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:101
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:196
 msgid "Default profile settings"
 msgstr "Impostazioni del profilo predefinito"
 
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:124
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:86
 msgid "Defaults"
 msgstr "PredefinitI"
 
-#: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:6
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:6
 msgid "Defaults for {type}"
 msgstr "Predefiniti per {type}"
 
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:44
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:51
-#: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:29
-#: locale/tmp-html/tabby-terminal/src/components/colorSchemeSettingsForMode.component.html:8
-#: tabby-settings/src/components/configSyncSettingsTab.component.ts:116
-#: tabby-settings/src/components/editProfileGroupModal.component.ts:38
-#: tabby-settings/src/components/profilesSettingsTab.component.ts:130
-#: tabby-settings/src/components/profilesSettingsTab.component.ts:215
-#: tabby-settings/src/components/profilesSettingsTab.component.ts:229
-#: tabby-settings/src/components/profilesSettingsTab.component.ts:318
-#: tabby-settings/src/components/vaultSettingsTab.component.ts:52
-#: tabby-ssh/src/sftpContextMenu.ts:39
-#: tabby-ssh/src/sftpContextMenu.ts:47
-#: tabby-terminal/src/components/colorSchemeSettingsForMode.component.ts:92
-#: tabby-terminal/src/components/loginScriptsSettings.component.ts:32
+#: issh-settings/src/components/editProfileGroupModal.component.ts:119
+#: issh-settings/src/components/profilesSettingsTab.component.ts:191
+#: issh-settings/src/components/profilesSettingsTab.component.ts:279
+#: issh-settings/src/components/profilesSettingsTab.component.ts:293
+#: issh-settings/src/components/profilesSettingsTab.component.ts:396
+#: issh-settings/src/components/vaultSettingsTab.component.ts:99
+#: issh-ssh/src/sftpContextMenu.ts:57
+#: issh-ssh/src/sftpContextMenu.ts:65
+#: issh-terminal/src/components/colorSchemeSettingsForMode.component.ts:92
+#: issh-terminal/src/components/loginScriptsSettings.component.ts:33
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:143
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:29
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsForMode.component.html:8
 msgid "Delete"
 msgstr "Elimina"
 
-#: tabby-settings/src/components/profilesSettingsTab.component.ts:128
-#: tabby-settings/src/components/profilesSettingsTab.component.ts:213
-#: tabby-terminal/src/components/colorSchemeSettingsForMode.component.ts:90
+#: issh-settings/src/components/profilesSettingsTab.component.ts:189
+#: issh-settings/src/components/profilesSettingsTab.component.ts:277
+#: issh-terminal/src/components/colorSchemeSettingsForMode.component.ts:90
 msgid "Delete \"{name}\"?"
 msgstr "Vuoi eliminare \"{name}\"?"
 
-#: tabby-ssh/src/sftpContextMenu.ts:35
-msgid "Delete {fullPath}?"
-msgstr "Vuoi eliminare {fullPath}?"
-
-#: tabby-terminal/src/hotkeys.ts:42
+#: issh-terminal/src/hotkeys.ts:42
 msgid "Delete entire line"
 msgstr "Elimina tutta la riga"
 
-#: tabby-terminal/src/hotkeys.ts:46
+#: issh-terminal/src/hotkeys.ts:46
 msgid "Delete next word"
 msgstr "Elimina parola successiva"
 
-#: tabby-terminal/src/hotkeys.ts:38
+#: issh-terminal/src/hotkeys.ts:38
 msgid "Delete previous word"
 msgstr "Elimina parola precedente"
 
-#: tabby-settings/src/components/configSyncSettingsTab.component.ts:114
-msgid "Delete the config on the remote side?"
-msgstr "Vuoi eliminare la configurazione sul dispositivo remoto?"
-
-#: tabby-settings/src/components/profilesSettingsTab.component.ts:226
+#: issh-settings/src/components/profilesSettingsTab.component.ts:290
 msgid "Delete the group's profiles?"
 msgstr "Vuoi eliminare i profili del gruppo?"
 
-#: tabby-terminal/src/components/loginScriptsSettings.component.ts:29
+#: issh-terminal/src/components/loginScriptsSettings.component.ts:30
 msgid "Delete this script?"
 msgstr "Vuoi eliminare questo script?"
 
-#: tabby-settings/src/components/vaultSettingsTab.component.ts:50
+#: issh-settings/src/components/vaultSettingsTab.component.ts:97
 msgid "Delete vault contents?"
 msgstr "Vuoi eliminare il contenuto della cassaforte?"
 
-#: locale/tmp-html/tabby-ssh/src/components/sftpDeleteModal.component.html:3
+#: issh-ssh/src/sftpContextMenu.ts:53
+msgid "Delete {fullPath}?"
+msgstr "Vuoi eliminare {fullPath}?"
+
+#: locale/tmp-html/issh-ssh/src/components/sftpDeleteModal.component.html:3
 msgid "Deleting"
 msgstr "Eliminazione"
 
-#: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:8
-msgid "Device"
-msgstr "Dispositivo"
-
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:10
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:10
 msgid "Direct"
 msgstr "Diretto"
 
-#: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:39
-msgid "Disable dynamic tab title"
-msgstr "Disabilita il titolo dinamico per la scheda"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:218
-msgid "Disable fluent background while dragging"
-msgstr "Disabilita lo sfondo fluente durante il trascinamento"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:204
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:211
 msgid "Disable GPU acceleration"
 msgstr "Disabilita accelerazione GPU"
 
-#: locale/tmp-html/tabby-ssh/src/components/hostKeyPromptModal.component.html:26
-#: tabby-ssh/src/components/sshTab.component.ts:200
-#: tabby-terminal/src/api/connectableTerminalTab.component.ts:36
-#: tabby-terminal/src/tabContextMenu.ts:106
-#: tabby-terminal/src/tabContextMenu.ts:110
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:39
+msgid "Disable dynamic tab title"
+msgstr "Disabilita il titolo dinamico per la scheda"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:225
+msgid "Disable fluent background while dragging"
+msgstr "Disabilita lo sfondo fluente durante il trascinamento"
+
+#: issh-ssh/src/components/sshTab.component.ts:259
+#: issh-terminal/src/api/connectableTerminalTab.component.ts:36
+#: issh-terminal/src/tabContextMenu.ts:114
+#: issh-terminal/src/tabContextMenu.ts:118
+#: locale/tmp-html/issh-ssh/src/components/hostKeyPromptModal.component.html:26
 msgid "Disconnect"
 msgstr "Disconnetti"
 
-#: tabby-terminal/src/hotkeys.ts:106
+#: issh-terminal/src/hotkeys.ts:114
 msgid "Disconnect current tab (Serial/Telnet/SSH)"
 msgstr "Disconnetti la scheda attuale (serial/telnet/SSH)"
 
-#: tabby-ssh/src/components/sshTab.component.ts:198
+#: issh-ssh/src/components/sshTab.component.ts:257
 msgid "Disconnect from {host}?"
 msgstr "Vuoi disconnetti da {host}?"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:30
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:30
 msgid "Display images via Sixel escape sequences"
 msgstr "Visualizza le immagini tramite sequenze di escape di Sixel"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:85
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:92
 msgid "Display on"
 msgstr "Visualizza in"
 
-#: tabby-core/src/components/transfersMenu.component.ts:50
+#: issh-core/src/components/transfersMenu.component.ts:56
 msgid "Do not abort"
 msgstr "Non interrompere"
 
-#: tabby-ssh/src/components/sshTab.component.ts:201
+#: issh-ssh/src/components/sshTab.component.ts:260
 msgid "Do not close"
 msgstr "Non chiudere"
 
-#: locale/tmp-html/tabby-core/src/components/unlockVaultModal.component.html:6
-#: locale/tmp-html/tabby-core/src/components/unlockVaultModal.component.html:8
+#: locale/tmp-html/issh-core/src/components/unlockVaultModal.component.html:6
+#: locale/tmp-html/issh-core/src/components/unlockVaultModal.component.html:8
 msgid "Do not remember"
 msgstr "Non ricordare"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:97
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:104
 msgid "Dock always on top"
 msgstr "Visualizza sempre in primo piano"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:67
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:74
 msgid "Dock the terminal"
 msgstr "Aggancia il terminale"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:104
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:111
 msgid "Docked terminal size"
 msgstr "Dimensione del terminale agganciato"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:111
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:118
 msgid "Docked terminal space"
 msgstr "Margine del terminale agganciato"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:64
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:71
 msgid "Docking"
 msgstr "Aggancia"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:75
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:75
 msgid "Double-click selection will stop at these characters"
 msgstr "La selezione con doppio clic si fermerà a questi caratteri"
 
-#: tabby-core/src/tabContextMenu.ts:79
+#: issh-core/src/tabContextMenu.ts:79
 msgid "Down"
 msgstr "In basso"
 
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:43
+#: issh-ssh/src/sftpContextMenu.ts:45
 msgid "Download"
 msgstr "Scarica"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:23
+#: issh-ssh/src/sftpContextMenu.ts:38
+msgid "Download directory"
+msgstr ""
+
+#: issh-electron/src/services/platform.service.ts:323
+msgid "Download here"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:23
 msgid "Draw bold text in bright colors"
 msgstr "Evidenzia il testo in grassetto con colori chiari"
 
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:48
-#: tabby-core/src/tabContextMenu.ts:127
+#: issh-core/src/tabContextMenu.ts:127
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:140
 msgid "Duplicate"
 msgstr "Duplica"
 
-#: tabby-local/src/tabContextMenu.ts:72
+#: issh-settings/src/components/profilesSettingsTab.component.ts:123
+msgid "Duplicate an existing profile"
+msgstr ""
+
+#: issh-local/src/tabContextMenu.ts:72
 msgid "Duplicate as administrator"
 msgstr "Duplica come amministratore"
 
-#: tabby-core/src/hotkeys.ts:60
-#: tabby-core/src/tabContextMenu.ts:128
+#: issh-core/src/hotkeys.ts:60
+#: issh-core/src/tabContextMenu.ts:128
 msgid "Duplicate tab"
 msgstr "Duplica la scheda"
 
-#: locale/tmp-html/tabby-terminal/src/components/colorSchemeSettingsForMode.component.html:6
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:139
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsForMode.component.html:6
 msgid "Edit"
 msgstr "Modifica"
 
-#: tabby-electron/src/sftpContextMenu.ts:35
+#: issh-electron/src/sftpContextMenu.ts:35
 msgid "Edit locally"
 msgstr "Modifica in locale"
 
-#: locale/tmp-html/tabby-core/src/components/welcomeTab.component.html:32
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:66
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:32
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:26
 msgid "Enable analytics"
 msgstr "Abilita dati analitici"
 
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:87
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:47
 msgid "Enable animations"
 msgstr "Abilita animazioni"
 
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:74
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:34
 msgid "Enable automatic installation of updates when they become available."
 msgstr "Abilita l'installazione automatica degli aggiornamenti quando disponibili."
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:211
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:218
 msgid "Enable fluent background option"
 msgstr "Abilita opzione di sfondo fluente"
 
-#: locale/tmp-html/tabby-terminal/src/components/appearanceSettingsTab.component.html:16
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:16
 msgid "Enable font ligatures"
 msgstr "Abilita le legature tra font"
 
-#: locale/tmp-html/tabby-core/src/components/welcomeTab.component.html:39
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:39
 msgid "Enable global hotkey (Ctrl-Space)"
 msgstr "Abilita tasto di scelta rapida globale (Ctrl-Space)"
 
-#: locale/tmp-html/tabby-local/src/components/shellSettingsTab.component.html:6
+#: locale/tmp-html/issh-local/src/components/shellSettingsTab.component.html:6
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:7
 msgid "Enables the experimental Windows ConPTY API"
 msgstr "Abilita l'API sperimentale di Windows ConPTY"
 
-#: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:37
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:37
 msgid "Encrypt config file"
 msgstr "Cifra il file di configurazione"
 
-#: tabby-terminal/src/hotkeys.ts:26
+#: issh-terminal/src/hotkeys.ts:26
 msgid "End of the line"
 msgstr "Fine della riga"
 
-#: locale/tmp-html/tabby-local/src/components/localProfileSettings.component.html:17
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:45
+msgid "Enter your master passphrase to unlock. Access valid for 10 minutes."
+msgstr ""
+
+#: locale/tmp-html/issh-local/src/components/localProfileSettings.component.html:20
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:81
 msgid "Environment"
 msgstr "Ambiente"
 
-#: tabby-core/src/services/config.service.ts:429
-#: tabby-core/src/services/config.service.ts:443
+#: issh-core/src/services/config.service.ts:475
+#: issh-core/src/services/config.service.ts:489
 msgid "Erase config"
 msgstr "Cancella configurazione"
 
-#: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:12
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:12
 msgid "Erase the Vault"
 msgstr "Cancella cassaforte"
 
-#: locale/tmp-html/tabby-terminal/src/components/loginScriptsSettings.component.html:10
+#: locale/tmp-html/issh-terminal/src/components/loginScriptsSettings.component.html:10
 msgid "Exact match"
 msgstr "Corrispondenza esatta"
 
-#: locale/tmp-html/tabby-local/src/components/environmentEditor.component.html:15
+#: locale/tmp-html/issh-local/src/components/environmentEditor.component.html:15
 msgid "Example:"
 msgstr "Esempio:"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:212
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:219
 msgid "Experimental Windows 10 background style known to cause issues"
 msgstr "Sfondo sperimentale basati sullo stile di Windows 10, sono noti dei problemi"
 
-#: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:28
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:28
 msgid "Export"
 msgstr "Esporta"
 
-#: locale/tmp-html/tabby-terminal/src/components/appearanceSettingsTab.component.html:76
+#: issh-electron/src/terminalContextMenu.ts:23
+msgid "Export to file"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:236
+msgid "Failed to generate sync key"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:76
 msgid "Fallback font"
 msgstr "Carattere sostitutivo"
 
-#: locale/tmp-html/tabby-core/src/components/transfersMenu.component.html:3
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:75
+msgid "Favorite"
+msgstr ""
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:12
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:10
+msgid "Favorites"
+msgstr ""
+
+#: locale/tmp-html/issh-core/src/components/transfersMenu.component.html:3
 msgid "File transfers"
 msgstr "Trasferimento file"
 
-#: tabby-settings/src/components/vaultSettingsTab.component.ts:96
+#: issh-settings/src/components/vaultSettingsTab.component.ts:158
 msgid "File: {description}"
 msgstr "File: {description}"
 
-#: tabby-settings/src/components/profilesSettingsTab.component.ts:9
+#: issh-settings/src/components/profilesSettingsTab.component.ts:9
 msgid "Filter"
 msgstr "Filtra"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:147
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:73
+msgid "Fingerprint copied"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:154
 msgid "Fixed"
 msgstr "Fissa"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:219
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:124
+msgid ""
+"Flatten pasted text into a single line for terminals that do not support "
+"multiline paste"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:226
 msgid "Fluent background sometimes causes drag lag"
 msgstr "Lo sfondo fluente può causare ritardo nel trascinamento"
 
-#: tabby-terminal/src/tabContextMenu.ts:82
+#: issh-terminal/src/tabContextMenu.ts:90
 msgid "Focus all panes"
 msgstr "Evidenzia tutti i riquadri"
 
-#: tabby-terminal/src/hotkeys.ts:78
+#: issh-terminal/src/hotkeys.ts:78
 msgid "Focus all panes at once (broadcast)"
 msgstr "Evidenzia tutti i riquadri contemporaneamente (scrivi su tutti)"
 
-#: tabby-terminal/src/tabContextMenu.ts:75
+#: issh-terminal/src/tabContextMenu.ts:83
 msgid "Focus all tabs"
 msgstr "Utilizza tutte le schede"
 
-#: tabby-terminal/src/hotkeys.ts:82
+#: issh-terminal/src/hotkeys.ts:82
 msgid "Focus all tabs at once (broadcast)"
 msgstr "Attiva tutte le schede contemporaneamente (broadcast)"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:196
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:203
 msgid "Focus follows mouse"
 msgstr "Il fuoco segue il mouse"
 
-#: tabby-core/src/hotkeys.ts:196
+#: issh-core/src/hotkeys.ts:196
 msgid "Focus next pane"
 msgstr "Evidenzia riquadro successivo"
 
-#: tabby-core/src/hotkeys.ts:200
-#: tabby-core/src/hotkeys.ts:204
-#: tabby-core/src/hotkeys.ts:208
-#: tabby-core/src/hotkeys.ts:212
-#: tabby-core/src/hotkeys.ts:216
-#: tabby-core/src/hotkeys.ts:220
-#: tabby-core/src/hotkeys.ts:224
-#: tabby-core/src/hotkeys.ts:228
-#: tabby-core/src/hotkeys.ts:232
+#: issh-core/src/hotkeys.ts:200
+#: issh-core/src/hotkeys.ts:204
+#: issh-core/src/hotkeys.ts:208
+#: issh-core/src/hotkeys.ts:212
+#: issh-core/src/hotkeys.ts:216
+#: issh-core/src/hotkeys.ts:220
+#: issh-core/src/hotkeys.ts:224
+#: issh-core/src/hotkeys.ts:228
+#: issh-core/src/hotkeys.ts:232
 msgid "Focus pane {number}"
 msgstr "Metti a fuoco il pannello {number}"
 
-#: tabby-core/src/hotkeys.ts:192
+#: issh-core/src/hotkeys.ts:192
 msgid "Focus previous pane"
 msgstr "Evidenzia riquadro precedente"
 
-#: tabby-core/src/hotkeys.ts:176
+#: issh-core/src/hotkeys.ts:176
 msgid "Focus the pane above"
 msgstr "Evidenzia il riquadro sopra"
 
-#: tabby-core/src/hotkeys.ts:180
+#: issh-core/src/hotkeys.ts:180
 msgid "Focus the pane below"
 msgstr "Evidenzia il riquadro sotto"
 
-#: tabby-core/src/hotkeys.ts:184
+#: issh-core/src/hotkeys.ts:184
 msgid "Focus the pane on the left"
 msgstr "Evidenzia il riquadro a sinistra"
 
-#: tabby-core/src/hotkeys.ts:188
+#: issh-core/src/hotkeys.ts:188
 msgid "Focus the pane on the right"
 msgstr "Evidenzia il riquadro a destra"
 
-#: tabby-core/src/theme.ts:34
+#: issh-core/src/theme.ts:8
 msgid "Follow the color scheme"
 msgstr "Segui il tema di sistema"
 
-#: locale/tmp-html/tabby-terminal/src/components/appearanceSettingsTab.component.html:5
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:5
 msgid "Font"
 msgstr "Carattere"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:190
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:197
 msgid "For keyboard shortcuts"
 msgstr "Per le scorciatoie da tastiera"
 
-#: tabby-terminal/src/components/streamProcessingSettings.component.ts:53
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:54
 msgid "Force CR"
 msgstr "Forza CR"
 
-#: tabby-terminal/src/components/streamProcessingSettings.component.ts:55
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:56
 msgid "Force CRLF"
 msgstr "Forza CRLF"
 
-#: tabby-terminal/src/components/streamProcessingSettings.component.ts:54
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:55
 msgid "Force LF"
 msgstr "Forza LF"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshSettingsTab.component.html:25
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:41
 msgid "Forces a specific SSH agent connection type."
 msgstr "Per la connessione SSH forza un tipo specifico di agente ."
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:105
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:124
 msgid "Forget"
 msgstr "Dimentica"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshPortForwardingConfig.component.html:45
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:45
 msgid "Forward port"
 msgstr "Inoltra porta"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshPortForwardingModal.component.html:3
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingModal.component.html:3
 msgid "Forwarded ports"
 msgstr "Porte inoltrate"
 
-#: locale/tmp-html/tabby-terminal/src/components/appearanceSettingsTab.component.html:46
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:46
 msgid "From color scheme"
 msgstr "Dal tema in uso"
 
-#: locale/tmp-html/tabby-core/src/components/welcomeTab.component.html:23
-#: locale/tmp-html/tabby-terminal/src/components/colorSchemeSettingsTab.component.html:9
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:23
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:9
 msgid "From system"
 msgstr "Di sistema"
 
-#: locale/tmp-html/tabby-terminal/src/components/appearanceSettingsTab.component.html:44
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:44
 msgid "From theme"
 msgstr "Dal tema"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:6
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:6
 msgid "Frontend"
 msgstr "Frontend"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:61
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:61
 msgid "Full"
 msgstr "Piena"
 
-#: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:3
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:3
+#: locale/tmp-html/issh-local/src/components/localProfileSettings.component.html:3
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:3
 msgid "General"
 msgstr "Generale"
 
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:21
-msgid "Generate a pre-filled GitHub issue"
-msgstr "Genera una segnalazione GitHub pre-compilata"
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:18
+msgid "Generate 256-color palette"
+msgstr ""
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:29
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:19
+msgid "Generate extended 256-color palette from your base 16 colors"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:29
 msgid "Gives the window a blurred transparent background"
 msgstr "Dona alla finestra una trasparenza sfocata per lo sfondo"
 
-#: locale/tmp-html/tabby-ssh/src/components/sftpPanel.component.html:24
-msgid "Go up"
-msgstr "Livello superiore"
-
-#: tabby-core/src/utils.ts:61
+#: issh-core/src/utils.ts:61
 msgid "Green"
 msgstr "Verde"
 
-#: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:16
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:16
 msgid "Group"
 msgstr "Gruppo"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:201
-msgid "Hacks"
-msgstr "Hack"
-
-#: locale/tmp-html/tabby-core/src/components/welcomeTab.component.html:33
-msgid "Help track the number of Tabby installs across the world!"
-msgstr "Aiuta a tenere traccia del numero di installazioni di Tabby nel mondo!"
-
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:50
-msgid "Help translate Tabby"
-msgstr "Partecipa alla traduzione di Tabby"
-
-#: tabby-terminal/src/components/streamProcessingSettings.component.ts:32
-#: tabby-terminal/src/components/streamProcessingSettings.component.ts:45
-msgid "Hexadecimal"
-msgstr "Esadecimale"
-
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:49
-msgid "Hide"
-msgstr "Nascondi"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:176
-msgid "Hide tab close button"
-msgstr "Nascondi pulsante di chiusura schede"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:158
-msgid "Hide tab index"
-msgstr "Nascondi numerazione delle schede"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:170
-msgid "Hide tab options button"
-msgstr "Pulsante per nascondere scheda opzioni"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:118
-msgid "Hide window on focus loss"
-msgstr "Nascondi la finestra quando in secondo piano"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:119
-msgid "Hides the docked terminal when you click away."
-msgstr "Nasconde il terminale agganciato quando si fa click fuori."
-
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:34
-msgid "Host"
-msgstr "Host"
-
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:206
-msgid "Host key"
-msgstr "Chiave host"
-
-#: locale/tmp-html/tabby-ssh/src/components/hostKeyPromptModal.component.html:3
-msgid "Host key verification"
-msgstr "Verifica della chiave host"
-
-#: locale/tmp-html/tabby-settings/src/components/hotkeySettingsTab.component.html:2
-#: tabby-settings/src/settings.ts:15
-msgid "Hotkeys"
-msgstr "Tasti scelta rapida"
-
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:83
-msgid "How Tabby presents itself through environment vars"
-msgstr "Come Tabby si presenta attraverso le variabili dell'ambiente"
-
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:24
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:24
 msgid "HTTP proxy"
 msgstr "Proxy HTTP"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:61
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:61
 msgid "HTTP proxy host"
 msgstr "Host proxy HTTP"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:65
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:65
 msgid "HTTP proxy port"
 msgstr "Porta proxy HTTP"
 
-#: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:20
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:208
+msgid "Hacks"
+msgstr "Hack"
+
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:25
+msgid "Harmonious palette"
+msgstr ""
+
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:33
+msgid "Help track the number of issh installs across the world!"
+msgstr "Aiuta a tenere traccia del numero di installazioni di issh nel mondo!"
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:33
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:46
+msgid "Hexadecimal"
+msgstr "Esadecimale"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:141
+msgid "Hide"
+msgstr "Nascondi"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:67
+msgid "Hide issh from tray or menu bar."
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:183
+msgid "Hide tab close button"
+msgstr "Nascondi pulsante di chiusura schede"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:165
+msgid "Hide tab index"
+msgstr "Nascondi numerazione delle schede"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:177
+msgid "Hide tab options button"
+msgstr "Pulsante per nascondere scheda opzioni"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:66
+msgid "Hide tray icon"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:125
+msgid "Hide window on focus loss"
+msgstr "Nascondi la finestra quando in secondo piano"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:126
+msgid "Hides the docked terminal when you click away."
+msgstr "Nasconde il terminale agganciato quando si fa click fuori."
+
+#: issh-local/src/buttonProvider.ts:19
+msgid "Home"
+msgstr ""
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:34
+msgid "Host"
+msgstr "Host"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:225
+msgid "Host key"
+msgstr "Chiave host"
+
+#: locale/tmp-html/issh-ssh/src/components/hostKeyPromptModal.component.html:3
+msgid "Host key verification"
+msgstr "Verifica della chiave host"
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:11
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:2
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:4
+msgid "Host manager"
+msgstr ""
+
+#: issh-settings/src/settings.ts:15
+#: locale/tmp-html/issh-settings/src/components/hotkeySettingsTab.component.html:2
+msgid "Hotkeys"
+msgstr "Tasti scelta rapida"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:178
+msgid "How issh presents itself through environment vars"
+msgstr "Come issh si presenta attraverso le variabili dell'ambiente"
+
+#: locale/tmp-html/issh-settings/src/components/editProfileGroupModal.component.html:17
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:20
 msgid "Icon"
 msgstr "Icona"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:145
-msgid "id.tab-width.dynamic"
-msgstr "Dinamica"
-
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:76
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:171
 msgid "If disabled, only custom profiles will show up in the profile selector"
-msgstr "Se disabilitato, solo i profili personalizzati verranno visualizzati nel selettore dei profili"
+msgstr ""
+"Se disabilitato, solo i profili personalizzati verranno visualizzati nel "
+"selettore dei profili"
 
-#: tabby-terminal/src/components/streamProcessingSettings.component.ts:23
+#: issh-terminal/src/features/zmodem.ts:39
+msgid "If you have not requested it, it could be a sign of malicious activity."
+msgstr ""
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:24
 msgid "Immediately echoes your input locally"
 msgstr "Riporta immediatamente gli input locali"
 
-#: tabby-core/src/hotkeys.ts:252
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:57
+msgid "Implicit CR in every LF"
+msgstr ""
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:58
+msgid "Implicit LF in every CR"
+msgstr ""
+
+#: issh-core/src/hotkeys.ts:252
 msgid "Increase horizontal split size"
 msgstr "Aumenta la divisione orizzontale"
 
-#: tabby-core/src/hotkeys.ts:244
+#: issh-core/src/hotkeys.ts:244
 msgid "Increase vertical split size"
 msgstr "Aumenta la divisione verticale"
 
-#: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:91
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:226
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:255
 msgid "Input"
 msgstr "Input"
 
-#: tabby-terminal/src/components/streamProcessingSettings.component.ts:18
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:19
 msgid "Input is sent as you type"
 msgstr "L'input è inviato mentre digiti"
 
-#: locale/tmp-html/tabby-terminal/src/components/streamProcessingSettings.component.html:4
+#: locale/tmp-html/issh-terminal/src/components/streamProcessingSettings.component.html:4
 msgid "Input mode"
 msgstr "Modalità di inserimento"
 
-#: locale/tmp-html/tabby-terminal/src/components/streamProcessingSettings.component.html:15
+#: locale/tmp-html/issh-terminal/src/components/streamProcessingSettings.component.html:15
 msgid "Input newlines"
 msgstr "Input ritorni a capo"
 
-#: tabby-electron/src/services/updater.service.ts:131
-msgid "Installing the update will close all tabs and restart Tabby."
-msgstr "L'installazione dell'aggiornamento chiuderà tutte le schede e riavvierà Tabby."
+#: issh-electron/src/services/updater.service.ts:130
+msgid "Installing the update will close all tabs and restart issh."
+msgstr ""
+"L'installazione dell'aggiornamento chiuderà tutte le schede e riavvierà "
+"issh."
 
-#: tabby-terminal/src/hotkeys.ts:66
+#: issh-terminal/src/hotkeys.ts:66
 msgid "Intelligent Ctrl-C (copy/abort)"
 msgstr "Ctrl-C intelligente (copia/annulla)"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:94
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:113
 msgid "Interactive"
 msgstr "Interattivo"
 
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:130
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:92
 msgid "Invalid syntax"
 msgstr "Sintassi non valida"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:16
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:43
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:16
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:43
 msgid "Jump host"
 msgstr "Salta host"
 
-#: tabby-terminal/src/hotkeys.ts:34
+#: issh-terminal/src/hotkeys.ts:34
 msgid "Jump to next word"
 msgstr "Vai alla parola successiva"
 
-#: tabby-terminal/src/hotkeys.ts:30
+#: issh-terminal/src/hotkeys.ts:30
 msgid "Jump to previous word"
 msgstr "Vai alla parola precedente"
 
-#: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:51
-#: tabby-settings/src/components/editProfileGroupModal.component.ts:39
-#: tabby-settings/src/components/profilesSettingsTab.component.ts:131
-#: tabby-settings/src/components/profilesSettingsTab.component.ts:216
-#: tabby-settings/src/components/profilesSettingsTab.component.ts:319
-#: tabby-settings/src/components/vaultSettingsTab.component.ts:53
-#: tabby-terminal/src/components/colorSchemeSettingsForMode.component.ts:93
-#: tabby-terminal/src/components/loginScriptsSettings.component.ts:33
-#: tabby-terminal/src/components/streamProcessingSettings.component.ts:51
+#: issh-settings/src/components/editProfileGroupModal.component.ts:120
+#: issh-settings/src/components/profilesSettingsTab.component.ts:192
+#: issh-settings/src/components/profilesSettingsTab.component.ts:280
+#: issh-settings/src/components/profilesSettingsTab.component.ts:397
+#: issh-settings/src/components/vaultSettingsTab.component.ts:100
+#: issh-terminal/src/components/colorSchemeSettingsForMode.component.ts:93
+#: issh-terminal/src/components/loginScriptsSettings.component.ts:34
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:52
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:51
 msgid "Keep"
 msgstr "Mantieni"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:154
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:173
 msgid "Keep Alive Interval (Milliseconds)"
 msgstr "Intervallo keep alive (Millisecondi)"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:98
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:105
 msgid "Keep docked terminal always on top"
 msgstr "Mantieni il terminale agganciato sempre in primo piano"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:86
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:105
 msgid "Key"
 msgstr "Chiave"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:186
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:205
 msgid "Key exchange"
 msgstr "Scambio chiavi"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:36
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:36
 msgid "Keyboard"
 msgstr "Tastiera"
 
-#: locale/tmp-html/tabby-ssh/src/components/keyboardInteractiveAuthPanel.component.html:2
+#: locale/tmp-html/issh-ssh/src/components/keyboardInteractiveAuthPanel.component.html:2
 msgid "Keyboard-interactive auth"
 msgstr "Autenticazione interattiva da tastiera"
 
-#: tabby-local/src/components/terminalTab.component.ts:117
+#: issh-local/src/components/terminalTab.component.ts:118
 msgid "Kill"
 msgstr "Forza chiusura"
 
-#: locale/tmp-html/tabby-core/src/components/welcomeTab.component.html:10
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:50
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:10
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:10
 msgid "Language"
 msgstr "Lingua"
 
-#: locale/tmp-html/tabby-ssh/src/components/hostKeyPromptModal.component.html:11
+#: locale/tmp-html/issh-ssh/src/components/hostKeyPromptModal.component.html:11
 msgid "Last known host key fingerprint"
 msgstr "Ultima firma nota chiave host"
 
-#: tabby-ssh/src/tabContextMenu.ts:32
+#: issh-ssh/src/tabContextMenu.ts:32
 msgid "Launch WinSCP"
 msgstr "Avvia WinSCP"
 
-#: tabby-ssh/src/hotkeys.ts:14
+#: issh-ssh/src/hotkeys.ts:14
 msgid "Launch WinSCP for current SSH session"
 msgstr "Avvia WinSCP per la sessione SSH attuale"
 
-#: locale/tmp-html/tabby-ssh/src/components/sftpPanel.component.html:16
-#: locale/tmp-html/tabby-ssh/src/components/sshTab.component.html:7
-msgid "Learn how to allow Tabby to detect remote shell's working directory."
-msgstr "Scopri come consentire a Tabby di rilevare la cartella di lavoro della shell remota."
+#: locale/tmp-html/issh-ssh/src/components/sshTab.component.html:7
+msgid "Learn how to allow issh to detect remote shell's working directory."
+msgstr ""
+"Scopri come consentire a issh di rilevare la cartella di lavoro della shell "
+"remota."
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:134
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:76
-#: tabby-core/src/tabContextMenu.ts:80
+#: issh-core/src/tabContextMenu.ts:80
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:141
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:83
 msgid "Left"
 msgstr "A sinistra"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:40
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:40
 msgid "Lets the shell handle Meta key instead of OS"
 msgstr "Consenti alla shell di definire il tasto Meta al posto del sistema operativo"
 
-#: locale/tmp-html/tabby-terminal/src/components/colorSchemeSettingsTab.component.html:22
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:36
 msgid "Light mode"
 msgstr "Modalità chiara"
 
-#: tabby-terminal/src/components/streamProcessingSettings.component.ts:27
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:28
 msgid "Line by line"
 msgstr "Riga per riga"
 
-#: tabby-terminal/src/components/streamProcessingSettings.component.ts:28
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:29
 msgid "Line editor, input is sent after you press Enter"
 msgstr "Editor in linea, l'input viene inviato dopo aver premuto Invio"
 
-#: locale/tmp-html/tabby-terminal/src/components/appearanceSettingsTab.component.html:83
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:83
 msgid "Line padding"
 msgstr "Riempimento riga"
 
-#: locale/tmp-html/tabby-ssh/src/components/sftpPanel.component.html:21
-msgid "Loading"
-msgstr "Caricamento"
-
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:34
-msgid "Loading configs..."
-msgstr "Caricamento configurazioni..."
-
-#: locale/tmp-html/tabby-ssh/src/components/sshPortForwardingConfig.component.html:39
-#: locale/tmp-html/tabby-ssh/src/components/sshPortForwardingConfig.component.html:5
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:39
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:5
 msgid "Local"
 msgstr "Locale"
 
-#: tabby-terminal/src/components/streamProcessingSettings.component.ts:22
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:23
 msgid "Local echo"
 msgstr "Eco locale"
 
-#: tabby-local/src/profiles.ts:12
+#: issh-local/src/profiles.ts:12
 msgid "Local terminal"
 msgstr "Terminale locale"
 
-#: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:86
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:221
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:250
 msgid "Login scripts"
 msgstr "Script di accesso"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:57
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:57
 msgid "Long-click for context menu"
 msgstr "Clic prolungato per il menu contestuale"
 
-#: tabby-core/src/services/profiles.service.ts:279
+#: issh-core/src/services/profiles.service.ts:303
 msgid "Manage profiles"
 msgstr "Gestione profili"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:160
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:179
 msgid "Max Keep Alive Count"
 msgstr "Numero massimo keep Alive"
 
-#: tabby-core/src/hotkeys.ts:172
+#: issh-core/src/hotkeys.ts:172
 msgid "Maximize the active pane"
 msgstr "Massimizza il riquadro attivo"
 
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:93
-#: locale/tmp-html/tabby-terminal/src/components/appearanceSettingsTab.component.html:70
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:53
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:70
 msgid "Minimum contrast ratio"
 msgstr "Rapporto minimo di contrasto"
 
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:39
-msgid "Modified on {date}"
-msgstr "Modificato il {date}"
-
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:53
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:53
 msgid "Mouse"
 msgstr "Mouse"
 
-#: tabby-core/src/hotkeys.ts:48
+#: issh-core/src/hotkeys.ts:48
 msgid "Move tab to the left"
 msgstr "Sposta scheda a sinistra"
 
-#: tabby-core/src/hotkeys.ts:52
+#: issh-core/src/hotkeys.ts:52
 msgid "Move tab to the right"
 msgstr "Sposta scheda a destra"
 
-#: tabby-settings/src/components/profilesSettingsTab.component.ts:228
+#: issh-settings/src/components/profilesSettingsTab.component.ts:292
 msgid "Move to \"Ungrouped\""
 msgstr "Sposta in \"Non raggruppate\""
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:197
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:204
 msgid "Moving the mouse over an inactive pane will cause it to activate"
 msgstr "Spostare il mouse su un riquadro inattivo lo farà attivare"
 
-#: locale/tmp-html/tabby-settings/src/components/editProfileGroupModal.component.html:9
-#: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:12
-#: locale/tmp-html/tabby-terminal/src/components/colorSchemeSettingsForMode.component.html:13
+#: locale/tmp-html/issh-settings/src/components/editProfileGroupModal.component.html:9
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:12
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsForMode.component.html:13
 msgid "Name"
 msgstr "Nome"
 
-#: tabby-settings/src/components/configSyncSettingsTab.component.ts:60
-msgid "Name for the new config"
-msgstr "Nome per la nuova configurazione"
-
-#: locale/tmp-html/tabby-ssh/src/components/sftpCreateDirectoryModal.component.html:3
+#: locale/tmp-html/issh-ssh/src/components/sftpCreateDirectoryModal.component.html:3
 msgid "Name for the new directory"
 msgstr "Nome della nuova cartella"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:57
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:57
 msgid "Native"
 msgstr "Nativa"
 
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:21
-msgid "New"
-msgstr "Nuovo"
-
-#: tabby-local/src/tabContextMenu.ts:53
-msgid "New admin tab"
-msgstr "Nuova scheda amministratore"
-
-#: tabby-settings/src/components/configSyncSettingsTab.component.ts:58
-msgid "New config on {platform}"
-msgstr "Nuova configurazione IN {platform}"
-
-#: tabby-settings/src/components/profilesSettingsTab.component.ts:144
-msgid "New group name"
-msgstr "Nome nuovo gruppo"
-
-#: locale/tmp-html/tabby-terminal/src/components/loginScriptsSettings.component.html:16
-msgid "New item"
-msgstr "Nuovo elemento"
-
-#: tabby-settings/src/components/vaultSettingsTab.component.ts:133
-msgid "New name"
-msgstr "Nuovo nome"
-
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:23
-msgid "New profile"
-msgstr "Nuovo profilo"
-
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:24
-msgid "New profile Group"
-msgstr "Nome del nuovo profilo di gruppo"
-
-#: tabby-terminal/src/tabContextMenu.ts:176
-msgid "New profile name"
-msgstr "Nuovo nome profilo"
-
-#: tabby-local/src/hotkeys.ts:10
-msgid "New tab"
-msgstr "Nuova scheda"
-
-#: tabby-core/src/hotkeys.ts:271
-msgid "New tab: {profile}"
-msgstr "Nuova scheda: {profile}"
-
-#: tabby-local/src/buttonProvider.ts:20
-#: tabby-local/src/tabContextMenu.ts:27
-msgid "New terminal"
-msgstr "Nuovo terminale"
-
-#: tabby-electron/src/hotkeys.ts:10
-msgid "New window"
-msgstr "Nuova finestra"
-
-#: tabby-electron/src/services/dockMenu.service.ts:62
+#: issh-electron/src/services/dockMenu.service.ts:63
 msgid "New Window"
 msgstr "Nuova Finestra"
 
-#: tabby-local/src/tabContextMenu.ts:37
+#: issh-local/src/tabContextMenu.ts:53
+msgid "New admin tab"
+msgstr "Nuova scheda amministratore"
+
+#: locale/tmp-html/issh-terminal/src/components/loginScriptsSettings.component.html:16
+msgid "New item"
+msgstr "Nuovo elemento"
+
+#: issh-settings/src/components/vaultSettingsTab.component.ts:201
+msgid "New name"
+msgstr "Nuovo nome"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:42
+msgid "New profile"
+msgstr "Nuovo profilo"
+
+#: issh-terminal/src/tabContextMenu.ts:184
+msgid "New profile name"
+msgstr "Nuovo nome profilo"
+
+#: issh-local/src/hotkeys.ts:10
+msgid "New tab"
+msgstr "Nuova scheda"
+
+#: issh-local/src/tabContextMenu.ts:27
+msgid "New terminal"
+msgstr "Nuovo terminale"
+
+#: issh-electron/src/hotkeys.ts:10
+msgid "New window"
+msgstr "Nuova finestra"
+
+#: issh-local/src/tabContextMenu.ts:37
 msgid "New with profile"
 msgstr "Nuovo terminale con"
 
-#: tabby-core/src/hotkeys.ts:40
+#: issh-core/src/hotkeys.ts:40
 msgid "Next tab"
 msgstr "Scheda successiva"
 
-#: tabby-core/src/utils.ts:59
+#: issh-core/src/utils.ts:59
 msgid "No color"
 msgstr "Nessun colore"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:85
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:85
 msgid "No modifier"
 msgstr "Nessun modificatore"
 
-#: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:41
-msgid "None"
-msgstr "Nessuno"
+#: issh-terminal/src/services/batchInput.service.ts:32
+msgid "No terminal tabs are available"
+msgstr ""
 
-#: tabby-terminal/src/components/streamProcessingSettings.component.ts:17
-#: tabby-terminal/src/components/streamProcessingSettings.component.ts:40
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:18
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:41
 msgid "Normal"
 msgstr "Normale"
 
-#: locale/tmp-html/tabby-terminal/src/components/appearanceSettingsTab.component.html:22
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:22
 msgid "Normal font weight"
 msgstr "Peso font normale"
 
-#: tabby-terminal/src/components/searchPanel.component.ts:54
-#: tabby-terminal/src/components/searchPanel.component.ts:64
+#: issh-terminal/src/components/searchPanel.component.ts:55
+#: issh-terminal/src/components/searchPanel.component.ts:65
 msgid "Not found"
 msgstr "Non trovato"
 
-#: tabby-core/src/tabContextMenu.ts:209
+#: issh-core/src/tabContextMenu.ts:209
 msgid "Notify on activity"
 msgstr "Notifica sull'attività"
 
-#: tabby-core/src/tabContextMenu.ts:187
+#: issh-core/src/tabContextMenu.ts:187
 msgid "Notify when done"
 msgstr "Notifica quando terminato"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:17
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:17
 msgid "Number of lines kept in the buffer"
 msgstr "Numero di righe conservate nel buffer"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:72
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:137
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:60
-msgid "Off"
-msgstr "Disattivo"
-
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:26
-msgid "On GitHub Discussions"
-msgstr "Nelle discussioni di GitHub"
-
-#: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:47
-msgid "Only close the tab when session is explicitly terminated"
-msgstr "Chiudi la scheda solo quando la sessione è esplicitamente terminata"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:46
-msgid "Opacity"
-msgstr "Opacità"
-
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:82
-msgid "Open DevTools"
-msgstr "Apri strumenti di sviluppo"
-
-#: tabby-settings/src/hotkeys.ts:11
-msgid "Open Settings"
-msgstr "Apri Impostazioni"
-
-#: tabby-settings/src/hotkeys.ts:25
-msgid "Open settings tab: {tab}"
-msgstr "Apri scheda impostazioni: {tab}"
-
-#: tabby-ssh/src/tabContextMenu.ts:25
-msgid "Open SFTP panel"
-msgstr "Apri pannello SFTP"
-
-#: locale/tmp-html/tabby-terminal/src/components/loginScriptsSettings.component.html:10
-msgid "Optional"
-msgstr "Opzionale"
-
-#: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:11
-#: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:34
-msgid "Options"
-msgstr "Opzioni"
-
-#: tabby-core/src/utils.ts:62
-msgid "Orange"
-msgstr "Arancione"
-
-#: tabby-electron/src/shells/macDefault.ts:25
+#: issh-electron/src/shells/macDefault.ts:25
 msgid "OS default"
 msgstr "Predefinito S.O."
 
-#: tabby-electron/src/shells/winDefault.ts:43
+#: issh-electron/src/shells/winDefault.ts:43
 msgid "OS default ({name})"
 msgstr "Predefinito S.O. ({name})"
 
-#: tabby-terminal/src/components/streamProcessingSettings.component.ts:46
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:79
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:144
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:60
+msgid "Off"
+msgstr "Disattivo"
+
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:47
+msgid "Only close the tab when session is explicitly terminated"
+msgstr "Chiudi la scheda solo quando la sessione è esplicitamente terminata"
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:89
+msgid "Only use this on a trusted LAN. TLS fingerprint pairing is still required."
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:46
+msgid "Opacity"
+msgstr "Opacità"
+
+#: issh-electron/src/services/platform.service.ts:179
+msgid "Open"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:42
+msgid "Open DevTools"
+msgstr "Apri strumenti di sviluppo"
+
+#: issh-ssh/src/hotkeys.ts:18
+#: issh-ssh/src/tabContextMenu.ts:25
+msgid "Open SFTP panel"
+msgstr "Apri pannello SFTP"
+
+#: issh-settings/src/hotkeys.ts:11
+msgid "Open Settings"
+msgstr "Apri Impostazioni"
+
+#: issh-settings/src/hotkeys.ts:25
+msgid "Open settings tab: {tab}"
+msgstr "Apri scheda impostazioni: {tab}"
+
+#: locale/tmp-html/issh-terminal/src/components/loginScriptsSettings.component.html:10
+msgid "Optional"
+msgstr "Opzionale"
+
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:11
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:34
+msgid "Options"
+msgstr "Opzioni"
+
+#: issh-core/src/utils.ts:62
+msgid "Orange"
+msgstr "Arancione"
+
+#: issh-settings/src/components/settingsTab.component.ts:49
+msgid "Other"
+msgstr ""
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:47
 msgid "Output is shown as a hexdump"
 msgstr "L'output è visualizzato come un dump esadecimale"
 
-#: tabby-terminal/src/components/streamProcessingSettings.component.ts:41
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:42
 msgid "Output is shown as it is received"
 msgstr "L'output è visualizzato come viene ricevuto"
 
-#: locale/tmp-html/tabby-terminal/src/components/streamProcessingSettings.component.html:23
+#: locale/tmp-html/issh-terminal/src/components/streamProcessingSettings.component.html:23
 msgid "Output mode"
 msgstr "Modalità di output"
 
-#: locale/tmp-html/tabby-terminal/src/components/streamProcessingSettings.component.html:34
+#: locale/tmp-html/issh-terminal/src/components/streamProcessingSettings.component.html:34
 msgid "Output newlines"
 msgstr "Output ritorni a capo"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshSettingsTab.component.html:42
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:58
 msgid "Override X11 display"
 msgstr "Sovrascrivi il display X11"
 
-#: tabby-settings/src/components/configSyncSettingsTab.component.ts:98
-msgid "Overwrite local and sync"
-msgstr "Sovrascrivi locale e sincronizza"
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:202
+msgid "Overwrite and apply"
+msgstr ""
 
-#: tabby-settings/src/components/configSyncSettingsTab.component.ts:78
-msgid "Overwrite remote and sync"
-msgstr "Sovrascrivi remoto e sincronizza"
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:199
+msgid "Overwrite local config with the remote one?"
+msgstr ""
 
-#: tabby-settings/src/components/configSyncSettingsTab.component.ts:76
-msgid "Overwrite the config on the remote side and start syncing?"
-msgstr "Sovrascrivere la configurazione remota e iniziare la sincronizzazione?"
-
-#: tabby-settings/src/components/configSyncSettingsTab.component.ts:96
-msgid "Overwrite the local config and start syncing?"
-msgstr "Sovrascrivere la configurazione locale e iniziare la sincronizzazione?"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:189
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:196
 msgid "Pane resize step"
 msgstr "Progressi di ridimensionamento"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:186
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:193
 msgid "Panes"
 msgstr "Riquadri"
 
-#: tabby-core/src/theme.ts:26
-msgid "Paper (legacy)"
-msgstr "Carta (legacy)"
+#: locale/tmp-html/issh-settings/src/components/editProfileGroupModal.component.html:13
+msgid "Parent Group"
+msgstr ""
 
-#: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:38
-msgid "Parity"
-msgstr "Parità"
-
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:64
-msgid "Partial config sync is not possible when the config is encrypted via Vault."
-msgstr "La sincronizzazione parziale della configurazione non è possibile quando questa è cifrata all'interno della cassaforte."
-
-#: tabby-terminal/src/components/inputProcessingSettings.component.ts:17
+#: issh-terminal/src/components/inputProcessingSettings.component.ts:18
 msgid "Pass-through"
 msgstr "Pass-through"
 
-#: tabby-settings/src/components/vaultSettingsTab.component.ts:92
+#: issh-settings/src/components/vaultSettingsTab.component.ts:154
 msgid "Passphrase for a private key with hash {hash}..."
 msgstr "Frase segreta per la chiave privata con hash {hash}..."
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:100
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:82
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:101
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:119
 msgid "Password"
 msgstr "Password"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:62
-#: tabby-terminal/src/api/baseTerminalTab.component.ts:521
-#: tabby-terminal/src/tabContextMenu.ts:39
+#: issh-terminal/src/api/baseTerminalTab.component.ts:555
+#: issh-terminal/src/cli.ts:33
+#: issh-terminal/src/tabContextMenu.ts:40
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:62
 msgid "Paste"
 msgstr "Incolla"
 
-#: tabby-terminal/src/hotkeys.ts:14
+#: issh-terminal/src/cli.ts:31
+msgid "Paste \"{text}\"?"
+msgstr ""
+
+#: issh-terminal/src/hotkeys.ts:14
 msgid "Paste from clipboard"
 msgstr "Incolla dagli appunti"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:63
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:63
 msgid "Paste if no selection, else copy"
 msgstr "Incolla quando non selezionato, altrimenti copia"
 
-#: tabby-terminal/src/api/baseTerminalTab.component.ts:528
+#: issh-terminal/src/api/baseTerminalTab.component.ts:562
 msgid "Paste multiple lines?"
 msgstr "Vuoi incollare righe multiple?"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:68
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:68
 msgid "Paste on middle-click"
 msgstr "Incolla con il tasto centrale"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshSettingsTab.component.html:43
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:59
 msgid "Path or address of the local X11 socket"
 msgstr "Percorso o indirizzo del socket locale X11"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalToolbar.component.html:4
+#: locale/tmp-html/issh-terminal/src/components/terminalToolbar.component.html:5
 msgid "Pin"
 msgstr "Fissa"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:38
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:76
+msgid "Pin this host to favorites and prioritize it in host manager views"
+msgstr ""
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:38
 msgid "Port"
 msgstr "Porta"
 
-#: tabby-serial/src/components/serialTab.component.ts:65
+#: issh-serial/src/components/serialTab.component.ts:66
 msgid "Port opened"
 msgstr "Porta aperta"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:119
-#: locale/tmp-html/tabby-ssh/src/components/sshTab.component.html:12
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:138
+#: locale/tmp-html/issh-ssh/src/components/sshTab.component.html:12
 msgid "Ports"
 msgstr "Porte"
 
-#: tabby-terminal/src/api/connectableTerminalTab.component.ts:87
+#: issh-terminal/src/api/connectableTerminalTab.component.ts:86
 msgid "Press any key to reconnect"
 msgstr "Premi un tasto per riconnetterti"
 
-#: locale/tmp-html/tabby-settings/src/components/hotkeyInputModal.component.html:3
+#: locale/tmp-html/issh-settings/src/components/hotkeyInputModal.component.html:3
 msgid "Press the key now"
 msgstr "Premi un tasto adesso"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:21
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:21
 msgid "Prevents accidental closing"
 msgstr "Previene la chiusura accidentale"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:110
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:110
 msgid "Prevents accidental execution of pasted commands"
 msgstr "Impedisci l'esecuzione accidentale di comandi incollati"
 
-#: tabby-core/src/hotkeys.ts:44
+#: issh-core/src/hotkeys.ts:44
 msgid "Previous tab"
 msgstr "Scheda precedente"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:108
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:127
 msgid "Private keys"
 msgstr "Chiavi private"
 
-#: tabby-core/src/tabContextMenu.ts:195
+#: issh-core/src/tabContextMenu.ts:195
 msgid "Process completed"
 msgstr "Processo completato"
 
-#: tabby-core/src/tabContextMenu.ts:151
+#: issh-core/src/tabContextMenu.ts:151
 msgid "Profile name"
 msgstr "Nome profilo"
 
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:2
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:4
-#: tabby-electron/src/services/dockMenu.service.ts:40
+#: issh-electron/src/services/dockMenu.service.ts:42
 msgid "Profiles"
 msgstr "Profili"
 
-#: tabby-core/src/commands.ts:32
-#: tabby-settings/src/settings.ts:58
+#: issh-core/src/commands.ts:32
+#: issh-settings/src/settings.ts:61
 msgid "Profiles & connections"
 msgstr "Profili e connessioni"
 
-#: locale/tmp-html/tabby-local/src/components/commandLineEditor.component.html:12
+#: locale/tmp-html/issh-local/src/components/commandLineEditor.component.html:12
 msgid "Program"
 msgstr "Programma"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:30
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:30
 msgid "Proxy command"
 msgstr "Comando proxy"
 
-#: tabby-core/src/utils.ts:63
+#: issh-core/src/utils.ts:63
 msgid "Purple"
 msgstr "Viola"
 
-#: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:38
-msgid "Puts all of Tabby's configuration into the vault"
-msgstr "Trasferisci tutta la configurazione di Tabby all'interno della cassaforte"
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:38
+msgid "Puts all of issh's configuration into the vault"
+msgstr "Trasferisci tutta la configurazione di issh all'interno della cassaforte"
 
-#: tabby-core/src/index.ts:219
-#: tabby-core/src/services/profiles.service.ts:295
+#: issh-core/src/index.ts:221
+#: issh-core/src/services/profiles.service.ts:319
 msgid "Quick connect"
 msgstr "Connessione rapida"
 
-#: tabby-core/src/services/config.service.ts:430
-#: tabby-core/src/services/config.service.ts:444
+#: issh-core/src/services/config.service.ts:476
+#: issh-core/src/services/config.service.ts:490
 msgid "Quit"
 msgstr "Esci"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:166
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:185
 msgid "Ready Timeout (Milliseconds)"
 msgstr "Tempo stato pronto (millisecondi)"
 
-#: tabby-core/src/services/profiles.service.ts:235
-#: tabby-core/src/services/profiles.service.ts:249
-#: tabby-electron/src/services/dockMenu.service.ts:28
+#: issh-core/src/services/profiles.service.ts:259
+#: issh-core/src/services/profiles.service.ts:273
+#: issh-electron/src/services/dockMenu.service.ts:30
+#: issh-settings/src/components/profilesSettingsTab.component.ts:13
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:11
 msgid "Recent"
 msgstr "Recente"
 
-#: locale/tmp-html/tabby-serial/src/components/serialTab.component.html:5
-#: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:52
-#: locale/tmp-html/tabby-ssh/src/components/sshTab.component.html:10
-#: tabby-terminal/src/api/connectableTerminalTab.component.ts:32
-#: tabby-terminal/src/tabContextMenu.ts:115
-#: tabby-terminal/src/tabContextMenu.ts:119
+#: issh-terminal/src/api/connectableTerminalTab.component.ts:32
+#: issh-terminal/src/tabContextMenu.ts:123
+#: issh-terminal/src/tabContextMenu.ts:127
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:52
+#: locale/tmp-html/issh-ssh/src/components/sshTab.component.html:10
 msgid "Reconnect"
 msgstr "Riconnetti"
 
-#: tabby-terminal/src/hotkeys.ts:102
+#: issh-terminal/src/hotkeys.ts:110
 msgid "Reconnect current tab (Serial/Telnet/SSH)"
 msgstr "Riconnetti la scheda attuale (serial/telnet/SSH)"
 
-#: tabby-core/src/utils.ts:64
+#: issh-core/src/utils.ts:64
 msgid "Red"
 msgstr "Rosso"
 
-#: locale/tmp-html/tabby-terminal/src/components/loginScriptsSettings.component.html:10
+#: locale/tmp-html/issh-terminal/src/components/loginScriptsSettings.component.html:10
 msgid "Regex"
 msgstr "Espressione regolare"
 
-#: tabby-settings/src/components/releaseNotesTab.component.ts:27
+#: issh-terminal/src/features/zmodem.ts:42
+msgid "Reject"
+msgstr ""
+
+#: issh-settings/src/components/releaseNotesTab.component.ts:28
 msgid "Release notes"
 msgstr "Note di rilascio"
 
-#: locale/tmp-html/tabby-core/src/components/unlockVaultModal.component.html:6
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:89
+msgid "Remark"
+msgstr ""
+
+#: locale/tmp-html/issh-core/src/components/unlockVaultModal.component.html:6
 msgid "Remember for {time}"
 msgstr "Ricorda per {time}"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshPortForwardingConfig.component.html:41
-#: locale/tmp-html/tabby-ssh/src/components/sshPortForwardingConfig.component.html:5
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:41
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:5
 msgid "Remote"
 msgstr "Remoto"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:124
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:131
 msgid "Remove whitespace and newlines around the copied text"
 msgstr "Rimuovi spazi bianchi e a ritorni a capo dal testo copiato"
 
-#: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:26
-#: tabby-core/src/tabContextMenu.ts:120
+#: issh-core/src/tabContextMenu.ts:120
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:26
 msgid "Rename"
 msgstr "Rinomina"
 
-#: tabby-core/src/hotkeys.ts:24
-#: tabby-core/src/tabContextMenu.ts:121
+#: issh-core/src/hotkeys.ts:24
+#: issh-core/src/tabContextMenu.ts:121
 msgid "Rename tab"
 msgstr "Rinomina scheda"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:3
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:3
 msgid "Rendering"
 msgstr "Rendering"
 
-#: tabby-core/src/hotkeys.ts:32
+#: issh-core/src/hotkeys.ts:32
 msgid "Reopen last tab"
 msgstr "Riapri l'ultima scheda"
 
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:42
-#: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:27
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:27
 msgid "Replace"
 msgstr "Sostituisci"
 
-#: locale/tmp-html/tabby-core/src/components/startPage.component.html:11
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:21
-msgid "Report a problem"
-msgstr "Segnala un problema"
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:123
+msgid "Replace line breaks with spaces"
+msgstr ""
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:81
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:81
 msgid "Require a key to click links"
 msgstr "Richiedi una chiave per fare clic sui collegamenti"
 
-#: tabby-terminal/src/hotkeys.ts:62
+#: issh-terminal/src/hotkeys.ts:62
 msgid "Reset zoom"
 msgstr "Reimposta zoom"
 
-#: tabby-serial/src/hotkeys.ts:14
-msgid "Restart current serial session"
-msgstr "Riavvia la sessione seriale attuale"
-
-#: tabby-ssh/src/hotkeys.ts:10
+#: issh-ssh/src/hotkeys.ts:10
 msgid "Restart current SSH session"
 msgstr "Riavvia la sessione SSH attuale"
 
-#: tabby-core/src/hotkeys.ts:64
+#: issh-serial/src/hotkeys.ts:14
+msgid "Restart current serial session"
+msgstr "Riavvia la sessione seriale attuale"
+
+#: issh-core/src/hotkeys.ts:64
 msgid "Restart tab"
 msgstr "Riavvia scheda"
 
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:140
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:102
 msgid "Restart the app to apply changes"
 msgstr "Riavvia l'app per applicare le modifiche"
 
-#: tabby-settings/src/components/profilesSettingsTab.component.ts:316
+#: issh-settings/src/components/profilesSettingsTab.component.ts:394
 msgid "Restore settings to defaults ?"
 msgstr "Vuoi ripristinare le impostazioni predefinite?"
 
-#: tabby-settings/src/components/editProfileGroupModal.component.ts:36
+#: issh-settings/src/components/editProfileGroupModal.component.ts:117
 msgid "Restore settings to inherited defaults ?"
 msgstr "Vuoi ripristinare le impostazioni predefinite ereditate?"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:159
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:166
 msgid "Restore terminal tabs on app start"
 msgstr "Ripristina le schede del terminale all'avvio dell'app"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:147
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:166
 msgid "Reuse session for multiple tabs"
 msgstr "Riusa la sessione per più schede"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:136
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:78
-#: tabby-core/src/tabContextMenu.ts:78
+#: issh-core/src/tabContextMenu.ts:78
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:143
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:85
 msgid "Right"
 msgstr "A destra"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:56
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:56
 msgid "Right click"
 msgstr "Clic destro"
 
-#: locale/tmp-html/tabby-local/src/components/localProfileSettings.component.html:5
+#: issh-local/src/cli.ts:52
+msgid "Run"
+msgstr ""
+
+#: issh-local/src/cli.ts:50
+msgid "Run \"{command}\"?"
+msgstr ""
+
+#: locale/tmp-html/issh-local/src/components/localProfileSettings.component.html:8
 msgid "Run as administrator"
 msgstr "Esegui come amministratore"
 
-#: locale/tmp-html/tabby-core/src/components/renameTabModal.component.html:6
-#: locale/tmp-html/tabby-settings/src/components/editProfileGroupModal.component.html:27
-#: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:70
-#: locale/tmp-html/tabby-terminal/src/components/colorSchemeSettingsForMode.component.html:29
-msgid "Save"
-msgstr "Salva"
-
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:101
-msgid "Save a password in the keychain"
-msgstr "Salva una password nel portachiavi"
-
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:129
-msgid "Save and apply"
-msgstr "Salva e applica"
-
-#: tabby-terminal/src/tabContextMenu.ts:173
-msgid "Save as profile"
-msgstr "Salva come profilo"
-
-#: tabby-core/src/tabContextMenu.ts:148
-msgid "Save layout as profile"
-msgstr "Salva layout come profilo"
-
-#: tabby-terminal/src/tabContextMenu.ts:210
-msgid "Saved"
-msgstr "Salvato"
-
-#: tabby-core/src/profiles.ts:19
-msgid "Saved layout"
-msgstr "Layout salvato"
-
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:46
-msgid "Scroll on input"
-msgstr "Scorri durante la digitazione"
-
-#: tabby-terminal/src/hotkeys.ts:94
-msgid "Scroll terminal one page down"
-msgstr "Scorri il terminale di una pagina verso il basso"
-
-#: tabby-terminal/src/hotkeys.ts:90
-msgid "Scroll terminal one page up"
-msgstr "Scorri il terminale di una pagina verso l'alto"
-
-#: tabby-terminal/src/hotkeys.ts:98
-msgid "Scroll terminal to bottom"
-msgstr "Scorri il terminale fino in fondo"
-
-#: tabby-terminal/src/hotkeys.ts:86
-msgid "Scroll terminal to top"
-msgstr "Scorri il terminale fino in cima"
-
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:16
-msgid "Scrollback"
-msgstr "Scorrimento"
-
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:47
-msgid "Scrolls the terminal to the bottom on user input"
-msgstr "Scorri il terminale in basso durante l'input utente"
-
-#: tabby-terminal/src/hotkeys.ts:74
-msgid "Search"
-msgstr "Cerca"
-
-#: tabby-terminal/src/components/colorSchemeSelector.component.ts:9
-#: tabby-terminal/src/components/colorSchemeSettingsForMode.component.ts:10
-msgid "Search color schemes"
-msgstr "Cerca tema terminale"
-
-#: tabby-settings/src/components/hotkeySettingsTab.component.ts:12
-msgid "Search hotkeys"
-msgstr "Cerca combinazioni"
-
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:17
-msgid "Secret sync token"
-msgstr "Token di sincronizzazione segreto"
-
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:45
-#: tabby-electron/src/services/platform.service.ts:200
-msgid "Select"
-msgstr "Seleziona"
-
-#: tabby-settings/src/components/profilesSettingsTab.component.ts:61
-msgid "Select a base profile to use as a template"
-msgstr "Seleziona un profilo di base da usare come modello"
-
-#: tabby-terminal/src/hotkeys.ts:18
-msgid "Select all"
-msgstr "Seleziona tutto"
-
-#: tabby-core/src/services/fileProviders.service.ts:47
-msgid "Select file storage"
-msgstr "Seleziona archiviazione"
-
-#: tabby-core/src/index.ts:232
-msgid "Select profile"
-msgstr "Seleziona profilo"
-
-#: tabby-core/src/services/profiles.service.ts:308
-msgid "Select profile or enter an address"
-msgstr "Seleziona profilo o inserisci indirizzo"
-
-#: tabby-terminal/src/components/streamProcessingSettings.component.ts:33
-msgid "Send bytes by typing in hex values"
-msgstr "Invia byte digitando valori esadecimali"
-
-#: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:75
-msgid "Sends data one byte at a time"
-msgstr "Invia dati un byte alla volta"
-
-#: tabby-serial/src/profiles.ts:14
-#: tabby-serial/src/profiles.ts:74
-msgid "Serial"
-msgstr "Seriale"
-
-#: tabby-serial/src/profiles.ts:53
-#: tabby-serial/src/profiles.ts:64
-msgid "Serial connection"
-msgstr "Connessione seriale"
-
-#: tabby-serial/src/profiles.ts:73
-msgid "Serial: {description}"
-msgstr "Seriale: {description}"
-
-#: locale/tmp-html/tabby-settings/src/components/setVaultPassphraseModal.component.html:2
-#: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:5
-msgid "Set master passphrase"
-msgstr "Imposta la frase segreta principale"
-
-#: locale/tmp-html/tabby-settings/src/components/setVaultPassphraseModal.component.html:11
-msgid "Set passphrase"
-msgstr "Imposta frase segreta"
-
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:104
-msgid "Set password"
-msgstr "Imposta password"
-
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:168
-msgid "Set Tabby as %COMSPEC%"
-msgstr "Imposta Tabby come %COMSPEC%"
-
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:69
-msgid "Set to 0 to disable recent profiles"
-msgstr "Impostare a 0 per disabilitare i profili recenti"
-
-#: locale/tmp-html/tabby-ssh/src/components/sshSettingsTab.component.html:36
-msgid "Sets the SSH agent's named pipe path."
-msgstr "Imposta il percorso named pipe dell'agente SSH."
-
-#: tabby-settings/src/buttonProvider.ts:28
-#: tabby-settings/src/components/settingsTab.component.ts:57
-msgid "Settings"
-msgstr "Impostazioni"
-
-#: locale/tmp-html/tabby-local/src/components/shellSettingsTab.component.html:2
-msgid "Shell"
-msgstr "Shell"
-
-#: tabby-terminal/src/api/baseTerminalTab.component.ts:593
-msgid "Shell does not support current path detection"
-msgstr "La shell non supporta il rilevamento del percorso attuale"
-
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:59
-msgid "Shell integration"
-msgstr "Integrazione shell"
-
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:50
-#: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:25
-msgid "Show"
-msgstr "Visualizza"
-
-#: tabby-core/src/hotkeys.ts:275
-msgid "Show {type} profile selector"
-msgstr "Visualizza il selettore profilo {type}"
-
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:117
-msgid "Show a confirmation box when pasting multiple lines"
-msgstr "Visualizza una casella di conferma quando incolli più righe"
-
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:75
-msgid "Show built-in profiles in selector"
-msgstr "Visualizza profili integrati nel selettore"
-
-#: tabby-core/src/hotkeys.ts:12
-msgid "Show command selector"
-msgstr "Visualizza selettore comandi"
-
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:132
-msgid "Show config file"
-msgstr "Visualizza file di configurazione"
-
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:131
-msgid "Show defaults"
-msgstr "Visualizza predefiniti"
-
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:146
-msgid "Show Mixer"
-msgstr "Visualizza mixer"
-
-#: tabby-core/src/hotkeys.ts:56
-msgid "Show pane labels (for rearranging)"
-msgstr "Visualizza etichette riquadro (per riorganizzare)"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:164
-msgid "Show profile icon on tab"
-msgstr "Visualizza l'icona del profilo nella scheda"
-
-#: tabby-core/src/hotkeys.ts:16
-msgid "Show profile selector"
-msgstr "Visualizza selettore profilo"
-
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:68
-msgid "Show recent profiles in selector"
-msgstr "Visualizza i profili recenti nel selettore"
-
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:36
-msgid "Show release notes"
-msgstr "Visualizza note di rilascio"
-
-#: tabby-serial/src/hotkeys.ts:10
-msgid "Show Serial connections"
-msgstr "Visualizza connessioni seriali"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:152
-msgid "Show tabs in fullscreen mode"
-msgstr "Visualizza schede in modalità schermo intero"
-
-#: tabby-terminal/src/tabContextMenu.ts:62
-msgid "Show toolbar"
-msgstr "Visualizza barra degli strumenti"
-
-#: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:45
-msgid "Show vault contents"
-msgstr "Visualizza contenuto della cassaforte"
-
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:29
-msgid "Sixel graphics support (experimental)"
-msgstr "Supporto grafico Sixel (sperimentale)"
-
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:140
-msgid "Skip MoTD/banner"
-msgstr "Salta MoTD/banner"
-
-#: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:74
-msgid "Slow feed"
-msgstr "Avanzamento lento"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:68
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:86
-msgid "Snaps the window to a side of the screen"
-msgstr "Aggancia la finestra su un lato dello schermo"
-
-#: locale/tmp-html/tabby-ssh/src/components/sshPortForwardingConfig.component.html:22
-#: locale/tmp-html/tabby-ssh/src/components/sshPortForwardingConfig.component.html:9
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:20
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:22
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:9
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:20
 msgid "SOCKS proxy"
 msgstr "Proxy SOCKS"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:51
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:51
 msgid "SOCKS proxy host"
 msgstr "Host proxy SOCKS"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:55
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:55
 msgid "SOCKS proxy port"
 msgstr "Porta proxy SOCKS"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:130
-msgid "Sound"
-msgstr "Notifiche"
-
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:31
-msgid "Source code"
-msgstr "Codice sorgente"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:13
-msgid "Spaciness"
-msgstr "Vuoto"
-
-#: tabby-core/src/tabContextMenu.ts:75
-msgid "Split"
-msgstr "Dividi"
-
-#: tabby-core/src/hotkeys.ts:160
-msgid "Split to the bottom"
-msgstr "Dividi in basso"
-
-#: tabby-core/src/tabContextMenu.ts:85
-msgid "Split to the down"
-msgstr "Dividi in basso"
-
-#: tabby-core/src/hotkeys.ts:164
-#: tabby-core/src/tabContextMenu.ts:86
-msgid "Split to the left"
-msgstr "Dividi a sinistra"
-
-#: tabby-core/src/hotkeys.ts:156
-#: tabby-core/src/tabContextMenu.ts:84
-msgid "Split to the right"
-msgstr "Dividi a destra"
-
-#: tabby-core/src/hotkeys.ts:168
-msgid "Split to the top"
-msgstr "Dividi in alto"
-
-#: tabby-core/src/tabContextMenu.ts:87
-msgid "Split to the up"
-msgstr "Dividi in alto"
-
-#: tabby-ssh/src/profiles.ts:82
+#: issh-ssh/src/profiles.ts:77
 msgid "SSH connection"
 msgstr "Connessione SSH"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshSettingsTab.component.html:47
-msgid "SSH connection management is now done through the \"Profiles & connections\" tab"
-msgstr "La gestione della connessione SSH è ora fatta attraverso la scheda \"Profili e connessioni\""
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:63
+msgid ""
+"SSH connection management is now done through the \"Profiles & "
+"connections\" tab"
+msgstr ""
+"La gestione della connessione SSH è ora fatta attraverso la scheda "
+"\"Profili e connessioni\""
 
-#: tabby-settings/src/components/vaultSettingsTab.component.ts:89
+#: issh-settings/src/components/profilesSettingsTab.component.ts:14
+msgid "SSH only"
+msgstr ""
+
+#: issh-settings/src/components/vaultSettingsTab.component.ts:151
 msgid "SSH password for {user}@{host}:{port}"
 msgstr "Password SSH per {user}@{host}:{port}"
 
-#: tabby-core/src/theme.ts:8
-msgid "Standard (legacy)"
-msgstr "Standard (legacy)"
+#: locale/tmp-html/issh-core/src/components/renameTabModal.component.html:6
+#: locale/tmp-html/issh-settings/src/components/editProfileGroupModal.component.html:50
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:71
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsForMode.component.html:29
+msgid "Save"
+msgstr "Salva"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:150
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:120
+msgid "Save a password in the keychain"
+msgstr "Salva una password nel portachiavi"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:91
+msgid "Save and apply"
+msgstr "Salva e applica"
+
+#: issh-terminal/src/tabContextMenu.ts:181
+msgid "Save as profile"
+msgstr "Salva come profilo"
+
+#: issh-core/src/tabContextMenu.ts:148
+msgid "Save layout as profile"
+msgstr "Salva layout come profilo"
+
+#: issh-terminal/src/tabContextMenu.ts:216
+msgid "Saved"
+msgstr "Salvato"
+
+#: issh-core/src/profiles.ts:19
+msgid "Saved layout"
+msgstr "Layout salvato"
+
+#: issh-electron/src/terminalContextMenu.ts:39
+msgid "Saved to {path}"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:46
+msgid "Scroll on input"
+msgstr "Scorri durante la digitazione"
+
+#: issh-terminal/src/hotkeys.ts:98
+msgid "Scroll terminal one line down"
+msgstr ""
+
+#: issh-terminal/src/hotkeys.ts:94
+msgid "Scroll terminal one line up"
+msgstr ""
+
+#: issh-terminal/src/hotkeys.ts:102
+msgid "Scroll terminal one page down"
+msgstr "Scorri il terminale di una pagina verso il basso"
+
+#: issh-terminal/src/hotkeys.ts:90
+msgid "Scroll terminal one page up"
+msgstr "Scorri il terminale di una pagina verso l'alto"
+
+#: issh-terminal/src/hotkeys.ts:106
+msgid "Scroll terminal to bottom"
+msgstr "Scorri il terminale fino in fondo"
+
+#: issh-terminal/src/hotkeys.ts:86
+msgid "Scroll terminal to top"
+msgstr "Scorri il terminale fino in cima"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:16
+msgid "Scrollback"
+msgstr "Scorrimento"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:47
+msgid "Scrolls the terminal to the bottom on user input"
+msgstr "Scorri il terminale in basso durante l'input utente"
+
+#: issh-terminal/src/hotkeys.ts:74
+msgid "Search"
+msgstr "Cerca"
+
+#: issh-terminal/src/components/colorSchemeSelector.component.ts:8
+#: issh-terminal/src/components/colorSchemeSettingsForMode.component.ts:9
+msgid "Search color schemes"
+msgstr "Cerca tema terminale"
+
+#: issh-settings/src/components/hotkeySettingsTab.component.ts:12
+msgid "Search hotkeys"
+msgstr "Cerca combinazioni"
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:200
+msgid "Sections: {sections}"
+msgstr ""
+
+#: issh-electron/src/services/platform.service.ts:263
+#: issh-electron/src/services/platform.service.ts:288
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:45
+msgid "Select"
+msgstr "Seleziona"
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:118
+msgid "Select a base profile to use as a template"
+msgstr "Seleziona un profilo di base da usare come modello"
+
+#: issh-terminal/src/hotkeys.ts:18
+msgid "Select all"
+msgstr "Seleziona tutto"
+
+#: issh-terminal/src/components/batchInputModal.component.ts:98
+#: issh-terminal/src/components/batchInputPanel.component.ts:117
+msgid "Select at least one terminal tab"
+msgstr ""
+
+#: issh-electron/src/services/platform.service.ts:323
+msgid "Select destination folder for {name}"
+msgstr ""
+
+#: issh-core/src/services/fileProviders.service.ts:47
+msgid "Select file storage"
+msgstr "Seleziona archiviazione"
+
+#: issh-core/src/index.ts:234
+#: issh-core/src/index.ts:249
+msgid "Select profile"
+msgstr "Seleziona profilo"
+
+#: issh-core/src/services/profiles.service.ts:332
+msgid "Select profile or enter an address"
+msgstr "Seleziona profilo o inserisci indirizzo"
+
+#: issh-terminal/src/components/batchInputModal.component.ts:114
+#: issh-terminal/src/components/batchInputPanel.component.ts:135
+msgid "Selected tabs"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/batchInputModal.component.html:36
+#: locale/tmp-html/issh-terminal/src/components/batchInputPanel.component.html:29
+#: locale/tmp-html/issh-terminal/src/components/terminalToolbar.component.html:4
+msgid "Send"
+msgstr ""
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:34
+msgid "Send bytes by typing in hex values"
+msgstr "Invia byte digitando valori esadecimali"
+
+#: issh-terminal/src/tabContextMenu.ts:78
+#: locale/tmp-html/issh-terminal/src/components/batchInputModal.component.html:3
+#: locale/tmp-html/issh-terminal/src/components/batchInputPanel.component.html:3
+msgid "Send input to multiple tabs"
+msgstr ""
+
+#: issh-terminal/src/components/batchInputModal.component.ts:103
+#: issh-terminal/src/components/batchInputPanel.component.ts:122
+msgid "Sent to {count} tabs"
+msgstr ""
+
+#: issh-serial/src/profiles.ts:14
+#: issh-serial/src/profiles.ts:74
+msgid "Serial"
+msgstr "Seriale"
+
+#: issh-serial/src/profiles.ts:53
+#: issh-serial/src/profiles.ts:64
+msgid "Serial connection"
+msgstr "Connessione seriale"
+
+#: issh-serial/src/profiles.ts:73
+msgid "Serial: {description}"
+msgstr "Seriale: {description}"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:175
+msgid "Set issh as %COMSPEC%"
+msgstr "Imposta issh come %COMSPEC%"
+
+#: locale/tmp-html/issh-settings/src/components/setVaultPassphraseModal.component.html:2
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:5
+msgid "Set master passphrase"
+msgstr "Imposta la frase segreta principale"
+
+#: locale/tmp-html/issh-settings/src/components/setVaultPassphraseModal.component.html:11
+msgid "Set passphrase"
+msgstr "Imposta frase segreta"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:123
+msgid "Set password"
+msgstr "Imposta password"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:164
+msgid "Set to 0 to disable recent profiles"
+msgstr "Impostare a 0 per disabilitare i profili recenti"
+
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:52
+msgid "Sets the SSH agent's named pipe path."
+msgstr "Imposta il percorso named pipe dell'agente SSH."
+
+#: issh-settings/src/buttonProvider.ts:28
+#: issh-settings/src/components/settingsTab.component.ts:67
+msgid "Settings"
+msgstr "Impostazioni"
+
+#: locale/tmp-html/issh-local/src/components/shellSettingsTab.component.html:2
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:3
+msgid "Shell"
+msgstr "Shell"
+
+#: issh-terminal/src/api/baseTerminalTab.component.ts:621
+msgid "Shell does not support current path detection"
+msgstr "La shell non supporta il rilevamento del percorso attuale"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:19
+msgid "Shell integration"
+msgstr "Integrazione shell"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:142
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:25
+msgid "Show"
+msgstr "Visualizza"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:153
+msgid "Show Mixer"
+msgstr "Visualizza mixer"
+
+#: issh-serial/src/hotkeys.ts:10
+msgid "Show Serial connections"
+msgstr "Visualizza connessioni seriali"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:117
+msgid "Show a confirmation box when pasting multiple lines"
+msgstr "Visualizza una casella di conferma quando incolli più righe"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:170
+msgid "Show built-in profiles in selector"
+msgstr "Visualizza profili integrati nel selettore"
+
+#: issh-core/src/hotkeys.ts:12
+msgid "Show command selector"
+msgstr "Visualizza selettore comandi"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:94
+msgid "Show config file"
+msgstr "Visualizza file di configurazione"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:93
+msgid "Show defaults"
+msgstr "Visualizza predefiniti"
+
+#: issh-core/src/hotkeys.ts:56
+msgid "Show pane labels (for rearranging)"
+msgstr "Visualizza etichette riquadro (per riorganizzare)"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:171
+msgid "Show profile icon on tab"
+msgstr "Visualizza l'icona del profilo nella scheda"
+
+#: issh-core/src/hotkeys.ts:16
+msgid "Show profile selector"
+msgstr "Visualizza selettore profilo"
+
+#: issh-core/src/hotkeys.ts:275
+msgid "Show profile selector for group {name}"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:163
+msgid "Show recent profiles in selector"
+msgstr "Visualizza i profili recenti nel selettore"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:159
+msgid "Show tabs in fullscreen mode"
+msgstr "Visualizza schede in modalità schermo intero"
+
+#: issh-terminal/src/tabContextMenu.ts:64
+msgid "Show toolbar"
+msgstr "Visualizza barra degli strumenti"
+
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:46
+msgid "Show vault contents"
+msgstr "Visualizza contenuto della cassaforte"
+
+#: issh-core/src/hotkeys.ts:271
+msgid "Show {type} profile selector"
+msgstr "Visualizza il selettore profilo {type}"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:29
+msgid "Sixel graphics support (experimental)"
+msgstr "Supporto grafico Sixel (sperimentale)"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:159
+msgid "Skip MoTD/banner"
+msgstr "Salta MoTD/banner"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:75
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:93
+msgid "Snaps the window to a side of the screen"
+msgstr "Aggancia la finestra su un lato dello schermo"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:137
+msgid "Sound"
+msgstr "Notifiche"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:13
+msgid "Spaciness"
+msgstr "Vuoto"
+
+#: issh-core/src/tabContextMenu.ts:75
+msgid "Split"
+msgstr "Dividi"
+
+#: issh-core/src/hotkeys.ts:160
+msgid "Split to the bottom"
+msgstr "Dividi in basso"
+
+#: issh-core/src/tabContextMenu.ts:85
+msgid "Split to the down"
+msgstr "Dividi in basso"
+
+#: issh-core/src/hotkeys.ts:164
+#: issh-core/src/tabContextMenu.ts:86
+msgid "Split to the left"
+msgstr "Dividi a sinistra"
+
+#: issh-core/src/hotkeys.ts:156
+#: issh-core/src/tabContextMenu.ts:84
+msgid "Split to the right"
+msgstr "Dividi a destra"
+
+#: issh-core/src/hotkeys.ts:168
+msgid "Split to the top"
+msgstr "Dividi in alto"
+
+#: issh-core/src/tabContextMenu.ts:87
+msgid "Split to the up"
+msgstr "Dividi in alto"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:157
 msgid "Startup"
 msgstr "Avvio"
 
-#: locale/tmp-html/tabby-serial/src/components/serialProfileSettings.component.html:32
-msgid "Stop bits"
-msgstr "Bit stop"
-
-#: tabby-terminal/src/components/streamProcessingSettings.component.ts:52
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:53
 msgid "Strip"
 msgstr "Striscia"
 
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:41
-msgid "Subscribe to updates"
-msgstr "Iscriviti agli aggiornamenti"
-
-#: locale/tmp-html/tabby-local/src/components/environmentEditor.component.html:13
+#: locale/tmp-html/issh-local/src/components/environmentEditor.component.html:13
 msgid "Substitutions allowed."
 msgstr "Sostituzioni consentite."
 
-#: locale/tmp-html/tabby-core/src/components/welcomeTab.component.html:19
-#: locale/tmp-html/tabby-terminal/src/components/colorSchemeSettingsTab.component.html:5
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:19
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:5
 msgid "Switch color scheme"
 msgstr "Cambia schema colore"
 
-#: tabby-core/src/tabContextMenu.ts:290
+#: issh-core/src/tabContextMenu.ts:290
 msgid "Switch profile"
 msgstr "Cambia profilo"
 
-#: tabby-core/src/hotkeys.ts:236
+#: issh-core/src/hotkeys.ts:236
 msgid "Switch profile in the active pane"
 msgstr "Cambia profilo nel riquadro attivo"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:7
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:7
 msgid "Switches terminal frontend implementation (experimental)"
 msgstr "Cambia l'implementazione del frontend del terminale (sperimentale)"
 
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:4
-msgid "Sync"
-msgstr "Sincronizzazione"
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:117
+msgid "Sync service stopped"
+msgstr ""
 
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:53
-msgid "Sync automatically"
-msgstr "Sincronizza automaticamente"
+#: issh-settings/src/components/settingsTab.component.ts:48
+msgid "System"
+msgstr ""
 
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:8
-msgid "Sync host"
-msgstr "Host di sincronizzazione"
-
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:68
-msgid "Sync hotkeys"
-msgstr "Sincronizza tasti di scelta rapida"
-
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:80
-msgid "Sync Vault"
-msgstr "Sincronizza cassaforte"
-
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:74
-msgid "Sync window settings"
-msgstr "Sincronizza impostazioni finestra"
-
-#: tabby-core/src/hotkeys.ts:100
-#: tabby-core/src/hotkeys.ts:104
-#: tabby-core/src/hotkeys.ts:108
-#: tabby-core/src/hotkeys.ts:112
-#: tabby-core/src/hotkeys.ts:116
-#: tabby-core/src/hotkeys.ts:120
-#: tabby-core/src/hotkeys.ts:124
-#: tabby-core/src/hotkeys.ts:128
-#: tabby-core/src/hotkeys.ts:132
-#: tabby-core/src/hotkeys.ts:136
-#: tabby-core/src/hotkeys.ts:140
-#: tabby-core/src/hotkeys.ts:144
-#: tabby-core/src/hotkeys.ts:148
-#: tabby-core/src/hotkeys.ts:152
-#: tabby-core/src/hotkeys.ts:76
-#: tabby-core/src/hotkeys.ts:80
-#: tabby-core/src/hotkeys.ts:84
-#: tabby-core/src/hotkeys.ts:88
-#: tabby-core/src/hotkeys.ts:92
-#: tabby-core/src/hotkeys.ts:96
-msgid "Tab {number}"
-msgstr "Tab {number}"
-
-#: tabby-core/src/tabContextMenu.ts:223
+#: issh-core/src/tabContextMenu.ts:223
 msgid "Tab activity"
 msgstr "Attività della scheda"
 
-#: locale/tmp-html/tabby-core/src/components/safeModeModal.component.html:3
-msgid "Tabby could not start with your plugins, so all third party plugins have been disabled in this session. The error was:"
-msgstr "Tabby non può avviarsi con i plugin, quindi tutti i plugin di terze parti sono stati disabilitati in questa sessione. \n"
-"L'errore era:"
+#: issh-core/src/hotkeys.ts:100
+#: issh-core/src/hotkeys.ts:104
+#: issh-core/src/hotkeys.ts:108
+#: issh-core/src/hotkeys.ts:112
+#: issh-core/src/hotkeys.ts:116
+#: issh-core/src/hotkeys.ts:120
+#: issh-core/src/hotkeys.ts:124
+#: issh-core/src/hotkeys.ts:128
+#: issh-core/src/hotkeys.ts:132
+#: issh-core/src/hotkeys.ts:136
+#: issh-core/src/hotkeys.ts:140
+#: issh-core/src/hotkeys.ts:144
+#: issh-core/src/hotkeys.ts:148
+#: issh-core/src/hotkeys.ts:152
+#: issh-core/src/hotkeys.ts:76
+#: issh-core/src/hotkeys.ts:80
+#: issh-core/src/hotkeys.ts:84
+#: issh-core/src/hotkeys.ts:88
+#: issh-core/src/hotkeys.ts:92
+#: issh-core/src/hotkeys.ts:96
+msgid "Tab {number}"
+msgstr "Tab {number}"
 
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:41
-msgid "Tabby news and updates on Twitter"
-msgstr "Notizie e aggiornamenti di Tabby su Twitter"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:123
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:130
 msgid "Tabs"
 msgstr "Schede"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:126
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:133
 msgid "Tabs location"
 msgstr "Posizione delle schede"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:141
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:148
 msgid "Tabs width"
 msgstr "Larghezza schede"
 
-#: tabby-terminal/src/api/baseTerminalTab.component.ts:210
-#: tabby-terminal/src/settings.ts:43
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:85
+msgid "Tags"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/batchInputModal.component.html:12
+msgid "Target tabs"
+msgstr ""
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:123
+msgid "Template"
+msgstr ""
+
+#: issh-settings/src/components/settingsTab.component.ts:46
+#: issh-terminal/src/api/baseTerminalTab.component.ts:213
+#: issh-terminal/src/settings.ts:45
 msgid "Terminal"
 msgstr "Terminale"
 
-#: locale/tmp-html/tabby-terminal/src/components/appearanceSettingsTab.component.html:40
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:40
 msgid "Terminal background"
 msgstr "Sfondo del terminale"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:133
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:140
 msgid "Terminal bell"
 msgstr "Notifiche del terminale"
 
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:82
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:177
 msgid "Terminal identification"
 msgstr "Identificazione del terminale"
 
-#: locale/tmp-html/tabby-core/src/components/welcomeTab.component.html:7
-msgid "Thank you for downloading Tabby!"
-msgstr "Grazie per aver scaricato Tabby!"
+#: issh-terminal/src/services/batchInput.service.ts:91
+msgid "Terminal {number}"
+msgstr ""
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:5
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:7
+msgid "Thank you for downloading issh!"
+msgstr "Grazie per aver scaricato issh!"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:5
 msgid "Theme"
 msgstr "Tema"
 
-#: tabby-core/src/components/transfersMenu.component.ts:47
+#: issh-core/src/components/transfersMenu.component.ts:53
 msgid "There are active file transfers"
 msgstr "Ci sono trasferimenti di file attivi"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:102
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:121
 msgid "There is a saved password for this connection"
 msgstr "Per questa connessione è presente una password salvata"
 
-#: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:102
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:197
 msgid "These apply to all profiles of a given type"
 msgstr "Questi si applicano a tutti i profili di un dato tipo"
 
-#: locale/tmp-html/tabby-settings/src/components/editProfileGroupModal.component.html:17
+#: locale/tmp-html/issh-settings/src/components/editProfileGroupModal.component.html:40
 msgid "These apply to all profiles of a given type in this group"
-msgstr "Questa modifica si applica a tutti i profili di un dato tipo in questo gruppo"
+msgstr ""
+"Questa modifica si applica a tutti i profili di un dato tipo in questo "
+"gruppo"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:59
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:59
 msgid "Thin"
 msgstr "Sottile"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:205
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:212
 msgid "Tick this if you're experiencing aliasing, ghosting or other visual issues"
 msgstr "Seleziona se stai sperimentando aliasing, ghosting o altri problemi visivi"
 
-#: tabby-core/src/hotkeys.ts:20
+#: issh-core/src/hotkeys.ts:20
 msgid "Toggle fullscreen mode"
 msgstr "Attiva/disattiva schermo intero"
 
-#: tabby-core/src/hotkeys.ts:36
+#: issh-core/src/hotkeys.ts:36
 msgid "Toggle last tab"
 msgstr "Attiva/disattiva ultima scheda"
 
-#: tabby-electron/src/hotkeys.ts:14
+#: issh-electron/src/hotkeys.ts:14
 msgid "Toggle terminal window"
 msgstr "Attiva/disattiva finestra terminale"
 
-#: locale/tmp-html/tabby-core/src/components/welcomeTab.component.html:40
-msgid "Toggles the Tabby window visibility"
-msgstr "Attiva/disattiva visibilità della finestra di Tabby"
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:40
+msgid "Toggles the issh window visibility"
+msgstr "Attiva/disattiva visibilità della finestra di issh"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:130
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:74
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:137
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:81
 msgid "Top"
 msgstr "In alto"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:123
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:130
 msgid "Trim whitespace and newlines"
 msgstr "Riduci spazi bianchi e a capo"
 
-#: tabby-core/src/services/config.service.ts:428
+#: issh-core/src/services/config.service.ts:474
 msgid "Try again"
 msgstr "Prova di nuovo"
 
-#: tabby-ssh/src/session/ssh.ts:476
-msgid "Trying saved password"
-msgstr "Prova la password salvata"
-
-#: tabby-core/src/hotkeys.ts:68
+#: issh-core/src/hotkeys.ts:68
 msgid "Turn current tab's panes into separate tabs"
 msgstr "Separa i pannelli della tab selezionata in nuovi pannelli"
 
-#: tabby-core/src/services/profiles.service.ts:418
-#: tabby-settings/src/components/profilesSettingsTab.component.ts:10
+#: issh-core/src/services/profiles.service.ts:531
+#: issh-settings/src/components/profilesSettingsTab.component.ts:10
 msgid "Ungrouped"
 msgstr "Non raggruppate"
 
-#: tabby-settings/src/components/profilesSettingsTab.component.ts:269
+#: issh-settings/src/components/profilesSettingsTab.component.ts:352
 msgid "Unknown"
 msgstr "Sconosciuto"
 
-#: tabby-settings/src/components/vaultSettingsTab.component.ts:98
+#: issh-settings/src/components/vaultSettingsTab.component.ts:160
 msgid "Unknown secret of type {type} for {key}"
 msgstr "Codice segreto sconosciuto di tipo {type} per {key}"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalToolbar.component.html:4
+#: locale/tmp-html/issh-terminal/src/components/terminalToolbar.component.html:5
 msgid "Unpin"
 msgstr "Sgancia"
 
-#: tabby-core/src/tabContextMenu.ts:81
+#: issh-core/src/tabContextMenu.ts:81
 msgid "Up"
 msgstr "In alto"
 
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:14
-#: tabby-electron/src/services/updater.service.ts:133
+#: issh-electron/src/services/updater.service.ts:132
 msgid "Update"
 msgstr "Aggiorna"
 
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:42
-#: locale/tmp-html/tabby-ssh/src/components/sftpPanel.component.html:10
-msgid "Upload"
-msgstr "Carica"
-
-#: locale/tmp-html/tabby-settings/src/components/configSyncSettingsTab.component.html:46
-msgid "Upload as a new config"
-msgstr "Carica come nuova configurazione"
-
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:39
-msgid "Use {altKeyName} as the Meta key"
-msgstr "Come chiave meta usa {altKeyName} "
-
-#: locale/tmp-html/tabby-local/src/components/shellSettingsTab.component.html:5
+#: locale/tmp-html/issh-local/src/components/shellSettingsTab.component.html:5
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:6
 msgid "Use ConPTY"
 msgstr "Usa ConPTY"
 
-#: tabby-electron/src/shells/linuxDefault.ts:31
-#: tabby-electron/src/shells/linuxDefault.ts:38
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:39
+msgid "Use {altKeyName} as the Meta key"
+msgstr "Come chiave meta usa {altKeyName} "
+
+#: issh-electron/src/shells/linuxDefault.ts:31
+#: issh-electron/src/shells/linuxDefault.ts:39
 msgid "User default"
 msgstr "Predefinito"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:70
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:70
 msgid "Username"
 msgstr "Nome utente"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:25
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:25
 msgid "Using CONNECT method"
 msgstr "Attraverso il metodo CONNECT"
 
-#: tabby-ssh/src/session/ssh.ts:465
-msgid "Using preset password"
-msgstr "Usa password preimpostata"
+#: issh-ssh/src/session/ssh.ts:696
+msgid "Using saved password"
+msgstr ""
 
-#: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:9
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:9
 msgid "Vault"
 msgstr "Cassaforte"
 
-#: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:4
-msgid "Vault is an always-encrypted container for secrets such as SSH passwords and private key passphrases."
-msgstr "La cassaforte è un contenitore protetto da cifratura per proteggere password SSH e frasi segrete delle chiavi private."
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:4
+msgid ""
+"Vault is an always-encrypted container for secrets such as SSH passwords "
+"and private key passphrases."
+msgstr ""
+"La cassaforte è un contenitore protetto da cifratura per proteggere "
+"password SSH e frasi segrete delle chiavi private."
 
-#: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:17
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:17
 msgid "Vault is empty"
 msgstr "La cassaforte è vuota"
 
-#: locale/tmp-html/tabby-core/src/components/unlockVaultModal.component.html:4
-#: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:44
+#: locale/tmp-html/issh-core/src/components/unlockVaultModal.component.html:4
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:44
 msgid "Vault is locked"
 msgstr "Cassaforte bloccata"
 
-#: locale/tmp-html/tabby-settings/src/components/vaultSettingsTab.component.html:3
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:3
 msgid "Vault is not configured"
 msgstr "La cassaforte non è configurata"
 
-#: tabby-core/src/services/fileProviders.service.ts:40
+#: issh-core/src/services/fileProviders.service.ts:40
 msgid "Vault master passphrase needs to be set to allow storing secrets"
-msgstr "Per consentire la memorizzazione di dati cifrati deve essere impostata la frase segreta principale della cassaforte"
+msgstr ""
+"Per consentire la memorizzazione di dati cifrati deve essere impostata la "
+"frase segreta principale della cassaforte"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshSettingsTab.component.html:11
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:27
 msgid "Verify host keys when connecting"
 msgstr "Verifica le chiavi host durante la connessione"
 
-#: locale/tmp-html/tabby-core/src/components/startPage.component.html:13
+#: locale/tmp-html/issh-core/src/components/startPage.component.html:43
 msgid "Version: {version}"
 msgstr "Versione: {version}"
 
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:28
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:28
 msgid "Vibrancy"
 msgstr "Trasparenza"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:139
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:146
 msgid "Visual"
 msgstr "Visive"
 
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:116
-msgid "Warn on multi-line paste"
-msgstr "Avvisa prima di incollare righe multiple"
-
-#: locale/tmp-html/tabby-ssh/src/components/sshSettingsTab.component.html:5
-msgid "Warn when closing active connections"
-msgstr "Avvisa quando chiudi le connessioni attive"
-
-#: locale/tmp-html/tabby-ssh/src/components/hostKeyPromptModal.component.html:6
-msgid "Warning: remote host's key has suddenly changed!"
-msgstr "Attenzione: la chiave dell'host remoto è improvvisamente cambiata!"
-
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:67
-msgid "We're only tracking your Tabby and OS versions."
-msgstr "Monitoreremo soltanto le versioni di Tabby e del Sistema Operativo."
-
-#: tabby-core/src/components/welcomeTab.component.ts:25
-msgid "Welcome"
-msgstr "Benvenuto"
-
-#: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:36
-msgid "What's new"
-msgstr "Novità"
-
-#: locale/tmp-html/tabby-settings/src/components/editProfileModal.component.html:46
-msgid "When a session ends"
-msgstr "Quando termina una sessione"
-
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:82
-msgid "When enabled, links are only clickable while holding this key"
-msgstr "Quando abilitato, i collegamentisono cliccabili solo tenendo premuto questo tasto"
-
-#: locale/tmp-html/tabby-ssh/src/components/sshSettingsTab.component.html:18
-msgid "When WinSCP is detected, you can launch an SCP session from the context menu."
-msgstr "Quando viene rilevato WinSCP, è possibile avviare una sessione SCP dal menu contestuale."
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:53
-msgid "Whether a custom window or an OS native window should be used"
-msgstr "Indica se usare una cornice personalizzata o nativa del sistema operativo"
-
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:141
-msgid "Will prevent the SSH greeting from showing up"
-msgstr "Impedirà l'apparizione dei Greeting SSH"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:2
-#: tabby-settings/src/settings.ts:30
-msgid "Window"
-msgstr "Finestra"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:112
-msgid "Window dimension along the edge"
-msgstr "Dimensione finestra lungo il bordo"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:105
-msgid "Window dimension away from the edge"
-msgstr "Dimensione finestra fuori dal bordo"
-
-#: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:52
-msgid "Window frame"
-msgstr "Cornice della finestra"
-
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:165
-msgid "Windows"
-msgstr "Windows"
-
-#: locale/tmp-html/tabby-local/src/components/shellSettingsTab.component.html:11
-msgid "Windows 10 build 18309 or above is recommended for ConPTY"
-msgstr "Windows 10 build 18309 o superiore è raccomandato per ConPTY"
-
-#: locale/tmp-html/tabby-ssh/src/components/sshSettingsTab.component.html:17
-msgid "WinSCP path"
-msgstr "Percorso WinSCP"
-
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:74
-msgid "Word separators"
-msgstr "Separatori di parole"
-
-#: locale/tmp-html/tabby-local/src/components/localProfileSettings.component.html:10
-msgid "Working directory"
-msgstr "Cartella di lavoro"
-
-#: locale/tmp-html/tabby-ssh/src/components/sftpPanel.component.html:15
-#: locale/tmp-html/tabby-ssh/src/components/sshTab.component.html:6
-msgid "Working directory detection"
-msgstr "Rilevamento cartella di lavoro"
-
-#: locale/tmp-html/tabby-terminal/src/components/terminalSettingsTab.component.html:145
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:152
 msgid "WSL terminal bell can only be muted via Volume Mixer"
-msgstr "Gli avvisi del terminale WSL possono essere silenziati soltanto tramite il regolatore di volume"
+msgstr ""
+"Gli avvisi del terminale WSL possono essere silenziati soltanto tramite il "
+"regolatore di volume"
 
-#: locale/tmp-html/tabby-local/src/components/shellSettingsTab.component.html:14
+#: locale/tmp-html/issh-local/src/components/shellSettingsTab.component.html:14
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:15
 msgid "WSL terminal only supports TrueColor with ConPTY"
 msgstr "Il terminale WSL supporta solo TrueColor con ConPTY"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshProfileSettings.component.html:128
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:116
+msgid "Warn on multi-line paste"
+msgstr "Avvisa prima di incollare righe multiple"
+
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:21
+msgid "Warn when closing active connections"
+msgstr "Avvisa quando chiudi le connessioni attive"
+
+#: locale/tmp-html/issh-ssh/src/components/hostKeyPromptModal.component.html:6
+msgid "Warning: remote host's key has suddenly changed!"
+msgstr "Attenzione: la chiave dell'host remoto è improvvisamente cambiata!"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:27
+msgid "We're only tracking your issh and OS versions."
+msgstr "Monitoreremo soltanto le versioni di issh e del Sistema Operativo."
+
+#: issh-core/src/components/welcomeTab.component.ts:26
+msgid "Welcome"
+msgstr "Benvenuto"
+
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:34
+msgid ""
+"When WinSCP is detected, you can launch an SCP session from the context "
+"menu."
+msgstr ""
+"Quando viene rilevato WinSCP, è possibile avviare una sessione SCP dal menu "
+"contestuale."
+
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:46
+msgid "When a session ends"
+msgstr "Quando termina una sessione"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:82
+msgid "When enabled, links are only clickable while holding this key"
+msgstr ""
+"Quando abilitato, i collegamentisono cliccabili solo tenendo premuto questo "
+"tasto"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:53
+msgid "Whether a custom window or an OS native window should be used"
+msgstr "Indica se usare una cornice personalizzata o nativa del sistema operativo"
+
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:26
+msgid ""
+"Whether to invert generated light theme colors. This helps give the "
+"256-color palette more semantic meaning."
+msgstr ""
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:160
+msgid "Will prevent the SSH greeting from showing up"
+msgstr "Impedirà l'apparizione dei Greeting SSH"
+
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:33
+msgid "WinSCP path"
+msgstr "Percorso WinSCP"
+
+#: issh-settings/src/settings.ts:31
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:2
+msgid "Window"
+msgstr "Finestra"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:119
+msgid "Window dimension along the edge"
+msgstr "Dimensione finestra lungo il bordo"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:112
+msgid "Window dimension away from the edge"
+msgstr "Dimensione finestra fuori dal bordo"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:52
+msgid "Window frame"
+msgstr "Cornice della finestra"
+
+#: issh-terminal/src/services/batchInput.service.ts:89
+msgid "Window tab {number}"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:172
+msgid "Windows"
+msgstr "Windows"
+
+#: locale/tmp-html/issh-local/src/components/shellSettingsTab.component.html:11
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:12
+msgid "Windows 10 build 18309 or above is recommended for ConPTY"
+msgstr "Windows 10 build 18309 o superiore è raccomandato per ConPTY"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:74
+msgid "Word separators"
+msgstr "Separatori di parole"
+
+#: locale/tmp-html/issh-local/src/components/localProfileSettings.component.html:13
+msgid "Working directory"
+msgstr "Cartella di lavoro"
+
+#: locale/tmp-html/issh-ssh/src/components/sshTab.component.html:6
+msgid "Working directory detection"
+msgstr "Rilevamento cartella di lavoro"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:147
 msgid "X11 forwarding"
 msgstr "Inoltro X11"
 
-#: tabby-core/src/utils.ts:65
+#: issh-core/src/utils.ts:65
 msgid "Yellow"
 msgstr "Giallo"
 
-#: locale/tmp-html/tabby-settings/src/components/setVaultPassphraseModal.component.html:4
+#: locale/tmp-html/issh-settings/src/components/setVaultPassphraseModal.component.html:4
 msgid "You can change it later, but it's unrecoverable if forgotten."
 msgstr "Si può modificare più tardi, ma è irrecuperabile se dimenticata."
 
-#: locale/tmp-html/tabby-ssh/src/components/hostKeyPromptModal.component.html:7
-msgid "You could be under a man-in-the-middle attack right now, or the host key could have just been changed."
-msgstr "In questo momento potresti essere sotto un attacco man-in-the-middle, o la chiave dell'host potrebbe essere stata appena cambiata."
+#: locale/tmp-html/issh-ssh/src/components/hostKeyPromptModal.component.html:7
+msgid ""
+"You could be under a man-in-the-middle attack right now, or the host key "
+"could have just been changed."
+msgstr ""
+"In questo momento potresti essere sotto un attacco man-in-the-middle, o la "
+"chiave dell'host potrebbe essere stata appena cambiata."
 
-#: tabby-terminal/src/hotkeys.ts:54
+#: issh-terminal/src/hotkeys.ts:54
 msgid "Zoom in"
 msgstr "Zoom avanti"
 
-#: tabby-terminal/src/hotkeys.ts:58
+#: issh-terminal/src/hotkeys.ts:58
 msgid "Zoom out"
 msgstr "Zoom indietro"
 
-#: locale/tmp-html/tabby-ssh/src/components/sshPortForwardingConfig.component.html:43
-#: locale/tmp-html/tabby-ssh/src/components/sshPortForwardingConfig.component.html:5
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:43
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:5
 msgctxt "[Dynamic] port forwarding"
 msgid "id.port-forwarding.dynamic"
 msgstr "Dinamico"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:152
+msgid "id.tab-width.dynamic"
+msgstr "Dinamica"
+
+#: locale/tmp-html/issh-core/src/components/safeModeModal.component.html:3
+msgid ""
+"issh could not start with your plugins, so all third party plugins have "
+"been disabled in this session. The error was:"
+msgstr ""
+"issh non può avviarsi con i plugin, quindi tutti i plugin di terze parti "
+"sono stati disabilitati in questa sessione. \n"
+"L'errore era:"
+
+#: issh-core/src/components/startPage.component.ts:736
+#: issh-core/src/components/startPage.component.ts:745
+#: issh-settings/src/components/profilesSettingsTab.component.ts:137
+#: issh-settings/src/components/profilesSettingsTab.component.ts:147
+msgid "{name} copy"
+msgstr "{name} copia"
+
+#: issh-llm/src/hotkeys.ts:23
+msgid "上一条建议（Ctrl+U）"
+msgstr ""
+
+#: issh-llm/src/hotkeys.ts:19
+msgid "下一条建议（Ctrl+N）"
+msgstr ""
+
+#: issh-llm/src/tabLLMController.ts:357
+msgid "仅允许本次"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:105
+msgid "仅同步勾选的内容，其余保持不变"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:75
+msgid "从对端「本机 TLS 指纹」复制粘贴，必须完全一致。"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:128
+msgid "从对端拉取"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:101
+msgid "传输完整配置，覆盖对端/本地全部设置"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:12
+msgid "保险库已解锁"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:13
+msgid "保险库已锁定"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:103
+msgid "保险库未解锁"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:54
+msgid "停止服务"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:37
+msgid "允许局域网访问"
+msgstr ""
+
+#: issh-llm/src/hotkeys.ts:27
+msgid "关闭 AI 补全面板"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:113
+msgid "勾选需要同步的配置项"
+msgstr ""
+
+#: issh-llm/src/tabLLMController.ts:354
+msgid "危险命令需要确认"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:170
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:213
+msgid "同步 Vault 前请先解锁保险库"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:16
+msgid "同步使用自签 TLS。请手动交换证书指纹；指纹不匹配时连接会被拒绝。"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:112
+msgid "同步内容"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:19
+msgid "同步密钥"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:124
+msgid "同步操作"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:108
+msgid "同步服务已启动"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:31
+msgid "同步服务的 HTTPS 端口，两台电脑必须一致。"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:96
+msgid "同步模式"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:50
+msgid "启动同步服务后，其他电脑即可连接到本机。"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:110
+msgid "启动失败：{error}"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:53
+msgid "启动服务"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:5
+msgid "在局域网内的两台电脑之间同步 issh 配置。需要先启用保险库（Vault）并设置主密码。"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:70
+msgid "客户端（连接对端）"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:81
+msgid "对端 IP 地址"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:74
+msgid "对端 TLS 指纹"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:10
+msgid "局域网同步（HTTPS）"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:105
+msgid "差异同步"
+msgstr ""
+
+#: issh-llm/src/hotkeys.ts:33
+msgid "快速选择第 {position} 条补全建议"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:59
+msgid "把该指纹发给对端，粘贴到「对端 TLS 指纹」。"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:225
+msgid "拉取失败"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:220
+msgid "拉取完成"
+msgstr ""
+
+#: issh-llm/src/tabLLMController.ts:358
+msgid "拒绝"
+msgstr ""
+
+#: issh-llm/src/hotkeys.ts:15
+msgid "接受 AI 建议（Ctrl+Y）"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:127
+msgid "推送到对端"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:182
+msgid "推送失败"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:177
+msgid "推送完成"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:133
+msgid "推送需对端用户确认后才会写入。拉取会覆盖本机配置，覆盖前请确认。差异同步仅覆盖勾选的内容。"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:101
+msgid "整包同步"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:45
+msgid "服务端（本机）"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:58
+msgid "本机 TLS 指纹"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:49
+msgid "本机同步服务"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:86
+msgid "测试连接"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:20
+msgid "用于身份验证的共享密钥，两台电脑必须一致。"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:30
+msgid "端口"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:82
+msgid "请先在 Vault 设置中启用保险库并设置主密码"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:6
+msgid "请先在「安全」设置中启用保险库。"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:126
+msgid "请先粘贴对端 TLS 指纹"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:78
+msgid "请先设置同步密钥"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:153
+msgid "请至少勾选一个同步内容"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:82
+msgid "输入另一台电脑的局域网 IP 地址。"
+msgstr ""
+
+#: issh-llm/src/components/llmSettingsTab.component.ts:39
+msgid "连接成功"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:2
+msgid "配置同步"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:4
+msgid "配置同步尚未配置"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:221
+msgid "配置已从 {ip} 拉取并应用"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:178
+msgid "配置已推送到 {ip}（对端需确认）"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:38
+msgid "默认仅监听 127.0.0.1。勾选后绑定 0.0.0.0（仅限可信局域网）。"
+msgstr ""

@@ -113,16 +113,16 @@ function auditWorkspace (label, cwd) {
 
 const workspaceNames = [
     'app',
-    'tabby-core',
-    'tabby-settings',
-    'tabby-terminal',
-    'tabby-community-color-schemes',
-    'tabby-ssh',
-    'tabby-local',
-    'tabby-electron',
-    'tabby-linkifier',
-    'tabby-auto-sudo-password',
-    'tabby-llm',
+    'issh-core',
+    'issh-settings',
+    'issh-terminal',
+    'issh-community-color-schemes',
+    'issh-ssh',
+    'issh-local',
+    'issh-electron',
+    'issh-linkifier',
+    'issh-auto-sudo-password',
+    'issh-llm',
 ]
 const results = [auditWorkspace('root', repositoryRoot)]
 for (const name of workspaceNames) {

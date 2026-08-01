@@ -1,0 +1,24 @@
+{
+  "name": "issh-community-color-schemes",
+  "version": "1.0.231-nightly.0",
+  "description": "Community color schemes for issh",
+  "keywords": [
+    "tabby-builtin-plugin"
+  ],
+  "main": "dist/index.js",
+  "typings": "typings/index.d.ts",
+  "scripts": {
+    "build": "webpack --progress --color",
+    "watch": "webpack --progress --color --watch"
+  },
+  "files": [
+    "dist"
+  ],
+  "author": "issh Developers",
+  "license": "MIT",
+  "peerDependencies": {
+    "@angular/core": "^20",
+    "issh-core": "*",
+    "issh-terminal": "*"
+  }
+}
