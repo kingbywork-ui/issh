@@ -114,6 +114,20 @@
 3. **隐私**：启用「发送终端上下文到 API」时，最近终端输出会被包含以提升建议质量。敏感模式（API 密钥、令牌、密码、私钥）在发送前就地脱敏。禁用此选项则仅发送命令片段，不附带最近输出。
 4. **Agent Bridge**：可选 CLI/MCP bridge 通过 localhost 暴露 issh 会话给外部 agent，使用 token scope、SFTP 限制、危险命令确认和审计日志保护。
 
+### 安全加固与 Chromium 风险说明
+
+截至 2026-08-02，当前发行版使用 Electron `43.2.0`，内置 Chromium `150.0.7871.129`。官方稳定版尚未提供 Chromium `150.0.7871.219` 对应的 Electron，因此本项目采用补偿性加固；这些措施不能宣称已经移除 Chromium CVE。
+
+- 主窗口 CSP 仅允许本地脚本、打包资源，以及 HTTPS/WSS 和本机回环地址的连接；禁止对象加载和页面嵌入。
+- 配置、插件安装/卸载、PTY、窗口控制和新窗口等特权 IPC 只接受应用自有的本地渲染器发送者。
+- Windows 打包启用 ASAR 完整性验证和 `onlyLoadAppFromAsar`；`runAsNode`、`NODE_OPTIONS` 和 CLI 调试参数 Fuse 保持禁用。
+- GPU 加速保留为 **设置 → 窗口 → Hacks → Disable GPU acceleration** 运行时开关，不默认关闭，以避免无必要的性能损失。
+- 仅加载受信任的本地插件，不要让 Electron 主窗口加载远程页面；Electron alpha/nightly 不作为生产版本升级方案。
+
+当前架构仍使用 `nodeIntegration: true` 和 `contextIsolation: false`。完整迁移到 sandbox/contextBridge 属于后续架构工作，不是本次 Chromium 风险的简单热修复。请持续关注 [Electron 安全指南](https://www.electronjs.org/docs/latest/tutorial/security) 和[稳定版本列表](https://releases.electronjs.org/release/)，在官方稳定版本提供修复后再升级并执行完整构建、回归和打包验证。
+
+详细的实施范围和验证记录见 [Chromium 风险补偿性加固记录](./SECURITY_REMEDIATION_2026-08-02.md)。
+
 ## 便携式应用
 
 如果在 `issh.exe` 所在的目录创建一个名为 `data` 的文件夹，issh 将可以在 Windows 上作为便携式应用程序运行。

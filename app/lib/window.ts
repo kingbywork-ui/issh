@@ -532,7 +532,10 @@ export class Window {
             return { action: 'deny' }
         })
 
-        ipcMain.on('window-set-disable-vibrancy-while-dragging', (_event, value) => {
+        ipcMain.on('window-set-disable-vibrancy-while-dragging', (event, value) => {
+            if (!this.application.isTrustedRenderer(event.sender)) {
+                return
+            }
             this.disableVibrancyWhileDragging = value && this.configStore.hacks?.disableVibrancyWhileDragging
         })
 
@@ -552,11 +555,17 @@ export class Window {
         this.window.on('move', onBoundsChange)
         this.window.on('resize', onBoundsChange)
 
-        ipcMain.on('window-set-traffic-light-position', (_event, x, y) => {
+        ipcMain.on('window-set-traffic-light-position', (event, x, y) => {
+            if (!this.application.isTrustedRenderer(event.sender)) {
+                return
+            }
             this.window.setWindowButtonPosition({ x, y })
         })
 
-        ipcMain.on('window-set-opacity', (_event, opacity) => {
+        ipcMain.on('window-set-opacity', (event, opacity) => {
+            if (!this.application.isTrustedRenderer(event.sender)) {
+                return
+            }
             this.window.setOpacity(opacity)
         })
 
@@ -567,7 +576,7 @@ export class Window {
 
     on (event: string, listener: (...args: any[]) => void): void {
         ipcMain.on(event, (e, ...args) => {
-            if (!this.window || e.sender !== this.window.webContents) {
+            if (!this.window || e.sender !== this.window.webContents || !this.application.isTrustedRenderer(e.sender)) {
                 return
             }
             listener(e, ...args)

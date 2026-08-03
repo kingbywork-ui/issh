@@ -130,7 +130,10 @@ if (process.defaultApp) {
     app.setAsDefaultProtocolClient('issh')
 }
 
-ipcMain.on('app:new-window', () => {
+ipcMain.on('app:new-window', event => {
+    if (!application.isTrustedRenderer(event.sender)) {
+        return
+    }
     application.newWindow()
 })
 

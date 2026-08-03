@@ -21,4 +21,10 @@ import '@fortawesome/fontawesome-free/css/regular.css'
 import '@fortawesome/fontawesome-free/css/fontawesome.css'
 import './preload.scss'
 
+const rendererNodeRequire = global['require']
+if (typeof window !== 'undefined') {
+    window['nodeRequire'] = rendererNodeRequire
+    console.timeStamp('index')
+}
+
 debugLog('preload-entry-loaded')

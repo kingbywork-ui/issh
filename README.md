@@ -114,6 +114,20 @@ All hotkeys are customizable in **Settings → Hotkeys**.
 3. **Privacy**: When "Send terminal context to API" is enabled, recent terminal output is included to improve suggestion quality. Sensitive patterns (API keys, tokens, passwords, private keys) are redacted locally before sending. Disable this option to send only command fragments without recent output.
 4. **Agent Bridge**: The optional CLI/MCP bridge exposes local issh sessions to external agents over localhost using token scopes, SFTP limits, dangerous-command confirmation, and audit logging.
 
+### Security Hardening and Chromium Risk
+
+As of 2026-08-02, the current release uses Electron `43.2.0` with Chromium `150.0.7871.129`. No stable Electron release currently ships Chromium `150.0.7871.219`, so this fork uses compensating controls; these controls do not claim to remove Chromium CVEs.
+
+- The main window has a local-page CSP that permits packaged resources plus HTTPS/WSS and loopback connections, while denying object loading and framing.
+- Privileged configuration, plugin, PTY, window-control, and new-window IPC accepts only senders from the app-owned local renderer.
+- Windows packaging enables ASAR integrity validation and `onlyLoadAppFromAsar`; the `runAsNode`, `NODE_OPTIONS`, and CLI-inspect Fuses remain disabled.
+- GPU acceleration remains an operational toggle at **Settings → Window → Hacks → Disable GPU acceleration** rather than a forced default, avoiding an unnecessary performance trade-off.
+- Load only trusted local plugins and never load remote pages in the privileged Electron window. Do not use an Electron alpha/nightly build as the production upgrade path.
+
+The current architecture still uses `nodeIntegration: true` and `contextIsolation: false`. A full sandbox/contextBridge migration is follow-up architecture work, not a small Chromium hotfix. Monitor the [Electron security guidance](https://www.electronjs.org/docs/latest/tutorial/security) and [stable release list](https://releases.electronjs.org/release/); once an official stable release carries the relevant fixes, upgrade it and run the full build, regression, and packaging gates.
+
+See [Chromium compensating-hardening record](./SECURITY_REMEDIATION_2026-08-02.md) for the implementation scope and verification record.
+
 ## Portable
 
 issh will run as a portable app on Windows if you create a `data` folder in the same location where `issh.exe` lives.

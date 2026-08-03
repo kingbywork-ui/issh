@@ -74,6 +74,7 @@ test_*.py
 test_*.json
 test_screenshots/
 scripts/debug-*
+dist-security-*/
 
 # OS Files
 Thumbs.db
@@ -90,6 +91,7 @@ issh-llm/AUTOCOMPLETE_REGRESSION_PLAYBOOK.md
 SECURITY_REMEDIATION_*.md
 scripts/security-audit.mjs
 !SECURITY_REMEDIATION_2026-07-28.md
+!SECURITY_REMEDIATION_2026-08-02.md
 !scripts/security-audit.mjs
 
 # Test scripts

@@ -165,6 +165,10 @@ export class PTYManager {
 
     init (app: Application): void {
         ipcMain.on('pty:spawn', (event, ...options) => {
+            if (!app.isTrustedRenderer(event.sender)) {
+                event.returnValue = null
+                return
+            }
             const id = randomUUID()
             try {
                 this.ptys[id] = new PTY(id, app, ...options)
@@ -176,26 +180,46 @@ export class PTYManager {
         })
 
         ipcMain.on('pty:exists', (event, id) => {
+            if (!app.isTrustedRenderer(event.sender)) {
+                event.returnValue = false
+                return
+            }
             event.returnValue = this.ptys[id] && !this.ptys[id].exited
         })
 
         ipcMain.on('pty:get-pid', (event, id) => {
+            if (!app.isTrustedRenderer(event.sender)) {
+                event.returnValue = undefined
+                return
+            }
             event.returnValue = this.ptys[id]?.getPID()
         })
 
-        ipcMain.on('pty:resize', (_event, id, columns, rows) => {
+        ipcMain.on('pty:resize', (event, id, columns, rows) => {
+            if (!app.isTrustedRenderer(event.sender)) {
+                return
+            }
             this.ptys[id]?.resize(columns, rows)
         })
 
-        ipcMain.on('pty:write', (_event, id, data) => {
+        ipcMain.on('pty:write', (event, id, data) => {
+            if (!app.isTrustedRenderer(event.sender)) {
+                return
+            }
             this.ptys[id]?.write(Buffer.from(data))
         })
 
-        ipcMain.on('pty:kill', (_event, id, signal) => {
+        ipcMain.on('pty:kill', (event, id, signal) => {
+            if (!app.isTrustedRenderer(event.sender)) {
+                return
+            }
             this.ptys[id]?.kill(signal)
         })
 
-        ipcMain.on('pty:ack-data', (_event, id, length) => {
+        ipcMain.on('pty:ack-data', (event, id, length) => {
+            if (!app.isTrustedRenderer(event.sender)) {
+                return
+            }
             this.ptys[id]?.ackData(length)
         })
     }

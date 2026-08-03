@@ -3,6 +3,7 @@ import * as remote from '@electron/remote/main'
 import { spawnSync } from 'child_process'
 import { exec } from 'mz/child_process'
 import * as path from 'path'
+import { pathToFileURL } from 'url'
 import * as fs from 'fs'
 import { Subject, throttleTime } from 'rxjs'
 
@@ -55,12 +56,18 @@ export class Application {
 
         debugLog('application-ctor:ipc-save-config-begin')
         ipcMain.handle('app:save-config', async (event, config) => {
+            if (!this.isTrustedRenderer(event.sender)) {
+                throw new Error('Rejected IPC sender')
+            }
             await saveConfig(config)
             this.broadcastExcept('host:config-change', event.sender, config)
         })
         debugLog('application-ctor:ipc-save-config-done')
 
-        ipcMain.on('app:register-global-hotkey', (_event, specs) => {
+        ipcMain.on('app:register-global-hotkey', (event, specs) => {
+            if (!this.isTrustedRenderer(event.sender)) {
+                return
+            }
             globalShortcut.unregisterAll()
             if (!this.shouldRegisterGlobalHotkeys()) {
                 return
@@ -77,15 +84,24 @@ export class Application {
         debugLog('application-ctor:hotkey-subscription-done')
 
         debugLog('application-ctor:promise-ipc-begin')
-        ipcMain.handle('plugin-manager:install', (_event, name, version) => {
+        ipcMain.handle('plugin-manager:install', (event, name, version) => {
+            if (!this.isTrustedRenderer(event.sender)) {
+                throw new Error('Rejected IPC sender')
+            }
             return pluginManager.install(this.userPluginsPath, name, version)
         })
 
-        ipcMain.handle('plugin-manager:uninstall', (_event, name) => {
+        ipcMain.handle('plugin-manager:uninstall', (event, name) => {
+            if (!this.isTrustedRenderer(event.sender)) {
+                throw new Error('Rejected IPC sender')
+            }
             return pluginManager.uninstall(this.userPluginsPath, name)
         })
 
-        ipcMain.handle('get-default-mac-shell', async () => {
+        ipcMain.handle('get-default-mac-shell', async event => {
+            if (!this.isTrustedRenderer(event.sender)) {
+                throw new Error('Rejected IPC sender')
+            }
             try {
                 return (await exec(`/usr/bin/dscl . -read /Users/${process.env.LOGNAME} UserShell`))[0].toString().split(' ')[1].trim()
             } catch {
@@ -96,6 +112,9 @@ export class Application {
 
         const configSyncServer = new ConfigSyncServer((action, payload) => this.requestConfigSyncRenderer(action, payload))
         ipcMain.handle('config-sync:start', async (event, port: number, syncKey: string, bindAddress?: string) => {
+            if (!this.isTrustedRenderer(event.sender)) {
+                throw new Error('Rejected IPC sender')
+            }
             const renderer = event.sender
             const previousRenderer = this.configSyncRenderer
             this.configSyncRenderer = renderer
@@ -115,12 +134,18 @@ export class Application {
                 return { ok: false, error: e.message }
             }
         })
-        ipcMain.handle('config-sync:stop', async () => {
+        ipcMain.handle('config-sync:stop', async event => {
+            if (!this.isTrustedRenderer(event.sender)) {
+                throw new Error('Rejected IPC sender')
+            }
             configSyncServer.stop()
             this.configSyncRenderer = undefined
             return { ok: true }
         })
-        ipcMain.handle('config-sync:status', async () => {
+        ipcMain.handle('config-sync:status', async event => {
+            if (!this.isTrustedRenderer(event.sender)) {
+                throw new Error('Rejected IPC sender')
+            }
             return configSyncServer.getStatus()
         })
 
@@ -161,6 +186,19 @@ export class Application {
                 app.quit()
             }
         })
+    }
+
+    isTrustedRenderer (sender: WebContents): boolean {
+        if (!sender || sender.isDestroyed() || !this.windows.some(window => window.webContents === sender)) {
+            return false
+        }
+        try {
+            const expectedURL = pathToFileURL(path.join(app.getAppPath(), 'dist', 'index.html')).href
+            const actualURL = sender.getURL().split(/[?#]/)[0]
+            return actualURL === expectedURL
+        } catch {
+            return false
+        }
     }
 
     init (): void {
