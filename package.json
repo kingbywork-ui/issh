@@ -80,7 +80,7 @@
     "tslib": "^2.5.0",
     "typedoc": "0.28.20",
     "typescript": "5.9.3",
-    "utils-decorators": "^2.0.6",
+    "utils-decorators": "^2.10.0",
     "val-loader": "5.0.1",
     "webpack": "5.109.1",
     "webpack-bundle-analyzer": "5.3.1",
