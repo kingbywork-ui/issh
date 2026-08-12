@@ -191,8 +191,7 @@ jobs:
           $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4).ToString('X4')
           if ($machine -ne '${{ matrix.pe-machine }}') { throw "Unexpected PE machine $machine" }
 
-          $env:ELECTRON_RUN_AS_NODE = '1'
-          $runtimeVersion = (& $unpackedExe -p 'process.versions.electron').Trim()
+          $runtimeVersion = ([System.Diagnostics.FileVersionInfo]::GetVersionInfo($unpackedExe)).ProductVersion
           if ($runtimeVersion -ne '43.2.0') { throw "Unexpected Electron version $runtimeVersion" }
 
           $metadata = Get-Content dist\latest.yml -Raw
