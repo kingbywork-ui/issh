@@ -21,7 +21,7 @@
   "author": "issh Developers",
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "22.15.21",
+    "@types/node": "26.2.0",
     "ansi-colors": "^4.1.1",
     "strip-ansi": "^7.0.0"
   },
