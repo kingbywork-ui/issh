@@ -602,10 +602,10 @@
   dependencies:
     tslib "^2.3.0"
 
-"@ngtools/webpack@20.3.26":
-  version "20.3.26"
-  resolved "https://registry.npmmirror.com/@ngtools/webpack/-/webpack-20.3.26.tgz#8dcbd03851c44f65436bf953ce5dcadfbe317a72"
-  integrity sha512-SE6u+A8+lfgalx/zNLkyS5s6tDFK7aWioYU08uZjJhAO9J++KQna8xYVoDF73mmjIsdK85Ik0U5hhDWh6QpX4g==
+"@ngtools/webpack@20.3.33":
+  version "20.3.33"
+  resolved "https://registry.yarnpkg.com/@ngtools/webpack/-/webpack-20.3.33.tgz#7ea405e3566421cd74bebe531e74f249cb20d0a4"
+  integrity sha512-5cVMSEdZkL9nu6M5p5vbFXAC/UT5JfI5AQt+UyXrrGnw1r0e98xrWVIfcu4XTb9iOJjlg8peHDLMxFsCHQ6xmg==
 
 "@noble/hashes@1.4.0":
   version "1.4.0"
