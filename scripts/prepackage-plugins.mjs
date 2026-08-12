@@ -115,10 +115,10 @@ function pruneReleaseTree (pluginDir, plugin, target) {
         }
     }
 
-    assertExternalDependencies(pluginDir, nodeModules, path.join(path.dirname(pluginDir), '..', 'app'), path.dirname(pluginDir))
+    assertExternalDependencies(pluginDir, nodeModules, path.join(path.dirname(pluginDir), '..', 'app'), path.dirname(pluginDir), target)
 }
 
-function assertExternalDependencies (pluginDir, _nodeModules, appDir, builtinDir) {
+function assertExternalDependencies (pluginDir, _nodeModules, appDir, builtinDir, target) {
     const requireFromPlugin = createRequire(path.join(pluginDir, 'package.json'))
     const externalNames = new Set()
     const distDir = path.join(pluginDir, 'dist')
@@ -145,6 +145,9 @@ function assertExternalDependencies (pluginDir, _nodeModules, appDir, builtinDir
         }
     }
     for (const name of externalNames) {
+        if (target.platform !== 'win32' && name === 'windows-native-registry') {
+            continue
+        }
         try {
             if (name.startsWith('issh-') && fs.existsSync(path.join(builtinDir, name, 'package.json'))) {
                 continue
