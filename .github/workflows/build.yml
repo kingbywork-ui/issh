@@ -187,8 +187,10 @@ jobs:
           $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4).ToString('X4')
           if ($machine -ne '${{ matrix.pe-machine }}') { throw "Unexpected PE machine $machine" }
 
-          $runtimeVersion = ([System.Diagnostics.FileVersionInfo]::GetVersionInfo($unpackedExe)).ProductVersion
-          if ($runtimeVersion -ne '43.2.0') { throw "Unexpected Electron version $runtimeVersion" }
+          $appVersion = ([System.Diagnostics.FileVersionInfo]::GetVersionInfo($unpackedExe)).ProductVersion
+          if ($appVersion -ne "$version.0") { throw "Unexpected packaged application version $appVersion" }
+          $electronVersion = (Get-Content node_modules\electron\package.json -Raw | ConvertFrom-Json).version
+          if ($electronVersion -ne '43.2.0') { throw "Unexpected Electron dependency version $electronVersion" }
 
           $metadata = Get-Content dist\latest.yml -Raw
           if ($metadata -notmatch [regex]::Escape($installer.Name)) { throw 'latest.yml does not reference the installer' }
