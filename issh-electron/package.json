@@ -26,7 +26,7 @@
     "ssh-config": "^5.0.0",
     "tmp-promise": "^3.0.2",
     "which": "^3.0.0",
-    "winston": "^3.3.3"
+    "winston": "^3.19.0"
   },
   "optionalDependencies": {
     "@tabby-gang/windows-process-tree": "^0.6.1",
