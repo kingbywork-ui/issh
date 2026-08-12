@@ -35,7 +35,7 @@
     "core-js": "^3.31.0",
     "core-js-pure": "^3.21.1",
     "cross-env": "7.0.3",
-    "css-loader": "^6.7.3",
+    "css-loader": "^7.1.4",
     "deep-equal": "2.0.5",
     "dompurify": "3.4.12",
     "electron": "43.2.0",
