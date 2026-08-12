@@ -14,7 +14,9 @@ const electronInfo = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../node
 const appPackageInfo = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../app/package.json')))
 
 export let version
-try {
+if (process.env.ISSH_BUILD_VERSION) {
+    version = process.env.ISSH_BUILD_VERSION.trim()
+} else try {
     version = childProcess.execSync('git describe --tags', { encoding:'utf-8', stdio: ['pipe', 'pipe', 'ignore'] })
     version = version.substring(1).trim()
     version = version.replace('-', '-c')
