@@ -110,10 +110,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: x64
-            rust-target: x86_64-pc-windows-msvc
-            vc-redist: https://aka.ms/vs/17/release/vc_redist.x64.exe
-            pe-machine: '8664'
+          - arch: arm64
+            rust-target: aarch64-pc-windows-msvc
+            vc-redist: https://aka.ms/vs/17/release/vc_redist.arm64.exe
+            pe-machine: 'AA64'
     env:
       ARCH: ${{ matrix.arch }}
       ISSH_BUILD_VERSION: ${{ needs.preflight.outputs.version }}
@@ -339,7 +339,7 @@ jobs:
           set -euo pipefail
           mapfile -t assets < <(find release-assets -maxdepth 1 -type f \( -name '*.exe' -o -name '*.sha256' \) | sort)
           if [[ ${#assets[@]} -ne 2 ]]; then
-            printf 'Expected 2 Windows x64 release assets, found %s:\n' "${#assets[@]}" >&2
+            printf 'Expected 2 Windows arm64 release assets, found %s:\n' "${#assets[@]}" >&2
             printf '  %s\n' "${assets[@]}" >&2
             exit 1
           fi
