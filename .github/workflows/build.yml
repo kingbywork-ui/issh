@@ -191,7 +191,8 @@ jobs:
           $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4).ToString('X4')
           if ($machine -ne '${{ matrix.pe-machine }}') { throw "Unexpected PE machine $machine" }
 
-          $runtimeVersion = (Get-Content (Join-Path (Split-Path $unpackedExe) 'version') -Raw).Trim()
+          $env:ELECTRON_RUN_AS_NODE = '1'
+          $runtimeVersion = (& $unpackedExe -p 'process.versions.electron').Trim()
           if ($runtimeVersion -ne '43.2.0') { throw "Unexpected Electron version $runtimeVersion" }
 
           $metadata = Get-Content dist\latest.yml -Raw
@@ -285,7 +286,7 @@ jobs:
           unpacked_exe="$(find dist -maxdepth 3 -type f -path '*-unpacked/issh' -print -quit)"
           test -n "$unpacked_exe"
           readelf -h "$unpacked_exe" | grep -F 'Machine:' | grep -F '${{ matrix.elf-machine }}'
-          test "$(cat "$(dirname "$unpacked_exe")/version")" = '43.2.0'
+          test "$(ELECTRON_RUN_AS_NODE=1 "$unpacked_exe" -p 'process.versions.electron')" = '43.2.0'
 
           chmod +x "$appimage"
           rm -rf squashfs-root
