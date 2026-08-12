@@ -2,7 +2,7 @@
 
 ---
 
-issh is a customized fork of [Tabby](https://tabby.sh) (formerly **Terminus**), focused on SSH and terminal workflows for Windows.
+issh is a customized fork of [Tabby](https://tabby.sh) (formerly **Terminus**), focused on SSH and terminal workflows for Windows and Linux.
 
 The current application version is **0.1.1**, with focused improvements for Windows terminals, SSH host management, command autocomplete, and external agent workflows.
 
@@ -10,10 +10,12 @@ The current application version is **0.1.1**, with focused improvements for Wind
 
 ## Downloads
 
-Pre-built Windows artifacts (located in `dist/` after building):
+Tagged GitHub releases provide unsigned packages for both x64 and ARM64:
 
-- `issh-0.1.1-setup-x64.exe` — NSIS installer
-- `issh-0.1.0-portable-x64.exe` — currently available portable artifact (its version differs from the installer; check `dist/` for actual outputs)
+- Windows: `issh-<version>-setup-<arch>.exe` NSIS installer.
+- Linux: `issh-<version>-linux-<arch>.AppImage` and `.tar.gz` portable packages.
+
+For AppImage, run `chmod +x issh-*.AppImage` once and then launch it directly. The tarball can be extracted anywhere and started with the included `issh` executable. Every package is accompanied by a `.sha256` checksum. Development builds are also available from the corresponding GitHub Actions run artifacts.
 
 ## Features
 
@@ -174,6 +176,9 @@ yarn run build
 
 # Build Windows installer
 node scripts/build-windows.mjs
+
+# Build Linux AppImage and tar.gz packages (on Linux)
+node scripts/build-linux.mjs
 ```
 
 If `prepackage-plugins.mjs` fails due to native module rebuild issues, use the skip flag:

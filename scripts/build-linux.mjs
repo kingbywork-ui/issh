@@ -21,7 +21,7 @@ if (getISSHEnvironmentVariable('SKIP_PREPACKAGE') !== '1') {
 
 builder({
     dir: true,
-    linux: ['deb', 'tar.gz', 'rpm', 'pacman', 'appimage'],
+    linux: ['tar.gz', 'appimage'],
     armv7l: process.env.ARCH === 'armv7l',
     arm64: process.env.ARCH === 'arm64',
     config: {

@@ -2,7 +2,7 @@
 
 ---
 
-基于 [Tabby](https://tabby.sh)（前身 **Terminus**）的定制分支，专注于 Windows 下的 SSH 与终端工作流。
+基于 [Tabby](https://tabby.sh)（前身 **Terminus**）的定制分支，专注于 Windows 和 Linux 下的 SSH 与终端工作流。
 
 当前应用版本为 **0.1.1**，针对 Windows 下的日常终端、SSH 主机管理、命令补全与外部 Agent 工作流进行了增强。
 
@@ -10,10 +10,12 @@
 
 ## 下载
 
-预构建的 Windows 产物（构建后位于 `dist/` 目录）：
+带版本标签的 GitHub Release 会同时提供 x64 和 ARM64 未签名安装包：
 
-- `issh-0.1.1-setup-x64.exe` — NSIS 安装程序
-- `issh-0.1.0-portable-x64.exe` — 当前已有的便携版产物（版本与安装版不同，请以 `dist/` 实际文件为准）
+- Windows：`issh-<version>-setup-<arch>.exe` NSIS 安装程序。
+- Linux：`issh-<version>-linux-<arch>.AppImage` 和 `.tar.gz` 通用包。
+
+AppImage 首次使用前执行 `chmod +x issh-*.AppImage`，之后即可直接运行；tar.gz 可解压到任意目录并运行其中的 `issh`。每个安装包都附带 `.sha256` 校验文件。开发构建也可从对应的 GitHub Actions 运行页面下载 Artifact。
 
 ## 功能特性
 
@@ -174,6 +176,9 @@ yarn run build
 
 # 构建 Windows 安装包
 node scripts/build-windows.mjs
+
+# 在 Linux 上构建 AppImage 和 tar.gz 通用包
+node scripts/build-linux.mjs
 ```
 
 如果 `prepackage-plugins.mjs` 因原生模块重建失败，可使用跳过标志：
