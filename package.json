@@ -48,7 +48,7 @@
     "graceful-fs": "^4.2.10",
     "html-loader": "4.2.0",
     "json-loader": "^0.5.7",
-    "js-yaml": "4.3.0",
+    "js-yaml": "5.2.3",
     "lru-cache": "^6.0.0",
     "macos-release": "^3.3.0",
     "ngx-filesize": "^3.0.2",
