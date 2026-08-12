@@ -1,0 +1,327 @@
+.llm-settings
+    .llm-hero
+        .llm-hero-main
+            .llm-eyebrow Autocomplete
+            h3.llm-title 命令补全
+            p.llm-lead 输入时提供候选建议；密钥仅保存在本机 config.yaml。
+        .llm-hero-status([class.on]='config.store.llm.enabled')
+            span.dot
+            span(*ngIf='config.store.llm.enabled') AI: 已启用
+            span(*ngIf='!config.store.llm.enabled') AI: 已关闭
+
+    // ─── ① 历史命令补全 ───
+    .llm-section
+        .llm-section-header
+            .llm-section-icon
+                i.fas.fa-history
+            .llm-section-meta
+                .llm-section-title 历史命令补全
+                .llm-section-desc 本地 / SSH 历史前缀匹配，不依赖 API。
+        .llm-section-body
+            .form-line
+                .header
+                    .title 历史命令补全
+                    .description 以当前输入为前缀匹配历史命令。SSH 读远程历史，本地读 shell 历史。全屏编辑器（vim / nano 等）中自动禁用。
+                toggle(
+                    [(ngModel)]='config.store.llm.historyAutocompleteEnabled',
+                    (ngModelChange)='config.save()'
+                )
+
+            .form-line(*ngIf='config.store.llm.historyAutocompleteEnabled')
+                .header
+                    .title 历史候选上限
+                    .description 避免长历史记录把补全面板撑满；建议保留 8–12 条。
+                input.form-control(
+                    type='number',
+                    min='1',
+                    max='50',
+                    [(ngModel)]='config.store.llm.historyAutocompleteLimit',
+                    (keydown.enter)='config.save()',
+                    (blur)='config.save()'
+                )
+
+            .form-line
+                .header
+                    .title
+                        | 登录脚本补全
+                        span.llm-badge 测试版
+                    .description 从当前 Profile 登录脚本提取命令作为本地候选。
+                toggle(
+                    [(ngModel)]='config.store.llm.scriptAutocompleteEnabled',
+                    (ngModelChange)='config.save()'
+                )
+
+    // ─── ② AI 命令补全 ───
+    .llm-section
+        .llm-section-header
+            .llm-section-icon
+                i.fas.fa-robot
+            .llm-section-meta
+                .llm-section-title AI 命令补全
+                .llm-section-desc 调用 LLM 生成候选；与历史功能独立开关。
+        .llm-section-body
+            .form-line
+                .header
+                    .title 启用 AI 功能
+                    .description 打开 API 连接、AI 命令补全等需要 LLM 的能力。
+                toggle(
+                    [(ngModel)]='config.store.llm.enabled',
+                    (ngModelChange)='config.save()'
+                )
+
+            .form-line
+                .header
+                    .title AI 命令补全
+                    .description 调用 LLM 生成命令补全建议。
+                    .section-note(*ngIf='config.store.llm.aiAutocompleteEnabled && !config.store.llm.enabled')
+                        | 请先打开上方「启用 AI 功能」。
+                toggle(
+                    [(ngModel)]='config.store.llm.aiAutocompleteEnabled',
+                    (ngModelChange)='config.save()'
+                )
+
+            .form-line(*ngIf='config.store.llm.aiAutocompleteEnabled')
+                .header
+                    .title 编辑器内 AI 补全
+                    .description 在 vim / nano 等全屏编辑器中，把 AI 补全用于当前行文本。默认关闭，避免编辑时被面板打断。
+                toggle(
+                    [(ngModel)]='config.store.llm.editorAutocompleteEnabled',
+                    (ngModelChange)='config.save()'
+                )
+
+            ng-container(*ngIf='config.store.llm.enabled')
+                .llm-subgroup API 连接
+
+                .form-line.form-line-stacked
+                    .header
+                        .title API 基础地址
+                        .description 例如 https://api.openai.com/v1
+                    input.form-control(
+                        type='text',
+                        [(ngModel)]='config.store.llm.baseUrl',
+                        (keydown.enter)='saveAndTest()',
+                        (blur)='config.save()',
+                        placeholder='https://api.openai.com/v1'
+                    )
+
+                .form-line.form-line-stacked
+                    .header
+                        .title API 密钥
+                        .description 本地保存，不会上传到其他服务。
+                    .input-group
+                        input.form-control(
+                            type='password',
+                            [(ngModel)]='config.store.llm.apiKey',
+                            (keydown.enter)='saveAndTest()',
+                            (blur)='config.save()',
+                            placeholder='sk-…'
+                        )
+                        button.btn.btn-secondary(
+                            (click)='saveAndTest()',
+                            [disabled]='testing'
+                        )
+                            i.fas.fa-circle-notch.fa-spin.me-1(*ngIf='testing')
+                            span(*ngIf='!testing') 测试连接
+                        .input-group-text(*ngIf='config.store.llm.apiKey && !testing')
+                            i.fas.fa-fw.fa-check.text-success(*ngIf='connectionSuccessful')
+                            i.fas.fa-fw.fa-exclamation-triangle.text-danger(*ngIf='connectionSuccessful === false')
+
+                .alert.alert-danger.llm-inline-alert(*ngIf='connectionSuccessful === false')
+                    i.fas.fa-exclamation-triangle.me-2
+                    span {{ connectionError }}
+
+                .form-line
+                    .header
+                        .title 模型
+                        .description 发送给接口的 model 字段。
+                    input.form-control(
+                        type='text',
+                        [(ngModel)]='config.store.llm.model',
+                        (keydown.enter)='config.save()',
+                        (blur)='config.save()',
+                        placeholder='gpt-4o-mini'
+                    )
+
+                .form-line
+                    .header
+                        .title 补全专用模型
+                        .description 建议填写不带深度思考的快速模型；留空时使用上方主模型。
+                    input.form-control(
+                        type='text',
+                        [(ngModel)]='config.store.llm.autocompleteModel',
+                        (keydown.enter)='config.save()',
+                        (blur)='config.save()',
+                        placeholder='留空则使用主模型'
+                    )
+
+                .form-line
+                    .header
+                        .title 补全时关闭思考
+                        .description 对支持的 Qwen/OpenAI 推理模型发送关闭或最低思考参数。
+                    toggle(
+                        [(ngModel)]='config.store.llm.autocompleteDisableThinking',
+                        (ngModelChange)='config.save()'
+                    )
+
+                .form-line
+                    .header
+                        .title AI 补全超时
+                        .description 连续无响应超时后静默使用历史和缓存候选，单位为毫秒。
+                    input.form-control(
+                        type='number',
+                        min='250',
+                        max='10000',
+                        step='100',
+                        [(ngModel)]='config.store.llm.autocompleteTimeoutMs',
+                        (keydown.enter)='config.save()',
+                        (blur)='config.save()'
+                    )
+
+                .llm-subgroup 隐私与上下文
+
+                .form-line
+                    .header
+                        .title 发送终端上下文到 API
+                        .description 关闭后只发送当前输入片段，不发送最近终端输出。
+                    toggle(
+                        [(ngModel)]='config.store.llm.sendContextToCloud',
+                        (ngModelChange)='config.save()'
+                    )
+
+                .form-line(*ngIf='config.store.llm.sendContextToCloud')
+                    .header
+                        .title 最大上下文行数
+                        .description 请求里附带的最近输出行数。
+                    input.form-control(
+                        type='number',
+                        min='0',
+                        max='100',
+                        [(ngModel)]='config.store.llm.maxContextLines',
+                        (keydown.enter)='config.save()'
+                    )
+
+                .llm-subgroup 确认行为
+
+                .form-line
+                    .header
+                        .title 确认时自动执行
+                        .description 开启后，接受候选会立即回车执行。建议只在你信任当前建议来源时开启。
+                    toggle(
+                        [(ngModel)]='config.store.llm.executeOnConfirm',
+                        (ngModelChange)='config.save()'
+                    )
+
+    // ─── ③ 面板触发与展示 ───
+    .llm-section
+        .llm-section-header
+            .llm-section-icon
+                i.fas.fa-keyboard
+            .llm-section-meta
+                .llm-section-title 面板触发与展示
+                .llm-section-desc 共用补全面板的触发与展示，不混同历史 / AI 业务本身。
+        .llm-section-body
+            .llm-hotkeys
+                .llm-hotkey
+                    kbd Ctrl+1-9
+                    span 快速选择对应序号
+                .llm-hotkey
+                    kbd Ctrl+Shift+Space
+                    span 手动触发
+                .llm-hotkey
+                    kbd Ctrl+Y
+                    span 接受
+                .llm-hotkey
+                    kbd Ctrl+N / U
+                    span 上下选择
+
+            .form-line
+                .header
+                    .title 输入时自动补全
+                    .description 启用任一来源后，输入过程中自动显示建议。
+                toggle(
+                    [(ngModel)]='config.store.llm.autoCompleteOnType',
+                    (ngModelChange)='config.save()'
+                )
+
+            .form-line
+                .header
+                    .title 无空格也可触发
+                    .description 首个命令词达到最小长度即触发，不必先输入空格。
+                toggle(
+                    [(ngModel)]='config.store.llm.triggerWithoutSpaceEnabled',
+                    (ngModelChange)='config.save()'
+                )
+
+            .form-line
+                .header
+                    .title 最小触发长度
+                    .description 输入达到该字符数后才自动触发。
+                input.form-control(
+                    type='number',
+                    min='2',
+                    max='10',
+                    [(ngModel)]='config.store.llm.minTriggerLength',
+                    (keydown.enter)='config.save()'
+                )
+
+            .form-line
+                .header
+                    .title 补全延迟（毫秒）
+                    .description 停止输入后等待多久再请求建议。
+                input.form-control(
+                    type='number',
+                    min='100',
+                    max='2000',
+                    [(ngModel)]='config.store.llm.debounceMs',
+                    (keydown.enter)='config.save()'
+                )
+
+            .form-line
+                .header
+                    .title 轻提示模式
+                    .description 仅当候选能自然续写当前输入时显示行内 ghost text，否则回退为完整列表。
+                toggle(
+                    [(ngModel)]='config.store.llm.lightweightHintEnabled',
+                    (ngModelChange)='config.save()'
+                )
+
+            .form-line
+                .header
+                    .title 面板水平偏移
+                    .description 候选框离光标的水平距离，避免遮挡当前输入。
+                input.form-control(
+                    type='number',
+                    min='0',
+                    max='240',
+                    [(ngModel)]='config.store.llm.autocompletePanelOffsetX',
+                    (keydown.enter)='config.save()',
+                    (blur)='config.save()'
+                )
+
+            .form-line
+                .header
+                    .title 面板垂直偏移
+                    .description 候选框离光标的垂直距离。默认更靠下，减少遮挡视线。
+                input.form-control(
+                    type='number',
+                    min='0',
+                    max='240',
+                    [(ngModel)]='config.store.llm.autocompletePanelOffsetY',
+                    (keydown.enter)='config.save()',
+                    (blur)='config.save()'
+                )
+
+            .form-line
+                .header
+                    .title 面板不透明度
+                    .description 候选框背景的透明程度，数值越低越通透，终端内容可透出。100% 时关闭毛玻璃效果。
+                .range-control
+                    input.form-range(
+                        type='range',
+                        min='5',
+                        max='100',
+                        step='1',
+                        [(ngModel)]='config.store.llm.autocompletePanelOpacity',
+                        (ngModelChange)='config.save()'
+                    )
+                    .range-value {{config.store.llm.autocompletePanelOpacity ?? 20}}%

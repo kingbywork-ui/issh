@@ -1,0 +1,58 @@
+.modal-header
+    h5.modal-title(translate) Send input to multiple tabs
+    button.btn-close(type='button', aria-label='Close', (click)='close()')
+
+.modal-body
+    .mb-3
+        label.form-label(translate, for='batch-input-command') Command or input
+        textarea.form-control.batch-input-command(
+            #commandInput,
+            id='batch-input-command',
+            rows='5',
+            [(ngModel)]='command'
+        )
+
+    .mb-3
+        label.form-label(translate) Target tabs
+        .scope-options
+            button.btn.btn-sm(
+                type='button',
+                [class.btn-primary]='scope === "current"',
+                [class.btn-outline-secondary]='scope !== "current"',
+                (click)='setScope("current")'
+            ) {{scopeLabel('current')}}
+            button.btn.btn-sm(
+                type='button',
+                [class.btn-primary]='scope === "all"',
+                [class.btn-outline-secondary]='scope !== "all"',
+                (click)='setScope("all")'
+            ) {{scopeLabel('all')}}
+            button.btn.btn-sm(
+                type='button',
+                [class.btn-primary]='scope === "selected"',
+                [class.btn-outline-secondary]='scope !== "selected"',
+                (click)='setScope("selected")'
+            ) {{scopeLabel('selected')}}
+
+    .target-list(*ngIf='scope === "selected"')
+        label.target-item(*ngFor='let target of targets')
+            input.form-check-input.me-2(
+                type='checkbox',
+                [checked]='isSelected(target)',
+                (change)='toggleTarget(target)'
+            )
+            profile-icon.me-2([icon]='target.icon', [color]='target.color')
+            .target-copy
+                .target-title {{target.title}}
+                .target-description.text-muted {{target.description}}
+
+    .d-flex.align-items-center.justify-content-between.mt-3
+        checkbox(
+            [(ngModel)]='appendNewline',
+            [text]='translate.instant("Append Enter")'
+        )
+        .text-muted.small {{selectedTargets.length}} / {{targets.length}}
+
+.modal-footer
+    button.btn.btn-secondary(type='button', (click)='close()', translate) Close
+    button.btn.btn-primary(type='button', (click)='send()', [disabled]='!canSend', translate) Send

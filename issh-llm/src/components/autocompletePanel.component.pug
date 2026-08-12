@@ -1,0 +1,52 @@
+.autocomplete-panel(
+    *ngIf='visible',
+    (mousedown)='$event.preventDefault()'
+)
+    .lightweight-hint(*ngIf='lightweight')
+        span.hint-text(*ngIf='hintText') {{ hintText }}
+        span.hint-loading(*ngIf='!hintText && aiLoading')
+            i.fas.fa-circle-notch.fa-spin.me-1
+            span AI 正在处理…
+        span.hint-key(*ngIf='hintText') Ctrl+Y
+
+    ng-container(*ngIf='!lightweight')
+        .panel-header
+            span 候选建议
+            .ai-loading(*ngIf='aiLoading')
+                i.fas.fa-circle-notch.fa-spin.me-1
+                span AI 正在处理…
+            button.btn.btn-sm.btn-link((click)='dismiss.emit()')
+                i.fas.fa-times
+
+        .suggestion-list(*ngIf='suggestions.length')
+            .suggestion-item(
+                *ngFor='let item of suggestions; let i = index',
+                [class.selected]='i === selectedIndex',
+                (click)='select(item)'
+            )
+                .suggestion-row
+                    span.suggestion-index {{ i + 1 }}
+                    span.category-tag(
+                        *ngIf='item.category === "history"',
+                        class='history'
+                    ) 历史
+                    span.category-tag(
+                        *ngIf='item.category === "ai"',
+                        class='ai'
+                    ) AI
+                    span.category-tag(
+                        *ngIf='item.category === "script"',
+                        class='script'
+                    ) 脚本
+                    .command {{ item.command }}
+                .description(*ngIf='item.description && item.category !== "history"') {{ item.description }}
+
+        .loading-row(*ngIf='aiLoading && !suggestions.length')
+            i.fas.fa-circle-notch.fa-spin.me-2
+            span {{ statusText || 'AI 正在思考…' }}
+
+        .empty-row(*ngIf='!aiLoading && !suggestions.length')
+            span {{ statusText || '当前输入没有候选建议。' }}
+
+        .panel-footer(*ngIf='suggestions.length')
+            span {{ statusText || 'Ctrl+1-9 快速选择 · Ctrl+Y 接受 · Ctrl+N/U 选择 · Esc 关闭' }}

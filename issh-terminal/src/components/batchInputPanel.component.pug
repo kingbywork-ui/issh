@@ -1,0 +1,67 @@
+.batch-input-panel(
+    (mousedown)='$event.stopPropagation()',
+    (click)='$event.stopPropagation()'
+)
+    .panel-header
+        span.panel-title(translate) Send input to multiple tabs
+        button.btn.btn-sm.btn-link.panel-collapse(
+            type='button',
+            (click)='collapse()',
+            title='Collapse'
+        )
+            i.fas.fa-chevron-down
+
+    .panel-body
+        .panel-main
+            textarea.form-control.batch-input-command(
+                #commandInput,
+                [(ngModel)]='command',
+                (keydown.control.enter)='send()',
+                placeholder='Command or input'
+            )
+
+        .panel-controls
+            .scope-options
+                button.btn.btn-sm(
+                    type='button',
+                    [class.btn-primary]='scope === "current"',
+                    [class.btn-outline-secondary]='scope !== "current"',
+                    (click)='setScope("current")'
+                ) {{scopeLabel('current')}}
+                button.btn.btn-sm(
+                    type='button',
+                    [class.btn-primary]='scope === "all"',
+                    [class.btn-outline-secondary]='scope !== "all"',
+                    (click)='setScope("all")'
+                ) {{scopeLabel('all')}}
+                button.btn.btn-sm(
+                    type='button',
+                    [class.btn-primary]='scope === "selected"',
+                    [class.btn-outline-secondary]='scope !== "selected"',
+                    (click)='setScope("selected")'
+                ) {{scopeLabel('selected')}}
+
+            .target-list(*ngIf='scope === "selected"')
+                label.target-item(*ngFor='let target of targets')
+                    input.form-check-input.me-2(
+                        type='checkbox',
+                        [checked]='isSelected(target)',
+                        (change)='toggleTarget(target)'
+                    )
+                    profile-icon.me-2([icon]='target.icon', [color]='target.color')
+                    .target-copy
+                        .target-title {{target.title}}
+                        .target-description.text-muted {{target.description}}
+
+            .panel-footer-row
+                checkbox(
+                    [(ngModel)]='appendNewline',
+                    [text]='translate.instant("Append Enter")'
+                )
+                .text-muted.small {{selectedTargets.length}} / {{targets.length}}
+                button.btn.btn-primary.btn-sm(
+                    type='button',
+                    (click)='send()',
+                    [disabled]='!canSend',
+                    translate
+                ) Send

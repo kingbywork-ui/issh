@@ -1,0 +1,133 @@
+.start-page-layout
+    .start-page-sidebar
+        .sidebar-tree((contextmenu)='onSidebarContextMenu($event)')
+            .sidebar-tree-item.root-item(
+                (click)='showAllHosts()',
+                [class.active]='!activeGroupId && !favoritesOnly && !recentOnly'
+            )
+                i.fas.fa-fw.fa-server
+                span.ms-2 全部
+                span.count.ms-auto {{getVisibleCustomProfilesCount()}}
+
+            .sidebar-tree-item.root-item(
+                (click)='showFavorites()',
+                [class.active]='favoritesOnly'
+            )
+                i.fas.fa-fw.fa-star
+                span.ms-2 收藏
+                span.count.ms-auto {{getFavoriteVisibleCount()}}
+
+            .sidebar-tree-item.root-item(
+                (click)='showRecentHosts()',
+                [class.active]='recentOnly'
+            )
+                i.fas.fa-fw.fa-history
+                span.ms-2 最近
+                span.count.ms-auto {{getRecentVisibleCount()}}
+
+            ng-container(*ngFor='let group of rootGroups')
+                ng-container(*ngTemplateOutlet='sidebarGroup; context: {$implicit: group, level: 0}')
+
+    .start-page-main
+        .main-header
+            h2.main-title {{getRightPanelTitle()}}
+            span.main-count {{getRightPanelProfiles().length}} 台主机
+
+        .host-list(*ngIf='getRightPanelProfiles().length > 0')
+            button.host-list-item(
+                *ngFor='let profile of getRightPanelProfiles(); trackBy: profilesTrackBy',
+                [class.host-list-item--risk]='isRiskEnvironment(profile.environment)',
+                (click)='launchProfile(profile)',
+                (contextmenu)='onProfileContextMenu($event, profile)'
+            )
+                .host-status-rail([class]='getHostStatusRailClass(profile)')
+                .host-item-body
+                    .host-item-info
+                        .host-item-name-row
+                            .host-item-name {{profile.name}}
+                            .host-item-badges
+                                span.host-badge.host-badge--favorite(*ngIf='profile.favorite') 收藏
+                                span.host-badge.host-badge--recent(*ngIf='isRecentProfile(profile)') 最近
+                        .host-item-meta(*ngIf='getProfileConnectionInfo(profile) as info')
+                            span(*ngIf='info.user')
+                                i.fas.fa-user.fa-fw
+                                | {{info.user}}
+                            span(*ngIf='info.host')
+                                i.fas.fa-globe.fa-fw
+                                | {{info.host}}
+                            span(*ngIf='info.port')
+                                i.fas.fa-plug.fa-fw
+                                | :{{info.port}}
+                        .host-item-remark(*ngIf='profile.remark') {{profile.remark}}
+                        .host-item-tags(*ngIf='(profile.tags?.length ?? 0) > 0')
+                            span.badge.text-bg-secondary(*ngFor='let tag of profile.tags') {{tag}}
+
+                    .host-item-actions
+                        span.badge.env-badge(
+                            *ngIf='profile.environment',
+                            [class]='getEnvironmentBadgeClass(profile.environment)'
+                        ) {{profile.environment}}
+                        button.btn.btn-sm.btn-outline-success.connect-btn((click)='$event.stopPropagation(); launchProfile(profile)')
+                            i.fas.fa-plug
+                            span 连接
+
+        .host-list-empty(*ngIf='getRightPanelProfiles().length === 0')
+            .empty-icon
+                i.fas.fa-server
+            .empty-text 当前分组没有主机
+
+footer.d-flex.align-items-center
+    .form-control-static.selectable.no-drag.ms-auto(
+        translate='Version: {version}',
+        [translateParams]='{ version: this.homeBase.appVersion }'
+    )
+
+ng-template(#sidebarGroup let-group let-level='level')
+    ng-container(*ngIf='isSidebarGroupVisible(group)')
+        .sidebar-tree-item(
+            [style.paddingLeft.rem]='0.75 + (level * 1.1)',
+            [class.active]='isGroupActive(group)',
+            (click)='selectGroupView(group)',
+            (contextmenu)='onGroupContextMenu($event, group)'
+        )
+            button.btn.btn-link.tree-toggle(
+                *ngIf='group.children && group.children.length > 0',
+                (click)='$event.stopPropagation(); toggleGroupCollapse(group)'
+            )
+                i.fas.fa-fw([class.fa-chevron-right]='group.collapsed', [class.fa-chevron-down]='!group.collapsed')
+            i.far.fa-fw([class.fa-folder]='group.collapsed', [class.fa-folder-open]='!group.collapsed')
+            span.ms-2 {{group.name || "Ungrouped"}}
+            span.count.ms-auto {{getGroupVisibleProfileCount(group)}}
+
+        ng-container(*ngIf='!group.collapsed')
+            ng-container(*ngFor='let child of group.children')
+                ng-container(*ngTemplateOutlet='sidebarGroup; context: {$implicit: child, level: level + 1}')
+
+.context-menu-overlay(
+    *ngIf='contextMenuVisible',
+    (click)='closeContextMenu()',
+    (contextmenu)='$event.preventDefault(); closeContextMenu()'
+)
+.context-menu(
+    #contextMenu,
+    *ngIf='contextMenuVisible',
+    role='menu',
+    tabindex='-1',
+    aria-label='上下文菜单',
+    [attr.aria-activedescendant]='contextMenuSelectedIndex >= 0 ? "start-page-context-item-" + contextMenuSelectedIndex : null',
+    [style.left.px]='contextMenuX',
+    [style.top.px]='contextMenuY',
+    (keydown)='onContextMenuKeyDown($event)'
+)
+    .context-menu-item(
+        *ngFor='let item of contextMenuItems; let i = index',
+        [attr.id]='"start-page-context-item-" + i',
+        [attr.role]='item.type === "separator" ? "separator" : "menuitem"',
+        [attr.aria-disabled]='item.enabled === false ? "true" : null',
+        [class.separator]='item.type === "separator"',
+        [class.disabled]='item.enabled === false',
+        [class.selected]='i === contextMenuSelectedIndex',
+        (mouseenter)='onContextMenuItemMouseEnter(i)',
+        (click)='onContextMenuItemClick(item)'
+    )
+        span(*ngIf='item.type !== "separator"') {{item.label}}

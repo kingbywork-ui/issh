@@ -1,0 +1,25 @@
+name: issh
+version: '1.0.0'
+summary: A terminal for a modern age
+description: |
+  issh is a local, SSH and serial terminal heavily inspired by Hyper.
+
+grade: devel
+confinement: devmode
+
+apps:
+  issh:
+    command: opt/issh/issh
+
+parts:
+  app:
+    plugin: nodejs
+    source: .
+    build-packages:
+      - libfontconfig-dev
+    override-build: |
+      yarn
+      yarn run build
+      ./scripts/build-linux.js
+      mkdir -p $SNAPCRAFT_PART_INSTALL/opt/issh || true
+      cp -ar dist/linux-unpacked/* $SNAPCRAFT_PART_INSTALL/opt/issh/

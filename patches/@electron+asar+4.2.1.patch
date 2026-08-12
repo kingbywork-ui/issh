@@ -1,0 +1,32 @@
+diff --git a/node_modules/@electron/asar/lib/filesystem.js b/node_modules/@electron/asar/lib/filesystem.js
+index e23538e..d19200b 100644
+--- a/node_modules/@electron/asar/lib/filesystem.js
++++ b/node_modules/@electron/asar/lib/filesystem.js
+@@ -99,16 +99,19 @@ export class Filesystem {
+         }
+         if (size <= BUFFER_HASH_THRESHOLD) {
+             // Fully synchronous fast path — no Promise, no stream, no microtask yield
+-            try {
+-                const fileBuffer = fs.readFileSync(p);
++            // The stream is authoritative for stream-backed packages; `p` may point
++            // at an unrelated file in the current working directory.
++            return (async () => {
++                const chunks = [];
++                for await (const chunk of streamGenerator()) {
++                    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
++                }
++                const fileBuffer = Buffer.concat(chunks);
++                node.size = fileBuffer.length;
+                 node.integrity = getFileIntegrityFromBuffer(fileBuffer);
+                 file.cachedBuffer = fileBuffer;
+-                this.offset += BigInt(size);
+-                return Promise.resolve();
+-            }
+-            catch {
+-                // Fall through to stream path
+-            }
++                this.offset += BigInt(fileBuffer.length);
++            })();
+         }
+         return getFileIntegrity(streamGenerator()).then((integrity) => {
+             node.integrity = integrity;

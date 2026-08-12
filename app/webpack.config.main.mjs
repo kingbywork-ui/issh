@@ -1,0 +1,73 @@
+import * as path from 'path'
+import wp from 'webpack'
+import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer'
+import * as url from 'url'
+import { isDevelopmentBuild } from '../scripts/webpack-env.mjs'
+const __dirname = url.fileURLToPath(new URL('.', import.meta.url))
+const isDev = isDevelopmentBuild()
+
+const config = {
+    name: 'issh-main',
+    target: 'electron-main',
+    entry: {
+        main: path.resolve(__dirname, 'lib/index.ts'),
+    },
+    mode: isDev ? 'development' : 'production',
+    context: __dirname,
+    devtool: 'source-map',
+    output: {
+        path: path.join(__dirname, 'dist'),
+        pathinfo: true,
+        filename: '[name].js',
+    },
+    resolve: {
+        modules: ['lib/', 'node_modules', '../node_modules'].map(x => path.join(__dirname, x)),
+        extensions: ['.ts', '.js'],
+    },
+    module: {
+        rules: [
+            {
+                test: /\.ts$/,
+                use: {
+                    loader: 'ts-loader',
+                    options: {
+                        configFile: path.resolve(__dirname, 'tsconfig.main.json'),
+                    },
+                },
+            },
+        ],
+    },
+    externals: {
+        electron: 'commonjs electron',
+        fs: 'commonjs fs',
+        glasstron: 'commonjs glasstron',
+        mz: 'commonjs mz',
+        'mz/child_process': 'commonjs mz/child_process',
+        'mz/fs': 'commonjs mz/fs',
+        'any-promise': 'commonjs any-promise',
+        'thenify': 'commonjs thenify',
+        'thenify-all': 'commonjs thenify-all',
+        'node:os': 'commonjs os',
+        'node-pty': 'commonjs node-pty',
+        path: 'commonjs path',
+        util: 'commonjs util',
+        'source-map-support': 'commonjs source-map-support',
+        'windows-swca': 'commonjs windows-swca',
+        'windows-native-registry': 'commonjs windows-native-registry',
+        '@tabby-gang/windows-blurbehind': 'commonjs @tabby-gang/windows-blurbehind',
+        'electron-debug': 'commonjs electron-debug',
+        'yargs/yargs': 'commonjs yargs/yargs',
+    },
+    plugins: [
+        new wp.optimize.ModuleConcatenationPlugin(),
+        new wp.DefinePlugin({
+            'process.type': '"main"',
+        }),
+    ],
+}
+
+if (process.env.BUNDLE_ANALYZER) {
+    config.plugins.push(new BundleAnalyzerPlugin())
+}
+
+export default () => config

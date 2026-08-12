@@ -1,0 +1,15 @@
+autocomplete-panel(
+    [visible]='controller?.showAutocomplete',
+    [suggestions]='controller?.suggestions ?? []',
+    [aiLoading]='controller?.aiLoading',
+    [position]='controller?.panelPosition ?? {x:0,y:0}',
+    [maxHeight]='controller?.panelMaxHeight ?? 320',
+    [panelOpacity]='controller?.panelOpacity ?? 20',
+    [selectedIndex]='controller?.selectedIndex ?? 0',
+    [lightweight]='controller?.shouldUseLightweightHint() ?? false',
+    [hintText]='controller?.getAutocompleteHintText() ?? ""',
+    [statusText]='controller?.getAutocompleteStatusText() ?? ""',
+    (selectSuggestion)='onSelectSuggestion($event)',
+    (dismiss)='onAutocompleteDismiss()',
+    (selectedIndexChange)='onSelectedIndexChange($event)'
+)

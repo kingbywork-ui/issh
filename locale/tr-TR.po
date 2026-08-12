@@ -1,0 +1,2843 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=utf-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Project-Id-Version: issh\n"
+"Language-Team: Turkish\n"
+"Language: tr_TR\n"
+"PO-Revision-Date: 2025-01-22 22:02\n"
+
+#: issh-local/src/components/terminalTab.component.ts:114
+msgid "\"{command}\" is still running. Close?"
+msgstr "\"{command}\" halen çalışıyor. Kapatılsın mı?"
+
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:77
+msgid "A second font family used to display characters missing in the main font"
+msgstr ""
+"Varsayılan yazı tipinde eksik karakterleri görüntülemek için kullanılan "
+"ikinci yazı tipi"
+
+#: issh-settings/src/components/settingsTab.component.ts:47
+msgid "AI & agents"
+msgstr ""
+
+#: issh-llm/src/hotkeys.ts:11
+msgid "AI 命令补全"
+msgstr ""
+
+#: issh-llm/src/tabLLMController.ts:638
+msgid "AI 请求失败：{error}"
+msgstr ""
+
+#: issh-core/src/components/transfersMenu.component.ts:55
+msgid "Abort all"
+msgstr "Tümünü iptal et"
+
+#: issh-terminal/src/features/zmodem.ts:41
+msgid "Accept"
+msgstr ""
+
+#: issh-terminal/src/features/zmodem.ts:38
+msgid "Accept a ZMODEM session?"
+msgstr ""
+
+#: locale/tmp-html/issh-ssh/src/components/hostKeyPromptModal.component.html:24
+msgid "Accept and remember key"
+msgstr "Kabul et ve hatırla"
+
+#: locale/tmp-html/issh-ssh/src/components/hostKeyPromptModal.component.html:25
+msgid "Accept just this once"
+msgstr "Yalnızca bu seferlik"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:44
+msgid "Accessibility"
+msgstr "Erişilebilirlik"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:27
+msgid "Acrylic background"
+msgstr "Saydam arkaplan"
+
+#: locale/tmp-html/issh-local/src/components/commandLineEditor.component.html:24
+#: locale/tmp-html/issh-local/src/components/environmentEditor.component.html:11
+msgid "Add"
+msgstr "Ekle"
+
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:16
+msgid "Add a port forward"
+msgstr "Yeni port yönlendirmesi ekle"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:134
+msgid "Add a private key"
+msgstr "Özel anahtar ekle"
+
+#: locale/tmp-html/issh-settings/src/components/multiHotkeyInput.component.html:8
+msgid "Add..."
+msgstr "Ekle..."
+
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:84
+msgid "Additional space between lines"
+msgstr "Satırlar arasındaki ek boşluk"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:159
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:143
+msgid "Advanced"
+msgstr "Gelişmiş"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:109
+msgid "Agent"
+msgstr "Anonim"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:153
+msgid "Agent forwarding"
+msgstr "Anonim yönlendirme"
+
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:51
+msgid "Agent pipe path"
+msgstr "Anonim ayar dosyası"
+
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:40
+msgid "Agent type"
+msgstr "Gizlilik Türü"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:9
+msgid "All"
+msgstr ""
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:15
+msgid "All environments"
+msgstr ""
+
+#: issh-terminal/src/components/batchInputModal.component.ts:113
+#: issh-terminal/src/components/batchInputPanel.component.ts:134
+msgid "All tabs"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:176
+msgid "Allows opening .bat files in tabs, but breaks some shells"
+msgstr ""
+".bat dosyalarının yeni sekmelerde açılmasına izin verir, ancak bazı "
+"Terminallerde çalışmayabilir"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:20
+msgid "Allows quickly opening a terminal in the selected folder"
+msgstr "Seçilen klasörde hızlı bir şekilde bir terminal açılmasına izin verir"
+
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:25
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:11
+msgid "Always dark"
+msgstr ""
+
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:27
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:13
+msgid "Always light"
+msgstr "Daima Aydınlık"
+
+#: issh-settings/src/components/settingsTab.component.ts:45
+#: issh-terminal/src/settings.ts:14
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:2
+msgid "Appearance"
+msgstr "Görünüm / Kişileştirme"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:4
+msgid "Application"
+msgstr "Uygulama"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:7
+msgid "Application settings"
+msgstr "Uygulama ayarları"
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:16
+msgid "Apply environment"
+msgstr ""
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:17
+msgid "Apply tags"
+msgstr ""
+
+#: issh-core/src/services/config.service.ts:486
+msgid "Are you sure?"
+msgstr "Emin misiniz?"
+
+#: locale/tmp-html/issh-local/src/components/commandLineEditor.component.html:18
+msgid "Arguments"
+msgstr "Değişkenler"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:20
+msgid "Ask before closing the browser tab"
+msgstr "Tarayıcı sekmesini kapatmadan önce sor"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:148
+msgid "Audible"
+msgstr "Sesli"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:93
+msgid "Authentication method"
+msgstr "Kimlik doğrulama yöntemi"
+
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:50
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:97
+msgid "Auto"
+msgstr "Otomatik"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:160
+msgid "Auto-open a terminal on app start"
+msgstr "Uygulama başlangıcında bir terminali otomatik aç"
+
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:13
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:13
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:44
+msgid "Automatic"
+msgstr "Otomatik"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:33
+msgid "Automatic Updates"
+msgstr "Otomatik güncellemeler"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:35
+msgid "Background type"
+msgstr "Arkaplan Türü"
+
+#: locale/tmp-html/issh-terminal/src/components/inputProcessingSettings.component.html:4
+msgid "Backspace key mode"
+msgstr "Backspace tuşu modu"
+
+#: issh-serial/src/components/serialTab.component.ts:94
+#: issh-serial/src/profiles.ts:88
+msgid "Baud rate"
+msgstr "Bit hızı"
+
+#: issh-terminal/src/hotkeys.ts:22
+msgid "Beginning of the line"
+msgstr "Satır başlangıcı"
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:88
+msgid "Bind to all interfaces (0.0.0.0)?"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:64
+msgid "Blink cursor"
+msgstr "Yanıp sönen imleç"
+
+#: issh-core/src/utils.ts:60
+msgid "Blue"
+msgstr "Mavi"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:39
+msgid "Blur"
+msgstr "Bulanık"
+
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:28
+msgid "Bold font weight"
+msgstr "Kalın harf genişliği"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:139
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:87
+msgid "Bottom"
+msgstr "Alt"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:109
+msgid "Bracketed paste (requires shell support)"
+msgstr "Köşe Parantezli yapıştırma(kabuk desteği gerektirir)"
+
+#: issh-terminal/src/services/multifocus.service.ts:19
+msgid "Broadcast mode. Click anywhere to cancel."
+msgstr "Yayın modundasınız. İptal etmek için herhangi bir yere tıklayın."
+
+#: issh-core/src/services/profiles.service.ts:524
+msgid "Built-in"
+msgstr "Dahili"
+
+#: issh-electron/src/services/platform.service.ts:180
+#: issh-electron/src/services/updater.service.ts:133
+#: issh-local/src/cli.ts:53
+#: issh-local/src/components/terminalTab.component.ts:119
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:203
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:92
+#: issh-ssh/src/sftpContextMenu.ts:58
+#: issh-terminal/src/api/baseTerminalTab.component.ts:556
+#: issh-terminal/src/cli.ts:34
+#: locale/tmp-html/issh-core/src/components/renameTabModal.component.html:7
+#: locale/tmp-html/issh-settings/src/components/editProfileGroupModal.component.html:51
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:72
+#: locale/tmp-html/issh-settings/src/components/hotkeyInputModal.component.html:14
+#: locale/tmp-html/issh-settings/src/components/setVaultPassphraseModal.component.html:12
+#: locale/tmp-html/issh-ssh/src/components/sftpCreateDirectoryModal.component.html:10
+#: locale/tmp-html/issh-ssh/src/components/sftpDeleteModal.component.html:7
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsForMode.component.html:31
+msgid "Cancel"
+msgstr "İptal"
+
+#: issh-core/src/tabContextMenu.ts:133
+msgid "Change tab color"
+msgstr "Sekme renklerini değiştir"
+
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:12
+msgid "Change the master passphrase"
+msgstr "Ana parolayı değiştirin"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:191
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:195
+msgid "Ciphers"
+msgstr "şifreler"
+
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSelector.component.html:5
+msgid "Clear"
+msgstr "Temizle"
+
+#: issh-core/src/services/profiles.service.ts:272
+msgid "Clear recent profiles"
+msgstr "Son profilleri temizle"
+
+#: issh-terminal/src/hotkeys.ts:50
+msgid "Clear terminal"
+msgstr "Terminali Temizle"
+
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:58
+msgid "Clear terminal after connection"
+msgstr "Bağlantıdan sonra terminali temizle"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:94
+msgid "Clipboard"
+msgstr "Pano"
+
+#: issh-core/src/tabContextMenu.ts:33
+#: locale/tmp-html/issh-core/src/components/safeModeModal.component.html:7
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:53
+#: locale/tmp-html/issh-settings/src/components/showSecretModal.component.html:10
+#: locale/tmp-html/issh-terminal/src/components/batchInputModal.component.html:35
+msgid "Close"
+msgstr "Kapat"
+
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:45
+msgid "Close and never show again"
+msgstr "Kapat ve tekrar gösterme"
+
+#: issh-core/src/hotkeys.ts:240
+msgid "Close focused pane"
+msgstr "Bu ekranı kapat"
+
+#: issh-core/src/tabContextMenu.ts:48
+msgid "Close other tabs"
+msgstr "Diğer sekmeleri kapat"
+
+#: issh-core/src/hotkeys.ts:28
+#: issh-core/src/tabContextMenu.ts:34
+msgid "Close tab"
+msgstr "Sekmeyi kapat"
+
+#: issh-core/src/tabContextMenu.ts:64
+msgid "Close tabs to the left"
+msgstr "Soldaki sekmeleri kapat"
+
+#: issh-core/src/tabContextMenu.ts:56
+msgid "Close tabs to the right"
+msgstr "Sağdaki sekmeleri kapat"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:189
+msgid "Close the window after closing the last tab"
+msgstr "Son sekmeyi kapattıktan sonra pencereyi de kapat"
+
+#: issh-core/src/tabContextMenu.ts:132
+#: locale/tmp-html/issh-settings/src/components/editProfileGroupModal.component.html:29
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:33
+msgid "Color"
+msgstr "Renk"
+
+#: issh-terminal/src/settings.ts:30
+msgid "Color scheme"
+msgstr "Renk düzeni"
+
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:2
+msgid "Color schemes"
+msgstr "Renk şemaları"
+
+#: locale/tmp-html/issh-local/src/components/localProfileSettings.component.html:25
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:245
+msgid "Colors"
+msgstr "Renkler"
+
+#: issh-core/src/hotkeys.ts:72
+msgid "Combine all tabs into the current tab"
+msgstr "Tüm sekmeleri geçerli sekmede birleştir"
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:18
+msgid "Comma-separated tags"
+msgstr ""
+
+#: issh-terminal/src/components/batchInputModal.component.ts:92
+#: issh-terminal/src/components/batchInputPanel.component.ts:110
+msgid "Command cannot be empty"
+msgstr ""
+
+#: locale/tmp-html/issh-local/src/components/commandLineEditor.component.html:4
+msgid "Command line"
+msgstr "Komut satırı"
+
+#: locale/tmp-html/issh-terminal/src/components/batchInputModal.component.html:8
+msgid "Command or input"
+msgstr ""
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:13
+msgid "Command's stdin/stdout is used instead of a network connection"
+msgstr "Ağ bağlantısı yerine komutun standart giriş/çıkışı kullanılıyor"
+
+#: issh-core/src/services/commands.service.ts:105
+msgid "Commands"
+msgstr "Komutlar"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:77
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:82
+msgid "Config file"
+msgstr "Yapılandırma dosyası"
+
+#: issh-settings/src/settings.ts:78
+msgid "Config sync"
+msgstr "Yapılandırma senkronize"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:21
+msgid "Connect through a proxy server"
+msgstr "Bağlanırken vekil sunucu kullan"
+
+#: issh-core/src/index.ts:222
+#: issh-core/src/services/profiles.service.ts:320
+msgid "Connect to \"%s\"..."
+msgstr "\"%s\" bağlan..."
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:17
+msgid "Connect to a different host first and use it as a proxy"
+msgstr "Önce farklı bir ana bilgisayara bağlanın ve onu vekil olarak kullanın"
+
+#: issh-serial/src/components/serialTab.component.ts:61
+#: issh-ssh/src/components/sshTab.component.ts:182
+msgid "Connecting"
+msgstr "Bağlanıyor"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:7
+msgid "Connection"
+msgstr "Bağlantı"
+
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:40
+msgid "Connection name will be used instead"
+msgstr "Bunun yerine bağlantı adı kullanılacak"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:61
+msgid "Context menu"
+msgstr "İçerik Menüsü"
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:91
+msgid "Continue"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:14
+msgid "Controls the amount of space between elements"
+msgstr "Elementler arasındaki mesafeyi kontrol eder"
+
+#: issh-terminal/src/api/baseTerminalTab.component.ts:243
+#: issh-terminal/src/api/baseTerminalTab.component.ts:251
+#: issh-terminal/src/api/baseTerminalTab.component.ts:619
+#: issh-terminal/src/api/baseTerminalTab.component.ts:839
+#: issh-terminal/src/tabContextMenu.ts:35
+msgid "Copied"
+msgstr "Kopyalandı"
+
+#: issh-terminal/src/tabContextMenu.ts:31
+msgid "Copy"
+msgstr "Kopyala"
+
+#: issh-terminal/src/hotkeys.ts:70
+#: issh-terminal/src/tabContextMenu.ts:72
+msgid "Copy current path"
+msgstr "Şu anki yolu kopyala"
+
+#: issh-electron/src/sftpContextMenu.ts:29
+msgid "Copy full path"
+msgstr "Dosya yolunu kopyala"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:97
+msgid "Copy on select"
+msgstr "Seçileni kopyala"
+
+#: issh-terminal/src/hotkeys.ts:10
+msgid "Copy to clipboard"
+msgstr "Panoya Kopyala"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:103
+msgid "Copy with formatting"
+msgstr "Biçimlendirme ile kopyalayın"
+
+#: issh-settings/src/components/vaultSettingsTab.component.ts:134
+msgid "Could not change the master passphrase"
+msgstr ""
+
+#: issh-core/src/services/config.service.ts:471
+msgid "Could not decrypt config"
+msgstr "Yapılandırma dosyasının şifresi çözülemedi"
+
+#: issh-settings/src/components/vaultSettingsTab.component.ts:181
+msgid "Could not delete the secret"
+msgstr ""
+
+#: issh-ssh/src/components/keyboardInteractiveAuthPanel.component.ts:61
+msgid "Could not save password"
+msgstr ""
+
+#: locale/tmp-html/issh-ssh/src/components/sftpCreateDirectoryModal.component.html:9
+msgid "Create"
+msgstr "Oluştur"
+
+#: issh-ssh/src/sftpContextMenu.ts:30
+msgid "Create directory"
+msgstr "Dizin oluştur"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:97
+msgid "Current"
+msgstr "Geçerli"
+
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsForMode.component.html:3
+msgid "Current color scheme"
+msgstr "Mevcut renk şeması"
+
+#: locale/tmp-html/issh-ssh/src/components/hostKeyPromptModal.component.html:17
+msgid "Current host key fingerprint"
+msgstr "Geçerli ana bilgisayar anahtarı parmak izi"
+
+#: issh-core/src/tabContextMenu.ts:184
+msgid "Current process: {name}"
+msgstr "Mevcut işlem :{name}"
+
+#: issh-terminal/src/components/batchInputModal.component.ts:112
+#: issh-terminal/src/components/batchInputPanel.component.ts:133
+msgid "Current tab"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:51
+msgid "Cursor shape"
+msgstr "İmleç şekli"
+
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsForMode.component.html:46
+msgid "Custom"
+msgstr "Özel"
+
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:90
+msgid "Custom CSS"
+msgstr "Özel CSS"
+
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:31
+msgid "Dark mode"
+msgstr "Koyu mod"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:40
+msgid "Debugging"
+msgstr "Hata ayıklama"
+
+#: issh-core/src/hotkeys.ts:256
+msgid "Decrease horizontal split size"
+msgstr "Yatay bölme boyutunu küçült"
+
+#: issh-core/src/hotkeys.ts:248
+msgid "Decrease vertical split size"
+msgstr "Dikey bölme boyutunu küçült"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:187
+msgid "Default \"Connect to\" type"
+msgstr "Varsayılan \"Bağlan\" tipi"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:188
+msgid "Default connection type used by quick connect feature (ex. SSH, Telnet)"
+msgstr "Hızlı bağlanma özelliği için varsayılan bağlantı türü (örn. SSH, Telnet)"
+
+#: locale/tmp-html/issh-settings/src/components/editProfileGroupModal.component.html:39
+msgid "Default profile group settings"
+msgstr "Varsayılan profil grup ayarları"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:196
+msgid "Default profile settings"
+msgstr "Varsayılan Profil Ayarları"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:86
+msgid "Defaults"
+msgstr "Varsayılanlar"
+
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:6
+msgid "Defaults for {type}"
+msgstr "{type} için varsayılanlar"
+
+#: issh-settings/src/components/editProfileGroupModal.component.ts:119
+#: issh-settings/src/components/profilesSettingsTab.component.ts:191
+#: issh-settings/src/components/profilesSettingsTab.component.ts:279
+#: issh-settings/src/components/profilesSettingsTab.component.ts:293
+#: issh-settings/src/components/profilesSettingsTab.component.ts:396
+#: issh-settings/src/components/vaultSettingsTab.component.ts:99
+#: issh-ssh/src/sftpContextMenu.ts:57
+#: issh-ssh/src/sftpContextMenu.ts:65
+#: issh-terminal/src/components/colorSchemeSettingsForMode.component.ts:92
+#: issh-terminal/src/components/loginScriptsSettings.component.ts:33
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:143
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:29
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsForMode.component.html:8
+msgid "Delete"
+msgstr "Sil"
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:189
+#: issh-settings/src/components/profilesSettingsTab.component.ts:277
+#: issh-terminal/src/components/colorSchemeSettingsForMode.component.ts:90
+msgid "Delete \"{name}\"?"
+msgstr "Sil {name}?"
+
+#: issh-terminal/src/hotkeys.ts:42
+msgid "Delete entire line"
+msgstr "Bütün satırı sil"
+
+#: issh-terminal/src/hotkeys.ts:46
+msgid "Delete next word"
+msgstr "Sonraki sözcüğü sil"
+
+#: issh-terminal/src/hotkeys.ts:38
+msgid "Delete previous word"
+msgstr "Önceki sözlüğü sil"
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:290
+msgid "Delete the group's profiles?"
+msgstr "Grubun profillerini sil?"
+
+#: issh-terminal/src/components/loginScriptsSettings.component.ts:30
+msgid "Delete this script?"
+msgstr "Bu komut dosyası silinsin mi?"
+
+#: issh-settings/src/components/vaultSettingsTab.component.ts:97
+msgid "Delete vault contents?"
+msgstr "İçeriği sil?"
+
+#: issh-ssh/src/sftpContextMenu.ts:53
+msgid "Delete {fullPath}?"
+msgstr "{fullPath} sil?"
+
+#: locale/tmp-html/issh-ssh/src/components/sftpDeleteModal.component.html:3
+msgid "Deleting"
+msgstr "Siliniyor"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:10
+msgid "Direct"
+msgstr "Direk"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:211
+msgid "Disable GPU acceleration"
+msgstr "GPU hızlandırmasını devre dışı bırak"
+
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:39
+msgid "Disable dynamic tab title"
+msgstr "Dinamik sekme başlığını devre dışı bırak"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:225
+msgid "Disable fluent background while dragging"
+msgstr "Sürüklerken akıcı arka planı devre dışı bırak"
+
+#: issh-ssh/src/components/sshTab.component.ts:259
+#: issh-terminal/src/api/connectableTerminalTab.component.ts:36
+#: issh-terminal/src/tabContextMenu.ts:114
+#: issh-terminal/src/tabContextMenu.ts:118
+#: locale/tmp-html/issh-ssh/src/components/hostKeyPromptModal.component.html:26
+msgid "Disconnect"
+msgstr "Bağlantıyı Kes"
+
+#: issh-terminal/src/hotkeys.ts:114
+msgid "Disconnect current tab (Serial/Telnet/SSH)"
+msgstr "Geçerli sekmenin bağlantısını kes (Serial/Telnet/SSH)"
+
+#: issh-ssh/src/components/sshTab.component.ts:257
+msgid "Disconnect from {host}?"
+msgstr "{host} bağlantısı kesilsin mi?"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:30
+msgid "Display images via Sixel escape sequences"
+msgstr "Fotoğrafları Sixel yoluyla görüntüleyin"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:92
+msgid "Display on"
+msgstr "Ekran açık"
+
+#: issh-core/src/components/transfersMenu.component.ts:56
+msgid "Do not abort"
+msgstr "İptal etme"
+
+#: issh-ssh/src/components/sshTab.component.ts:260
+msgid "Do not close"
+msgstr "Kapatma"
+
+#: locale/tmp-html/issh-core/src/components/unlockVaultModal.component.html:6
+#: locale/tmp-html/issh-core/src/components/unlockVaultModal.component.html:8
+msgid "Do not remember"
+msgstr "Beni hatırlama"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:104
+msgid "Dock always on top"
+msgstr "Dock her zaman üstte"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:74
+msgid "Dock the terminal"
+msgstr "Terminali kenetle"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:111
+msgid "Docked terminal size"
+msgstr "Kenetlenmiş terminal yüksekliği"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:118
+msgid "Docked terminal space"
+msgstr "Kenetlenmiş terminal genişliği"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:71
+msgid "Docking"
+msgstr "Kenetlenme"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:75
+msgid "Double-click selection will stop at these characters"
+msgstr "Çift tıklama seçimi bu karakterlerde duracak"
+
+#: issh-core/src/tabContextMenu.ts:79
+msgid "Down"
+msgstr "Aşağı"
+
+#: issh-ssh/src/sftpContextMenu.ts:45
+msgid "Download"
+msgstr "İndir"
+
+#: issh-ssh/src/sftpContextMenu.ts:38
+msgid "Download directory"
+msgstr ""
+
+#: issh-electron/src/services/platform.service.ts:323
+msgid "Download here"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:23
+msgid "Draw bold text in bright colors"
+msgstr "Kalın metinleri parlak renkler ile göster"
+
+#: issh-core/src/tabContextMenu.ts:127
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:140
+msgid "Duplicate"
+msgstr "Kopyasını oluştur"
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:123
+msgid "Duplicate an existing profile"
+msgstr ""
+
+#: issh-local/src/tabContextMenu.ts:72
+msgid "Duplicate as administrator"
+msgstr "Yönetici olarak çoğalt"
+
+#: issh-core/src/hotkeys.ts:60
+#: issh-core/src/tabContextMenu.ts:128
+msgid "Duplicate tab"
+msgstr "Sekmeyi çoğalt"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:139
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsForMode.component.html:6
+msgid "Edit"
+msgstr "Düzenle"
+
+#: issh-electron/src/sftpContextMenu.ts:35
+msgid "Edit locally"
+msgstr "Yerel olarak düzenle"
+
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:32
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:26
+msgid "Enable analytics"
+msgstr "Analizleri aktifleştir"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:47
+msgid "Enable animations"
+msgstr "Animasyonları etkinleştir"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:34
+msgid "Enable automatic installation of updates when they become available."
+msgstr ""
+"Güncellemeler kullanıma sunulduğunda otomatik olarak yüklenmesini "
+"etkinleştirin."
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:218
+msgid "Enable fluent background option"
+msgstr "Akıcı arka plan seçeneğini etkinleştir"
+
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:16
+msgid "Enable font ligatures"
+msgstr "Yazı tipi bağlamayı etkinleştir"
+
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:39
+msgid "Enable global hotkey (Ctrl-Space)"
+msgstr "Evrensel kısayol tuşunu etkinleştir (Ctrl-Boşluk)"
+
+#: locale/tmp-html/issh-local/src/components/shellSettingsTab.component.html:6
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:7
+msgid "Enables the experimental Windows ConPTY API"
+msgstr "Deneysel Windows ConPTY API'ı etkinleştir"
+
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:37
+msgid "Encrypt config file"
+msgstr "Konfigürasyon dosyasını şifrele"
+
+#: issh-terminal/src/hotkeys.ts:26
+msgid "End of the line"
+msgstr "Satır sonu"
+
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:45
+msgid "Enter your master passphrase to unlock. Access valid for 10 minutes."
+msgstr ""
+
+#: locale/tmp-html/issh-local/src/components/localProfileSettings.component.html:20
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:81
+msgid "Environment"
+msgstr "Ortam"
+
+#: issh-core/src/services/config.service.ts:475
+#: issh-core/src/services/config.service.ts:489
+msgid "Erase config"
+msgstr "Konfigürasyonu sil"
+
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:12
+msgid "Erase the Vault"
+msgstr "Şifreleri Sil"
+
+#: locale/tmp-html/issh-terminal/src/components/loginScriptsSettings.component.html:10
+msgid "Exact match"
+msgstr "Tam eşleşme"
+
+#: locale/tmp-html/issh-local/src/components/environmentEditor.component.html:15
+msgid "Example:"
+msgstr "Örnek:"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:219
+msgid "Experimental Windows 10 background style known to cause issues"
+msgstr "Sorunlara neden olduğu bilinen deneysel Windows 10 arka plan stili"
+
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:28
+msgid "Export"
+msgstr "Dışa Aktar"
+
+#: issh-electron/src/terminalContextMenu.ts:23
+msgid "Export to file"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:236
+msgid "Failed to generate sync key"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:76
+msgid "Fallback font"
+msgstr "Yedek yazı tipi"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:75
+msgid "Favorite"
+msgstr ""
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:12
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:10
+msgid "Favorites"
+msgstr ""
+
+#: locale/tmp-html/issh-core/src/components/transfersMenu.component.html:3
+msgid "File transfers"
+msgstr "Dosya aktarımları"
+
+#: issh-settings/src/components/vaultSettingsTab.component.ts:158
+msgid "File: {description}"
+msgstr "{description}: Dosyası"
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:9
+msgid "Filter"
+msgstr "Filtre"
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:73
+msgid "Fingerprint copied"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:154
+msgid "Fixed"
+msgstr "Sabit"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:124
+msgid ""
+"Flatten pasted text into a single line for terminals that do not support "
+"multiline paste"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:226
+msgid "Fluent background sometimes causes drag lag"
+msgstr "Akışkan arkaplan bazen kasmalara sebep olabilir"
+
+#: issh-terminal/src/tabContextMenu.ts:90
+msgid "Focus all panes"
+msgstr "Tüm bölmelere odaklan"
+
+#: issh-terminal/src/hotkeys.ts:78
+msgid "Focus all panes at once (broadcast)"
+msgstr "Tüm bölmelere aynı anda odaklanın (yayın)"
+
+#: issh-terminal/src/tabContextMenu.ts:83
+msgid "Focus all tabs"
+msgstr "Tüm sekmelere odaklan"
+
+#: issh-terminal/src/hotkeys.ts:82
+msgid "Focus all tabs at once (broadcast)"
+msgstr "Tüm sekmeler aynı anda odaklanın (yayın)"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:203
+msgid "Focus follows mouse"
+msgstr "Odak imleci takip eder"
+
+#: issh-core/src/hotkeys.ts:196
+msgid "Focus next pane"
+msgstr "Sonraki bölmeye odaklan"
+
+#: issh-core/src/hotkeys.ts:200
+#: issh-core/src/hotkeys.ts:204
+#: issh-core/src/hotkeys.ts:208
+#: issh-core/src/hotkeys.ts:212
+#: issh-core/src/hotkeys.ts:216
+#: issh-core/src/hotkeys.ts:220
+#: issh-core/src/hotkeys.ts:224
+#: issh-core/src/hotkeys.ts:228
+#: issh-core/src/hotkeys.ts:232
+msgid "Focus pane {number}"
+msgstr "Odak bölmesi {number}"
+
+#: issh-core/src/hotkeys.ts:192
+msgid "Focus previous pane"
+msgstr "Önceki bölmeye odaklan"
+
+#: issh-core/src/hotkeys.ts:176
+msgid "Focus the pane above"
+msgstr "Yukarıdaki bölmeye odaklanın"
+
+#: issh-core/src/hotkeys.ts:180
+msgid "Focus the pane below"
+msgstr "Aşağıdaki bölmeye odaklan"
+
+#: issh-core/src/hotkeys.ts:184
+msgid "Focus the pane on the left"
+msgstr "Soldaki bölmeye odaklan"
+
+#: issh-core/src/hotkeys.ts:188
+msgid "Focus the pane on the right"
+msgstr "Sağdaki bölmeye odaklan"
+
+#: issh-core/src/theme.ts:8
+msgid "Follow the color scheme"
+msgstr "Renk düzenini takip et"
+
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:5
+msgid "Font"
+msgstr "Yazı tipi"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:197
+msgid "For keyboard shortcuts"
+msgstr "Klavye kısayolları için"
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:54
+msgid "Force CR"
+msgstr "CR'yi zorla"
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:56
+msgid "Force CRLF"
+msgstr "CRLF'i zorla"
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:55
+msgid "Force LF"
+msgstr "LF'yi zorla"
+
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:41
+msgid "Forces a specific SSH agent connection type."
+msgstr "Belirli bir SSH Doğrulama türünü zorlar."
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:124
+msgid "Forget"
+msgstr "Unut"
+
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:45
+msgid "Forward port"
+msgstr "bağlantı noktası Yönlendirme"
+
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingModal.component.html:3
+msgid "Forwarded ports"
+msgstr "Yönlendirilen bağlantı noktaları"
+
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:46
+msgid "From color scheme"
+msgstr "Renk şemasından"
+
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:23
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:9
+msgid "From system"
+msgstr "Sistemden"
+
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:44
+msgid "From theme"
+msgstr "Temadan"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:6
+msgid "Frontend"
+msgstr "Ön yüz"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:61
+msgid "Full"
+msgstr "Tam"
+
+#: locale/tmp-html/issh-local/src/components/localProfileSettings.component.html:3
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:3
+msgid "General"
+msgstr "Genel"
+
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:18
+msgid "Generate 256-color palette"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:19
+msgid "Generate extended 256-color palette from your base 16 colors"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:29
+msgid "Gives the window a blurred transparent background"
+msgstr "Pencereye bulanık şeffaf bir arka plan verir"
+
+#: issh-core/src/utils.ts:61
+msgid "Green"
+msgstr "Yeşil"
+
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:16
+msgid "Group"
+msgstr "Grup"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:24
+msgid "HTTP proxy"
+msgstr "Vekil Sunucu"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:61
+msgid "HTTP proxy host"
+msgstr "HTTP proxy sunucu"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:65
+msgid "HTTP proxy port"
+msgstr "HTTP proxy portu"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:208
+msgid "Hacks"
+msgstr "Özel bilgiler"
+
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:25
+msgid "Harmonious palette"
+msgstr ""
+
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:33
+msgid "Help track the number of issh installs across the world!"
+msgstr "Dünya çapında issh yüklemelerinin sayısını takip etmeye yardımcı olun!"
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:33
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:46
+msgid "Hexadecimal"
+msgstr "onaltılık"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:141
+msgid "Hide"
+msgstr "Gizle"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:67
+msgid "Hide issh from tray or menu bar."
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:183
+msgid "Hide tab close button"
+msgstr "Sekmeyi kapat düğmesini gizle"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:165
+msgid "Hide tab index"
+msgstr "Sekme dizinini gizle"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:177
+msgid "Hide tab options button"
+msgstr "Sekmeyi kapat düğmesini gizle"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:66
+msgid "Hide tray icon"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:125
+msgid "Hide window on focus loss"
+msgstr "Odaklanma kaybolduğunda pencereyi gizle"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:126
+msgid "Hides the docked terminal when you click away."
+msgstr "Uzakta tıkladığınızda yerleşik terminali gizler."
+
+#: issh-local/src/buttonProvider.ts:19
+msgid "Home"
+msgstr ""
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:34
+msgid "Host"
+msgstr "Sunucu"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:225
+msgid "Host key"
+msgstr "sunucu anahtarı"
+
+#: locale/tmp-html/issh-ssh/src/components/hostKeyPromptModal.component.html:3
+msgid "Host key verification"
+msgstr "Sunucu anahtarı doğrulaması"
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:11
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:2
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:4
+msgid "Host manager"
+msgstr ""
+
+#: issh-settings/src/settings.ts:15
+#: locale/tmp-html/issh-settings/src/components/hotkeySettingsTab.component.html:2
+msgid "Hotkeys"
+msgstr "Kısayol tuşları"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:178
+msgid "How issh presents itself through environment vars"
+msgstr "issh kendisini ortam değişkenleri aracılığıyla nasıl sunar"
+
+#: locale/tmp-html/issh-settings/src/components/editProfileGroupModal.component.html:17
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:20
+msgid "Icon"
+msgstr "Simge"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:171
+msgid "If disabled, only custom profiles will show up in the profile selector"
+msgstr "Devre dışı bırakılırsa, profil seçicide yalnızca özel profiller görünür"
+
+#: issh-terminal/src/features/zmodem.ts:39
+msgid "If you have not requested it, it could be a sign of malicious activity."
+msgstr ""
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:24
+msgid "Immediately echoes your input locally"
+msgstr "Girişinizi hemen yerel olarak yankılar"
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:57
+msgid "Implicit CR in every LF"
+msgstr ""
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:58
+msgid "Implicit LF in every CR"
+msgstr ""
+
+#: issh-core/src/hotkeys.ts:252
+msgid "Increase horizontal split size"
+msgstr "Yatay bölme boyutunu büyüt"
+
+#: issh-core/src/hotkeys.ts:244
+msgid "Increase vertical split size"
+msgstr "Dikey bölme boyutunu büyüt"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:255
+msgid "Input"
+msgstr "Girdi"
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:19
+msgid "Input is sent as you type"
+msgstr "Siz yazarken girdi gönder"
+
+#: locale/tmp-html/issh-terminal/src/components/streamProcessingSettings.component.html:4
+msgid "Input mode"
+msgstr "Giriş modu"
+
+#: locale/tmp-html/issh-terminal/src/components/streamProcessingSettings.component.html:15
+msgid "Input newlines"
+msgstr "Yeni satırları girin"
+
+#: issh-electron/src/services/updater.service.ts:130
+msgid "Installing the update will close all tabs and restart issh."
+msgstr ""
+"Güncellemeyi yüklemek tüm sekmeleri kapatacak ve issh'yi yeniden "
+"başlatacaktır."
+
+#: issh-terminal/src/hotkeys.ts:66
+msgid "Intelligent Ctrl-C (copy/abort)"
+msgstr "Akıllı Ctrl-C (kopyala/iptal)"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:113
+msgid "Interactive"
+msgstr "Etkişimli"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:92
+msgid "Invalid syntax"
+msgstr "Geçersiz komut"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:16
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:43
+msgid "Jump host"
+msgstr "Ev sahibine atla"
+
+#: issh-terminal/src/hotkeys.ts:34
+msgid "Jump to next word"
+msgstr "Sonraki kelimeye atla"
+
+#: issh-terminal/src/hotkeys.ts:30
+msgid "Jump to previous word"
+msgstr "Önceki kelimeye atla"
+
+#: issh-settings/src/components/editProfileGroupModal.component.ts:120
+#: issh-settings/src/components/profilesSettingsTab.component.ts:192
+#: issh-settings/src/components/profilesSettingsTab.component.ts:280
+#: issh-settings/src/components/profilesSettingsTab.component.ts:397
+#: issh-settings/src/components/vaultSettingsTab.component.ts:100
+#: issh-terminal/src/components/colorSchemeSettingsForMode.component.ts:93
+#: issh-terminal/src/components/loginScriptsSettings.component.ts:34
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:52
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:51
+msgid "Keep"
+msgstr "Tut"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:173
+msgid "Keep Alive Interval (Milliseconds)"
+msgstr "Canlı Tutma Aralığı (Milisaniye)"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:105
+msgid "Keep docked terminal always on top"
+msgstr "Yerleşik terminali her zaman üstte tutun"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:105
+msgid "Key"
+msgstr "Anahtar"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:205
+msgid "Key exchange"
+msgstr "Anahtar değişimi"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:36
+msgid "Keyboard"
+msgstr "Klavye"
+
+#: locale/tmp-html/issh-ssh/src/components/keyboardInteractiveAuthPanel.component.html:2
+msgid "Keyboard-interactive auth"
+msgstr "Klavye etkileşimli kimlik doğrulama"
+
+#: issh-local/src/components/terminalTab.component.ts:118
+msgid "Kill"
+msgstr "Öldür"
+
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:10
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:10
+msgid "Language"
+msgstr "Dil"
+
+#: locale/tmp-html/issh-ssh/src/components/hostKeyPromptModal.component.html:11
+msgid "Last known host key fingerprint"
+msgstr "Son bilinen ana bilgisayar anahtarı parmak izi"
+
+#: issh-ssh/src/tabContextMenu.ts:32
+msgid "Launch WinSCP"
+msgstr "WinSCP'yi Başlat"
+
+#: issh-ssh/src/hotkeys.ts:14
+msgid "Launch WinSCP for current SSH session"
+msgstr "Şu andaki SSH oturumu için WinSCP'yi Başlatın"
+
+#: locale/tmp-html/issh-ssh/src/components/sshTab.component.html:7
+msgid "Learn how to allow issh to detect remote shell's working directory."
+msgstr ""
+"issh'nin uzak kabuğun çalışma dizinini algılamasına nasıl izin verileceğini "
+"öğrenin."
+
+#: issh-core/src/tabContextMenu.ts:80
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:141
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:83
+msgid "Left"
+msgstr "Sol"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:40
+msgid "Lets the shell handle Meta key instead of OS"
+msgstr "Shell Kabuğa Meta anahtarını işlemesine izin verir"
+
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:36
+msgid "Light mode"
+msgstr "Aydınlık mod"
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:28
+msgid "Line by line"
+msgstr "Satır satır"
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:29
+msgid "Line editor, input is sent after you press Enter"
+msgstr "Satır düzenleyicisi, Enter tuşuna bastıktan sonra gönderilir"
+
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:83
+msgid "Line padding"
+msgstr "Sıra Öteleme"
+
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:39
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:5
+msgid "Local"
+msgstr "Yerel"
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:23
+msgid "Local echo"
+msgstr "Yerel yankı"
+
+#: issh-local/src/profiles.ts:12
+msgid "Local terminal"
+msgstr "Yerel terminal"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:250
+msgid "Login scripts"
+msgstr "Oturum açma betikleri"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:57
+msgid "Long-click for context menu"
+msgstr "Bağlam menüsü için uzun tıklama"
+
+#: issh-core/src/services/profiles.service.ts:303
+msgid "Manage profiles"
+msgstr "Profilleri yönet"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:179
+msgid "Max Keep Alive Count"
+msgstr "Maksimum Canlı Tutma Sayısı"
+
+#: issh-core/src/hotkeys.ts:172
+msgid "Maximize the active pane"
+msgstr "Aktif bölmeyi büyüt"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:53
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:70
+msgid "Minimum contrast ratio"
+msgstr "Minimum kontrast oranı"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:53
+msgid "Mouse"
+msgstr "Fare"
+
+#: issh-core/src/hotkeys.ts:48
+msgid "Move tab to the left"
+msgstr "Soldaki sekmeye geç"
+
+#: issh-core/src/hotkeys.ts:52
+msgid "Move tab to the right"
+msgstr "Sağdaki sekmeye geç"
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:292
+msgid "Move to \"Ungrouped\""
+msgstr "\"Ungrouped\"a taşı"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:204
+msgid "Moving the mouse over an inactive pane will cause it to activate"
+msgstr ""
+"Fareyi etkin olmayan bir bölmenin üzerine getirmek bölmenin etkinleşmesine "
+"neden olur"
+
+#: locale/tmp-html/issh-settings/src/components/editProfileGroupModal.component.html:9
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:12
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsForMode.component.html:13
+msgid "Name"
+msgstr "İsim"
+
+#: locale/tmp-html/issh-ssh/src/components/sftpCreateDirectoryModal.component.html:3
+msgid "Name for the new directory"
+msgstr "Yeni klasörün adı"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:57
+msgid "Native"
+msgstr "Yerel"
+
+#: issh-electron/src/services/dockMenu.service.ts:63
+msgid "New Window"
+msgstr "Yeni Pencere"
+
+#: issh-local/src/tabContextMenu.ts:53
+msgid "New admin tab"
+msgstr "Yeni yönetici sekmesi"
+
+#: locale/tmp-html/issh-terminal/src/components/loginScriptsSettings.component.html:16
+msgid "New item"
+msgstr "Yeni öge"
+
+#: issh-settings/src/components/vaultSettingsTab.component.ts:201
+msgid "New name"
+msgstr "Yeni isim"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:42
+msgid "New profile"
+msgstr "Yeni profil"
+
+#: issh-terminal/src/tabContextMenu.ts:184
+msgid "New profile name"
+msgstr "Yeni profil adı"
+
+#: issh-local/src/hotkeys.ts:10
+msgid "New tab"
+msgstr "Yeni sekme"
+
+#: issh-local/src/tabContextMenu.ts:27
+msgid "New terminal"
+msgstr "Yeni terminal"
+
+#: issh-electron/src/hotkeys.ts:10
+msgid "New window"
+msgstr "Yeni pencere"
+
+#: issh-local/src/tabContextMenu.ts:37
+msgid "New with profile"
+msgstr "Profil ile yeni"
+
+#: issh-core/src/hotkeys.ts:40
+msgid "Next tab"
+msgstr "Sonraki sekme"
+
+#: issh-core/src/utils.ts:59
+msgid "No color"
+msgstr "Renk yok"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:85
+msgid "No modifier"
+msgstr "Değiştirici yok"
+
+#: issh-terminal/src/services/batchInput.service.ts:32
+msgid "No terminal tabs are available"
+msgstr ""
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:18
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:41
+msgid "Normal"
+msgstr "Normal"
+
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:22
+msgid "Normal font weight"
+msgstr "Normal yazı tipi kalınlığı"
+
+#: issh-terminal/src/components/searchPanel.component.ts:55
+#: issh-terminal/src/components/searchPanel.component.ts:65
+msgid "Not found"
+msgstr "Bulunamadı"
+
+#: issh-core/src/tabContextMenu.ts:209
+msgid "Notify on activity"
+msgstr "Etkinlik anında bilgilendir"
+
+#: issh-core/src/tabContextMenu.ts:187
+msgid "Notify when done"
+msgstr "Tamamlandığında bildir"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:17
+msgid "Number of lines kept in the buffer"
+msgstr "Tamponda tutulan satır sayısı"
+
+#: issh-electron/src/shells/macDefault.ts:25
+msgid "OS default"
+msgstr "İşletim sistemi varsayılanı"
+
+#: issh-electron/src/shells/winDefault.ts:43
+msgid "OS default ({name})"
+msgstr "İşletim sistemi varsayılanı ({name})"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:79
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:144
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:60
+msgid "Off"
+msgstr "Kapalı"
+
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:47
+msgid "Only close the tab when session is explicitly terminated"
+msgstr "Sekmeyi yalnızca oturum sonlandırıldığında kapatın"
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:89
+msgid "Only use this on a trusted LAN. TLS fingerprint pairing is still required."
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:46
+msgid "Opacity"
+msgstr "Saydamlık"
+
+#: issh-electron/src/services/platform.service.ts:179
+msgid "Open"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:42
+msgid "Open DevTools"
+msgstr "Geliştirici araçlarını aç"
+
+#: issh-ssh/src/hotkeys.ts:18
+#: issh-ssh/src/tabContextMenu.ts:25
+msgid "Open SFTP panel"
+msgstr "SFTP panelini aç"
+
+#: issh-settings/src/hotkeys.ts:11
+msgid "Open Settings"
+msgstr "Ayarları Aç"
+
+#: issh-settings/src/hotkeys.ts:25
+msgid "Open settings tab: {tab}"
+msgstr "Ayarlar sekmesini aç: {tab}"
+
+#: locale/tmp-html/issh-terminal/src/components/loginScriptsSettings.component.html:10
+msgid "Optional"
+msgstr "İsteğe bağlı"
+
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:11
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:34
+msgid "Options"
+msgstr "Seçenekler"
+
+#: issh-core/src/utils.ts:62
+msgid "Orange"
+msgstr "Turuncu"
+
+#: issh-settings/src/components/settingsTab.component.ts:49
+msgid "Other"
+msgstr ""
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:47
+msgid "Output is shown as a hexdump"
+msgstr "Çıktı hexdump olarak gösterilir"
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:42
+msgid "Output is shown as it is received"
+msgstr "Çıktı alındığı gibi gösterilir"
+
+#: locale/tmp-html/issh-terminal/src/components/streamProcessingSettings.component.html:23
+msgid "Output mode"
+msgstr "Çıkış modu"
+
+#: locale/tmp-html/issh-terminal/src/components/streamProcessingSettings.component.html:34
+msgid "Output newlines"
+msgstr "Çıktı yeni satırları"
+
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:58
+msgid "Override X11 display"
+msgstr "X11 görüntüsünü bastır"
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:202
+msgid "Overwrite and apply"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:199
+msgid "Overwrite local config with the remote one?"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:196
+msgid "Pane resize step"
+msgstr "Bölmeyi yeniden boyutlandırma adımı"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:193
+msgid "Panes"
+msgstr "Bölmeler"
+
+#: locale/tmp-html/issh-settings/src/components/editProfileGroupModal.component.html:13
+msgid "Parent Group"
+msgstr ""
+
+#: issh-terminal/src/components/inputProcessingSettings.component.ts:18
+msgid "Pass-through"
+msgstr "Doğrudan geçiş(Pass-through)"
+
+#: issh-settings/src/components/vaultSettingsTab.component.ts:154
+msgid "Passphrase for a private key with hash {hash}..."
+msgstr "{hash} hash'li özel anahtar için parola ifadesi..."
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:101
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:119
+msgid "Password"
+msgstr "Şifre"
+
+#: issh-terminal/src/api/baseTerminalTab.component.ts:555
+#: issh-terminal/src/cli.ts:33
+#: issh-terminal/src/tabContextMenu.ts:40
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:62
+msgid "Paste"
+msgstr "Yapıştır"
+
+#: issh-terminal/src/cli.ts:31
+msgid "Paste \"{text}\"?"
+msgstr ""
+
+#: issh-terminal/src/hotkeys.ts:14
+msgid "Paste from clipboard"
+msgstr "Panodan yapıştır"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:63
+msgid "Paste if no selection, else copy"
+msgstr "Seçim yoksa yapıştır, aksi durumda kopyala"
+
+#: issh-terminal/src/api/baseTerminalTab.component.ts:562
+msgid "Paste multiple lines?"
+msgstr "Birden çok satır yapıştırılsın mı?"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:68
+msgid "Paste on middle-click"
+msgstr "Orta tıklamayla yapıştır"
+
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:59
+msgid "Path or address of the local X11 socket"
+msgstr "Yerel X11 soketinin yolu veya adresi"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalToolbar.component.html:5
+msgid "Pin"
+msgstr "Sabitle"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:76
+msgid "Pin this host to favorites and prioritize it in host manager views"
+msgstr ""
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:38
+msgid "Port"
+msgstr "Port"
+
+#: issh-serial/src/components/serialTab.component.ts:66
+msgid "Port opened"
+msgstr "Port açıldı"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:138
+#: locale/tmp-html/issh-ssh/src/components/sshTab.component.html:12
+msgid "Ports"
+msgstr "Bağlantı noktaları"
+
+#: issh-terminal/src/api/connectableTerminalTab.component.ts:86
+msgid "Press any key to reconnect"
+msgstr "Tekrar bağlanmak için bir tuşa basın"
+
+#: locale/tmp-html/issh-settings/src/components/hotkeyInputModal.component.html:3
+msgid "Press the key now"
+msgstr "Şimdi tuşa basın"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:21
+msgid "Prevents accidental closing"
+msgstr "Yanlışlıkla kapanmayı önle"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:110
+msgid "Prevents accidental execution of pasted commands"
+msgstr "Yapıştırılan komutların yanlışlıkla çalıştırılmasını önler"
+
+#: issh-core/src/hotkeys.ts:44
+msgid "Previous tab"
+msgstr "Önceki sekme"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:127
+msgid "Private keys"
+msgstr "Özel anahtarlar"
+
+#: issh-core/src/tabContextMenu.ts:195
+msgid "Process completed"
+msgstr "İşlem tamamlandı"
+
+#: issh-core/src/tabContextMenu.ts:151
+msgid "Profile name"
+msgstr "Profil adı"
+
+#: issh-electron/src/services/dockMenu.service.ts:42
+msgid "Profiles"
+msgstr "Profiller"
+
+#: issh-core/src/commands.ts:32
+#: issh-settings/src/settings.ts:61
+msgid "Profiles & connections"
+msgstr "Profiller ve bağlantılar"
+
+#: locale/tmp-html/issh-local/src/components/commandLineEditor.component.html:12
+msgid "Program"
+msgstr "Program"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:30
+msgid "Proxy command"
+msgstr "Proxy komutu"
+
+#: issh-core/src/utils.ts:63
+msgid "Purple"
+msgstr "Mor"
+
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:38
+msgid "Puts all of issh's configuration into the vault"
+msgstr "issh'nin tüm konfigürasyonunu kasaya koy"
+
+#: issh-core/src/index.ts:221
+#: issh-core/src/services/profiles.service.ts:319
+msgid "Quick connect"
+msgstr "Hızlı bağlan"
+
+#: issh-core/src/services/config.service.ts:476
+#: issh-core/src/services/config.service.ts:490
+msgid "Quit"
+msgstr "Çık"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:185
+msgid "Ready Timeout (Milliseconds)"
+msgstr "Hazır Zaman Aşımı (Milisaniye)"
+
+#: issh-core/src/services/profiles.service.ts:259
+#: issh-core/src/services/profiles.service.ts:273
+#: issh-electron/src/services/dockMenu.service.ts:30
+#: issh-settings/src/components/profilesSettingsTab.component.ts:13
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:11
+msgid "Recent"
+msgstr "En Son"
+
+#: issh-terminal/src/api/connectableTerminalTab.component.ts:32
+#: issh-terminal/src/tabContextMenu.ts:123
+#: issh-terminal/src/tabContextMenu.ts:127
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:52
+#: locale/tmp-html/issh-ssh/src/components/sshTab.component.html:10
+msgid "Reconnect"
+msgstr "Tekrar bağlan"
+
+#: issh-terminal/src/hotkeys.ts:110
+msgid "Reconnect current tab (Serial/Telnet/SSH)"
+msgstr "Geçerli sekmeye yeniden bağlan (Serial/Telnet/SSH)"
+
+#: issh-core/src/utils.ts:64
+msgid "Red"
+msgstr "Kırmızı"
+
+#: locale/tmp-html/issh-terminal/src/components/loginScriptsSettings.component.html:10
+msgid "Regex"
+msgstr "Regex"
+
+#: issh-terminal/src/features/zmodem.ts:42
+msgid "Reject"
+msgstr ""
+
+#: issh-settings/src/components/releaseNotesTab.component.ts:28
+msgid "Release notes"
+msgstr "Sürüm notları"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:89
+msgid "Remark"
+msgstr ""
+
+#: locale/tmp-html/issh-core/src/components/unlockVaultModal.component.html:6
+msgid "Remember for {time}"
+msgstr "{time} için hatırla"
+
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:41
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:5
+msgid "Remote"
+msgstr "Uzak Bağlantı"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:131
+msgid "Remove whitespace and newlines around the copied text"
+msgstr "Kopyalanan metnin etrafındaki boşlukları ve yeni satırları kaldırın"
+
+#: issh-core/src/tabContextMenu.ts:120
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:26
+msgid "Rename"
+msgstr "Yeniden adlandır"
+
+#: issh-core/src/hotkeys.ts:24
+#: issh-core/src/tabContextMenu.ts:121
+msgid "Rename tab"
+msgstr "Sekmeyi yeniden adlandır"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:3
+msgid "Rendering"
+msgstr "İşleniyor"
+
+#: issh-core/src/hotkeys.ts:32
+msgid "Reopen last tab"
+msgstr "Son sekmeyi yeniden aç"
+
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:27
+msgid "Replace"
+msgstr "Değiştir"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:123
+msgid "Replace line breaks with spaces"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:81
+msgid "Require a key to click links"
+msgstr "Bağlantıları tıklamak için bir anahtar gerekir"
+
+#: issh-terminal/src/hotkeys.ts:62
+msgid "Reset zoom"
+msgstr "Yakınlaştırmayı sıfırla"
+
+#: issh-ssh/src/hotkeys.ts:10
+msgid "Restart current SSH session"
+msgstr "Mevcut SSH oturumunu yeniden başlat"
+
+#: issh-serial/src/hotkeys.ts:14
+msgid "Restart current serial session"
+msgstr "Mevcut seri bağlantısını yeniden başlat"
+
+#: issh-core/src/hotkeys.ts:64
+msgid "Restart tab"
+msgstr "Sekmeyi yeniden başlat"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:102
+msgid "Restart the app to apply changes"
+msgstr "Değişiklikleri uygulamak için uygulamayı yeniden başlatın"
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:394
+msgid "Restore settings to defaults ?"
+msgstr "Ayarları varsayılanlara geri yükle?"
+
+#: issh-settings/src/components/editProfileGroupModal.component.ts:117
+msgid "Restore settings to inherited defaults ?"
+msgstr "Ayarları önceki varsayılan değerlere geri yükle?"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:166
+msgid "Restore terminal tabs on app start"
+msgstr "Uygulama başlangıcında terminal sekmelerini geri yükle"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:166
+msgid "Reuse session for multiple tabs"
+msgstr "Oturumu birden fazla sekme için yeniden kullanma"
+
+#: issh-core/src/tabContextMenu.ts:78
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:143
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:85
+msgid "Right"
+msgstr "Sağ"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:56
+msgid "Right click"
+msgstr "Sağ tık"
+
+#: issh-local/src/cli.ts:52
+msgid "Run"
+msgstr ""
+
+#: issh-local/src/cli.ts:50
+msgid "Run \"{command}\"?"
+msgstr ""
+
+#: locale/tmp-html/issh-local/src/components/localProfileSettings.component.html:8
+msgid "Run as administrator"
+msgstr "Yönetici olarak çalıştır"
+
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:22
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:9
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:20
+msgid "SOCKS proxy"
+msgstr "SOCKS Proxy"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:51
+msgid "SOCKS proxy host"
+msgstr "SOCKS proxy host"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:55
+msgid "SOCKS proxy port"
+msgstr "SOCKS proxy port"
+
+#: issh-ssh/src/profiles.ts:77
+msgid "SSH connection"
+msgstr "SSH bağlantısı"
+
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:63
+msgid ""
+"SSH connection management is now done through the \"Profiles & "
+"connections\" tab"
+msgstr ""
+"SSH bağlantı yönetimi artık \"Profiller ve bağlantılar\" sekmesinden "
+"yapılıyor"
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:14
+msgid "SSH only"
+msgstr ""
+
+#: issh-settings/src/components/vaultSettingsTab.component.ts:151
+msgid "SSH password for {user}@{host}:{port}"
+msgstr "SSH şifresi için {user}@{host}:{port}"
+
+#: locale/tmp-html/issh-core/src/components/renameTabModal.component.html:6
+#: locale/tmp-html/issh-settings/src/components/editProfileGroupModal.component.html:50
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:71
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsForMode.component.html:29
+msgid "Save"
+msgstr "Kaydet"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:120
+msgid "Save a password in the keychain"
+msgstr "Anahtar zincirine bir parola kaydedin"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:91
+msgid "Save and apply"
+msgstr "Kaydet ve uygula"
+
+#: issh-terminal/src/tabContextMenu.ts:181
+msgid "Save as profile"
+msgstr "Profil olarak kaydet"
+
+#: issh-core/src/tabContextMenu.ts:148
+msgid "Save layout as profile"
+msgstr "Düzeni profil olarak kaydet"
+
+#: issh-terminal/src/tabContextMenu.ts:216
+msgid "Saved"
+msgstr "Kaydedildi"
+
+#: issh-core/src/profiles.ts:19
+msgid "Saved layout"
+msgstr "Düzeni kaydet"
+
+#: issh-electron/src/terminalContextMenu.ts:39
+msgid "Saved to {path}"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:46
+msgid "Scroll on input"
+msgstr "Girdide kaydır"
+
+#: issh-terminal/src/hotkeys.ts:98
+msgid "Scroll terminal one line down"
+msgstr ""
+
+#: issh-terminal/src/hotkeys.ts:94
+msgid "Scroll terminal one line up"
+msgstr ""
+
+#: issh-terminal/src/hotkeys.ts:102
+msgid "Scroll terminal one page down"
+msgstr "Terminali bir sayfa aşağı kaydır"
+
+#: issh-terminal/src/hotkeys.ts:90
+msgid "Scroll terminal one page up"
+msgstr "Terminali bir sayfa yukarı kaydır"
+
+#: issh-terminal/src/hotkeys.ts:106
+msgid "Scroll terminal to bottom"
+msgstr "Terminali en alta kaydır"
+
+#: issh-terminal/src/hotkeys.ts:86
+msgid "Scroll terminal to top"
+msgstr "Terminali en üste kaydır"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:16
+msgid "Scrollback"
+msgstr "Geriye kaydır"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:47
+msgid "Scrolls the terminal to the bottom on user input"
+msgstr "Kullanıcı girdisinde terminali en alta kaydır"
+
+#: issh-terminal/src/hotkeys.ts:74
+msgid "Search"
+msgstr "Ara"
+
+#: issh-terminal/src/components/colorSchemeSelector.component.ts:8
+#: issh-terminal/src/components/colorSchemeSettingsForMode.component.ts:9
+msgid "Search color schemes"
+msgstr "Renk şemalarını ara"
+
+#: issh-settings/src/components/hotkeySettingsTab.component.ts:12
+msgid "Search hotkeys"
+msgstr "Kısayolları ara"
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:200
+msgid "Sections: {sections}"
+msgstr ""
+
+#: issh-electron/src/services/platform.service.ts:263
+#: issh-electron/src/services/platform.service.ts:288
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:45
+msgid "Select"
+msgstr "Seç"
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:118
+msgid "Select a base profile to use as a template"
+msgstr "Kalıp olarak kullanmak için temel bir profil seç"
+
+#: issh-terminal/src/hotkeys.ts:18
+msgid "Select all"
+msgstr "Tümünü Seç"
+
+#: issh-terminal/src/components/batchInputModal.component.ts:98
+#: issh-terminal/src/components/batchInputPanel.component.ts:117
+msgid "Select at least one terminal tab"
+msgstr ""
+
+#: issh-electron/src/services/platform.service.ts:323
+msgid "Select destination folder for {name}"
+msgstr ""
+
+#: issh-core/src/services/fileProviders.service.ts:47
+msgid "Select file storage"
+msgstr "Depolama seç"
+
+#: issh-core/src/index.ts:234
+#: issh-core/src/index.ts:249
+msgid "Select profile"
+msgstr "Profil seçin"
+
+#: issh-core/src/services/profiles.service.ts:332
+msgid "Select profile or enter an address"
+msgstr "Profil seçin ya da bir adres girin"
+
+#: issh-terminal/src/components/batchInputModal.component.ts:114
+#: issh-terminal/src/components/batchInputPanel.component.ts:135
+msgid "Selected tabs"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/batchInputModal.component.html:36
+#: locale/tmp-html/issh-terminal/src/components/batchInputPanel.component.html:29
+#: locale/tmp-html/issh-terminal/src/components/terminalToolbar.component.html:4
+msgid "Send"
+msgstr ""
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:34
+msgid "Send bytes by typing in hex values"
+msgstr "Hex değerleri yazarak bayt gönderme"
+
+#: issh-terminal/src/tabContextMenu.ts:78
+#: locale/tmp-html/issh-terminal/src/components/batchInputModal.component.html:3
+#: locale/tmp-html/issh-terminal/src/components/batchInputPanel.component.html:3
+msgid "Send input to multiple tabs"
+msgstr ""
+
+#: issh-terminal/src/components/batchInputModal.component.ts:103
+#: issh-terminal/src/components/batchInputPanel.component.ts:122
+msgid "Sent to {count} tabs"
+msgstr ""
+
+#: issh-serial/src/profiles.ts:14
+#: issh-serial/src/profiles.ts:74
+msgid "Serial"
+msgstr "Seri"
+
+#: issh-serial/src/profiles.ts:53
+#: issh-serial/src/profiles.ts:64
+msgid "Serial connection"
+msgstr "Seri bağlantı"
+
+#: issh-serial/src/profiles.ts:73
+msgid "Serial: {description}"
+msgstr "Seri: {description}"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:175
+msgid "Set issh as %COMSPEC%"
+msgstr "issh'yi %COMSPEC% olarak ayarla"
+
+#: locale/tmp-html/issh-settings/src/components/setVaultPassphraseModal.component.html:2
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:5
+msgid "Set master passphrase"
+msgstr "Ana parolayı ayarla"
+
+#: locale/tmp-html/issh-settings/src/components/setVaultPassphraseModal.component.html:11
+msgid "Set passphrase"
+msgstr "Parolayı ayarla"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:123
+msgid "Set password"
+msgstr "Şifreyi ayarla"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:164
+msgid "Set to 0 to disable recent profiles"
+msgstr "Son profilleri devre dışı bırakmak için 0'a ayarlayın"
+
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:52
+msgid "Sets the SSH agent's named pipe path."
+msgstr "SSH aracısının adlandırılmış yöneltme yolunu ayarlar."
+
+#: issh-settings/src/buttonProvider.ts:28
+#: issh-settings/src/components/settingsTab.component.ts:67
+msgid "Settings"
+msgstr "Ayarlar"
+
+#: locale/tmp-html/issh-local/src/components/shellSettingsTab.component.html:2
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:3
+msgid "Shell"
+msgstr "Kabuk"
+
+#: issh-terminal/src/api/baseTerminalTab.component.ts:621
+msgid "Shell does not support current path detection"
+msgstr "Shell geçerli yol algılamayı desteklemiyor"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:19
+msgid "Shell integration"
+msgstr "Kabuk bütünleşmesi"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:142
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:25
+msgid "Show"
+msgstr "Göster"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:153
+msgid "Show Mixer"
+msgstr "Mikseri Göster"
+
+#: issh-serial/src/hotkeys.ts:10
+msgid "Show Serial connections"
+msgstr "Seri bağlantıları göster"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:117
+msgid "Show a confirmation box when pasting multiple lines"
+msgstr "Birden fazla satır yapıştırırken onay kutusu göster"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:170
+msgid "Show built-in profiles in selector"
+msgstr "Yerleşik profilleri seçicide göster"
+
+#: issh-core/src/hotkeys.ts:12
+msgid "Show command selector"
+msgstr "Komut seçiciyi göster"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:94
+msgid "Show config file"
+msgstr "Yapılandırma dosyasını aç"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:93
+msgid "Show defaults"
+msgstr "Varsayılanları göster"
+
+#: issh-core/src/hotkeys.ts:56
+msgid "Show pane labels (for rearranging)"
+msgstr "Bölme etiketlerini göster (yeniden düzenlemek için)"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:171
+msgid "Show profile icon on tab"
+msgstr "Profil ikonunu sekmede göster"
+
+#: issh-core/src/hotkeys.ts:16
+msgid "Show profile selector"
+msgstr "Profil seçiciyi göster"
+
+#: issh-core/src/hotkeys.ts:275
+msgid "Show profile selector for group {name}"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:163
+msgid "Show recent profiles in selector"
+msgstr "Son profilleri seçicide göster"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:159
+msgid "Show tabs in fullscreen mode"
+msgstr "Tam ekran modunda sekmeleri göster"
+
+#: issh-terminal/src/tabContextMenu.ts:64
+msgid "Show toolbar"
+msgstr "Araç Çubuğunu Göster"
+
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:46
+msgid "Show vault contents"
+msgstr "Kasa içeriğini göster"
+
+#: issh-core/src/hotkeys.ts:271
+msgid "Show {type} profile selector"
+msgstr "Profil {type} seçiciyi göster"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:29
+msgid "Sixel graphics support (experimental)"
+msgstr "Sixel grafik desteği (deneysel)"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:159
+msgid "Skip MoTD/banner"
+msgstr "MoTD/banner'ı atla"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:75
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:93
+msgid "Snaps the window to a side of the screen"
+msgstr "Pencereyi ekranın bir tarafına yaslar"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:137
+msgid "Sound"
+msgstr "Ses"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:13
+msgid "Spaciness"
+msgstr "Uzaklık"
+
+#: issh-core/src/tabContextMenu.ts:75
+msgid "Split"
+msgstr "Ayır"
+
+#: issh-core/src/hotkeys.ts:160
+msgid "Split to the bottom"
+msgstr "Ekranı alta ayır"
+
+#: issh-core/src/tabContextMenu.ts:85
+msgid "Split to the down"
+msgstr "Aşağı doğru böl"
+
+#: issh-core/src/hotkeys.ts:164
+#: issh-core/src/tabContextMenu.ts:86
+msgid "Split to the left"
+msgstr "Ekranı sola ayır"
+
+#: issh-core/src/hotkeys.ts:156
+#: issh-core/src/tabContextMenu.ts:84
+msgid "Split to the right"
+msgstr "Ekranı sağa ayır"
+
+#: issh-core/src/hotkeys.ts:168
+msgid "Split to the top"
+msgstr "Ekranı üste ayır"
+
+#: issh-core/src/tabContextMenu.ts:87
+msgid "Split to the up"
+msgstr "Yukarı doğru böl"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:157
+msgid "Startup"
+msgstr "Başlangıç"
+
+#: issh-terminal/src/components/streamProcessingSettings.component.ts:53
+msgid "Strip"
+msgstr "Şerit"
+
+#: locale/tmp-html/issh-local/src/components/environmentEditor.component.html:13
+msgid "Substitutions allowed."
+msgstr "Değiştirmeye izin verildi."
+
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:19
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:5
+msgid "Switch color scheme"
+msgstr "Renk şemasını değiştir"
+
+#: issh-core/src/tabContextMenu.ts:290
+msgid "Switch profile"
+msgstr "Profili değiştirin"
+
+#: issh-core/src/hotkeys.ts:236
+msgid "Switch profile in the active pane"
+msgstr "Etkin bölmede profil değiştirme"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:7
+msgid "Switches terminal frontend implementation (experimental)"
+msgstr "Switchler Terminal Frontend implementasyonu (deneysel)"
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:117
+msgid "Sync service stopped"
+msgstr ""
+
+#: issh-settings/src/components/settingsTab.component.ts:48
+msgid "System"
+msgstr ""
+
+#: issh-core/src/tabContextMenu.ts:223
+msgid "Tab activity"
+msgstr "Sekme aktivitesi"
+
+#: issh-core/src/hotkeys.ts:100
+#: issh-core/src/hotkeys.ts:104
+#: issh-core/src/hotkeys.ts:108
+#: issh-core/src/hotkeys.ts:112
+#: issh-core/src/hotkeys.ts:116
+#: issh-core/src/hotkeys.ts:120
+#: issh-core/src/hotkeys.ts:124
+#: issh-core/src/hotkeys.ts:128
+#: issh-core/src/hotkeys.ts:132
+#: issh-core/src/hotkeys.ts:136
+#: issh-core/src/hotkeys.ts:140
+#: issh-core/src/hotkeys.ts:144
+#: issh-core/src/hotkeys.ts:148
+#: issh-core/src/hotkeys.ts:152
+#: issh-core/src/hotkeys.ts:76
+#: issh-core/src/hotkeys.ts:80
+#: issh-core/src/hotkeys.ts:84
+#: issh-core/src/hotkeys.ts:88
+#: issh-core/src/hotkeys.ts:92
+#: issh-core/src/hotkeys.ts:96
+msgid "Tab {number}"
+msgstr "Tab {number}"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:130
+msgid "Tabs"
+msgstr "Sekmeler"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:133
+msgid "Tabs location"
+msgstr "Sekme konumu"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:148
+msgid "Tabs width"
+msgstr "Sekme genişliği"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:85
+msgid "Tags"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/batchInputModal.component.html:12
+msgid "Target tabs"
+msgstr ""
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:123
+msgid "Template"
+msgstr ""
+
+#: issh-settings/src/components/settingsTab.component.ts:46
+#: issh-terminal/src/api/baseTerminalTab.component.ts:213
+#: issh-terminal/src/settings.ts:45
+msgid "Terminal"
+msgstr "Terminal"
+
+#: locale/tmp-html/issh-terminal/src/components/appearanceSettingsTab.component.html:40
+msgid "Terminal background"
+msgstr "Terminal arka planı"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:140
+msgid "Terminal bell"
+msgstr "Terminal zili"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:177
+msgid "Terminal identification"
+msgstr "Terminal tanımlama"
+
+#: issh-terminal/src/services/batchInput.service.ts:91
+msgid "Terminal {number}"
+msgstr ""
+
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:7
+msgid "Thank you for downloading issh!"
+msgstr "issh'i indirdiğiniz için teşekkür ederiz!"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:5
+msgid "Theme"
+msgstr "Tema"
+
+#: issh-core/src/components/transfersMenu.component.ts:53
+msgid "There are active file transfers"
+msgstr "Aktif dosya transferleri var"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:121
+msgid "There is a saved password for this connection"
+msgstr "Bu bağlantı için kaydedilmiş parola mevcut"
+
+#: locale/tmp-html/issh-settings/src/components/profilesSettingsTab.component.html:197
+msgid "These apply to all profiles of a given type"
+msgstr "Bunlar, seçilen türdeki tüm profiller için geçerlidir"
+
+#: locale/tmp-html/issh-settings/src/components/editProfileGroupModal.component.html:40
+msgid "These apply to all profiles of a given type in this group"
+msgstr "Bunlar, bu gruptaki verilen türdeki tüm profiller için geçerlidir"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:59
+msgid "Thin"
+msgstr "İnce"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:212
+msgid "Tick this if you're experiencing aliasing, ghosting or other visual issues"
+msgstr "Örtüşme, gölgelenme veya diğer görsel sorunlar yaşıyorsanız bunu işaretleyin"
+
+#: issh-core/src/hotkeys.ts:20
+msgid "Toggle fullscreen mode"
+msgstr "Tam Ekran Kipini Aç/Kapat"
+
+#: issh-core/src/hotkeys.ts:36
+msgid "Toggle last tab"
+msgstr "Son sekmeyi değiştir"
+
+#: issh-electron/src/hotkeys.ts:14
+msgid "Toggle terminal window"
+msgstr "Terminal penceresini aç/kapat"
+
+#: locale/tmp-html/issh-core/src/components/welcomeTab.component.html:40
+msgid "Toggles the issh window visibility"
+msgstr "Sekmeli pencere görünürlüğünü değiştirir"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:137
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:81
+msgid "Top"
+msgstr "Üst"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:130
+msgid "Trim whitespace and newlines"
+msgstr "Boşlukları ve yeni satırları kaldırın"
+
+#: issh-core/src/services/config.service.ts:474
+msgid "Try again"
+msgstr "Tekrar deneyin"
+
+#: issh-core/src/hotkeys.ts:68
+msgid "Turn current tab's panes into separate tabs"
+msgstr "Geçerli sekmenin bölmelerini ayrı sekmelere dönüştür"
+
+#: issh-core/src/services/profiles.service.ts:531
+#: issh-settings/src/components/profilesSettingsTab.component.ts:10
+msgid "Ungrouped"
+msgstr "Gruplandırılmamış"
+
+#: issh-settings/src/components/profilesSettingsTab.component.ts:352
+msgid "Unknown"
+msgstr "Bilinmeyen"
+
+#: issh-settings/src/components/vaultSettingsTab.component.ts:160
+msgid "Unknown secret of type {type} for {key}"
+msgstr "{key} için {type} türünde bilinmeyen mutabakat"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalToolbar.component.html:5
+msgid "Unpin"
+msgstr "Sabitlemeyi kaldır"
+
+#: issh-core/src/tabContextMenu.ts:81
+msgid "Up"
+msgstr "Yukarı"
+
+#: issh-electron/src/services/updater.service.ts:132
+msgid "Update"
+msgstr "Güncelle"
+
+#: locale/tmp-html/issh-local/src/components/shellSettingsTab.component.html:5
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:6
+msgid "Use ConPTY"
+msgstr "ConPTY kullan"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:39
+msgid "Use {altKeyName} as the Meta key"
+msgstr "Meta anahtarı olarak {altKeyName} kullanın"
+
+#: issh-electron/src/shells/linuxDefault.ts:31
+#: issh-electron/src/shells/linuxDefault.ts:39
+msgid "User default"
+msgstr "Kullanıcı Varsayılanları"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:70
+msgid "Username"
+msgstr "Kullanıcı Adı"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:25
+msgid "Using CONNECT method"
+msgstr "CONNECT yöntemini kullanma"
+
+#: issh-ssh/src/session/ssh.ts:696
+msgid "Using saved password"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:9
+msgid "Vault"
+msgstr "Kasa"
+
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:4
+msgid ""
+"Vault is an always-encrypted container for secrets such as SSH passwords "
+"and private key passphrases."
+msgstr ""
+"Vault, SSH şifreleri ve özel anahtar parolaları gibi gizli içerikler için "
+"her zaman şifrelenmiş bir alandır."
+
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:17
+msgid "Vault is empty"
+msgstr "Kasa boş"
+
+#: locale/tmp-html/issh-core/src/components/unlockVaultModal.component.html:4
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:44
+msgid "Vault is locked"
+msgstr "Kasa kilitli"
+
+#: locale/tmp-html/issh-settings/src/components/vaultSettingsTab.component.html:3
+msgid "Vault is not configured"
+msgstr "Kasa yapılandırılmamış"
+
+#: issh-core/src/services/fileProviders.service.ts:40
+msgid "Vault master passphrase needs to be set to allow storing secrets"
+msgstr ""
+"Gizli dizilerin saklanmasına izin vermek için kasa ana parolasının "
+"ayarlanması gerekir"
+
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:27
+msgid "Verify host keys when connecting"
+msgstr "Bağlanırken ana bilgisayar anahtarlarını doğrulayın"
+
+#: locale/tmp-html/issh-core/src/components/startPage.component.html:43
+msgid "Version: {version}"
+msgstr "Sürüm: {version}"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:28
+msgid "Vibrancy"
+msgstr "Titreşim"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:146
+msgid "Visual"
+msgstr "Görsel"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:152
+msgid "WSL terminal bell can only be muted via Volume Mixer"
+msgstr "WSL terminal zili yalnızca Volume Mixer aracılığıyla kapatılabilir"
+
+#: locale/tmp-html/issh-local/src/components/shellSettingsTab.component.html:14
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:15
+msgid "WSL terminal only supports TrueColor with ConPTY"
+msgstr "WSL terminali yalnızca ConPTY ile TrueColor'u destekler"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:116
+msgid "Warn on multi-line paste"
+msgstr "Çok satırlı yapıştırmada uyar"
+
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:21
+msgid "Warn when closing active connections"
+msgstr "Aktif bağlantıları kapatırken uyar"
+
+#: locale/tmp-html/issh-ssh/src/components/hostKeyPromptModal.component.html:6
+msgid "Warning: remote host's key has suddenly changed!"
+msgstr "Uyarı: Uzak ana bilgisayarın anahtarı aniden değişti!"
+
+#: locale/tmp-html/issh-settings/src/components/settingsTab.component.html:27
+msgid "We're only tracking your issh and OS versions."
+msgstr "Yalnızca issh ve İşletim Sistemi sürümlerinizi izliyoruz."
+
+#: issh-core/src/components/welcomeTab.component.ts:26
+msgid "Welcome"
+msgstr "Hoşgeldiniz"
+
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:34
+msgid ""
+"When WinSCP is detected, you can launch an SCP session from the context "
+"menu."
+msgstr "WinSCP algılandığında, içerik menüsünden bir SCP oturumu başlatabilirsiniz."
+
+#: locale/tmp-html/issh-settings/src/components/editProfileModal.component.html:46
+msgid "When a session ends"
+msgstr "Oturum sona erdiğinde"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:82
+msgid "When enabled, links are only clickable while holding this key"
+msgstr "Etkinleştirildiğinde, bağlantılar yalnızca bu tuş basılıyken tıklanabilir"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:53
+msgid "Whether a custom window or an OS native window should be used"
+msgstr ""
+"Özel bir pencerenin mi yoksa bir İşletim Sistemi yerel penceresinin mi "
+"kullanılması gerektiği"
+
+#: locale/tmp-html/issh-terminal/src/components/colorSchemeSettingsTab.component.html:26
+msgid ""
+"Whether to invert generated light theme colors. This helps give the "
+"256-color palette more semantic meaning."
+msgstr ""
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:160
+msgid "Will prevent the SSH greeting from showing up"
+msgstr "SSH selamlamasının görünmesini engelleyecek"
+
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:33
+msgid "WinSCP path"
+msgstr "WinSCP yolu"
+
+#: issh-settings/src/settings.ts:31
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:2
+msgid "Window"
+msgstr "Pencere"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:119
+msgid "Window dimension along the edge"
+msgstr "Kenar boyunca pencere boyutu"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:112
+msgid "Window dimension away from the edge"
+msgstr "Pencere boyutu kenardan uzakta"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:52
+msgid "Window frame"
+msgstr "Pencere çerçevesi"
+
+#: issh-terminal/src/services/batchInput.service.ts:89
+msgid "Window tab {number}"
+msgstr ""
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:172
+msgid "Windows"
+msgstr "Pencere"
+
+#: locale/tmp-html/issh-local/src/components/shellSettingsTab.component.html:11
+#: locale/tmp-html/issh-ssh/src/components/sshSettingsTab.component.html:12
+msgid "Windows 10 build 18309 or above is recommended for ConPTY"
+msgstr "ConPTY için Windows 10 build 18309 veya üstü önerilir"
+
+#: locale/tmp-html/issh-terminal/src/components/terminalSettingsTab.component.html:74
+msgid "Word separators"
+msgstr "Kelime ayracı"
+
+#: locale/tmp-html/issh-local/src/components/localProfileSettings.component.html:13
+msgid "Working directory"
+msgstr "Çalışma dizini"
+
+#: locale/tmp-html/issh-ssh/src/components/sshTab.component.html:6
+msgid "Working directory detection"
+msgstr "Çalışma dizini tespiti"
+
+#: locale/tmp-html/issh-ssh/src/components/sshProfileSettings.component.html:147
+msgid "X11 forwarding"
+msgstr "X11 yönlendirme"
+
+#: issh-core/src/utils.ts:65
+msgid "Yellow"
+msgstr "Sarı"
+
+#: locale/tmp-html/issh-settings/src/components/setVaultPassphraseModal.component.html:4
+msgid "You can change it later, but it's unrecoverable if forgotten."
+msgstr "Daha sonra değiştirebilirsiniz, ancak unutulursa kurtarılamaz."
+
+#: locale/tmp-html/issh-ssh/src/components/hostKeyPromptModal.component.html:7
+msgid ""
+"You could be under a man-in-the-middle attack right now, or the host key "
+"could have just been changed."
+msgstr ""
+"Şu anda bir man-in-the-middle saldırısı altında olabilirsiniz veya ana "
+"bilgisayar anahtarı yeni değiştirilmiş olabilir."
+
+#: issh-terminal/src/hotkeys.ts:54
+msgid "Zoom in"
+msgstr "Yakınlaştır"
+
+#: issh-terminal/src/hotkeys.ts:58
+msgid "Zoom out"
+msgstr "Uzaklaştır"
+
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:43
+#: locale/tmp-html/issh-ssh/src/components/sshPortForwardingConfig.component.html:5
+msgctxt "[Dynamic] port forwarding"
+msgid "id.port-forwarding.dynamic"
+msgstr "id.port-forwarding.dynamic"
+
+#: locale/tmp-html/issh-settings/src/components/windowSettingsTab.component.html:152
+msgid "id.tab-width.dynamic"
+msgstr "id.sekme-genişliği.dinamik"
+
+#: locale/tmp-html/issh-core/src/components/safeModeModal.component.html:3
+msgid ""
+"issh could not start with your plugins, so all third party plugins have "
+"been disabled in this session. The error was:"
+msgstr ""
+"issh, eklentilerinizle başlatılamadı, bu nedenle bu oturumda tüm üçüncü "
+"taraf eklentileri devre dışı bırakıldı. Hata:"
+
+#: issh-core/src/components/startPage.component.ts:736
+#: issh-core/src/components/startPage.component.ts:745
+#: issh-settings/src/components/profilesSettingsTab.component.ts:137
+#: issh-settings/src/components/profilesSettingsTab.component.ts:147
+msgid "{name} copy"
+msgstr "{name} kopyalandı"
+
+#: issh-llm/src/hotkeys.ts:23
+msgid "上一条建议（Ctrl+U）"
+msgstr ""
+
+#: issh-llm/src/hotkeys.ts:19
+msgid "下一条建议（Ctrl+N）"
+msgstr ""
+
+#: issh-llm/src/tabLLMController.ts:357
+msgid "仅允许本次"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:105
+msgid "仅同步勾选的内容，其余保持不变"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:75
+msgid "从对端「本机 TLS 指纹」复制粘贴，必须完全一致。"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:128
+msgid "从对端拉取"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:101
+msgid "传输完整配置，覆盖对端/本地全部设置"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:12
+msgid "保险库已解锁"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:13
+msgid "保险库已锁定"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:103
+msgid "保险库未解锁"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:54
+msgid "停止服务"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:37
+msgid "允许局域网访问"
+msgstr ""
+
+#: issh-llm/src/hotkeys.ts:27
+msgid "关闭 AI 补全面板"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:113
+msgid "勾选需要同步的配置项"
+msgstr ""
+
+#: issh-llm/src/tabLLMController.ts:354
+msgid "危险命令需要确认"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:170
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:213
+msgid "同步 Vault 前请先解锁保险库"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:16
+msgid "同步使用自签 TLS。请手动交换证书指纹；指纹不匹配时连接会被拒绝。"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:112
+msgid "同步内容"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:19
+msgid "同步密钥"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:124
+msgid "同步操作"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:108
+msgid "同步服务已启动"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:31
+msgid "同步服务的 HTTPS 端口，两台电脑必须一致。"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:96
+msgid "同步模式"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:50
+msgid "启动同步服务后，其他电脑即可连接到本机。"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:110
+msgid "启动失败：{error}"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:53
+msgid "启动服务"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:5
+msgid "在局域网内的两台电脑之间同步 issh 配置。需要先启用保险库（Vault）并设置主密码。"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:70
+msgid "客户端（连接对端）"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:81
+msgid "对端 IP 地址"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:74
+msgid "对端 TLS 指纹"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:10
+msgid "局域网同步（HTTPS）"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:105
+msgid "差异同步"
+msgstr ""
+
+#: issh-llm/src/hotkeys.ts:33
+msgid "快速选择第 {position} 条补全建议"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:59
+msgid "把该指纹发给对端，粘贴到「对端 TLS 指纹」。"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:225
+msgid "拉取失败"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:220
+msgid "拉取完成"
+msgstr ""
+
+#: issh-llm/src/tabLLMController.ts:358
+msgid "拒绝"
+msgstr ""
+
+#: issh-llm/src/hotkeys.ts:15
+msgid "接受 AI 建议（Ctrl+Y）"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:127
+msgid "推送到对端"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:182
+msgid "推送失败"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:177
+msgid "推送完成"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:133
+msgid "推送需对端用户确认后才会写入。拉取会覆盖本机配置，覆盖前请确认。差异同步仅覆盖勾选的内容。"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:101
+msgid "整包同步"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:45
+msgid "服务端（本机）"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:58
+msgid "本机 TLS 指纹"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:49
+msgid "本机同步服务"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:86
+msgid "测试连接"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:20
+msgid "用于身份验证的共享密钥，两台电脑必须一致。"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:30
+msgid "端口"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:82
+msgid "请先在 Vault 设置中启用保险库并设置主密码"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:6
+msgid "请先在「安全」设置中启用保险库。"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:126
+msgid "请先粘贴对端 TLS 指纹"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:78
+msgid "请先设置同步密钥"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:153
+msgid "请至少勾选一个同步内容"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:82
+msgid "输入另一台电脑的局域网 IP 地址。"
+msgstr ""
+
+#: issh-llm/src/components/llmSettingsTab.component.ts:39
+msgid "连接成功"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:2
+msgid "配置同步"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:4
+msgid "配置同步尚未配置"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:221
+msgid "配置已从 {ip} 拉取并应用"
+msgstr ""
+
+#: issh-settings/src/components/configSyncSettingsTab.component.ts:178
+msgid "配置已推送到 {ip}（对端需确认）"
+msgstr ""
+
+#: locale/tmp-html/issh-settings/src/components/configSyncSettingsTab.component.html:38
+msgid "默认仅监听 127.0.0.1。勾选后绑定 0.0.0.0（仅限可信局域网）。"
+msgstr ""

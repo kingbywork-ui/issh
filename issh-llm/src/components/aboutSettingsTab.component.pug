@@ -1,0 +1,76 @@
+h3.mb-3 关于
+
+div.mt-4
+    h3.mb-3 版本信息
+
+    .form-line
+        .header
+            .title 当前版本
+            .description {{ appVersion }}
+
+    .form-line(*ngIf='osRelease')
+        .header
+            .title 操作系统
+            .description {{ osRelease }}
+
+    .form-line(*ngIf='electronVersion')
+        .header
+            .title 运行时
+            .description Electron {{ electronVersion }} / Chrome {{ chromeVersion }} / Node {{ nodeVersion }}
+
+div.mt-4
+    h3.mb-3 版本更新检查
+
+    .form-line
+        .header
+            .title Gitea 服务地址
+            .description 例如 https://gitea.example.com
+        input.form-control(
+            type='text',
+            placeholder='https://gitea.example.com',
+            [(ngModel)]='config.store.about.giteaBaseUrl',
+            (blur)='config.save()'
+        )
+
+    .form-line
+        .header
+            .title 仓库路径
+            .description 例如 owner/repo
+        input.form-control(
+            type='text',
+            placeholder='owner/repo',
+            [(ngModel)]='config.store.about.giteaRepo',
+            (blur)='config.save()'
+        )
+
+    .form-line
+        button.btn.btn-primary(
+            (click)='checkForUpdates()',
+            [disabled]='checking'
+        )
+            i.fas.fa-circle-notch.fa-spin.me-2(*ngIf='checking')
+            i.fas.fa-sync.me-2(*ngIf='!checking')
+            span {{ checking ? '检查中…' : '检查更新' }}
+
+    .alert.alert-danger(*ngIf='checkResult?.error')
+        i.fas.fa-exclamation-triangle.me-2
+        span {{ checkResult.error }}
+
+    .alert.alert-success(*ngIf='checkResult && !checkResult.error && !checkResult.hasUpdate')
+        i.fas.fa-check-circle.me-2
+        span 当前已是最新版本（{{ checkResult.currentVersion }}）
+
+    .alert.alert-warning(*ngIf='checkResult && !checkResult.error && checkResult.hasUpdate')
+        .d-flex.align-items-center
+            i.fas.fa-arrow-up.me-2
+            span 发现新版本：{{ checkResult.latestVersion }}（当前 {{ checkResult.currentVersion }}）
+        .mt-2(*ngIf='checkResult.publishedAt')
+            .text-muted 发布时间：{{ checkResult.publishedAt }}
+        .mt-2(*ngIf='checkResult.releaseNotes')
+            .release-notes {{ checkResult.releaseNotes }}
+        .mt-3
+            button.btn.btn-warning(
+                (click)='openReleaseUrl()'
+            )
+                i.fas.fa-download.me-2
+                span 前往下载

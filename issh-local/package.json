@@ -1,0 +1,37 @@
+{
+  "name": "issh-local",
+  "version": "1.0.231-nightly.0",
+  "description": "issh's local shell plugin",
+  "keywords": [
+    "issh-builtin-plugin"
+  ],
+  "main": "dist/index.js",
+  "typings": "typings/index.d.ts",
+  "scripts": {
+    "build": "webpack --progress --color --display-modules",
+    "watch": "webpack --progress --color --watch"
+  },
+  "files": [
+    "dist",
+    "typings"
+  ],
+  "author": "issh Developers",
+  "license": "MIT",
+  "devDependencies": {
+    "ansi-colors": "^4.1.1",
+    "dataurl": "0.1.0",
+    "runes": "^0.4.2"
+  },
+  "peerDependencies": {
+    "@angular/animations": "^20",
+    "@angular/common": "^20",
+    "@angular/core": "^20",
+    "@angular/forms": "^20",
+    "@angular/platform-browser": "^20",
+    "@ng-bootstrap/ng-bootstrap": "^19",
+    "rxjs": "^7",
+    "issh-core": "*",
+    "issh-settings": "*",
+    "issh-terminal": "*"
+  }
+}

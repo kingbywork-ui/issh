@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="issh logo">
+  <defs>
+    <linearGradient id="bg" x1="164" y1="120" x2="860" y2="904" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1b2733"/>
+      <stop offset="1" stop-color="#0b1118"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="208" y1="210" x2="816" y2="812" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#05c8ff"/>
+      <stop offset="1" stop-color="#55e6ff"/>
+    </linearGradient>
+  </defs>
+  <rect x="96" y="96" width="832" height="832" rx="176" fill="url(#bg)"/>
+  <path d="M278 330c0-52 42-94 94-94h280c52 0 94 42 94 94v214c0 52-42 94-94 94H514" fill="none" stroke="url(#cyan)" stroke-width="42" stroke-linecap="round"/>
+  <path d="M305 407l96 74-96 74" fill="none" stroke="#f8fbff" stroke-width="48" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M462 552h74" stroke="#f8fbff" stroke-width="36" stroke-linecap="round"/>
+  <path d="M512 632l118 44v102c0 76-52 132-118 164-66-32-118-88-118-164V676l118-44z" fill="#10202a" stroke="url(#cyan)" stroke-width="42" stroke-linejoin="round"/>
+  <circle cx="512" cy="742" r="34" fill="#f6a51e"/>
+  <path d="M512 760v72" stroke="#f6a51e" stroke-width="34" stroke-linecap="round"/>
+  <path d="M746 462h70v118l-78 78" fill="none" stroke="url(#cyan)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="746" cy="462" r="24" fill="#10202a" stroke="#55e6ff" stroke-width="18"/>
+  <circle cx="816" cy="580" r="24" fill="#10202a" stroke="#55e6ff" stroke-width="18"/>
+  <circle cx="738" cy="658" r="24" fill="#10202a" stroke="#55e6ff" stroke-width="18"/>
+</svg>

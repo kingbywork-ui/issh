@@ -1,0 +1,74 @@
+# Dependencies and generated code
+node_modules/
+app/node_modules/
+builtin-plugins/
+*/builtin-plugins/
+*/dist/
+*/typings/
+dist/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+
+# Build and package caches
+.electron-builder-cache/
+.electron-builder-cache2/
+.npm-cache/
+.python-deps/
+.electron-symbols/
+*.wixpdb
+*.blockmap
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+config.yaml
+config.yaml.backup
+sentry.properties
+sentry-symbols.js
+*.pem
+*.key
+*.pfx
+*.p12
+*.kdbx
+id_rsa
+id_ed25519
+*agent-bridge*.json
+*connection*.json
+
+# Logs, reports, runtime data, and screenshots
+*.log
+npm-debug.log
+yarn-error.log
+smoke_test_report.json
+functional_regression_report.json
+test_screenshots/
+.issh-smoke/
+.tabby-smoke/
+data/
+
+# IDE, OS, and agent work files
+.vscode/
+.idea/
+.cursor/
+.workbuddy/
+.psacowork/
+.agents/
+.codex/
+AGENTS.md
+HANDOFF.md
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Temporary files
+.tmp-*/
+*.tmp
+*.bak
+__pycache__/
+*.pyc
+
+# Documentation outputs; Markdown source and approved screenshots are kept
+docs/user-manual/*.docx
+docs/user-manual/*.pdf
