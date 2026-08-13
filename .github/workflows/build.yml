@@ -319,12 +319,120 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  macos:
+    name: macOS ${{ matrix.arch }}
+    needs: preflight
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            npm-arch: x64
+            runner: macos-15-intel
+            rust-target: x86_64-apple-darwin
+            mach-o-architecture: x86_64
+          - arch: arm64
+            npm-arch: arm64
+            runner: macos-15
+            rust-target: aarch64-apple-darwin
+            mach-o-architecture: arm64
+    env:
+      ARCH: ${{ matrix.arch }}
+      ISSH_BUILD_VERSION: ${{ needs.preflight.outputs.version }}
+      npm_config_arch: ${{ matrix.npm-arch }}
+      npm_config_target_arch: ${{ matrix.npm-arch }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Yarn, Electron downloads and builder tools
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: |
+            ~/Library/Caches/Yarn
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: macos-${{ matrix.arch }}-build-cache-${{ hashFiles('yarn.lock', 'app/yarn.lock') }}
+          restore-keys: macos-${{ matrix.arch }}-build-cache-
+
+      - name: Set up Rust target and node-gyp
+        shell: bash
+        run: |
+          rustup target add '${{ matrix.rust-target }}'
+          npm install --global yarn@${YARN_VERSION} node-gyp@12.3.0
+          global_prefix="$(npm prefix -g)"
+          echo "npm_config_node_gyp=$global_prefix/lib/node_modules/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: yarn --frozen-lockfile --network-timeout 1000000
+
+      - name: Build source
+        run: yarn run build
+
+      - name: Apply macOS packaging compatibility fixes
+        shell: bash
+        run: |
+          sed -i '' 's/updateInfo = await/\/\/updateInfo = await/g' node_modules/app-builder-lib/out/targets/ArchiveTarget.js
+          ln -s ../../node_modules/electron app/node_modules/electron
+
+      - name: Build DMG and ZIP packages
+        run: node scripts/build-macos.mjs
+
+      - name: Verify macOS packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./app/package.json').version")"
+          dmg="dist/issh-${version}-macos-${{ matrix.arch }}.dmg"
+          zip="dist/issh-${version}-macos-${{ matrix.arch }}.zip"
+          test -s "$dmg"
+          test -s "$zip"
+          hdiutil imageinfo "$dmg" >/dev/null
+
+          app_binary="$(find dist -type f -path '*/issh.app/Contents/MacOS/issh' -print -quit)"
+          test -n "$app_binary"
+          file "$app_binary" | grep -F '${{ matrix.mach-o-architecture }}'
+          app_dir="${app_binary%/Contents/MacOS/issh}"
+          test -f "$app_dir/Contents/Resources/app.asar"
+          test "$(plutil -extract CFBundleShortVersionString raw -o - "$app_dir/Contents/Info.plist")" = "$version"
+
+          unzip -l "$zip" | grep -E 'issh\.app/Contents/Resources/app\.asar$' >/dev/null
+
+          output="artifacts/macos-${{ matrix.arch }}"
+          mkdir -p "$output"
+          cp "$dmg" "$zip" "$output/"
+          (
+            cd "$output"
+            for package in *; do
+              shasum -a 256 "$package" > "$package.sha256"
+            done
+          )
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: issh-macos-${{ matrix.arch }}
+          path: artifacts/macos-${{ matrix.arch }}/
+          if-no-files-found: error
+          retention-days: 30
+
   release:
     name: Publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/')
     needs:
       - windows
       - linux
+      - macos
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -342,9 +450,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t assets < <(find release-assets -maxdepth 1 -type f \( -name '*.exe' -o -name '*.AppImage' -o -name '*.tar.gz' -o -name '*.sha256' \) | sort)
-          if [[ ${#assets[@]} -ne 12 ]]; then
-            printf 'Expected 12 Windows/Linux release assets, found %s:\n' "${#assets[@]}" >&2
+          mapfile -t assets < <(find release-assets -maxdepth 1 -type f \( -name '*.exe' -o -name '*.AppImage' -o -name '*.tar.gz' -o -name '*.dmg' -o -name '*.zip' -o -name '*.sha256' \) | sort)
+          if [[ ${#assets[@]} -ne 20 ]]; then
+            printf 'Expected 20 Windows/Linux/macOS release assets, found %s:\n' "${#assets[@]}" >&2
             printf '  %s\n' "${assets[@]}" >&2
             exit 1
           fi
