@@ -284,7 +284,7 @@ jobs:
           unpacked_exe="$(find dist -maxdepth 3 -type f -path '*-unpacked/issh' -print -quit)"
           test -n "$unpacked_exe"
           readelf -h "$unpacked_exe" | grep -F 'Machine:' | grep -F '${{ matrix.elf-machine }}'
-          test "$(ELECTRON_RUN_AS_NODE=1 "$unpacked_exe" -p 'process.versions.electron')" = '43.2.0'
+          test "$("$unpacked_exe" --no-sandbox --version)" = 'v43.2.0'
 
           chmod +x "$appimage"
           rm -rf squashfs-root
