@@ -103,6 +103,7 @@ jobs:
 
   windows:
     name: Windows ${{ matrix.arch }}
+    if: ${{ false }} # Linux packaging test scope.
     needs: preflight
     runs-on: windows-latest
     timeout-minutes: 120
@@ -212,7 +213,6 @@ jobs:
 
   linux:
     name: Linux ${{ matrix.arch }}
-    if: ${{ false }} # Temporarily disabled while Windows release packaging is prioritized.
     needs: preflight
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
@@ -319,7 +319,7 @@ jobs:
     name: Publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/')
     needs:
-      - windows
+      - linux
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -327,7 +327,7 @@ jobs:
       - name: Download release artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          pattern: issh-windows-*
+          pattern: issh-linux-*
           path: release-assets
           merge-multiple: true
 
@@ -337,9 +337,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t assets < <(find release-assets -maxdepth 1 -type f \( -name '*.exe' -o -name '*.sha256' \) | sort)
-          if [[ ${#assets[@]} -ne 2 ]]; then
-            printf 'Expected 2 Windows arm64 release assets, found %s:\n' "${#assets[@]}" >&2
+          mapfile -t assets < <(find release-assets -maxdepth 1 -type f \( -name '*.AppImage' -o -name '*.tar.gz' -o -name '*.sha256' \) | sort)
+          if [[ ${#assets[@]} -ne 8 ]]; then
+            printf 'Expected 8 Linux release assets, found %s:\n' "${#assets[@]}" >&2
             printf '  %s\n' "${assets[@]}" >&2
             exit 1
           fi
