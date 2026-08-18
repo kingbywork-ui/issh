@@ -473,8 +473,7 @@ export class BaseTerminalTabComponent<P extends BaseTerminalProfile> extends Bas
         }
 
         this.input$.subscribe(data => {
-            this.recentInputs += data
-            this.recentInputs = this.recentInputs.substring(this.recentInputs.length - 32)
+            this.recordRecentInput(data)
         })
     }
 
@@ -491,12 +490,20 @@ export class BaseTerminalTabComponent<P extends BaseTerminalProfile> extends Bas
     /**
      * Feeds input into the active session
      */
-    sendInput (data: string|Buffer): void {
+    sendInput (data: string|Buffer, recordAsUserInput = false): void {
         const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data, 'utf-8')
+        if (recordAsUserInput) {
+            this.recordRecentInput(buffer)
+        }
         this.session?.feedFromTerminal(buffer)
         if (this.config.store.terminal.scrollOnInput && !buffer.equals(OSC_FOCUS_IN) && !buffer.equals(OSC_FOCUS_OUT)) {
             this.frontend?.scrollToBottom()
         }
+    }
+
+    private recordRecentInput (data: string|Buffer): void {
+        this.recentInputs += data.toString()
+        this.recentInputs = this.recentInputs.substring(this.recentInputs.length - 32)
     }
 
     /**

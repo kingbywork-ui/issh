@@ -48,9 +48,7 @@ export class SSHTabComponent extends ConnectableTerminalTabComponent<SSHProfile>
         this.sessionChanged$.subscribe(() => {
             this.activeKIPrompt = null
             if (this.session?.open) {
-                this.sendPanelVisible = true
                 this.sshAppPanel.syncFromTab(this)
-                this.requestTerminalResize()
             }
         })
     }
@@ -218,9 +216,7 @@ export class SSHTabComponent extends ConnectableTerminalTabComponent<SSHProfile>
         this.session?.resize(this.size.columns, this.size.rows)
 
         if (this.session?.open) {
-            this.sendPanelVisible = true
             this.sshAppPanel.syncFromTab(this)
-            this.requestTerminalResize()
         }
     }
 

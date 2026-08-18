@@ -41,13 +41,32 @@ export class AboutSettingsTabComponent extends BaseComponent {
         return (process as any).versions?.node || ''
     }
 
+    get githubBaseUrl (): string {
+        return this.config.store.about?.githubBaseUrl || this.config.store.about?.giteaBaseUrl || ''
+    }
+
+    set githubBaseUrl (value: string) {
+        this.config.store.about.githubBaseUrl = value
+        this.config.store.about.giteaBaseUrl = ''
+    }
+
+    get githubRepo (): string {
+        return this.config.store.about?.githubRepo || this.config.store.about?.giteaRepo || ''
+    }
+
+    set githubRepo (value: string) {
+        this.config.store.about.githubRepo = value
+        this.config.store.about.giteaRepo = ''
+    }
+
     async checkForUpdates (): Promise<void> {
         this.checking = true
         this.checkResult = null
         try {
             this.checkResult = await this.versionCheck.checkForUpdates(
-                this.config.store.about?.giteaBaseUrl || this.config.store.llm?.giteaBaseUrl,
-                this.config.store.about?.giteaRepo || this.config.store.llm?.giteaRepo,
+                this.githubBaseUrl || this.config.store.llm?.giteaBaseUrl,
+                this.githubRepo || this.config.store.llm?.giteaRepo,
+                this.config.store.about?.githubToken,
             )
         } finally {
             this.checking = false

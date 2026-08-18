@@ -47,7 +47,7 @@ export class MultifocusService {
         this.inputSubscription = currentTab.frontend?.input$.subscribe(data => {
             for (const tab of tabs) {
                 if (tab !== currentTab) {
-                    tab.sendInput(data)
+                    tab.sendInput(data, true)
                 }
             }
         }) ?? null

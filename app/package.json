@@ -7,7 +7,7 @@
     "name": "issh Developers"
   },
   "main": "dist/main.js",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "scripts": {
     "postinstall": "patch-package && node ../scripts/harden-embedded-npm.mjs",
     "build": "webpack --progress --color --display-modules",

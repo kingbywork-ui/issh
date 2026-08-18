@@ -121,6 +121,11 @@ export class SSHAppPanelService implements OnDestroy {
     private syncPanels (): void {
         const tab = this.activeTab
         if (!tab || !this.tabs.has(tab)) {
+            this.sendPanelVisible = false
+            this.sendPanelTab = null
+            for (const item of this.tabs) {
+                item.sendPanelVisible = false
+            }
             this.appPanel.setPanelVisible('left', false)
             this.destroySftpPanel()
             this.syncSendPanel()

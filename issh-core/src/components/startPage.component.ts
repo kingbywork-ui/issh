@@ -698,16 +698,22 @@ export class StartPageComponent extends BaseComponent {
         }]
 
         return options.concat(
-            this.profileGroups
+            this.flattenProfileGroupTree(this.rootGroups)
                 .filter(group => group.editable)
-                .map((group): SelectorOption<string> => ({
+                .map((group, index): SelectorOption<string> => ({
                     name: group.name,
                     description: group.id === profile.group ? '当前分组' : undefined,
                     group: this.profilesService.resolveProfileGroupPath(group.parentGroupId ?? '').join(' / '),
                     result: group.id,
-                    weight: 1,
+                    weight: index + 1,
                 })),
         )
+    }
+
+    private flattenProfileGroupTree (groups: PartialProfileGroup<CollapsableProfileGroup>[]): PartialProfileGroup<CollapsableProfileGroup>[] {
+        return groups.reduce<PartialProfileGroup<CollapsableProfileGroup>[]>((result, group) => {
+            return result.concat(group, this.flattenProfileGroupTree(group.children ?? []))
+        }, [])
     }
 
     private async editProfile (profile: PartialProfile<Profile>): Promise<void> {
