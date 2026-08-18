@@ -38,7 +38,7 @@
     "@tabby-gang/windows-blurbehind": "^3.1.0",
     "@tabby-gang/windows-process-tree": "^0.6.1",
     "macos-native-processlist": "^2.1.0",
-    "windows-native-registry": "^3.2.1"
+    "windows-native-registry": "^3.2.2"
   },
   "devDependencies": {
     "@ngx-translate/core": "^14.0.0",
