@@ -23,6 +23,45 @@ h3.mb-3 Agent Workspace
 .llm-section
     .llm-section-header
         .llm-section-icon
+            i.fas.fa-network-wired
+        .llm-section-meta
+            .llm-section-title Herdr 可选适配器
+            .llm-section-desc(*ngIf='herdrStatus?.running && herdrStatus?.compatible') 已连接 Herdr {{ herdrStatus.version }} · 协议 {{ herdrStatus.protocol }} · {{ herdrStatus.managed ? '由 issh 管理' : '外部管理' }}
+            .llm-section-desc(*ngIf='!herdrStatus?.running') Native-only 降级模式：Herdr 缺失或停止不会影响 issh Workspace 和 SSH 会话。
+            .llm-section-desc.text-danger(*ngIf='herdrStatus?.lastError') {{ herdrStatus.lastError }}
+    .llm-section-body
+        .form-check.mb-2
+            input.form-check-input(type='checkbox', id='herdr-enabled', [(ngModel)]='config.store.llm.herdrEnabled', (change)='saveHerdrSettings()')
+            label.form-check-label(for='herdr-enabled') 启用 Herdr 可选集成
+        .form-check.mb-3
+            input.form-check-input(type='checkbox', id='herdr-autostart', [(ngModel)]='config.store.llm.herdrAutoStart', (change)='saveHerdrSettings()', [disabled]='!config.store.llm.herdrEnabled')
+            label.form-check-label(for='herdr-autostart') 启动 issh 时自动启动并在崩溃后有限重连
+        .row.mb-3
+            .col-md-7
+                label Herdr 可执行文件（留空使用 PATH）
+                input.form-control(type='text', [(ngModel)]='config.store.llm.herdrBinaryPath', placeholder='例如 C:\\Tools\\herdr.exe', (change)='saveHerdrSettings()')
+            .col-md-5
+                label 独立 Session
+                input.form-control(type='text', maxlength='64', [(ngModel)]='config.store.llm.herdrSession', placeholder='issh', (change)='saveHerdrSettings()')
+        .d-flex.flex-wrap
+            button.btn.btn-primary.btn-sm.me-2(type='button', (click)='startHerdr()', [disabled]='herdrBusy || !config.store.llm.herdrEnabled') 启动 / 连接
+            button.btn.btn-outline-danger.btn-sm(type='button', (click)='stopHerdr()', [disabled]='herdrBusy || !herdrStatus?.running') 停止 issh 所属 sidecar
+        small.text-muted.d-block.mt-2 仅同步 Workspace 标识和 Agent/Task 聚合计数；不会发送终端输出、SSH 凭据或主 Agent Bridge token。
+        .mt-3(*ngIf='selectedWorkspaceId && herdrStatus?.running && herdrStatus?.compatible')
+            label Herdr Workspace 映射
+            .input-group
+                select.form-control([(ngModel)]='selectedHerdrWorkspaceId')
+                    option(value='') 选择 Herdr Workspace
+                    option(*ngFor='let workspace of herdrWorkspaces', [value]='workspace.workspace_id') {{ workspace.label || workspace.workspace_id }}
+                .input-group-append
+                    button.btn.btn-secondary(type='button', (click)='linkHerdrWorkspace()', [disabled]='!selectedHerdrWorkspaceId || herdrBusy') 关联并同步
+                    button.btn.btn-outline-secondary(type='button', *ngIf='herdrLinkedWorkspaceId', (click)='syncHerdrWorkspace()', [disabled]='herdrBusy') 同步
+                    button.btn.btn-outline-danger(type='button', *ngIf='herdrLinkedWorkspaceId', (click)='unlinkHerdrWorkspace()', [disabled]='herdrBusy') 解除
+            small.text-muted.d-block.mt-1(*ngIf='herdrLinkedWorkspaceId') 当前关联：{{ herdrLinkedWorkspaceId }}
+
+.llm-section
+    .llm-section-header
+        .llm-section-icon
             i.fas.fa-layer-group
         .llm-section-meta
             .llm-section-title Workspace

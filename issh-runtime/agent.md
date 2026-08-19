@@ -7,7 +7,7 @@
 ## Rules
 
 - Keep the runtime independent of Angular, Electron, Cordis, and Herdr implementation details.
-- Keep SSH, PTY, SFTP, Cordis implementation details, and Herdr outside the runtime. Rust exposes only generic Agent scope and Task operations.
+- Keep SSH, PTY, SFTP, Cordis implementation details, and Herdr outside the runtime. Rust exposes only generic Agent scope and Task operations. The Phase 4 Herdr adapter lives at the Electron/Agent Bridge edge and must not add Herdr-specific state to the Rust schema.
 - SQLite stores runtime state and event metadata only; secrets remain outside this database.
 - Session snapshots mirror Electron-owned tabs; the Rust runtime must not take terminal input ownership in this phase.
 - Reconnect bindings by stable profile identity when Electron recreates a terminal tab. Do not silently resume interrupted LLM work after Runtime restart.

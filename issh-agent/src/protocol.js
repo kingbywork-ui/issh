@@ -1,4 +1,4 @@
-export const AGENT_BRIDGE_PROTOCOL_VERSION = '1.3.0'
+export const AGENT_BRIDGE_PROTOCOL_VERSION = '1.4.0'
 
 const tabProperty = {
     type: 'string',
@@ -281,6 +281,66 @@ export const AGENT_BRIDGE_TOOLS = [
                 command: { type: 'string', minLength: 1 },
                 execute: { type: 'boolean', default: false },
             },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_herdr_status',
+        scope: 'read',
+        description: 'Inspect the optional Herdr sidecar, version contract, ownership, and native-only downgrade state.',
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    },
+    {
+        name: 'issh_herdr_start',
+        scope: 'exec',
+        description: 'Start the configured, isolated Herdr headless sidecar with bounded crash recovery. Existing external Herdr servers are only connected, not owned.',
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    },
+    {
+        name: 'issh_herdr_stop',
+        scope: 'exec',
+        description: 'Stop only the Herdr sidecar process started and owned by this issh process.',
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    },
+    {
+        name: 'issh_herdr_snapshot',
+        scope: 'read',
+        description: 'Read a bounded Herdr session.snapshot for workspace and agent interoperability.',
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    },
+    {
+        name: 'issh_herdr_link',
+        scope: 'write',
+        description: 'Persist a mapping between one native issh Workspace and an existing Herdr Workspace.',
+        inputSchema: {
+            type: 'object',
+            required: ['workspaceId', 'herdrWorkspaceId'],
+            properties: {
+                workspaceId: { type: 'string', minLength: 1 },
+                herdrWorkspaceId: { type: 'string', minLength: 1 },
+            },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_herdr_unlink',
+        scope: 'write',
+        description: 'Remove an issh-to-Herdr Workspace mapping without closing either Workspace.',
+        inputSchema: {
+            type: 'object',
+            required: ['workspaceId'],
+            properties: { workspaceId: { type: 'string', minLength: 1 } },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_herdr_sync',
+        scope: 'write',
+        description: 'Push bounded issh Workspace identity and aggregate agent/task counts to linked Herdr metadata; no terminal output or SSH credentials are sent.',
+        inputSchema: {
+            type: 'object',
+            required: ['workspaceId'],
+            properties: { workspaceId: { type: 'string', minLength: 1 } },
             additionalProperties: false,
         },
     },

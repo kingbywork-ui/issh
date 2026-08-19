@@ -12,6 +12,7 @@ import { Window, WindowOptions } from './window'
 import { PTYManager } from './pty'
 import { ConfigSyncRendererAction, ConfigSyncServer } from './configSyncServer'
 import { RuntimeManager, RuntimeRequest } from './runtime'
+import { HerdrManager, HerdrRequest } from './herdr'
 
 /* eslint-disable block-scoped-var */
 
@@ -37,6 +38,7 @@ export class Application {
     private configSyncRenderer?: WebContents
     private configSyncRequestID = 0
     private runtimeManager = new RuntimeManager()
+    private herdrManager = new HerdrManager()
     userPluginsPath: string
 
     // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
@@ -142,6 +144,12 @@ export class Application {
             }
             return this.runtimeManager.request(request)
         })
+        ipcMain.handle('herdr:request', async (event, request: HerdrRequest) => {
+            if (!this.isTrustedRenderer(event.sender)) {
+                throw new Error('Rejected IPC sender')
+            }
+            return this.herdrManager.request(request)
+        })
 
         if (process.platform === 'linux') {
             app.commandLine.appendSwitch('no-sandbox')
@@ -174,6 +182,7 @@ export class Application {
         app.on('before-quit', () => {
             this.quitRequested = true
             this.runtimeManager.stop()
+            this.herdrManager.shutdown()
         })
 
         app.on('window-all-closed', () => {

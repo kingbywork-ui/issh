@@ -18,6 +18,7 @@ import { normalizeCommand } from './commandValidation'
 import { RuntimeBridgeService } from './runtimeBridge.service'
 import { AgentPromptContext, LLMService } from './llm.service'
 import { CordisOrchestratorService } from './cordisOrchestrator.service'
+import { HerdrAdapterService } from './herdrAdapter.service'
 import {
     buildCodexDesktopConfigFields,
     CodexDesktopConfigFields,
@@ -127,6 +128,7 @@ export class AgentBridgeService {
         private runtime: RuntimeBridgeService,
         private llm: LLMService,
         private cordis: CordisOrchestratorService,
+        private herdr: HerdrAdapterService,
         private zone: NgZone,
         log: LogService,
     ) {
@@ -856,6 +858,27 @@ export class AgentBridgeService {
                 case 'issh_task_run_command':
                     rpcResponse = { id, result: await this.runWorkspaceTaskCommand(normalizedRequest.params ?? {}) }
                     break
+                case 'issh_herdr_status':
+                    rpcResponse = { id, result: await this.herdr.status() }
+                    break
+                case 'issh_herdr_start':
+                    rpcResponse = { id, result: await this.herdr.start() }
+                    break
+                case 'issh_herdr_stop':
+                    rpcResponse = { id, result: await this.herdr.stop() }
+                    break
+                case 'issh_herdr_snapshot':
+                    rpcResponse = { id, result: await this.herdr.snapshot() }
+                    break
+                case 'issh_herdr_link':
+                    rpcResponse = { id, result: await this.linkHerdrWorkspace(normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_herdr_unlink':
+                    rpcResponse = { id, result: await this.unlinkHerdrWorkspace(normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_herdr_sync':
+                    rpcResponse = { id, result: await this.syncHerdrWorkspace(normalizedRequest.params ?? {}) }
+                    break
                 case 'issh_list_profiles':
                     rpcResponse = { id, result: await this.listProfiles() }
                     break
@@ -947,6 +970,9 @@ export class AgentBridgeService {
                 issh_run_collect: ['runId'],
                 issh_run_cancel: ['runId'],
                 issh_task_run_command: ['taskId', 'command'],
+                issh_herdr_link: ['workspaceId', 'herdrWorkspaceId'],
+                issh_herdr_unlink: ['workspaceId'],
+                issh_herdr_sync: ['workspaceId'],
             }
             for (const name of requiredTextParams[method ?? ''] ?? []) {
                 if (typeof params[name] !== 'string' || !params[name].trim()) {
@@ -1079,6 +1105,67 @@ export class AgentBridgeService {
 
     getCordisHealth (): any {
         return this.cordis.health()
+    }
+
+    getHerdrStatus (): Promise<any> {
+        return this.herdr.status()
+    }
+
+    startHerdr (): Promise<any> {
+        return this.herdr.start()
+    }
+
+    stopHerdr (): Promise<any> {
+        return this.herdr.stop()
+    }
+
+    async getHerdrSnapshot (): Promise<any> {
+        return this.herdr.remoteSnapshot(await this.herdr.snapshot())
+    }
+
+    async linkHerdrWorkspace (params: RpcParams): Promise<any> {
+        const workspaceId = String(params.workspaceId ?? '').trim()
+        const herdrWorkspaceId = String(params.herdrWorkspaceId ?? '').trim()
+        const workspaces = await this.getWorkspaces()
+        if (!workspaces.some(workspace => workspace.id === workspaceId)) {
+            throw new Error(`Workspace not found: ${workspaceId}`)
+        }
+        const snapshot = await this.getHerdrSnapshot()
+        if (!snapshot?.workspaces?.some((workspace: any) => workspace.workspace_id === herdrWorkspaceId)) {
+            throw new Error(`Herdr Workspace not found: ${herdrWorkspaceId}`)
+        }
+        await this.herdr.linkWorkspace(workspaceId, herdrWorkspaceId)
+        return { workspaceId, herdrWorkspaceId, linked: true }
+    }
+
+    async unlinkHerdrWorkspace (params: RpcParams): Promise<any> {
+        const workspaceId = String(params.workspaceId ?? '').trim()
+        await this.herdr.unlinkWorkspace(workspaceId)
+        return { workspaceId, linked: false }
+    }
+
+    async syncHerdrWorkspace (params: RpcParams): Promise<any> {
+        const workspaceId = String(params.workspaceId ?? '').trim()
+        const workspaces = await this.getWorkspaces()
+        const workspace = workspaces.find(item => item.id === workspaceId)
+        if (!workspace) {
+            throw new Error(`Workspace not found: ${workspaceId}`)
+        }
+        const [agents, tasks] = await Promise.all([
+            this.listWorkspaceAgents({ workspaceId }),
+            this.listWorkspaceTasks({ workspaceId }),
+        ])
+        const result = await this.herdr.syncWorkspace(workspace, agents, tasks)
+        return {
+            workspaceId,
+            herdrWorkspaceId: this.herdr.linkedWorkspaceId(workspaceId),
+            synced: true,
+            result,
+        }
+    }
+
+    linkedHerdrWorkspaceId (workspaceId: string): string | null {
+        return this.herdr.linkedWorkspaceId(workspaceId)
     }
 
     getWorkspaceRuns (workspaceId: string): any[] {

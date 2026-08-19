@@ -141,6 +141,20 @@ test('security-sensitive source boundaries remain enabled', () => {
     assert.match(cordis, /runContext\.effect/)
     assert.match(cordis, /entry\.fiber\.dispose\(\)/)
 
+    const herdrAdapter = fs.readFileSync(path.join(llmRoot, 'services/herdrAdapter.service.ts'), 'utf8')
+    assert.match(herdrAdapter, /herdrWorkspaceLinks/)
+    assert.match(herdrAdapter, /agentCount: agents\.length/)
+    assert.match(herdrAdapter, /Herdr integration is disabled in issh settings/)
+    assert.doesNotMatch(herdrAdapter, /recentOutput|apiKey|agentBridgeToken/)
+
+    const herdrMain = fs.readFileSync(path.join(appRoot, 'herdr.ts'), 'utf8')
+    assert.match(herdrMain, /EXPECTED_PROTOCOL = 20/)
+    assert.match(herdrMain, /MAX_OUTPUT_BYTES = 2 \* 1024 \* 1024/)
+    assert.match(herdrMain, /MAX_QUEUE_DEPTH = 32/)
+    assert.match(herdrMain, /reason: 'not_owned'/)
+    assert.match(herdrMain, /restartAttempts >= 5/)
+    assert.match(herdrMain, /replayWorkspaceSyncs/)
+
     const winscp = fs.readFileSync(path.join(sshRoot, 'services/ssh.service.ts'), 'utf8')
     assert.doesNotMatch(winscp, /x-tunnelpasswordplain|x-tunnelpassphraseplain|\/passphrase=/)
     assert.doesNotMatch(winscp, /encodeURIComponent\(password\)/)

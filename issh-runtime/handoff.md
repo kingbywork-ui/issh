@@ -1,5 +1,14 @@
 # issh-runtime Handoff
 
+## Phase 4 - Optional Herdr adapter and resilience complete
+
+- Added an optional Electron-main Herdr sidecar manager without changing the Rust Runtime schema or taking ownership of SSH, PTY, or SFTP.
+- Contract is Herdr `>=0.8.1` with socket/API protocol `20`. Status reports missing, stopped, incompatible, externally managed, or issh-managed state and downgrades cleanly to the native Workspace.
+- Sidecar execution is bounded to two concurrent CLI commands, a 32-request queue, 2 MiB command output, and 64 KiB recent logs. Owned crashes use at most five exponential restart attempts; stop never terminates an externally managed Herdr server.
+- Workspace synchronization uses persisted issh-to-Herdr links, Herdr `session.snapshot`, and `workspace report-metadata`. Only Workspace identity/name and aggregate Agent/Task counts cross the adapter; terminal output, SSH credentials, secrets, and Agent Bridge tokens do not.
+- Agent Bridge protocol is `1.4.0` with 43 MCP tools and matching CLI commands for Herdr status/start/stop/snapshot/link/unlink/sync. Full Herdr pane proxying remains a post-MVP gate.
+- Verification: app-main and `issh-llm` TypeScript checks/builds, the full root build, dist markers, 27 Agent/Herdr tests, `git diff --check`, security audit policy, and the 12-check GUI smoke passed. Herdr is not installed on the reference machine, so real-binary UAT remains pending and no external installation was performed.
+
 ## Phase 3 - Cordis multi-agent and scoped execution complete
 
 - Bumped Runtime/protocol to `0.4.0` and Agent Bridge protocol to `1.3.0` with 36 MCP tools.

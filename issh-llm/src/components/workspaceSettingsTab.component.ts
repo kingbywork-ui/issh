@@ -1,5 +1,5 @@
 import { Component, HostBinding, OnInit } from '@angular/core'
-import { BaseComponent, NotificationsService } from 'issh-core'
+import { BaseComponent, ConfigService, NotificationsService } from 'issh-core'
 import { AgentBridgeService } from '../services/agentBridge.service'
 
 /** @hidden */
@@ -20,6 +20,10 @@ export class WorkspaceSettingsTabComponent extends BaseComponent implements OnIn
     runs: any[] = []
     cordisHealth: any = null
     runtimeHealth: any = null
+    herdrStatus: any = null
+    herdrWorkspaces: any[] = []
+    herdrLinkedWorkspaceId: string | null = null
+    selectedHerdrWorkspaceId = ''
     workspaceName = ''
     selectedWorkspaceId = ''
     agentName = ''
@@ -34,10 +38,12 @@ export class WorkspaceSettingsTabComponent extends BaseComponent implements OnIn
     detailLoading = false
     prompting = false
     dispatching = false
+    herdrBusy = false
     error: string | null = null
 
     constructor (
         private agentBridge: AgentBridgeService,
+        public config: ConfigService,
         private notifications: NotificationsService,
     ) {
         super()
@@ -56,6 +62,13 @@ export class WorkspaceSettingsTabComponent extends BaseComponent implements OnIn
                 this.agentBridge.getWorkspaces(),
             ])
             this.runtimeHealth = health
+            this.herdrStatus = await this.agentBridge.getHerdrStatus().catch(error => ({
+                available: false,
+                running: false,
+                compatible: false,
+                nativeOnly: true,
+                lastError: error instanceof Error ? error.message : String(error),
+            }))
             this.workspaces = workspaces
             this.sessions = this.agentBridge.listSessions()
             if (!this.workspaces.some(workspace => workspace.id === this.selectedWorkspaceId)) {
@@ -90,6 +103,16 @@ export class WorkspaceSettingsTabComponent extends BaseComponent implements OnIn
             this.events = [...events].reverse()
             this.runs = this.agentBridge.getWorkspaceRuns(this.selectedWorkspaceId)
             this.cordisHealth = this.agentBridge.getCordisHealth()
+            this.herdrLinkedWorkspaceId = this.agentBridge.linkedHerdrWorkspaceId(this.selectedWorkspaceId)
+            if (this.herdrStatus?.running && this.herdrStatus?.compatible) {
+                const snapshot = await this.agentBridge.getHerdrSnapshot()
+                this.herdrWorkspaces = snapshot?.workspaces ?? []
+                if (!this.herdrWorkspaces.some(workspace => workspace.workspace_id === this.selectedHerdrWorkspaceId)) {
+                    this.selectedHerdrWorkspaceId = this.herdrLinkedWorkspaceId ?? this.herdrWorkspaces[0]?.workspace_id ?? ''
+                }
+            } else {
+                this.herdrWorkspaces = []
+            }
             if (!this.agents.some(agent => agent.id === this.selectedAgentId)) {
                 this.selectedAgentId = this.agents[0]?.id ?? ''
             }
@@ -248,6 +271,77 @@ export class WorkspaceSettingsTabComponent extends BaseComponent implements OnIn
             await this.refreshWorkspaceDetails()
         } catch (error) {
             this.error = error instanceof Error ? error.message : String(error)
+        }
+    }
+
+    async saveHerdrSettings (): Promise<void> {
+        await this.config.save()
+        this.herdrStatus = await this.agentBridge.getHerdrStatus()
+    }
+
+    async startHerdr (): Promise<void> {
+        await this.runHerdrAction(async () => {
+            await this.config.save()
+            this.herdrStatus = await this.agentBridge.startHerdr()
+            await this.refreshWorkspaceDetails()
+            this.notifications.notice('Herdr sidecar 已连接')
+        })
+    }
+
+    async stopHerdr (): Promise<void> {
+        await this.runHerdrAction(async () => {
+            const result = await this.agentBridge.stopHerdr()
+            this.herdrStatus = result
+            this.herdrWorkspaces = []
+            this.notifications.notice(result.stopped ? 'Herdr sidecar 已停止' : '未停止外部管理的 Herdr server')
+        })
+    }
+
+    async linkHerdrWorkspace (): Promise<void> {
+        if (!this.selectedWorkspaceId || !this.selectedHerdrWorkspaceId) {
+            return
+        }
+        await this.runHerdrAction(async () => {
+            await this.agentBridge.linkHerdrWorkspace({
+                workspaceId: this.selectedWorkspaceId,
+                herdrWorkspaceId: this.selectedHerdrWorkspaceId,
+            })
+            this.herdrLinkedWorkspaceId = this.selectedHerdrWorkspaceId
+            await this.agentBridge.syncHerdrWorkspace({ workspaceId: this.selectedWorkspaceId })
+            this.notifications.notice('Herdr Workspace 已关联并同步')
+        })
+    }
+
+    async unlinkHerdrWorkspace (): Promise<void> {
+        if (!this.selectedWorkspaceId) {
+            return
+        }
+        await this.runHerdrAction(async () => {
+            await this.agentBridge.unlinkHerdrWorkspace({ workspaceId: this.selectedWorkspaceId })
+            this.herdrLinkedWorkspaceId = null
+            this.notifications.notice('Herdr Workspace 关联已移除')
+        })
+    }
+
+    async syncHerdrWorkspace (): Promise<void> {
+        if (!this.selectedWorkspaceId) {
+            return
+        }
+        await this.runHerdrAction(async () => {
+            await this.agentBridge.syncHerdrWorkspace({ workspaceId: this.selectedWorkspaceId })
+            this.notifications.notice('Workspace 状态已同步到 Herdr')
+        })
+    }
+
+    private async runHerdrAction (action: () => Promise<void>): Promise<void> {
+        this.herdrBusy = true
+        this.error = null
+        try {
+            await action()
+        } catch (error) {
+            this.error = error instanceof Error ? error.message : String(error)
+        } finally {
+            this.herdrBusy = false
         }
     }
 

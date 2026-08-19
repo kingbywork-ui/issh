@@ -98,6 +98,7 @@ For the lowest initial cost there is no separate QA or DevOps role. BA owns acce
 
 - Add optional Herdr sidecar lifecycle, version contract, workspace/state synchronization, downgrade behavior, output backpressure, and crash/reconnect recovery.
 - Herdr remains optional; the native Workspace continues to work when it is absent.
+- Status (2026-08-19): implemented on `dev` as an optional, out-of-process adapter pinned to the Herdr `0.8.1` / protocol `20` contract. The Electron main process owns bounded CLI execution, at most two concurrent commands, a 32-request queue, 2 MiB output caps, owned-process-only stop semantics, and five-attempt exponential crash recovery. The Angular adapter persists issh-to-Herdr Workspace links, pulls `session.snapshot`, and pushes only Workspace identity plus aggregate Agent/Task counts through Herdr metadata; terminal output, SSH credentials, API keys, and the primary Agent Bridge token are never forwarded. Missing, stopped, externally owned, or incompatible Herdr installations downgrade to native-only mode without affecting Rust state or SSH sessions. Full pane/PTY proxying remains gated to Weeks 17-22.
 
 ### Weeks 11-12: pilot release
 

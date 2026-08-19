@@ -21,6 +21,9 @@ export function usage () {
   issh-agent sftp-list [--tab active|tab-1] --path /remote/path
   issh-agent sftp-read [--tab active|tab-1] --path /remote/file [--encoding utf8|base64] [--max-bytes 1048576]
   issh-agent sftp-write [--tab active|tab-1] --path /remote/file [--encoding utf8|base64] -- <content>
+  issh-agent herdr-status|herdr-start|herdr-stop|herdr-snapshot
+  issh-agent herdr-link --workspace-id <issh-id> --herdr-workspace-id <herdr-id>
+  issh-agent herdr-unlink|herdr-sync --workspace-id <issh-id>
 
 Options:
   --bridge-file <path>  Path to the Agent Bridge connection JSON file
@@ -72,6 +75,8 @@ export function parseAgentArgs (argv) {
             case '--encoding': options.encoding = requireValue(args, ++index, arg); break
             case '--max-bytes': options.maxBytes = numberValue(args, ++index, arg); break
             case '--output-id': options.outputId = requireValue(args, ++index, arg); break
+            case '--workspace-id': options.workspaceId = requireValue(args, ++index, arg); break
+            case '--herdr-workspace-id': options.herdrWorkspaceId = requireValue(args, ++index, arg); break
             case '--offset': options.offset = numberValue(args, ++index, arg, true); break
             case '--limit': options.limit = numberValue(args, ++index, arg); break
             case '--bridge-file': options.bridgeFile = requireValue(args, ++index, arg); break
@@ -114,6 +119,13 @@ export function buildCall (command, options, positionals) {
         'sftp-list': ['issh_sftp_list', { ...baseParams, path: options.path }],
         'sftp-read': ['issh_sftp_read', { ...baseParams, path: options.path, encoding: options.encoding, maxBytes: options.maxBytes }],
         'sftp-write': ['issh_sftp_write', { ...baseParams, path: options.path, encoding: options.encoding, content }],
+        'herdr-status': ['issh_herdr_status', {}],
+        'herdr-start': ['issh_herdr_start', {}],
+        'herdr-stop': ['issh_herdr_stop', {}],
+        'herdr-snapshot': ['issh_herdr_snapshot', {}],
+        'herdr-link': ['issh_herdr_link', { workspaceId: options.workspaceId, herdrWorkspaceId: options.herdrWorkspaceId }],
+        'herdr-unlink': ['issh_herdr_unlink', { workspaceId: options.workspaceId }],
+        'herdr-sync': ['issh_herdr_sync', { workspaceId: options.workspaceId }],
     }
     const call = calls[command]
     if (!call) {
@@ -151,6 +163,12 @@ function validateCall (command, params) {
     if (command.startsWith('sftp-') && !params.path) {
         throw new Error(`${command} requires --path`)
     }
+    if (command.startsWith('herdr-') && ['herdr-link', 'herdr-unlink', 'herdr-sync'].includes(command) && !params.workspaceId) {
+        throw new Error(`${command} requires --workspace-id`)
+    }
+    if (command === 'herdr-link' && !params.herdrWorkspaceId) {
+        throw new Error('herdr-link requires --herdr-workspace-id')
+    }
     if (!['utf8', 'base64'].includes(params.encoding) && (command === 'sftp-read' || command === 'sftp-write')) {
         throw new Error('--encoding must be utf8 or base64')
     }
@@ -187,6 +205,9 @@ function getRpcTimeout (command, options) {
     }
     if (command === 'connect' || command?.startsWith('sftp-')) {
         return Math.max(Number(options.timeoutMs), 30000)
+    }
+    if (command === 'herdr-start' || command === 'herdr-stop') {
+        return 20000
     }
     return 10000
 }
