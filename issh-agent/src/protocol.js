@@ -1,4 +1,4 @@
-export const AGENT_BRIDGE_PROTOCOL_VERSION = '1.1.0'
+export const AGENT_BRIDGE_PROTOCOL_VERSION = '1.2.0'
 
 const tabProperty = {
     type: 'string',
@@ -94,6 +94,108 @@ export const AGENT_BRIDGE_TOOLS = [
             properties: {
                 workspaceId: { type: 'string', minLength: 1 },
                 sessionId: { type: 'string', minLength: 1, description: 'Tab id returned by issh_list_sessions.' },
+            },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_agent_register',
+        scope: 'write',
+        description: 'Register one LLM-backed agent in a persistent issh Workspace.',
+        inputSchema: {
+            type: 'object',
+            required: ['workspaceId', 'name'],
+            properties: {
+                workspaceId: { type: 'string', minLength: 1 },
+                name: { type: 'string', minLength: 1, maxLength: 120 },
+                sessionId: { type: 'string', minLength: 1, description: 'Optional open tab id used as terminal context.' },
+            },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_agent_list',
+        scope: 'read',
+        description: 'List registered agents and their current persistent status in a Workspace.',
+        inputSchema: {
+            type: 'object',
+            required: ['workspaceId'],
+            properties: { workspaceId: { type: 'string', minLength: 1 } },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_agent_prompt',
+        scope: 'exec',
+        description: 'Queue a prompt for a registered agent. Returns immediately with a task id; use issh_task_wait or issh_task_read for the result.',
+        inputSchema: {
+            type: 'object',
+            required: ['agentId', 'prompt'],
+            properties: {
+                agentId: { type: 'string', minLength: 1 },
+                prompt: { type: 'string', minLength: 1, maxLength: 16000 },
+            },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_task_wait',
+        scope: 'read',
+        description: 'Wait until an agent task reaches a terminal state or the requested timeout elapses.',
+        inputSchema: {
+            type: 'object',
+            required: ['taskId'],
+            properties: {
+                taskId: { type: 'string', minLength: 1 },
+                timeoutMs: { type: 'number', minimum: 1, maximum: 3600000 },
+            },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_task_read',
+        scope: 'read',
+        description: 'Read the persisted prompt, status, result, or recovery error for one agent task.',
+        inputSchema: {
+            type: 'object',
+            required: ['taskId'],
+            properties: { taskId: { type: 'string', minLength: 1 } },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_task_list',
+        scope: 'read',
+        description: 'List persisted agent tasks for one Workspace, newest first.',
+        inputSchema: {
+            type: 'object',
+            required: ['workspaceId'],
+            properties: { workspaceId: { type: 'string', minLength: 1 } },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_task_cancel',
+        scope: 'exec',
+        description: 'Cancel a queued or running agent task and persist the cancelled terminal state.',
+        inputSchema: {
+            type: 'object',
+            required: ['taskId'],
+            properties: { taskId: { type: 'string', minLength: 1 } },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_workspace_events',
+        scope: 'read',
+        description: 'Read ordered persistent Workspace events after a sequence number.',
+        inputSchema: {
+            type: 'object',
+            required: ['workspaceId'],
+            properties: {
+                workspaceId: { type: 'string', minLength: 1 },
+                afterSequence: { type: 'number', minimum: 0 },
+                limit: { type: 'number', minimum: 1, maximum: 500 },
             },
             additionalProperties: false,
         },

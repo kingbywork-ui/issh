@@ -86,6 +86,7 @@ For the lowest initial cost there is no separate QA or DevOps role. BA owns acce
 
 - Add Workspace, Agent, Task, event sequencing, reconnect semantics, SQLite state, prompt, wait, read, cancel, and UI recovery states.
 - Complete `create workspace -> bind tab -> register agent -> prompt -> wait -> inspect result`.
+- Status (2026-08-19): implemented on `dev`. Runtime/protocol `0.3.0` persists Workspace, bindings, Agent, Task, and ordered events in SQLite WAL; profile identity reconnects replaced terminal tab IDs; unfinished work becomes `interrupted` after restart. The LLM adapter is advisory and does not execute shell commands. Cordis dispatch, multi-agent coordination, capability/audit expansion, Herdr, and Rust-owned SSH/PTY/SFTP remain gated to later phases.
 
 ### Weeks 7-8: multi-agent and Cordis MVP
 

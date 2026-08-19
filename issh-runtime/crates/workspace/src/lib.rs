@@ -1,6 +1,12 @@
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::fmt;
+use std::path::Path;
+
+const MAX_PROMPT_CHARS: usize = 16_000;
+const MAX_RESULT_CHARS: usize = 48_000;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -22,8 +28,13 @@ pub struct SessionSnapshot {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionBinding {
-    pub session_id: String,
-    pub bound_at_unix_ms: u64,
+    pub session_id: Option<String>,
+    pub profile_id: Option<String>,
+    pub host: Option<String>,
+    pub user: Option<String>,
+    pub status: String,
+    pub bound_at_unix_ms: i64,
+    pub last_seen_at_unix_ms: i64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -31,15 +42,74 @@ pub struct SessionBinding {
 pub struct Workspace {
     pub id: String,
     pub name: String,
-    pub created_at_unix_ms: u64,
+    pub created_at_unix_ms: i64,
     pub bindings: Vec<SessionBinding>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Agent {
+    pub id: String,
+    pub workspace_id: String,
+    pub name: String,
+    pub adapter: String,
+    pub session_id: Option<String>,
+    pub status: String,
+    pub created_at_unix_ms: i64,
+    pub updated_at_unix_ms: i64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Task {
+    pub id: String,
+    pub workspace_id: String,
+    pub agent_id: String,
+    pub prompt: String,
+    pub status: String,
+    pub output: Option<String>,
+    pub error: Option<String>,
+    pub created_at_unix_ms: i64,
+    pub started_at_unix_ms: Option<i64>,
+    pub completed_at_unix_ms: Option<i64>,
+    pub cancel_requested: bool,
+}
+
+impl Task {
+    pub fn terminal(&self) -> bool {
+        matches!(
+            self.status.as_str(),
+            "completed" | "failed" | "cancelled" | "interrupted"
+        )
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeEvent {
+    pub sequence: i64,
+    pub workspace_id: String,
+    pub entity_type: String,
+    pub entity_id: String,
+    pub kind: String,
+    pub payload: Value,
+    pub created_at_unix_ms: i64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionSyncResult {
     pub session_count: usize,
-    pub removed_bindings: usize,
+    pub reconnected_bindings: usize,
+    pub disconnected_bindings: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskWaitResult {
+    pub task: Task,
+    pub terminal: bool,
+    pub retry_after_ms: i64,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -47,8 +117,16 @@ pub enum WorkspaceError {
     InvalidSession(String),
     DuplicateSession(String),
     InvalidWorkspaceName,
+    InvalidAgentName,
+    InvalidAdapter(String),
+    InvalidPrompt,
+    ResultTooLarge,
     WorkspaceNotFound(String),
     SessionNotFound(String),
+    AgentNotFound(String),
+    TaskNotFound(String),
+    InvalidTaskTransition(String),
+    Storage(String),
 }
 
 impl fmt::Display for WorkspaceError {
@@ -59,34 +137,156 @@ impl fmt::Display for WorkspaceError {
             Self::InvalidWorkspaceName => {
                 formatter.write_str("Workspace name must contain 1-120 characters")
             }
+            Self::InvalidAgentName => {
+                formatter.write_str("Agent name must contain 1-120 characters")
+            }
+            Self::InvalidAdapter(adapter) => {
+                write!(formatter, "Unsupported agent adapter: {adapter}")
+            }
+            Self::InvalidPrompt => formatter.write_str("Prompt must contain 1-16000 characters"),
+            Self::ResultTooLarge => formatter.write_str("Task result exceeds 48000 characters"),
             Self::WorkspaceNotFound(id) => write!(formatter, "Workspace not found: {id}"),
             Self::SessionNotFound(id) => write!(formatter, "Session not found: {id}"),
+            Self::AgentNotFound(id) => write!(formatter, "Agent not found: {id}"),
+            Self::TaskNotFound(id) => write!(formatter, "Task not found: {id}"),
+            Self::InvalidTaskTransition(message) => formatter.write_str(message),
+            Self::Storage(message) => write!(formatter, "SQLite state error: {message}"),
         }
     }
 }
 
 impl std::error::Error for WorkspaceError {}
 
-pub struct WorkspaceStore {
-    sessions: BTreeMap<String, SessionSnapshot>,
-    workspaces: BTreeMap<String, Workspace>,
-    next_workspace_id: u64,
-}
-
-impl Default for WorkspaceStore {
-    fn default() -> Self {
-        Self {
-            sessions: BTreeMap::new(),
-            workspaces: BTreeMap::new(),
-            next_workspace_id: 1,
-        }
+impl From<rusqlite::Error> for WorkspaceError {
+    fn from(error: rusqlite::Error) -> Self {
+        Self::Storage(error.to_string())
     }
 }
 
+pub struct WorkspaceStore {
+    connection: Connection,
+    sessions: BTreeMap<String, SessionSnapshot>,
+}
+
 impl WorkspaceStore {
+    pub fn open(path: &Path, now_unix_ms: i64) -> Result<Self, WorkspaceError> {
+        let connection = Connection::open(path)?;
+        Self::initialize(connection, now_unix_ms)
+    }
+
+    pub fn open_in_memory(now_unix_ms: i64) -> Result<Self, WorkspaceError> {
+        let connection = Connection::open_in_memory()?;
+        Self::initialize(connection, now_unix_ms)
+    }
+
+    fn initialize(connection: Connection, now_unix_ms: i64) -> Result<Self, WorkspaceError> {
+        connection.execute_batch(
+            "PRAGMA foreign_keys = ON;
+             PRAGMA journal_mode = WAL;
+             CREATE TABLE IF NOT EXISTS workspaces (
+                 row_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 public_id TEXT NOT NULL UNIQUE,
+                 name TEXT NOT NULL,
+                 created_at_unix_ms INTEGER NOT NULL
+             );
+             CREATE TABLE IF NOT EXISTS bindings (
+                 workspace_id TEXT NOT NULL,
+                 binding_key TEXT NOT NULL,
+                 session_id TEXT,
+                 profile_id TEXT,
+                 host TEXT,
+                 user TEXT,
+                 status TEXT NOT NULL,
+                 bound_at_unix_ms INTEGER NOT NULL,
+                 last_seen_at_unix_ms INTEGER NOT NULL,
+                 PRIMARY KEY (workspace_id, binding_key),
+                 FOREIGN KEY (workspace_id) REFERENCES workspaces(public_id) ON DELETE CASCADE
+             );
+             CREATE TABLE IF NOT EXISTS agents (
+                 row_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 public_id TEXT NOT NULL UNIQUE,
+                 workspace_id TEXT NOT NULL,
+                 name TEXT NOT NULL,
+                 adapter TEXT NOT NULL,
+                 session_id TEXT,
+                 status TEXT NOT NULL,
+                 created_at_unix_ms INTEGER NOT NULL,
+                 updated_at_unix_ms INTEGER NOT NULL,
+                 FOREIGN KEY (workspace_id) REFERENCES workspaces(public_id) ON DELETE CASCADE
+             );
+             CREATE TABLE IF NOT EXISTS tasks (
+                 row_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 public_id TEXT NOT NULL UNIQUE,
+                 workspace_id TEXT NOT NULL,
+                 agent_id TEXT NOT NULL,
+                 prompt TEXT NOT NULL,
+                 status TEXT NOT NULL,
+                 output TEXT,
+                 error TEXT,
+                 created_at_unix_ms INTEGER NOT NULL,
+                 started_at_unix_ms INTEGER,
+                 completed_at_unix_ms INTEGER,
+                 cancel_requested INTEGER NOT NULL DEFAULT 0,
+                 FOREIGN KEY (workspace_id) REFERENCES workspaces(public_id) ON DELETE CASCADE,
+                 FOREIGN KEY (agent_id) REFERENCES agents(public_id) ON DELETE CASCADE
+             );
+             CREATE TABLE IF NOT EXISTS events (
+                 sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                 workspace_id TEXT NOT NULL,
+                 entity_type TEXT NOT NULL,
+                 entity_id TEXT NOT NULL,
+                 kind TEXT NOT NULL,
+                 payload_json TEXT NOT NULL,
+                 created_at_unix_ms INTEGER NOT NULL,
+                 FOREIGN KEY (workspace_id) REFERENCES workspaces(public_id) ON DELETE CASCADE
+             );
+             CREATE INDEX IF NOT EXISTS idx_agents_workspace ON agents(workspace_id);
+             CREATE INDEX IF NOT EXISTS idx_tasks_workspace ON tasks(workspace_id);
+             CREATE INDEX IF NOT EXISTS idx_events_workspace_sequence ON events(workspace_id, sequence);",
+        )?;
+
+        let interrupted = {
+            let mut statement = connection.prepare(
+                "SELECT public_id, workspace_id FROM tasks WHERE status IN ('queued', 'running')",
+            )?;
+            let rows = statement.query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?;
+            rows.collect::<Result<Vec<_>, _>>()?
+        };
+        connection.execute(
+            "UPDATE tasks
+             SET status = 'interrupted', error = 'Runtime restarted before task completion',
+                 completed_at_unix_ms = ?1
+             WHERE status IN ('queued', 'running')",
+            params![now_unix_ms],
+        )?;
+        connection.execute(
+            "UPDATE agents SET status = 'idle', updated_at_unix_ms = ?1 WHERE status = 'busy'",
+            params![now_unix_ms],
+        )?;
+        for (task_id, workspace_id) in interrupted {
+            insert_event(
+                &connection,
+                &workspace_id,
+                "task",
+                &task_id,
+                "task.interrupted",
+                &json!({ "reason": "runtime_restart" }),
+                now_unix_ms,
+            )?;
+        }
+
+        Ok(Self {
+            connection,
+            sessions: BTreeMap::new(),
+        })
+    }
+
     pub fn sync_sessions(
         &mut self,
         sessions: Vec<SessionSnapshot>,
+        now_unix_ms: i64,
     ) -> Result<SessionSyncResult, WorkspaceError> {
         let mut synchronized = BTreeMap::new();
         for mut session in sessions {
@@ -100,20 +300,75 @@ impl WorkspaceStore {
             }
         }
 
-        let valid_sessions: BTreeSet<_> = synchronized.keys().cloned().collect();
-        let mut removed_bindings = 0;
-        for workspace in self.workspaces.values_mut() {
-            let before = workspace.bindings.len();
-            workspace
-                .bindings
-                .retain(|binding| valid_sessions.contains(&binding.session_id));
-            removed_bindings += before - workspace.bindings.len();
+        let bindings = self.load_all_binding_rows()?;
+        let mut reconnected_bindings = 0;
+        let mut disconnected_bindings = 0;
+        for binding in bindings {
+            let exact = binding
+                .session_id
+                .as_ref()
+                .and_then(|id| synchronized.get(id));
+            let matched = exact.or_else(|| {
+                binding.profile_id.as_ref().and_then(|profile_id| {
+                    synchronized
+                        .values()
+                        .find(|session| session.profile_id.as_ref() == Some(profile_id))
+                })
+            });
+            if let Some(session) = matched {
+                let status = if session.connected {
+                    "connected"
+                } else {
+                    "disconnected"
+                };
+                if binding.session_id.as_deref() != Some(session.id.as_str()) {
+                    reconnected_bindings += 1;
+                    if let Some(previous_session_id) = binding.session_id.as_ref() {
+                        self.connection.execute(
+                            "UPDATE agents SET session_id = ?1, updated_at_unix_ms = ?2
+                             WHERE workspace_id = ?3 AND session_id = ?4",
+                            params![
+                                session.id,
+                                now_unix_ms,
+                                binding.workspace_id,
+                                previous_session_id,
+                            ],
+                        )?;
+                    }
+                }
+                self.connection.execute(
+                    "UPDATE bindings
+                     SET session_id = ?1, profile_id = ?2, host = ?3, user = ?4,
+                         status = ?5, last_seen_at_unix_ms = ?6
+                     WHERE workspace_id = ?7 AND binding_key = ?8",
+                    params![
+                        session.id,
+                        session.profile_id,
+                        session.host,
+                        session.user,
+                        status,
+                        now_unix_ms,
+                        binding.workspace_id,
+                        binding.binding_key,
+                    ],
+                )?;
+            } else {
+                if binding.status != "disconnected" {
+                    disconnected_bindings += 1;
+                }
+                self.connection.execute(
+                    "UPDATE bindings SET status = 'disconnected'
+                     WHERE workspace_id = ?1 AND binding_key = ?2",
+                    params![binding.workspace_id, binding.binding_key],
+                )?;
+            }
         }
         self.sessions = synchronized;
 
         Ok(SessionSyncResult {
             session_count: self.sessions.len(),
-            removed_bindings,
+            reconnected_bindings,
+            disconnected_bindings,
         })
     }
 
@@ -124,79 +379,582 @@ impl WorkspaceStore {
     pub fn create_workspace(
         &mut self,
         name: String,
-        now_unix_ms: u64,
+        now_unix_ms: i64,
     ) -> Result<Workspace, WorkspaceError> {
         let name = name.trim();
         if name.is_empty() || name.chars().count() > 120 {
             return Err(WorkspaceError::InvalidWorkspaceName);
         }
-
-        let id = format!("workspace-{}", self.next_workspace_id);
-        self.next_workspace_id += 1;
-        let workspace = Workspace {
-            id: id.clone(),
-            name: name.to_string(),
-            created_at_unix_ms: now_unix_ms,
-            bindings: Vec::new(),
-        };
-        self.workspaces.insert(id, workspace.clone());
-        Ok(workspace)
+        let transaction = self.connection.transaction()?;
+        transaction.execute(
+            "INSERT INTO workspaces(public_id, name, created_at_unix_ms) VALUES('', ?1, ?2)",
+            params![name, now_unix_ms],
+        )?;
+        let id = format!("workspace-{}", transaction.last_insert_rowid());
+        transaction.execute(
+            "UPDATE workspaces SET public_id = ?1 WHERE row_id = last_insert_rowid()",
+            params![id],
+        )?;
+        insert_event(
+            &transaction,
+            &id,
+            "workspace",
+            &id,
+            "workspace.created",
+            &json!({ "name": name }),
+            now_unix_ms,
+        )?;
+        transaction.commit()?;
+        self.get_workspace(&id)
     }
 
-    pub fn list_workspaces(&self) -> Vec<Workspace> {
-        self.workspaces.values().cloned().collect()
+    pub fn get_workspace(&self, workspace_id: &str) -> Result<Workspace, WorkspaceError> {
+        let row = self
+            .connection
+            .query_row(
+                "SELECT public_id, name, created_at_unix_ms FROM workspaces WHERE public_id = ?1",
+                params![workspace_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, i64>(2)?,
+                    ))
+                },
+            )
+            .optional()?;
+        let (id, name, created_at_unix_ms) =
+            row.ok_or_else(|| WorkspaceError::WorkspaceNotFound(workspace_id.to_string()))?;
+        Ok(Workspace {
+            bindings: self.load_bindings(&id)?,
+            id,
+            name,
+            created_at_unix_ms,
+        })
+    }
+
+    pub fn list_workspaces(&self) -> Result<Vec<Workspace>, WorkspaceError> {
+        let rows = {
+            let mut statement = self.connection.prepare(
+                "SELECT public_id, name, created_at_unix_ms FROM workspaces ORDER BY row_id",
+            )?;
+            let rows = statement.query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            })?;
+            rows.collect::<Result<Vec<_>, _>>()?
+        };
+        rows.into_iter()
+            .map(|(id, name, created_at_unix_ms)| {
+                Ok(Workspace {
+                    bindings: self.load_bindings(&id)?,
+                    id,
+                    name,
+                    created_at_unix_ms,
+                })
+            })
+            .collect()
     }
 
     pub fn bind(
         &mut self,
         workspace_id: &str,
         session_id: &str,
-        now_unix_ms: u64,
+        now_unix_ms: i64,
     ) -> Result<Workspace, WorkspaceError> {
-        if !self.sessions.contains_key(session_id) {
-            return Err(WorkspaceError::SessionNotFound(session_id.to_string()));
-        }
-        let workspace = self
-            .workspaces
-            .get_mut(workspace_id)
-            .ok_or_else(|| WorkspaceError::WorkspaceNotFound(workspace_id.to_string()))?;
-        if !workspace
-            .bindings
-            .iter()
-            .any(|binding| binding.session_id == session_id)
-        {
-            workspace.bindings.push(SessionBinding {
-                session_id: session_id.to_string(),
-                bound_at_unix_ms: now_unix_ms,
-            });
-            workspace
-                .bindings
-                .sort_by(|left, right| left.session_id.cmp(&right.session_id));
-        }
-        Ok(workspace.clone())
+        self.ensure_workspace(workspace_id)?;
+        let session = self
+            .sessions
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| WorkspaceError::SessionNotFound(session_id.to_string()))?;
+        let binding_key = session
+            .profile_id
+            .as_ref()
+            .map(|id| format!("profile:{id}"))
+            .unwrap_or_else(|| format!("session:{}", session.id));
+        let status = if session.connected {
+            "connected"
+        } else {
+            "disconnected"
+        };
+        let transaction = self.connection.transaction()?;
+        transaction.execute(
+            "INSERT INTO bindings(
+                 workspace_id, binding_key, session_id, profile_id, host, user, status,
+                 bound_at_unix_ms, last_seen_at_unix_ms
+             ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
+             ON CONFLICT(workspace_id, binding_key) DO UPDATE SET
+                 session_id = excluded.session_id, profile_id = excluded.profile_id,
+                 host = excluded.host, user = excluded.user, status = excluded.status,
+                 last_seen_at_unix_ms = excluded.last_seen_at_unix_ms",
+            params![
+                workspace_id,
+                binding_key,
+                session.id,
+                session.profile_id,
+                session.host,
+                session.user,
+                status,
+                now_unix_ms,
+            ],
+        )?;
+        insert_event(
+            &transaction,
+            workspace_id,
+            "binding",
+            session_id,
+            "binding.connected",
+            &json!({ "sessionId": session_id, "profileId": session.profile_id }),
+            now_unix_ms,
+        )?;
+        transaction.commit()?;
+        self.get_workspace(workspace_id)
     }
 
     pub fn unbind(
         &mut self,
         workspace_id: &str,
         session_id: &str,
+        now_unix_ms: i64,
     ) -> Result<Workspace, WorkspaceError> {
-        let workspace = self
-            .workspaces
-            .get_mut(workspace_id)
-            .ok_or_else(|| WorkspaceError::WorkspaceNotFound(workspace_id.to_string()))?;
-        workspace
-            .bindings
-            .retain(|binding| binding.session_id != session_id);
-        Ok(workspace.clone())
+        self.ensure_workspace(workspace_id)?;
+        let transaction = self.connection.transaction()?;
+        transaction.execute(
+            "DELETE FROM bindings WHERE workspace_id = ?1 AND session_id = ?2",
+            params![workspace_id, session_id],
+        )?;
+        insert_event(
+            &transaction,
+            workspace_id,
+            "binding",
+            session_id,
+            "binding.removed",
+            &json!({ "sessionId": session_id }),
+            now_unix_ms,
+        )?;
+        transaction.commit()?;
+        self.get_workspace(workspace_id)
     }
+
+    pub fn register_agent(
+        &mut self,
+        workspace_id: &str,
+        name: String,
+        adapter: String,
+        session_id: Option<String>,
+        now_unix_ms: i64,
+    ) -> Result<Agent, WorkspaceError> {
+        self.ensure_workspace(workspace_id)?;
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > 120 {
+            return Err(WorkspaceError::InvalidAgentName);
+        }
+        let adapter = adapter.trim();
+        if adapter != "llm" {
+            return Err(WorkspaceError::InvalidAdapter(adapter.to_string()));
+        }
+        if let Some(session_id) = session_id.as_ref() {
+            if !self.sessions.contains_key(session_id) {
+                return Err(WorkspaceError::SessionNotFound(session_id.clone()));
+            }
+        }
+        let transaction = self.connection.transaction()?;
+        transaction.execute(
+            "INSERT INTO agents(
+                 public_id, workspace_id, name, adapter, session_id, status,
+                 created_at_unix_ms, updated_at_unix_ms
+             ) VALUES('', ?1, ?2, ?3, ?4, 'idle', ?5, ?5)",
+            params![workspace_id, name, adapter, session_id, now_unix_ms],
+        )?;
+        let id = format!("agent-{}", transaction.last_insert_rowid());
+        transaction.execute(
+            "UPDATE agents SET public_id = ?1 WHERE row_id = last_insert_rowid()",
+            params![id],
+        )?;
+        insert_event(
+            &transaction,
+            workspace_id,
+            "agent",
+            &id,
+            "agent.registered",
+            &json!({ "name": name, "adapter": adapter, "sessionId": session_id }),
+            now_unix_ms,
+        )?;
+        transaction.commit()?;
+        self.get_agent(&id)
+    }
+
+    pub fn list_agents(&self, workspace_id: &str) -> Result<Vec<Agent>, WorkspaceError> {
+        self.ensure_workspace(workspace_id)?;
+        let mut statement = self.connection.prepare(
+            "SELECT public_id, workspace_id, name, adapter, session_id, status,
+                    created_at_unix_ms, updated_at_unix_ms
+             FROM agents WHERE workspace_id = ?1 ORDER BY row_id",
+        )?;
+        let rows = statement.query_map(params![workspace_id], map_agent)?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
+
+    pub fn get_agent(&self, agent_id: &str) -> Result<Agent, WorkspaceError> {
+        self.connection
+            .query_row(
+                "SELECT public_id, workspace_id, name, adapter, session_id, status,
+                        created_at_unix_ms, updated_at_unix_ms
+                 FROM agents WHERE public_id = ?1",
+                params![agent_id],
+                map_agent,
+            )
+            .optional()?
+            .ok_or_else(|| WorkspaceError::AgentNotFound(agent_id.to_string()))
+    }
+
+    pub fn create_task(
+        &mut self,
+        agent_id: &str,
+        prompt: String,
+        now_unix_ms: i64,
+    ) -> Result<Task, WorkspaceError> {
+        let agent = self.get_agent(agent_id)?;
+        let prompt = prompt.trim();
+        if prompt.is_empty() || prompt.chars().count() > MAX_PROMPT_CHARS {
+            return Err(WorkspaceError::InvalidPrompt);
+        }
+        let transaction = self.connection.transaction()?;
+        transaction.execute(
+            "INSERT INTO tasks(
+                 public_id, workspace_id, agent_id, prompt, status, created_at_unix_ms
+             ) VALUES('', ?1, ?2, ?3, 'queued', ?4)",
+            params![agent.workspace_id, agent_id, prompt, now_unix_ms],
+        )?;
+        let id = format!("task-{}", transaction.last_insert_rowid());
+        transaction.execute(
+            "UPDATE tasks SET public_id = ?1 WHERE row_id = last_insert_rowid()",
+            params![id],
+        )?;
+        transaction.execute(
+            "UPDATE agents SET status = 'busy', updated_at_unix_ms = ?1 WHERE public_id = ?2",
+            params![now_unix_ms, agent_id],
+        )?;
+        insert_event(
+            &transaction,
+            &agent.workspace_id,
+            "task",
+            &id,
+            "task.queued",
+            &json!({ "agentId": agent_id }),
+            now_unix_ms,
+        )?;
+        transaction.commit()?;
+        self.get_task(&id)
+    }
+
+    pub fn start_task(&mut self, task_id: &str, now_unix_ms: i64) -> Result<Task, WorkspaceError> {
+        let task = self.get_task(task_id)?;
+        if task.status != "queued" {
+            return Err(WorkspaceError::InvalidTaskTransition(format!(
+                "Task {task_id} cannot start from {}",
+                task.status
+            )));
+        }
+        let transaction = self.connection.transaction()?;
+        transaction.execute(
+            "UPDATE tasks SET status = 'running', started_at_unix_ms = ?1 WHERE public_id = ?2",
+            params![now_unix_ms, task_id],
+        )?;
+        insert_event(
+            &transaction,
+            &task.workspace_id,
+            "task",
+            task_id,
+            "task.started",
+            &json!({}),
+            now_unix_ms,
+        )?;
+        transaction.commit()?;
+        self.get_task(task_id)
+    }
+
+    pub fn complete_task(
+        &mut self,
+        task_id: &str,
+        output: String,
+        now_unix_ms: i64,
+    ) -> Result<Task, WorkspaceError> {
+        if output.chars().count() > MAX_RESULT_CHARS {
+            return Err(WorkspaceError::ResultTooLarge);
+        }
+        self.finish_task(task_id, "completed", Some(output), None, now_unix_ms)
+    }
+
+    pub fn fail_task(
+        &mut self,
+        task_id: &str,
+        error: String,
+        now_unix_ms: i64,
+    ) -> Result<Task, WorkspaceError> {
+        let error = truncate_chars(error.trim(), MAX_RESULT_CHARS);
+        self.finish_task(task_id, "failed", None, Some(error), now_unix_ms)
+    }
+
+    fn finish_task(
+        &mut self,
+        task_id: &str,
+        status: &str,
+        output: Option<String>,
+        error: Option<String>,
+        now_unix_ms: i64,
+    ) -> Result<Task, WorkspaceError> {
+        let task = self.get_task(task_id)?;
+        if task.status == "cancelled" {
+            return Ok(task);
+        }
+        if task.terminal() {
+            return Err(WorkspaceError::InvalidTaskTransition(format!(
+                "Task {task_id} is already {}",
+                task.status
+            )));
+        }
+        let transaction = self.connection.transaction()?;
+        transaction.execute(
+            "UPDATE tasks SET status = ?1, output = ?2, error = ?3,
+                 completed_at_unix_ms = ?4 WHERE public_id = ?5",
+            params![status, output, error, now_unix_ms, task_id],
+        )?;
+        transaction.execute(
+            "UPDATE agents SET status = 'idle', updated_at_unix_ms = ?1 WHERE public_id = ?2",
+            params![now_unix_ms, task.agent_id],
+        )?;
+        insert_event(
+            &transaction,
+            &task.workspace_id,
+            "task",
+            task_id,
+            &format!("task.{status}"),
+            &json!({}),
+            now_unix_ms,
+        )?;
+        transaction.commit()?;
+        self.get_task(task_id)
+    }
+
+    pub fn cancel_task(&mut self, task_id: &str, now_unix_ms: i64) -> Result<Task, WorkspaceError> {
+        let task = self.get_task(task_id)?;
+        if task.terminal() {
+            return Ok(task);
+        }
+        let transaction = self.connection.transaction()?;
+        transaction.execute(
+            "UPDATE tasks SET status = 'cancelled', cancel_requested = 1,
+                 completed_at_unix_ms = ?1 WHERE public_id = ?2",
+            params![now_unix_ms, task_id],
+        )?;
+        transaction.execute(
+            "UPDATE agents SET status = 'idle', updated_at_unix_ms = ?1 WHERE public_id = ?2",
+            params![now_unix_ms, task.agent_id],
+        )?;
+        insert_event(
+            &transaction,
+            &task.workspace_id,
+            "task",
+            task_id,
+            "task.cancelled",
+            &json!({}),
+            now_unix_ms,
+        )?;
+        transaction.commit()?;
+        self.get_task(task_id)
+    }
+
+    pub fn get_task(&self, task_id: &str) -> Result<Task, WorkspaceError> {
+        self.connection
+            .query_row(
+                "SELECT public_id, workspace_id, agent_id, prompt, status, output, error,
+                        created_at_unix_ms, started_at_unix_ms, completed_at_unix_ms,
+                        cancel_requested
+                 FROM tasks WHERE public_id = ?1",
+                params![task_id],
+                map_task,
+            )
+            .optional()?
+            .ok_or_else(|| WorkspaceError::TaskNotFound(task_id.to_string()))
+    }
+
+    pub fn wait_task(&self, task_id: &str) -> Result<TaskWaitResult, WorkspaceError> {
+        let task = self.get_task(task_id)?;
+        Ok(TaskWaitResult {
+            terminal: task.terminal(),
+            retry_after_ms: if task.terminal() { 0 } else { 250 },
+            task,
+        })
+    }
+
+    pub fn list_tasks(&self, workspace_id: &str) -> Result<Vec<Task>, WorkspaceError> {
+        self.ensure_workspace(workspace_id)?;
+        let mut statement = self.connection.prepare(
+            "SELECT public_id, workspace_id, agent_id, prompt, status, output, error,
+                    created_at_unix_ms, started_at_unix_ms, completed_at_unix_ms,
+                    cancel_requested
+             FROM tasks WHERE workspace_id = ?1 ORDER BY row_id DESC",
+        )?;
+        let rows = statement.query_map(params![workspace_id], map_task)?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
+
+    pub fn list_events(
+        &self,
+        workspace_id: &str,
+        after_sequence: i64,
+        limit: usize,
+    ) -> Result<Vec<RuntimeEvent>, WorkspaceError> {
+        self.ensure_workspace(workspace_id)?;
+        let limit = limit.clamp(1, 500) as i64;
+        let mut statement = self.connection.prepare(
+            "SELECT sequence, workspace_id, entity_type, entity_id, kind, payload_json,
+                    created_at_unix_ms
+             FROM events WHERE workspace_id = ?1 AND sequence > ?2
+             ORDER BY sequence LIMIT ?3",
+        )?;
+        let rows = statement.query_map(params![workspace_id, after_sequence, limit], |row| {
+            let payload_json: String = row.get(5)?;
+            Ok(RuntimeEvent {
+                sequence: row.get(0)?,
+                workspace_id: row.get(1)?,
+                entity_type: row.get(2)?,
+                entity_id: row.get(3)?,
+                kind: row.get(4)?,
+                payload: serde_json::from_str(&payload_json).unwrap_or(Value::Null),
+                created_at_unix_ms: row.get(6)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
+
+    fn ensure_workspace(&self, workspace_id: &str) -> Result<(), WorkspaceError> {
+        let exists = self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM workspaces WHERE public_id = ?1)",
+            params![workspace_id],
+            |row| row.get::<_, bool>(0),
+        )?;
+        if exists {
+            Ok(())
+        } else {
+            Err(WorkspaceError::WorkspaceNotFound(workspace_id.to_string()))
+        }
+    }
+
+    fn load_bindings(&self, workspace_id: &str) -> Result<Vec<SessionBinding>, WorkspaceError> {
+        let mut statement = self.connection.prepare(
+            "SELECT session_id, profile_id, host, user, status, bound_at_unix_ms,
+                    last_seen_at_unix_ms
+             FROM bindings WHERE workspace_id = ?1 ORDER BY bound_at_unix_ms",
+        )?;
+        let rows = statement.query_map(params![workspace_id], |row| {
+            Ok(SessionBinding {
+                session_id: row.get(0)?,
+                profile_id: row.get(1)?,
+                host: row.get(2)?,
+                user: row.get(3)?,
+                status: row.get(4)?,
+                bound_at_unix_ms: row.get(5)?,
+                last_seen_at_unix_ms: row.get(6)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
+
+    fn load_all_binding_rows(&self) -> Result<Vec<BindingRow>, WorkspaceError> {
+        let mut statement = self.connection.prepare(
+            "SELECT workspace_id, binding_key, session_id, profile_id, status FROM bindings",
+        )?;
+        let rows = statement.query_map([], |row| {
+            Ok(BindingRow {
+                workspace_id: row.get(0)?,
+                binding_key: row.get(1)?,
+                session_id: row.get(2)?,
+                profile_id: row.get(3)?,
+                status: row.get(4)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
+}
+
+struct BindingRow {
+    workspace_id: String,
+    binding_key: String,
+    session_id: Option<String>,
+    profile_id: Option<String>,
+    status: String,
+}
+
+fn map_agent(row: &rusqlite::Row<'_>) -> rusqlite::Result<Agent> {
+    Ok(Agent {
+        id: row.get(0)?,
+        workspace_id: row.get(1)?,
+        name: row.get(2)?,
+        adapter: row.get(3)?,
+        session_id: row.get(4)?,
+        status: row.get(5)?,
+        created_at_unix_ms: row.get(6)?,
+        updated_at_unix_ms: row.get(7)?,
+    })
+}
+
+fn map_task(row: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
+    Ok(Task {
+        id: row.get(0)?,
+        workspace_id: row.get(1)?,
+        agent_id: row.get(2)?,
+        prompt: row.get(3)?,
+        status: row.get(4)?,
+        output: row.get(5)?,
+        error: row.get(6)?,
+        created_at_unix_ms: row.get(7)?,
+        started_at_unix_ms: row.get(8)?,
+        completed_at_unix_ms: row.get(9)?,
+        cancel_requested: row.get(10)?,
+    })
+}
+
+fn insert_event(
+    connection: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    entity_id: &str,
+    kind: &str,
+    payload: &Value,
+    now_unix_ms: i64,
+) -> Result<(), WorkspaceError> {
+    connection.execute(
+        "INSERT INTO events(
+             workspace_id, entity_type, entity_id, kind, payload_json, created_at_unix_ms
+         ) VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
+        params![
+            workspace_id,
+            entity_type,
+            entity_id,
+            kind,
+            serde_json::to_string(payload)
+                .map_err(|error| WorkspaceError::Storage(error.to_string()))?,
+            now_unix_ms,
+        ],
+    )?;
+    Ok(())
+}
+
+fn truncate_chars(value: &str, max_chars: usize) -> String {
+    value.chars().take(max_chars).collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn session(id: &str) -> SessionSnapshot {
+    fn session(id: &str, profile_id: &str) -> SessionSnapshot {
         SessionSnapshot {
             id: id.to_string(),
             title: id.to_string(),
@@ -205,7 +963,7 @@ mod tests {
             focused: false,
             profile_type: Some("ssh".to_string()),
             profile_name: None,
-            profile_id: None,
+            profile_id: Some(profile_id.to_string()),
             host: Some("example.test".to_string()),
             user: Some("developer".to_string()),
             port: Some(22),
@@ -214,39 +972,154 @@ mod tests {
     }
 
     #[test]
-    fn creates_and_binds_workspace() {
-        let mut store = WorkspaceStore::default();
+    fn persists_workspace_agent_task_and_events() {
+        let mut store = WorkspaceStore::open_in_memory(1).expect("store should open");
         store
-            .sync_sessions(vec![session("tab-1")])
+            .sync_sessions(vec![session("tab-1", "profile-1")], 2)
             .expect("sessions should sync");
         let workspace = store
-            .create_workspace("Operations".to_string(), 10)
+            .create_workspace("Operations".to_string(), 3)
             .expect("workspace should be created");
-        let workspace = store
-            .bind(&workspace.id, "tab-1", 20)
+        store
+            .bind(&workspace.id, "tab-1", 4)
             .expect("session should bind");
+        let agent = store
+            .register_agent(
+                &workspace.id,
+                "Operator".to_string(),
+                "llm".to_string(),
+                Some("tab-1".to_string()),
+                5,
+            )
+            .expect("agent should register");
+        let task = store
+            .create_task(&agent.id, "Summarize status".to_string(), 6)
+            .expect("task should queue");
+        store.start_task(&task.id, 7).expect("task should start");
+        let task = store
+            .complete_task(&task.id, "All systems nominal".to_string(), 8)
+            .expect("task should complete");
 
-        assert_eq!(workspace.bindings.len(), 1);
-        assert_eq!(workspace.bindings[0].session_id, "tab-1");
+        assert_eq!(task.status, "completed");
+        assert_eq!(store.list_agents(&workspace.id).unwrap()[0].status, "idle");
+        let events = store.list_events(&workspace.id, 0, 100).unwrap();
+        assert_eq!(events.last().unwrap().kind, "task.completed");
+        assert!(events
+            .windows(2)
+            .all(|pair| pair[0].sequence < pair[1].sequence));
     }
 
     #[test]
-    fn session_sync_removes_stale_bindings() {
-        let mut store = WorkspaceStore::default();
+    fn reconnects_binding_by_profile_identity() {
+        let mut store = WorkspaceStore::open_in_memory(1).expect("store should open");
         store
-            .sync_sessions(vec![session("tab-1")])
-            .expect("sessions should sync");
-        let workspace = store
-            .create_workspace("Operations".to_string(), 10)
-            .expect("workspace should be created");
-        store
-            .bind(&workspace.id, "tab-1", 20)
-            .expect("session should bind");
+            .sync_sessions(vec![session("tab-1", "profile-1")], 2)
+            .unwrap();
+        let workspace = store.create_workspace("Ops".to_string(), 3).unwrap();
+        store.bind(&workspace.id, "tab-1", 4).unwrap();
+        let agent = store
+            .register_agent(
+                &workspace.id,
+                "Operator".to_string(),
+                "llm".to_string(),
+                Some("tab-1".to_string()),
+                4,
+            )
+            .unwrap();
 
-        let result = store
-            .sync_sessions(Vec::new())
-            .expect("sessions should sync");
-        assert_eq!(result.removed_bindings, 1);
-        assert!(store.list_workspaces()[0].bindings.is_empty());
+        let disconnected = store.sync_sessions(Vec::new(), 5).unwrap();
+        assert_eq!(disconnected.disconnected_bindings, 1);
+        assert_eq!(
+            store.get_workspace(&workspace.id).unwrap().bindings[0].status,
+            "disconnected"
+        );
+
+        let reconnected = store
+            .sync_sessions(vec![session("tab-9", "profile-1")], 6)
+            .unwrap();
+        assert_eq!(reconnected.reconnected_bindings, 1);
+        assert_eq!(
+            store.get_workspace(&workspace.id).unwrap().bindings[0]
+                .session_id
+                .as_deref(),
+            Some("tab-9")
+        );
+        assert_eq!(
+            store.list_agents(&workspace.id).unwrap()[0]
+                .session_id
+                .as_deref(),
+            Some("tab-9")
+        );
+        assert_eq!(agent.session_id.as_deref(), Some("tab-1"));
+    }
+
+    #[test]
+    fn cancelled_task_is_terminal_and_idempotent() {
+        let mut store = WorkspaceStore::open_in_memory(1).expect("store should open");
+        let workspace = store.create_workspace("Ops".to_string(), 2).unwrap();
+        let agent = store
+            .register_agent(
+                &workspace.id,
+                "Operator".to_string(),
+                "llm".to_string(),
+                None,
+                3,
+            )
+            .unwrap();
+        let task = store
+            .create_task(&agent.id, "Check status".to_string(), 4)
+            .unwrap();
+        let cancelled = store.cancel_task(&task.id, 5).unwrap();
+        assert_eq!(cancelled.status, "cancelled");
+        assert!(store.wait_task(&task.id).unwrap().terminal);
+        assert_eq!(store.cancel_task(&task.id, 6).unwrap().status, "cancelled");
+    }
+
+    #[test]
+    fn reopens_sqlite_and_marks_unfinished_task_interrupted() {
+        let database_path = std::env::temp_dir().join(format!(
+            "issh-runtime-workspace-{}-{}.sqlite3",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let (workspace_id, task_id) = {
+            let mut store = WorkspaceStore::open(&database_path, 1).unwrap();
+            let workspace = store.create_workspace("Persistent".to_string(), 2).unwrap();
+            let agent = store
+                .register_agent(
+                    &workspace.id,
+                    "Operator".to_string(),
+                    "llm".to_string(),
+                    None,
+                    3,
+                )
+                .unwrap();
+            let task = store
+                .create_task(&agent.id, "Keep state".to_string(), 4)
+                .unwrap();
+            store.start_task(&task.id, 5).unwrap();
+            (workspace.id, task.id)
+        };
+
+        {
+            let store = WorkspaceStore::open(&database_path, 6).unwrap();
+            assert_eq!(store.list_workspaces().unwrap()[0].id, workspace_id);
+            let recovered = store.get_task(&task_id).unwrap();
+            assert_eq!(recovered.status, "interrupted");
+            assert_eq!(
+                store
+                    .list_events(&workspace_id, 0, 100)
+                    .unwrap()
+                    .last()
+                    .unwrap()
+                    .kind,
+                "task.interrupted"
+            );
+        }
+
+        std::fs::remove_file(&database_path).unwrap();
     }
 }

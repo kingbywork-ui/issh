@@ -8,7 +8,7 @@ import * as path from 'path'
 const MAX_MESSAGE_BYTES = 64 * 1024
 const REQUEST_TIMEOUT_MS = 5000
 const START_ATTEMPTS = 50
-const PROTOCOL_VERSION = '0.2.0'
+const PROTOCOL_VERSION = '0.3.0'
 
 export interface RuntimeRequest {
     jsonrpc: '2.0'
@@ -31,13 +31,16 @@ export class RuntimeManager {
     private child?: ChildProcess
     private starting?: Promise<void>
     private readonly pipeName: string
+    private readonly databasePath: string
 
     constructor () {
+        const userDataPath = app.getPath('userData')
         const instanceKey = createHash('sha256')
-            .update(app.getPath('userData'))
+            .update(userDataPath)
             .digest('hex')
             .slice(0, 16)
         this.pipeName = `\\\\.\\pipe\\issh-runtime-${instanceKey}`
+        this.databasePath = path.join(userDataPath, 'runtime', 'issh-runtime.sqlite3')
     }
 
     async request (request: RuntimeRequest): Promise<RuntimeResponse> {
@@ -91,7 +94,10 @@ export class RuntimeManager {
         }
 
         const binary = this.resolveBinary()
-        const child = spawn(binary, ['--pipe', this.pipeName], {
+        const child = spawn(binary, [
+            '--pipe', this.pipeName,
+            '--database', this.databasePath,
+        ], {
             cwd: path.dirname(binary),
             stdio: 'ignore',
             windowsHide: true,

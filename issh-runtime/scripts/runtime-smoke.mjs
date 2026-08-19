@@ -2,19 +2,23 @@ import assert from 'node:assert/strict'
 import net from 'node:net'
 import { spawn } from 'node:child_process'
 import { access } from 'node:fs/promises'
+import { rm } from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
 const runtimeRoot = path.resolve(import.meta.dirname, '..')
 const binary = process.env.ISSHD_BIN || path.join(runtimeRoot, 'target', 'debug', 'isshd.exe')
 const pipeName = `\\\\.\\pipe\\issh-runtime-smoke-${process.pid}`
+const databasePath = path.join(os.tmpdir(), `issh-runtime-smoke-${process.pid}.sqlite3`)
 
 await access(binary)
+await rm(databasePath, { force: true })
 
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
 
 function startRuntime (...args) {
-    return spawn(binary, ['--pipe', pipeName, ...args], {
+    return spawn(binary, ['--pipe', pipeName, '--database', databasePath, ...args], {
         cwd: runtimeRoot,
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
@@ -70,6 +74,7 @@ async function request (payload, attempts = 50) {
     throw lastError
 }
 
+let interruptedTaskId
 const primary = startRuntime()
 try {
     const health = await request(JSON.stringify({
@@ -80,8 +85,8 @@ try {
     }))
     assert.equal(health.jsonrpc, '2.0')
     assert.equal(health.id, 'health')
-    assert.equal(health.result.protocolVersion, '0.2.0')
-    assert.equal(health.result.runtimeVersion, '0.2.0')
+    assert.equal(health.result.protocolVersion, '0.3.0')
+    assert.equal(health.result.runtimeVersion, '0.3.0')
     assert.ok(Number.isInteger(health.result.pid))
     assert.ok(Number.isInteger(health.result.startedAtUnixMs))
     assert.deepEqual(health.result.capabilities, [
@@ -92,6 +97,17 @@ try {
         'workspace.list',
         'workspace.bind',
         'workspace.unbind',
+        'agent.register',
+        'agent.list',
+        'task.prompt',
+        'task.start',
+        'task.wait',
+        'task.read',
+        'task.list',
+        'task.cancel',
+        'task.complete',
+        'task.fail',
+        'event.list',
     ])
 
     const synchronized = await request(JSON.stringify({
@@ -115,7 +131,11 @@ try {
             }],
         },
     }))
-    assert.deepEqual(synchronized.result, { sessionCount: 1, removedBindings: 0 })
+    assert.deepEqual(synchronized.result, {
+        sessionCount: 1,
+        reconnectedBindings: 0,
+        disconnectedBindings: 0,
+    })
 
     const sessions = await request(JSON.stringify({
         jsonrpc: '2.0',
@@ -146,6 +166,88 @@ try {
         method: 'workspace.list',
     }))
     assert.equal(workspaces.result[0].name, 'Operations')
+
+    const agent = await request(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'register-agent',
+        method: 'agent.register',
+        params: {
+            workspaceId: created.result.id,
+            name: 'Operator',
+            adapter: 'llm',
+            sessionId: 'ssh-tab-1',
+        },
+    }))
+    assert.equal(agent.result.status, 'idle')
+
+    const queued = await request(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'prompt-agent',
+        method: 'task.prompt',
+        params: { agentId: agent.result.id, prompt: 'Summarize host status' },
+    }))
+    assert.equal(queued.result.status, 'queued')
+
+    const started = await request(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'start-task',
+        method: 'task.start',
+        params: { taskId: queued.result.id },
+    }))
+    assert.equal(started.result.status, 'running')
+
+    const waiting = await request(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'wait-task',
+        method: 'task.wait',
+        params: { taskId: queued.result.id },
+    }))
+    assert.equal(waiting.result.terminal, false)
+
+    const completed = await request(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'complete-task',
+        method: 'task.complete',
+        params: { taskId: queued.result.id, output: 'Host is healthy' },
+    }))
+    assert.equal(completed.result.output, 'Host is healthy')
+
+    const events = await request(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'events',
+        method: 'event.list',
+        params: { workspaceId: created.result.id },
+    }))
+    assert.ok(events.result.length >= 6)
+    assert.ok(events.result.every((event, index, items) => index === 0 || event.sequence > items[index - 1].sequence))
+
+    const cancellable = await request(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'cancellable',
+        method: 'task.prompt',
+        params: { agentId: agent.result.id, prompt: 'Long-running task' },
+    }))
+    const cancelled = await request(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'cancel-task',
+        method: 'task.cancel',
+        params: { taskId: cancellable.result.id },
+    }))
+    assert.equal(cancelled.result.status, 'cancelled')
+
+    const interrupted = await request(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'interrupted',
+        method: 'task.prompt',
+        params: { agentId: agent.result.id, prompt: 'Recover after restart' },
+    }))
+    await request(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'start-interrupted',
+        method: 'task.start',
+        params: { taskId: interrupted.result.id },
+    }))
+    interruptedTaskId = interrupted.result.id
 
     const unbound = await request(JSON.stringify({
         jsonrpc: '2.0',
@@ -181,9 +283,15 @@ const once = startRuntime('--once')
 const recovered = await request(JSON.stringify({
     jsonrpc: '2.0',
     id: 'recovered',
-    method: 'runtime.health',
+    method: 'task.read',
+    params: { taskId: interruptedTaskId },
 }))
 assert.equal(recovered.id, 'recovered')
+assert.equal(recovered.result.status, 'interrupted')
 assert.equal((await waitForExit(once)).code, 0)
+
+await rm(databasePath, { force: true })
+await rm(`${databasePath}-wal`, { force: true })
+await rm(`${databasePath}-shm`, { force: true })
 
 console.log('isshd runtime smoke test passed')

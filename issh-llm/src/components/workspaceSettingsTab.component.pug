@@ -30,7 +30,7 @@ h3.mb-3 Agent Workspace
         .d-flex.align-items-center.mb-3
             input.form-control.me-2(type='text', maxlength='120', placeholder='例如：生产环境巡检', [(ngModel)]='workspaceName', (keydown.enter)='createWorkspace()')
             button.btn.btn-primary(type='button', (click)='createWorkspace()', [disabled]='!workspaceName.trim()') 创建
-        select.form-control(*ngIf='workspaces.length', [(ngModel)]='selectedWorkspaceId')
+        select.form-control(*ngIf='workspaces.length', [(ngModel)]='selectedWorkspaceId', (ngModelChange)='selectWorkspace()')
             option(*ngFor='let workspace of workspaces', [value]='workspace.id') {{ workspace.name }}（{{ workspace.bindings.length }} 个会话）
         .text-muted(*ngIf='!workspaces.length && !loading') 尚无 Workspace。
 
@@ -50,3 +50,61 @@ h3.mb-3 Agent Workspace
                 small.text-muted.d-block {{ session.user || '' }}{{ session.user && session.host ? '@' : '' }}{{ session.host || session.profileType || 'terminal' }} · {{ session.connected ? '已连接' : '未连接' }}
             span.badge.badge-success.me-2(*ngIf='session.active') 当前
             button.btn.btn-secondary.btn-sm(type='button', (click)='focusSession(session.id)') 聚焦
+
+.llm-section(*ngIf='selectedWorkspaceId')
+    .llm-section-header
+        .llm-section-icon
+            i.fas.fa-user-cog
+        .llm-section-meta
+            .llm-section-title 单 Agent 执行器
+            .llm-section-desc Agent 读取所绑定终端的脱敏上下文并生成建议；不会直接执行终端命令。
+    .llm-section-body
+        .row.mb-3
+            .col-md-5
+                input.form-control(type='text', maxlength='120', placeholder='Agent 名称', [(ngModel)]='agentName')
+            .col-md-5
+                select.form-control([(ngModel)]='selectedSessionId')
+                    option(value='') 不绑定终端上下文
+                    option(*ngFor='let session of sessions', [value]='session.id') {{ session.title || session.profileName || session.id }}
+            .col-md-2
+                button.btn.btn-primary.btn-block(type='button', (click)='registerAgent()', [disabled]='!agentName.trim() || detailLoading') 注册
+        .text-muted.mb-3(*ngIf='!agents.length') 当前 Workspace 尚无 Agent。
+        .form-group(*ngIf='agents.length')
+            label 目标 Agent
+            select.form-control([(ngModel)]='selectedAgentId')
+                option(*ngFor='let agent of agents', [value]='agent.id') {{ agent.name }} · {{ agent.sessionId ? '已绑定终端' : '无终端上下文' }}
+        .form-group(*ngIf='agents.length')
+            label 任务提示
+            textarea.form-control(rows='3', maxlength='16000', placeholder='描述要分析的问题或下一步操作；Agent 只返回建议。', [(ngModel)]='agentPrompt')
+        button.btn.btn-primary(type='button', *ngIf='agents.length', (click)='promptAgent()', [disabled]='!agentPrompt.trim() || prompting')
+            i.fas.fa-circle-notch.fa-spin.me-1(*ngIf='prompting')
+            span {{ prompting ? '等待结果…' : '发起任务' }}
+
+.llm-section(*ngIf='selectedWorkspaceId')
+    .llm-section-header
+        .llm-section-icon
+            i.fas.fa-tasks
+        .llm-section-meta
+            .llm-section-title 任务与恢复状态
+            .llm-section-desc Runtime 重启时未完成任务会标记为“中断”，不会被误报为成功。
+    .llm-section-body
+        .text-muted(*ngIf='!tasks.length') 暂无任务。
+        .border-bottom.py-3(*ngFor='let task of tasks')
+            .d-flex.align-items-center
+                .flex-grow-1
+                    strong {{ task.prompt }}
+                    small.text-muted.d-block {{ taskStatusText(task.status) }} · {{ task.createdAtUnixMs | date:'short' }}
+                button.btn.btn-outline-danger.btn-sm(type='button', *ngIf='!isTaskTerminal(task)', (click)='cancelTask(task.id)') 取消
+            pre.mt-2.mb-0.text-wrap(*ngIf='task.output') {{ task.output }}
+            .alert.alert-danger.mt-2.mb-0(*ngIf='task.error') {{ task.error }}
+
+.llm-section(*ngIf='selectedWorkspaceId')
+    .llm-section-header
+        .llm-section-icon
+            i.fas.fa-history
+        .llm-section-meta
+            .llm-section-title 最近事件
+            .llm-section-desc 按持久化序号展示最近 50 条 Workspace 事件，供恢复和审计定位。
+    .llm-section-body
+        .text-muted(*ngIf='!events.length') 暂无事件。
+        small.d-block.border-bottom.py-1(*ngFor='let event of events') 序号 {{ event.sequence }} · {{ event.kind }} · {{ event.createdAtUnixMs | date:'short' }}

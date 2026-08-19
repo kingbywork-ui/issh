@@ -9,6 +9,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::env;
 use std::io;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -20,6 +21,7 @@ const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\issh-runtime-v1";
 #[derive(Debug)]
 struct Options {
     pipe_name: String,
+    database_path: PathBuf,
     once: bool,
 }
 
@@ -29,10 +31,24 @@ struct RuntimeState {
 }
 
 impl RuntimeState {
-    fn new(started_at_unix_ms: u128) -> Self {
+    fn open(
+        started_at_unix_ms: u128,
+        database_path: &std::path::Path,
+    ) -> Result<Self, issh_runtime_workspace::WorkspaceError> {
+        Ok(Self {
+            started_at_unix_ms,
+            workspace: Mutex::new(WorkspaceStore::open(database_path, now_unix_ms())?),
+        })
+    }
+
+    #[cfg(test)]
+    fn in_memory(started_at_unix_ms: u128) -> Self {
         Self {
             started_at_unix_ms,
-            workspace: Mutex::new(WorkspaceStore::default()),
+            workspace: Mutex::new(
+                WorkspaceStore::open_in_memory(now_unix_ms())
+                    .expect("in-memory workspace should open"),
+            ),
         }
     }
 }
@@ -55,12 +71,71 @@ struct WorkspaceBindingParams {
     session_id: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceIdParams {
+    workspace_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentRegisterParams {
+    workspace_id: String,
+    name: String,
+    adapter: Option<String>,
+    session_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentPromptParams {
+    agent_id: String,
+    prompt: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TaskIdParams {
+    task_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TaskCompleteParams {
+    task_id: String,
+    output: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TaskFailParams {
+    task_id: String,
+    error: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EventListParams {
+    workspace_id: String,
+    #[serde(default)]
+    after_sequence: i64,
+    #[serde(default = "default_event_limit")]
+    limit: usize,
+}
+
+fn default_event_limit() -> usize {
+    100
+}
+
 impl Options {
     fn parse() -> Result<Self, String> {
         let mut pipe_name = env::var("ISSH_RUNTIME_PIPE")
             .ok()
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| DEFAULT_PIPE_NAME.to_string());
+        let mut database_path = env::var_os("ISSH_RUNTIME_DATABASE")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("issh-runtime.sqlite3"));
         let mut once = false;
         let mut args = env::args().skip(1);
 
@@ -72,16 +147,27 @@ impl Options {
                         .filter(|value| !value.trim().is_empty())
                         .ok_or_else(|| "--pipe requires a non-empty value".to_string())?;
                 }
+                "--database" => {
+                    database_path = args
+                        .next()
+                        .filter(|value| !value.trim().is_empty())
+                        .map(PathBuf::from)
+                        .ok_or_else(|| "--database requires a non-empty value".to_string())?;
+                }
                 "--once" => once = true,
                 "--help" | "-h" => {
-                    println!("Usage: isshd [--pipe <name>] [--once]");
+                    println!("Usage: isshd [--pipe <name>] [--database <path>] [--once]");
                     std::process::exit(0);
                 }
                 unknown => return Err(format!("Unknown argument: {unknown}")),
             }
         }
 
-        Ok(Self { pipe_name, once })
+        Ok(Self {
+            pipe_name,
+            database_path,
+            once,
+        })
     }
 }
 
@@ -90,7 +176,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let options =
         Options::parse().map_err(|message| io::Error::new(io::ErrorKind::InvalidInput, message))?;
     let started_at_unix_ms = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
-    let state = Arc::new(RuntimeState::new(started_at_unix_ms));
+    if let Some(parent) = options
+        .database_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        std::fs::create_dir_all(parent)?;
+    }
+    let state = Arc::new(RuntimeState::open(
+        started_at_unix_ms,
+        &options.database_path,
+    )?);
 
     run(options, state).await?;
     Ok(())
@@ -212,6 +308,17 @@ fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                     "workspace.list",
                     "workspace.bind",
                     "workspace.unbind",
+                    "agent.register",
+                    "agent.list",
+                    "task.prompt",
+                    "task.start",
+                    "task.wait",
+                    "task.read",
+                    "task.list",
+                    "task.cancel",
+                    "task.complete",
+                    "task.fail",
+                    "event.list",
                 ],
             },
         ))
@@ -222,7 +329,7 @@ fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                 Err(error) => return serialize_error(id, error.code, error.message),
             };
             with_workspace(state, id, |workspace| {
-                workspace.sync_sessions(params.sessions)
+                workspace.sync_sessions(params.sessions, now_unix_ms())
             })
         }
         "session.list" => with_workspace(state, id, |workspace| {
@@ -237,9 +344,7 @@ fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                 workspace.create_workspace(params.name, now_unix_ms())
             })
         }
-        "workspace.list" => with_workspace(state, id, |workspace| {
-            Ok::<_, issh_runtime_workspace::WorkspaceError>(workspace.list_workspaces())
-        }),
+        "workspace.list" => with_workspace(state, id, |workspace| workspace.list_workspaces()),
         "workspace.bind" => {
             let params = match parse_params::<WorkspaceBindingParams>(request.params) {
                 Ok(params) => params,
@@ -255,11 +360,114 @@ fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                 Err(error) => return serialize_error(id, error.code, error.message),
             };
             with_workspace(state, id, |workspace| {
-                workspace.unbind(&params.workspace_id, &params.session_id)
+                workspace.unbind(&params.workspace_id, &params.session_id, now_unix_ms())
+            })
+        }
+        "agent.register" => {
+            let params = match parse_params::<AgentRegisterParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_workspace(state, id, |workspace| {
+                workspace.register_agent(
+                    &params.workspace_id,
+                    params.name,
+                    params.adapter.unwrap_or_else(|| "llm".to_string()),
+                    params.session_id,
+                    now_unix_ms(),
+                )
+            })
+        }
+        "agent.list" => {
+            let params = match parse_params::<WorkspaceIdParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_workspace(state, id, |workspace| {
+                workspace.list_agents(&params.workspace_id)
+            })
+        }
+        "task.prompt" => {
+            let params = match parse_params::<AgentPromptParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_workspace(state, id, |workspace| {
+                workspace.create_task(&params.agent_id, params.prompt, now_unix_ms())
+            })
+        }
+        "task.start" => {
+            task_operation::<TaskIdParams, _, _>(state, id, request.params, |workspace, params| {
+                workspace.start_task(&params.task_id, now_unix_ms())
+            })
+        }
+        "task.wait" => {
+            task_operation::<TaskIdParams, _, _>(state, id, request.params, |workspace, params| {
+                workspace.wait_task(&params.task_id)
+            })
+        }
+        "task.read" => {
+            task_operation::<TaskIdParams, _, _>(state, id, request.params, |workspace, params| {
+                workspace.get_task(&params.task_id)
+            })
+        }
+        "task.list" => {
+            let params = match parse_params::<WorkspaceIdParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_workspace(state, id, |workspace| {
+                workspace.list_tasks(&params.workspace_id)
+            })
+        }
+        "task.cancel" => {
+            task_operation::<TaskIdParams, _, _>(state, id, request.params, |workspace, params| {
+                workspace.cancel_task(&params.task_id, now_unix_ms())
+            })
+        }
+        "task.complete" => task_operation::<TaskCompleteParams, _, _>(
+            state,
+            id,
+            request.params,
+            |workspace, params| {
+                workspace.complete_task(&params.task_id, params.output, now_unix_ms())
+            },
+        ),
+        "task.fail" => task_operation::<TaskFailParams, _, _>(
+            state,
+            id,
+            request.params,
+            |workspace, params| workspace.fail_task(&params.task_id, params.error, now_unix_ms()),
+        ),
+        "event.list" => {
+            let params = match parse_params::<EventListParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_workspace(state, id, |workspace| {
+                workspace.list_events(&params.workspace_id, params.after_sequence, params.limit)
             })
         }
         _ => serialize_error(id, METHOD_NOT_FOUND, "Method not found"),
     }
+}
+
+fn task_operation<P, T, F>(
+    state: &RuntimeState,
+    id: Value,
+    params: Option<Value>,
+    operation: F,
+) -> Vec<u8>
+where
+    P: DeserializeOwned,
+    T: serde::Serialize,
+    F: FnOnce(&mut WorkspaceStore, P) -> Result<T, issh_runtime_workspace::WorkspaceError>,
+{
+    let params = match parse_params::<P>(params) {
+        Ok(params) => params,
+        Err(error) => return serialize_error(id, error.code, error.message),
+    };
+    with_workspace(state, id, |workspace| operation(workspace, params))
 }
 
 fn parse_params<T: DeserializeOwned>(params: Option<Value>) -> Result<T, RpcError> {
@@ -283,10 +491,10 @@ where
     }
 }
 
-fn now_unix_ms() -> u64 {
+fn now_unix_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
+        .map(|duration| duration.as_millis() as i64)
         .unwrap_or(0)
 }
 
@@ -300,7 +508,7 @@ mod tests {
     use super::*;
 
     fn state() -> RuntimeState {
-        RuntimeState::new(123)
+        RuntimeState::in_memory(123)
     }
 
     #[test]

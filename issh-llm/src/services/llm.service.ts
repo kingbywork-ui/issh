@@ -29,6 +29,14 @@ interface AutocompleteParseResult {
     error?: string
 }
 
+export interface AgentPromptContext {
+    title?: string
+    cwd?: string | null
+    shell?: string | null
+    os?: string | null
+    recentOutput?: string[]
+}
+
 /** @hidden */
 @Injectable({ providedIn: 'root' })
 export class LLMService {
@@ -37,6 +45,7 @@ export class LLMService {
     private guard = new DangerousCommandGuard()
     private abortController: AbortController | null = null
     private autocompleteAbortControllers = new Map<string, AbortController>()
+    private agentAbortControllers = new Map<string, AbortController>()
 
     constructor (
         log: LogService,
@@ -60,6 +69,10 @@ export class LLMService {
             controller.abort()
         }
         this.autocompleteAbortControllers.clear()
+        for (const controller of this.agentAbortControllers.values()) {
+            controller.abort()
+        }
+        this.agentAbortControllers.clear()
     }
 
     cancelAutocompleteRequests (tabKey: string, requestKind?: AutocompleteRequestKind): void {
@@ -110,6 +123,84 @@ export class LLMService {
         if (!parsed.valid || !parsed.suggestions.length) {
             throw new Error(parsed.error ?? 'Autocomplete model returned an invalid response')
         }
+    }
+
+    async runAgentPrompt (
+        taskId: string,
+        prompt: string,
+        context?: AgentPromptContext,
+    ): Promise<string> {
+        if (!this.isConfigured()) {
+            throw new Error('LLM is not configured')
+        }
+        this.cancelAgentPrompt(taskId)
+        const controller = new AbortController()
+        this.agentAbortControllers.set(taskId, controller)
+        const { baseUrl, apiKey, model } = this.config.store.llm
+        const url = `${baseUrl.replace(/\/$/, '')}/chat/completions`
+        const contextText = context
+            ? [
+                `Terminal: ${context.title ?? 'unknown'}`,
+                `CWD: ${context.cwd ?? 'unknown'}`,
+                `Shell: ${context.shell ?? 'unknown'}`,
+                `OS: ${context.os ?? 'unknown'}`,
+                ...(context.recentOutput?.length
+                    ? ['Recent terminal output:', ...context.recentOutput]
+                    : []),
+            ].join('\n')
+            : 'No terminal context was shared.'
+        try {
+            const response = await axios.post<ChatCompletionResponse>(url, {
+                model,
+                messages: [
+                    {
+                        role: 'system',
+                        content: [
+                            'You are a single issh workspace agent.',
+                            'Analyze the user request and terminal context, then return a concise result.',
+                            'Do not claim that you executed commands or changed the host.',
+                            'If execution is required, clearly propose commands for the user or a separately authorized tool to run.',
+                        ].join(' '),
+                    },
+                    {
+                        role: 'user',
+                        content: `${contextText}\n\nTask:\n${prompt}`,
+                    },
+                ],
+                max_tokens: 1200,
+                temperature: 0.2,
+                stream: false,
+            }, {
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                },
+                signal: controller.signal,
+                timeout: 60000,
+            })
+            const output = response.data.choices[0]?.message?.content?.trim() ?? ''
+            if (!output) {
+                throw new Error('Agent returned an empty response')
+            }
+            return output
+        } catch (error) {
+            if (axios.isCancel(error)) {
+                throw new Error('Agent task cancelled')
+            }
+            const axiosError = error as AxiosError
+            const detail = (axiosError.response?.data as any)?.error?.message ?? axiosError.message
+            this.logger.error('Agent prompt failed', detail)
+            throw new Error(detail)
+        } finally {
+            if (this.agentAbortControllers.get(taskId) === controller) {
+                this.agentAbortControllers.delete(taskId)
+            }
+        }
+    }
+
+    cancelAgentPrompt (taskId: string): void {
+        this.agentAbortControllers.get(taskId)?.abort()
+        this.agentAbortControllers.delete(taskId)
     }
 
     async getAutocompleteSuggestions (request: AutocompleteRequest): Promise<AutocompleteSuggestion[]> {

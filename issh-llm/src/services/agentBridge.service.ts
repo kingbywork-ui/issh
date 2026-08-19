@@ -16,6 +16,7 @@ import { SensitiveInputService } from './sensitiveInput.service'
 import { DangerousCommandGuard } from './dangerousCommandGuard'
 import { normalizeCommand } from './commandValidation'
 import { RuntimeBridgeService } from './runtimeBridge.service'
+import { AgentPromptContext, LLMService } from './llm.service'
 import {
     buildCodexDesktopConfigFields,
     CodexDesktopConfigFields,
@@ -123,6 +124,7 @@ export class AgentBridgeService {
         private context: TerminalContextService,
         private sensitiveInput: SensitiveInputService,
         private runtime: RuntimeBridgeService,
+        private llm: LLMService,
         private zone: NgZone,
         log: LogService,
     ) {
@@ -810,6 +812,30 @@ export class AgentBridgeService {
                 case 'issh_workspace_unbind':
                     rpcResponse = { id, result: await this.callWorkspaceRuntime('workspace.unbind', normalizedRequest.params ?? {}) }
                     break
+                case 'issh_agent_register':
+                    rpcResponse = { id, result: await this.registerWorkspaceAgent(normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_agent_list':
+                    rpcResponse = { id, result: await this.listWorkspaceAgents(normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_agent_prompt':
+                    rpcResponse = { id, result: await this.promptWorkspaceAgent(normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_task_wait':
+                    rpcResponse = { id, result: await this.waitWorkspaceTask(normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_task_read':
+                    rpcResponse = { id, result: await this.runtime.call('task.read', normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_task_list':
+                    rpcResponse = { id, result: await this.listWorkspaceTasks(normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_task_cancel':
+                    rpcResponse = { id, result: await this.cancelWorkspaceTask(normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_workspace_events':
+                    rpcResponse = { id, result: await this.runtime.call('event.list', normalizedRequest.params ?? {}) }
+                    break
                 case 'issh_list_profiles':
                     rpcResponse = { id, result: await this.listProfiles() }
                     break
@@ -888,6 +914,14 @@ export class AgentBridgeService {
                 issh_workspace_create: ['name'],
                 issh_workspace_bind: ['workspaceId', 'sessionId'],
                 issh_workspace_unbind: ['workspaceId', 'sessionId'],
+                issh_agent_register: ['workspaceId', 'name'],
+                issh_agent_list: ['workspaceId'],
+                issh_agent_prompt: ['agentId', 'prompt'],
+                issh_task_wait: ['taskId'],
+                issh_task_read: ['taskId'],
+                issh_task_list: ['workspaceId'],
+                issh_task_cancel: ['taskId'],
+                issh_workspace_events: ['workspaceId'],
             }
             for (const name of requiredTextParams[method ?? ''] ?? []) {
                 if (typeof params[name] !== 'string' || !params[name].trim()) {
@@ -963,6 +997,97 @@ export class AgentBridgeService {
 
     unbindWorkspaceSession (workspaceId: string, sessionId: string): Promise<any> {
         return this.callWorkspaceRuntime('workspace.unbind', { workspaceId, sessionId })
+    }
+
+    registerWorkspaceAgent (params: RpcParams): Promise<any> {
+        return this.callWorkspaceRuntime('agent.register', {
+            workspaceId: params.workspaceId,
+            name: params.name,
+            adapter: 'llm',
+            sessionId: params.sessionId ?? null,
+        })
+    }
+
+    listWorkspaceAgents (params: RpcParams): Promise<any[]> {
+        return this.callWorkspaceRuntime('agent.list', { workspaceId: params.workspaceId })
+    }
+
+    async promptWorkspaceAgent (params: RpcParams): Promise<any> {
+        const task = await this.callWorkspaceRuntime('task.prompt', {
+            agentId: params.agentId,
+            prompt: params.prompt,
+        })
+        void this.executeWorkspaceTask(task).catch(error => {
+            this.logger.error(`Workspace task ${task.id} execution failed`, error)
+        })
+        return task
+    }
+
+    async waitWorkspaceTask (params: RpcParams): Promise<any> {
+        const timeoutMs = this.getDuration(params.timeoutMs, 60000)
+        const startedAt = Date.now()
+        while (true) {
+            const result = await this.runtime.call<any>('task.wait', { taskId: params.taskId })
+            if (result.terminal) {
+                return { ...result, timedOut: false }
+            }
+            if (Date.now() - startedAt >= timeoutMs) {
+                return { ...result, timedOut: true }
+            }
+            await this.sleep(Math.min(result.retryAfterMs ?? 250, 1000))
+        }
+    }
+
+    listWorkspaceTasks (params: RpcParams): Promise<any[]> {
+        return this.runtime.call('task.list', { workspaceId: params.workspaceId })
+    }
+
+    async cancelWorkspaceTask (params: RpcParams): Promise<any> {
+        this.llm.cancelAgentPrompt(String(params.taskId))
+        return this.runtime.call('task.cancel', { taskId: params.taskId })
+    }
+
+    listWorkspaceEvents (workspaceId: string, afterSequence = 0, limit = 100): Promise<any[]> {
+        return this.runtime.call('event.list', { workspaceId, afterSequence, limit })
+    }
+
+    private async executeWorkspaceTask (task: any): Promise<void> {
+        try {
+            await this.runtime.call('task.start', { taskId: task.id })
+            const agents = await this.runtime.call<any[]>('agent.list', { workspaceId: task.workspaceId })
+            const agent = agents.find(item => item.id === task.agentId)
+            const context = agent ? await this.collectAgentPromptContext(agent) : undefined
+            const output = await this.llm.runAgentPrompt(task.id, task.prompt, context)
+            await this.runtime.call('task.complete', { taskId: task.id, output })
+        } catch (error) {
+            await this.runtime.call('task.fail', {
+                taskId: task.id,
+                error: error instanceof Error ? error.message : String(error),
+            }).catch(() => {})
+        }
+    }
+
+    private async collectAgentPromptContext (agent: any): Promise<AgentPromptContext | undefined> {
+        if (!agent.sessionId) {
+            return undefined
+        }
+        let entry: RegisteredTab
+        try {
+            entry = this.resolveTab(agent.sessionId)
+        } catch {
+            return undefined
+        }
+        this.assertNotSensitive(entry.tab)
+        const context = await this.context.collectContext(entry.tab)
+        return {
+            title: entry.tab.title,
+            cwd: context.cwd,
+            shell: context.shell,
+            os: context.os,
+            recentOutput: this.config.store.llm.sendContextToCloud
+                ? this.guard.redactLines(context.recentOutput)
+                : undefined,
+        }
     }
 
     private normalizeRuntimePort (value: any): number | null {
