@@ -85,8 +85,8 @@ try {
     }))
     assert.equal(health.jsonrpc, '2.0')
     assert.equal(health.id, 'health')
-    assert.equal(health.result.protocolVersion, '0.3.0')
-    assert.equal(health.result.runtimeVersion, '0.3.0')
+    assert.equal(health.result.protocolVersion, '0.4.0')
+    assert.equal(health.result.runtimeVersion, '0.4.0')
     assert.ok(Number.isInteger(health.result.pid))
     assert.ok(Number.isInteger(health.result.startedAtUnixMs))
     assert.deepEqual(health.result.capabilities, [
@@ -99,6 +99,7 @@ try {
         'workspace.unbind',
         'agent.register',
         'agent.list',
+        'agent.authorize',
         'task.prompt',
         'task.start',
         'task.wait',
@@ -179,6 +180,15 @@ try {
         },
     }))
     assert.equal(agent.result.status, 'idle')
+    assert.deepEqual(agent.result.scopes, ['context.read', 'llm.prompt', 'command.propose'])
+
+    const deniedExecute = await request(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'authorize-agent',
+        method: 'agent.authorize',
+        params: { agentId: agent.result.id, scope: 'command.execute' },
+    }))
+    assert.equal(deniedExecute.error.code, -32602, JSON.stringify(deniedExecute))
 
     const queued = await request(JSON.stringify({
         jsonrpc: '2.0',

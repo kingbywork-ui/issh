@@ -84,6 +84,14 @@ struct AgentRegisterParams {
     name: String,
     adapter: Option<String>,
     session_id: Option<String>,
+    scopes: Option<Vec<String>>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentAuthorizeParams {
+    agent_id: String,
+    scope: String,
 }
 
 #[derive(Deserialize)]
@@ -310,6 +318,7 @@ fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                     "workspace.unbind",
                     "agent.register",
                     "agent.list",
+                    "agent.authorize",
                     "task.prompt",
                     "task.start",
                     "task.wait",
@@ -374,6 +383,7 @@ fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                     params.name,
                     params.adapter.unwrap_or_else(|| "llm".to_string()),
                     params.session_id,
+                    params.scopes,
                     now_unix_ms(),
                 )
             })
@@ -385,6 +395,15 @@ fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
             };
             with_workspace(state, id, |workspace| {
                 workspace.list_agents(&params.workspace_id)
+            })
+        }
+        "agent.authorize" => {
+            let params = match parse_params::<AgentAuthorizeParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_workspace(state, id, |workspace| {
+                workspace.authorize_agent(&params.agent_id, &params.scope, now_unix_ms())
             })
         }
         "task.prompt" => {

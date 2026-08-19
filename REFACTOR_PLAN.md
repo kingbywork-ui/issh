@@ -92,6 +92,7 @@ For the lowest initial cost there is no separate QA or DevOps role. BA owns acce
 
 - Add Cordis dispatch/wait/collect, multi-agent UI, capability scopes, audit, cross-workspace isolation, and dangerous-command confirmation.
 - Accept at least four agents across two SSH hosts.
+- Status (2026-08-19): implemented on `dev` with Cordis `4.0.0-rc.8` isolated behind `CordisOrchestratorService`. One prompt can be dispatched concurrently to 1-16 same-Workspace Agents; Fiber disposal cancels unfinished tasks without touching SSH sessions. Runtime/protocol `0.4.0` persists least-privilege Agent scopes, rejects cross-Workspace session reuse, and records authorization/denial events. Commands copied from persisted task results require `command.execute`, an explicit execute action, normal command validation, and the existing native dangerous-command confirmation. Cordis run grouping remains intentionally process-local while the underlying Tasks and ordered audit/recovery events remain durable in Rust.
 
 ### Weeks 9-10: Herdr adapter and resilience
 

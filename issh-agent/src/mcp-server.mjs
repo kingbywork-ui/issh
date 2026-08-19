@@ -8,6 +8,7 @@ const COMMAND_ARGUMENT_TOOLS = new Set([
     'issh_run_command',
     'issh_exec_command',
     'issh_batch_exec',
+    'issh_task_run_command',
 ])
 
 export async function handleMcpMessage (message) {
@@ -156,7 +157,7 @@ function getRpcTimeout (name, args) {
     if (name === 'issh_health') {
         return 2000
     }
-    if (name === 'issh_exec_command' || name === 'issh_batch_exec' || name === 'issh_task_wait') {
+    if (name === 'issh_exec_command' || name === 'issh_batch_exec' || name === 'issh_task_wait' || name === 'issh_run_wait') {
         return Number(args.timeoutMs ?? 60000) + 5000
     }
     if (name.startsWith('issh_sftp_') || name === 'issh_connect_profile') {

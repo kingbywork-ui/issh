@@ -7,6 +7,13 @@ use std::path::Path;
 
 const MAX_PROMPT_CHARS: usize = 16_000;
 const MAX_RESULT_CHARS: usize = 48_000;
+pub const DEFAULT_AGENT_SCOPES: &[&str] = &["context.read", "llm.prompt", "command.propose"];
+pub const SUPPORTED_AGENT_SCOPES: &[&str] = &[
+    "context.read",
+    "llm.prompt",
+    "command.propose",
+    "command.execute",
+];
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,6 +61,7 @@ pub struct Agent {
     pub name: String,
     pub adapter: String,
     pub session_id: Option<String>,
+    pub scopes: Vec<String>,
     pub status: String,
     pub created_at_unix_ms: i64,
     pub updated_at_unix_ms: i64,
@@ -119,6 +127,8 @@ pub enum WorkspaceError {
     InvalidWorkspaceName,
     InvalidAgentName,
     InvalidAdapter(String),
+    InvalidAgentScope(String),
+    AgentScopeDenied { agent_id: String, scope: String },
     InvalidPrompt,
     ResultTooLarge,
     WorkspaceNotFound(String),
@@ -142,6 +152,15 @@ impl fmt::Display for WorkspaceError {
             }
             Self::InvalidAdapter(adapter) => {
                 write!(formatter, "Unsupported agent adapter: {adapter}")
+            }
+            Self::InvalidAgentScope(scope) => {
+                write!(formatter, "Unsupported agent scope: {scope}")
+            }
+            Self::AgentScopeDenied { agent_id, scope } => {
+                write!(
+                    formatter,
+                    "Agent {agent_id} is not allowed to use scope {scope}"
+                )
             }
             Self::InvalidPrompt => formatter.write_str("Prompt must contain 1-16000 characters"),
             Self::ResultTooLarge => formatter.write_str("Task result exceeds 48000 characters"),
@@ -181,7 +200,7 @@ impl WorkspaceStore {
 
     fn initialize(connection: Connection, now_unix_ms: i64) -> Result<Self, WorkspaceError> {
         connection.execute_batch(
-            "PRAGMA foreign_keys = ON;
+            r#"PRAGMA foreign_keys = ON;
              PRAGMA journal_mode = WAL;
              CREATE TABLE IF NOT EXISTS workspaces (
                  row_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -209,6 +228,7 @@ impl WorkspaceStore {
                  name TEXT NOT NULL,
                  adapter TEXT NOT NULL,
                  session_id TEXT,
+                 scopes_json TEXT NOT NULL DEFAULT '["context.read","llm.prompt","command.propose"]',
                  status TEXT NOT NULL,
                  created_at_unix_ms INTEGER NOT NULL,
                  updated_at_unix_ms INTEGER NOT NULL,
@@ -242,8 +262,15 @@ impl WorkspaceStore {
              );
              CREATE INDEX IF NOT EXISTS idx_agents_workspace ON agents(workspace_id);
              CREATE INDEX IF NOT EXISTS idx_tasks_workspace ON tasks(workspace_id);
-             CREATE INDEX IF NOT EXISTS idx_events_workspace_sequence ON events(workspace_id, sequence);",
+             CREATE INDEX IF NOT EXISTS idx_events_workspace_sequence ON events(workspace_id, sequence);"#,
         )?;
+        if !table_has_column(&connection, "agents", "scopes_json")? {
+            connection.execute(
+                "ALTER TABLE agents ADD COLUMN scopes_json TEXT NOT NULL
+                 DEFAULT '[\"context.read\",\"llm.prompt\",\"command.propose\"]'",
+                [],
+            )?;
+        }
 
         let interrupted = {
             let mut statement = connection.prepare(
@@ -476,6 +503,30 @@ impl WorkspaceStore {
             .as_ref()
             .map(|id| format!("profile:{id}"))
             .unwrap_or_else(|| format!("session:{}", session.id));
+        let bound_elsewhere = self
+            .connection
+            .query_row(
+                "SELECT workspace_id FROM bindings
+             WHERE workspace_id <> ?1 AND (binding_key = ?2 OR session_id = ?3)
+             LIMIT 1",
+                params![workspace_id, binding_key, session.id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        if let Some(other_workspace_id) = bound_elsewhere {
+            insert_event(
+                &self.connection,
+                workspace_id,
+                "security",
+                session_id,
+                "security.binding_denied",
+                &json!({ "reason": "bound_to_other_workspace", "otherWorkspaceId": other_workspace_id }),
+                now_unix_ms,
+            )?;
+            return Err(WorkspaceError::InvalidSession(format!(
+                "{session_id} is already bound to workspace {other_workspace_id}"
+            )));
+        }
         let status = if session.connected {
             "connected"
         } else {
@@ -546,6 +597,7 @@ impl WorkspaceStore {
         name: String,
         adapter: String,
         session_id: Option<String>,
+        scopes: Option<Vec<String>>,
         now_unix_ms: i64,
     ) -> Result<Agent, WorkspaceError> {
         self.ensure_workspace(workspace_id)?;
@@ -557,18 +609,49 @@ impl WorkspaceStore {
         if adapter != "llm" {
             return Err(WorkspaceError::InvalidAdapter(adapter.to_string()));
         }
+        let scopes = normalize_agent_scopes(scopes)?;
         if let Some(session_id) = session_id.as_ref() {
             if !self.sessions.contains_key(session_id) {
                 return Err(WorkspaceError::SessionNotFound(session_id.clone()));
             }
+            let is_bound = self.connection.query_row(
+                "SELECT EXISTS(
+                    SELECT 1 FROM bindings WHERE workspace_id = ?1 AND session_id = ?2
+                 )",
+                params![workspace_id, session_id],
+                |row| row.get::<_, bool>(0),
+            )?;
+            if !is_bound {
+                insert_event(
+                    &self.connection,
+                    workspace_id,
+                    "security",
+                    session_id,
+                    "security.agent_registration_denied",
+                    &json!({ "reason": "session_not_bound" }),
+                    now_unix_ms,
+                )?;
+                return Err(WorkspaceError::InvalidSession(format!(
+                    "{session_id} is not bound to workspace {workspace_id}"
+                )));
+            }
         }
+        let scopes_json = serde_json::to_string(&scopes)
+            .map_err(|error| WorkspaceError::Storage(error.to_string()))?;
         let transaction = self.connection.transaction()?;
         transaction.execute(
             "INSERT INTO agents(
-                 public_id, workspace_id, name, adapter, session_id, status,
+                 public_id, workspace_id, name, adapter, session_id, scopes_json, status,
                  created_at_unix_ms, updated_at_unix_ms
-             ) VALUES('', ?1, ?2, ?3, ?4, 'idle', ?5, ?5)",
-            params![workspace_id, name, adapter, session_id, now_unix_ms],
+             ) VALUES('', ?1, ?2, ?3, ?4, ?5, 'idle', ?6, ?6)",
+            params![
+                workspace_id,
+                name,
+                adapter,
+                session_id,
+                scopes_json,
+                now_unix_ms
+            ],
         )?;
         let id = format!("agent-{}", transaction.last_insert_rowid());
         transaction.execute(
@@ -581,7 +664,12 @@ impl WorkspaceStore {
             "agent",
             &id,
             "agent.registered",
-            &json!({ "name": name, "adapter": adapter, "sessionId": session_id }),
+            &json!({
+                "name": name,
+                "adapter": adapter,
+                "sessionId": session_id,
+                "scopes": scopes,
+            }),
             now_unix_ms,
         )?;
         transaction.commit()?;
@@ -591,7 +679,7 @@ impl WorkspaceStore {
     pub fn list_agents(&self, workspace_id: &str) -> Result<Vec<Agent>, WorkspaceError> {
         self.ensure_workspace(workspace_id)?;
         let mut statement = self.connection.prepare(
-            "SELECT public_id, workspace_id, name, adapter, session_id, status,
+            "SELECT public_id, workspace_id, name, adapter, session_id, scopes_json, status,
                     created_at_unix_ms, updated_at_unix_ms
              FROM agents WHERE workspace_id = ?1 ORDER BY row_id",
         )?;
@@ -602,7 +690,7 @@ impl WorkspaceStore {
     pub fn get_agent(&self, agent_id: &str) -> Result<Agent, WorkspaceError> {
         self.connection
             .query_row(
-                "SELECT public_id, workspace_id, name, adapter, session_id, status,
+                "SELECT public_id, workspace_id, name, adapter, session_id, scopes_json, status,
                         created_at_unix_ms, updated_at_unix_ms
                  FROM agents WHERE public_id = ?1",
                 params![agent_id],
@@ -612,6 +700,44 @@ impl WorkspaceStore {
             .ok_or_else(|| WorkspaceError::AgentNotFound(agent_id.to_string()))
     }
 
+    pub fn authorize_agent(
+        &self,
+        agent_id: &str,
+        scope: &str,
+        now_unix_ms: i64,
+    ) -> Result<Agent, WorkspaceError> {
+        if !SUPPORTED_AGENT_SCOPES.contains(&scope) {
+            return Err(WorkspaceError::InvalidAgentScope(scope.to_string()));
+        }
+        let agent = self.get_agent(agent_id)?;
+        if agent.scopes.iter().any(|candidate| candidate == scope) {
+            insert_event(
+                &self.connection,
+                &agent.workspace_id,
+                "security",
+                agent_id,
+                "security.scope_authorized",
+                &json!({ "scope": scope }),
+                now_unix_ms,
+            )?;
+            Ok(agent)
+        } else {
+            insert_event(
+                &self.connection,
+                &agent.workspace_id,
+                "security",
+                agent_id,
+                "security.scope_denied",
+                &json!({ "scope": scope }),
+                now_unix_ms,
+            )?;
+            Err(WorkspaceError::AgentScopeDenied {
+                agent_id: agent_id.to_string(),
+                scope: scope.to_string(),
+            })
+        }
+    }
+
     pub fn create_task(
         &mut self,
         agent_id: &str,
@@ -619,6 +745,7 @@ impl WorkspaceStore {
         now_unix_ms: i64,
     ) -> Result<Task, WorkspaceError> {
         let agent = self.get_agent(agent_id)?;
+        self.authorize_agent(agent_id, "llm.prompt", now_unix_ms)?;
         let prompt = prompt.trim();
         if prompt.is_empty() || prompt.chars().count() > MAX_PROMPT_CHARS {
             return Err(WorkspaceError::InvalidPrompt);
@@ -892,16 +1019,64 @@ struct BindingRow {
 }
 
 fn map_agent(row: &rusqlite::Row<'_>) -> rusqlite::Result<Agent> {
+    let scopes_json: String = row.get(5)?;
     Ok(Agent {
         id: row.get(0)?,
         workspace_id: row.get(1)?,
         name: row.get(2)?,
         adapter: row.get(3)?,
         session_id: row.get(4)?,
-        status: row.get(5)?,
-        created_at_unix_ms: row.get(6)?,
-        updated_at_unix_ms: row.get(7)?,
+        scopes: serde_json::from_str(&scopes_json).unwrap_or_else(|_| {
+            DEFAULT_AGENT_SCOPES
+                .iter()
+                .map(|scope| (*scope).to_string())
+                .collect()
+        }),
+        status: row.get(6)?,
+        created_at_unix_ms: row.get(7)?,
+        updated_at_unix_ms: row.get(8)?,
     })
+}
+
+fn normalize_agent_scopes(scopes: Option<Vec<String>>) -> Result<Vec<String>, WorkspaceError> {
+    let candidates = scopes.unwrap_or_else(|| {
+        DEFAULT_AGENT_SCOPES
+            .iter()
+            .map(|scope| (*scope).to_string())
+            .collect()
+    });
+    let mut normalized = Vec::new();
+    for scope in candidates {
+        let scope = scope.trim();
+        if !SUPPORTED_AGENT_SCOPES.contains(&scope) {
+            return Err(WorkspaceError::InvalidAgentScope(scope.to_string()));
+        }
+        if !normalized.iter().any(|candidate| candidate == scope) {
+            normalized.push(scope.to_string());
+        }
+    }
+    if !normalized.iter().any(|scope| scope == "llm.prompt") {
+        return Err(WorkspaceError::AgentScopeDenied {
+            agent_id: "new agent".to_string(),
+            scope: "llm.prompt".to_string(),
+        });
+    }
+    Ok(normalized)
+}
+
+fn table_has_column(
+    connection: &Connection,
+    table: &str,
+    column: &str,
+) -> Result<bool, WorkspaceError> {
+    let mut statement = connection.prepare(&format!("PRAGMA table_info({table})"))?;
+    let names = statement.query_map([], |row| row.get::<_, String>(1))?;
+    for name in names {
+        if name? == column {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn map_task(row: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
@@ -989,6 +1164,7 @@ mod tests {
                 "Operator".to_string(),
                 "llm".to_string(),
                 Some("tab-1".to_string()),
+                None,
                 5,
             )
             .expect("agent should register");
@@ -1023,6 +1199,7 @@ mod tests {
                 "Operator".to_string(),
                 "llm".to_string(),
                 Some("tab-1".to_string()),
+                None,
                 4,
             )
             .unwrap();
@@ -1063,6 +1240,7 @@ mod tests {
                 "Operator".to_string(),
                 "llm".to_string(),
                 None,
+                None,
                 3,
             )
             .unwrap();
@@ -1073,6 +1251,88 @@ mod tests {
         assert_eq!(cancelled.status, "cancelled");
         assert!(store.wait_task(&task.id).unwrap().terminal);
         assert_eq!(store.cancel_task(&task.id, 6).unwrap().status, "cancelled");
+    }
+
+    #[test]
+    fn enforces_agent_scopes_and_workspace_session_isolation() {
+        let mut store = WorkspaceStore::open_in_memory(1).unwrap();
+        store
+            .sync_sessions(vec![session("tab-1", "profile-1")], 2)
+            .unwrap();
+        let first = store.create_workspace("First".to_string(), 3).unwrap();
+        let second = store.create_workspace("Second".to_string(), 3).unwrap();
+        store.bind(&first.id, "tab-1", 4).unwrap();
+
+        assert!(matches!(
+            store.bind(&second.id, "tab-1", 5),
+            Err(WorkspaceError::InvalidSession(_))
+        ));
+
+        let cross_workspace = store.register_agent(
+            &second.id,
+            "Wrong workspace".to_string(),
+            "llm".to_string(),
+            Some("tab-1".to_string()),
+            None,
+            5,
+        );
+        assert!(matches!(
+            cross_workspace,
+            Err(WorkspaceError::InvalidSession(_))
+        ));
+
+        let agent = store
+            .register_agent(
+                &first.id,
+                "Scoped".to_string(),
+                "llm".to_string(),
+                Some("tab-1".to_string()),
+                Some(vec![
+                    "llm.prompt".to_string(),
+                    "command.propose".to_string(),
+                ]),
+                6,
+            )
+            .unwrap();
+        assert!(matches!(
+            store.authorize_agent(&agent.id, "command.execute", 7),
+            Err(WorkspaceError::AgentScopeDenied { .. })
+        ));
+        assert!(store.authorize_agent(&agent.id, "llm.prompt", 8).is_ok());
+    }
+
+    #[test]
+    fn supports_four_agents_across_two_ssh_hosts() {
+        let mut store = WorkspaceStore::open_in_memory(1).unwrap();
+        let first_session = session("tab-1", "profile-1");
+        let mut second_session = session("tab-2", "profile-2");
+        second_session.host = Some("second.example.test".to_string());
+        store
+            .sync_sessions(vec![first_session, second_session], 2)
+            .unwrap();
+        let workspace = store.create_workspace("Fleet".to_string(), 3).unwrap();
+        store.bind(&workspace.id, "tab-1", 4).unwrap();
+        store.bind(&workspace.id, "tab-2", 4).unwrap();
+
+        for index in 0..4 {
+            let session_id = if index % 2 == 0 { "tab-1" } else { "tab-2" };
+            let agent = store
+                .register_agent(
+                    &workspace.id,
+                    format!("Agent {}", index + 1),
+                    "llm".to_string(),
+                    Some(session_id.to_string()),
+                    None,
+                    5 + index,
+                )
+                .unwrap();
+            store
+                .create_task(&agent.id, "Check host".to_string(), 10 + index)
+                .unwrap();
+        }
+
+        assert_eq!(store.list_agents(&workspace.id).unwrap().len(), 4);
+        assert_eq!(store.list_tasks(&workspace.id).unwrap().len(), 4);
     }
 
     #[test]
@@ -1093,6 +1353,7 @@ mod tests {
                     &workspace.id,
                     "Operator".to_string(),
                     "llm".to_string(),
+                    None,
                     None,
                     3,
                 )

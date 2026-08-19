@@ -17,16 +17,23 @@ export class WorkspaceSettingsTabComponent extends BaseComponent implements OnIn
     agents: any[] = []
     tasks: any[] = []
     events: any[] = []
+    runs: any[] = []
+    cordisHealth: any = null
     runtimeHealth: any = null
     workspaceName = ''
     selectedWorkspaceId = ''
     agentName = ''
     selectedSessionId = ''
     selectedAgentId = ''
+    selectedAgentIds: string[] = []
     agentPrompt = ''
+    multiAgentPrompt = ''
+    agentCanExecute = false
+    taskCommands: Record<string, string> = {}
     loading = false
     detailLoading = false
     prompting = false
+    dispatching = false
     error: string | null = null
 
     constructor (
@@ -67,6 +74,7 @@ export class WorkspaceSettingsTabComponent extends BaseComponent implements OnIn
             this.agents = []
             this.tasks = []
             this.events = []
+            this.runs = []
             this.selectedAgentId = ''
             return
         }
@@ -80,9 +88,14 @@ export class WorkspaceSettingsTabComponent extends BaseComponent implements OnIn
             this.agents = agents
             this.tasks = tasks
             this.events = [...events].reverse()
+            this.runs = this.agentBridge.getWorkspaceRuns(this.selectedWorkspaceId)
+            this.cordisHealth = this.agentBridge.getCordisHealth()
             if (!this.agents.some(agent => agent.id === this.selectedAgentId)) {
                 this.selectedAgentId = this.agents[0]?.id ?? ''
             }
+            this.selectedAgentIds = this.selectedAgentIds.filter(agentId =>
+                this.agents.some(agent => agent.id === agentId),
+            )
         } catch (error) {
             this.error = error instanceof Error ? error.message : String(error)
         } finally {
@@ -146,8 +159,15 @@ export class WorkspaceSettingsTabComponent extends BaseComponent implements OnIn
                 workspaceId: this.selectedWorkspaceId,
                 name,
                 sessionId: this.selectedSessionId || null,
+                scopes: [
+                    'context.read',
+                    'llm.prompt',
+                    'command.propose',
+                    ...(this.agentCanExecute ? ['command.execute'] : []),
+                ],
             })
             this.agentName = ''
+            this.agentCanExecute = false
             this.selectedAgentId = agent.id
             await this.refreshWorkspaceDetails()
             this.notifications.notice('Agent 已注册')
@@ -183,6 +203,73 @@ export class WorkspaceSettingsTabComponent extends BaseComponent implements OnIn
         try {
             await this.agentBridge.cancelWorkspaceTask({ taskId })
             await this.refreshWorkspaceDetails()
+        } catch (error) {
+            this.error = error instanceof Error ? error.message : String(error)
+        }
+    }
+
+    isAgentSelected (agentId: string): boolean {
+        return this.selectedAgentIds.includes(agentId)
+    }
+
+    toggleAgentSelection (agentId: string): void {
+        this.selectedAgentIds = this.isAgentSelected(agentId)
+            ? this.selectedAgentIds.filter(id => id !== agentId)
+            : [...this.selectedAgentIds, agentId]
+    }
+
+    async dispatchAgents (): Promise<void> {
+        const prompt = this.multiAgentPrompt.trim()
+        if (!this.selectedWorkspaceId || !this.selectedAgentIds.length || !prompt) {
+            return
+        }
+        this.dispatching = true
+        this.error = null
+        try {
+            const result = await this.agentBridge.dispatchWorkspaceAgents({
+                workspaceId: this.selectedWorkspaceId,
+                agentIds: this.selectedAgentIds,
+                prompt,
+            })
+            this.multiAgentPrompt = ''
+            await this.refreshWorkspaceDetails()
+            await this.agentBridge.waitWorkspaceRun({ runId: result.run.id, timeoutMs: 60000 })
+            await this.refreshWorkspaceDetails()
+        } catch (error) {
+            this.error = error instanceof Error ? error.message : String(error)
+        } finally {
+            this.dispatching = false
+        }
+    }
+
+    async cancelRun (runId: string): Promise<void> {
+        try {
+            await this.agentBridge.cancelWorkspaceRun({ runId })
+            await this.refreshWorkspaceDetails()
+        } catch (error) {
+            this.error = error instanceof Error ? error.message : String(error)
+        }
+    }
+
+    agentCanRunCommands (agentId: string): boolean {
+        return !!this.agents.find(agent => agent.id === agentId)?.scopes?.includes('command.execute')
+    }
+
+    async runTaskCommand (task: any, execute: boolean): Promise<void> {
+        const command = (this.taskCommands[task.id] ?? '').trim()
+        if (!command) {
+            return
+        }
+        try {
+            const result = await this.agentBridge.runWorkspaceTaskCommand({
+                taskId: task.id,
+                command,
+                execute,
+            })
+            if (!execute) {
+                const danger = result.preview?.dangerous ? `危险：${result.preview.dangerReason ?? '需要确认'}` : '安全检查通过'
+                this.notifications.notice(`命令预览完成：${danger}`)
+            }
         } catch (error) {
             this.error = error instanceof Error ? error.message : String(error)
         }

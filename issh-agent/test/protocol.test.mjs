@@ -8,7 +8,7 @@ import { buildCall, parseAgentArgs } from '../src/cli.mjs'
 
 test('protocol exposes the complete current bridge surface without removed RAG tools', () => {
     const names = AGENT_BRIDGE_TOOLS.map(tool => tool.name)
-    assert.equal(names.length, 30)
+    assert.equal(names.length, 36)
     assert(names.includes('issh_get_output'))
     assert(names.includes('issh_workspace_bind'))
     assert(names.includes('issh_agent_prompt'))
@@ -29,6 +29,10 @@ test('MCP tools contain operation-specific schemas', () => {
     assert.deepEqual(bind.inputSchema.required, ['workspaceId', 'sessionId'])
     const prompt = tools.find(tool => tool.name === 'issh_agent_prompt')
     assert.deepEqual(prompt.inputSchema.required, ['agentId', 'prompt'])
+    const dispatch = tools.find(tool => tool.name === 'issh_agent_dispatch')
+    assert.deepEqual(dispatch.inputSchema.required, ['workspaceId', 'agentIds', 'prompt'])
+    const runCommand = tools.find(tool => tool.name === 'issh_task_run_command')
+    assert.equal(runCommand.inputSchema.properties.execute.default, false)
 })
 
 test('every published tool has a issh service dispatch case', () => {

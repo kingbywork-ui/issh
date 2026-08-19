@@ -17,6 +17,7 @@ import { DangerousCommandGuard } from './dangerousCommandGuard'
 import { normalizeCommand } from './commandValidation'
 import { RuntimeBridgeService } from './runtimeBridge.service'
 import { AgentPromptContext, LLMService } from './llm.service'
+import { CordisOrchestratorService } from './cordisOrchestrator.service'
 import {
     buildCodexDesktopConfigFields,
     CodexDesktopConfigFields,
@@ -125,6 +126,7 @@ export class AgentBridgeService {
         private sensitiveInput: SensitiveInputService,
         private runtime: RuntimeBridgeService,
         private llm: LLMService,
+        private cordis: CordisOrchestratorService,
         private zone: NgZone,
         log: LogService,
     ) {
@@ -836,6 +838,24 @@ export class AgentBridgeService {
                 case 'issh_workspace_events':
                     rpcResponse = { id, result: await this.runtime.call('event.list', normalizedRequest.params ?? {}) }
                     break
+                case 'issh_cordis_health':
+                    rpcResponse = { id, result: this.cordis.health() }
+                    break
+                case 'issh_agent_dispatch':
+                    rpcResponse = { id, result: await this.dispatchWorkspaceAgents(normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_run_wait':
+                    rpcResponse = { id, result: await this.waitWorkspaceRun(normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_run_collect':
+                    rpcResponse = { id, result: await this.collectWorkspaceRun(normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_run_cancel':
+                    rpcResponse = { id, result: await this.cancelWorkspaceRun(normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_task_run_command':
+                    rpcResponse = { id, result: await this.runWorkspaceTaskCommand(normalizedRequest.params ?? {}) }
+                    break
                 case 'issh_list_profiles':
                     rpcResponse = { id, result: await this.listProfiles() }
                     break
@@ -922,6 +942,11 @@ export class AgentBridgeService {
                 issh_task_list: ['workspaceId'],
                 issh_task_cancel: ['taskId'],
                 issh_workspace_events: ['workspaceId'],
+                issh_agent_dispatch: ['workspaceId', 'prompt'],
+                issh_run_wait: ['runId'],
+                issh_run_collect: ['runId'],
+                issh_run_cancel: ['runId'],
+                issh_task_run_command: ['taskId', 'command'],
             }
             for (const name of requiredTextParams[method ?? ''] ?? []) {
                 if (typeof params[name] !== 'string' || !params[name].trim()) {
@@ -1005,6 +1030,7 @@ export class AgentBridgeService {
             name: params.name,
             adapter: 'llm',
             sessionId: params.sessionId ?? null,
+            scopes: params.scopes,
         })
     }
 
@@ -1051,6 +1077,111 @@ export class AgentBridgeService {
         return this.runtime.call('event.list', { workspaceId, afterSequence, limit })
     }
 
+    getCordisHealth (): any {
+        return this.cordis.health()
+    }
+
+    getWorkspaceRuns (workspaceId: string): any[] {
+        return this.cordis.list(workspaceId)
+    }
+
+    async dispatchWorkspaceAgents (params: RpcParams): Promise<any> {
+        const workspaceId = String(params.workspaceId ?? '')
+        const prompt = String(params.prompt ?? '').trim()
+        const agentIds = Array.isArray(params.agentIds)
+            ? [...new Set(params.agentIds.map((id: any) => String(id).trim()).filter(Boolean))]
+            : []
+        if (!agentIds.length || agentIds.length > 16) {
+            throw new Error('agentIds must contain 1-16 unique agents')
+        }
+        if (!prompt || prompt.length > 16000) {
+            throw new Error('prompt must contain 1-16000 characters')
+        }
+
+        const agents = await this.callWorkspaceRuntime('agent.list', { workspaceId }) as any[]
+        for (const agentId of agentIds) {
+            const agent = agents.find(item => item.id === agentId)
+            if (!agent) {
+                throw new Error(`Agent ${agentId} does not belong to Workspace ${workspaceId}`)
+            }
+        }
+        const tasks = await Promise.all(agentIds.map(agentId => this.runtime.call<any>('task.prompt', {
+            agentId,
+            prompt,
+        })))
+        const runId = `run-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`
+        const run = this.cordis.start(
+            runId,
+            workspaceId,
+            tasks.map(task => task.id),
+            async taskId => {
+                const task = tasks.find(candidate => candidate.id === taskId)
+                if (task) {
+                    await this.executeWorkspaceTask(task)
+                }
+            },
+            async taskId => {
+                this.llm.cancelAgentPrompt(taskId)
+                await this.runtime.call('task.cancel', { taskId })
+            },
+        )
+        return { run, tasks }
+    }
+
+    async collectWorkspaceRun (params: RpcParams): Promise<any> {
+        const runId = String(params.runId ?? '')
+        const run = this.cordis.get(runId)
+        if (!run) {
+            throw new Error(`Cordis run not found: ${runId}`)
+        }
+        const tasks = await Promise.all(run.taskIds.map(taskId => this.runtime.call('task.read', { taskId })))
+        return { run, tasks }
+    }
+
+    async waitWorkspaceRun (params: RpcParams): Promise<any> {
+        const timeoutMs = this.getDuration(params.timeoutMs, 60000)
+        const startedAt = Date.now()
+        while (true) {
+            const result = await this.collectWorkspaceRun(params)
+            if (result.run.status !== 'running') {
+                return { ...result, timedOut: false }
+            }
+            if (Date.now() - startedAt >= timeoutMs) {
+                return { ...result, timedOut: true }
+            }
+            await this.sleep(250)
+        }
+    }
+
+    async cancelWorkspaceRun (params: RpcParams): Promise<any> {
+        const run = await this.cordis.cancel(String(params.runId ?? ''))
+        return this.collectWorkspaceRun({ runId: run.id })
+    }
+
+    async runWorkspaceTaskCommand (params: RpcParams): Promise<any> {
+        const task = await this.runtime.call<any>('task.read', { taskId: params.taskId })
+        const agent = await this.runtime.call<any>('agent.authorize', {
+            agentId: task.agentId,
+            scope: 'command.execute',
+        })
+        if (!agent.sessionId) {
+            throw new Error('Agent has no bound terminal session')
+        }
+        const command = String(params.command ?? '').trim()
+        if (!task.output || !task.output.includes(command)) {
+            throw new Error('Command must be present in the persisted task result')
+        }
+        const preview = this.previewCommand({ command })
+        if (params.execute !== true) {
+            return { taskId: task.id, tabId: agent.sessionId, preview, executed: false }
+        }
+        return this.execCommand({
+            tab: agent.sessionId,
+            command,
+            confirmDangerous: true,
+        })
+    }
+
     private async executeWorkspaceTask (task: any): Promise<void> {
         try {
             await this.runtime.call('task.start', { taskId: task.id })
@@ -1064,18 +1195,20 @@ export class AgentBridgeService {
                 taskId: task.id,
                 error: error instanceof Error ? error.message : String(error),
             }).catch(() => {})
+            throw error
         }
     }
 
     private async collectAgentPromptContext (agent: any): Promise<AgentPromptContext | undefined> {
-        if (!agent.sessionId) {
-            return undefined
+        const allowCommandProposals = !!agent.scopes?.includes('command.propose')
+        if (!agent.sessionId || !agent.scopes?.includes('context.read')) {
+            return { allowCommandProposals }
         }
         let entry: RegisteredTab
         try {
             entry = this.resolveTab(agent.sessionId)
         } catch {
-            return undefined
+            return { allowCommandProposals }
         }
         this.assertNotSensitive(entry.tab)
         const context = await this.context.collectContext(entry.tab)
@@ -1087,6 +1220,7 @@ export class AgentBridgeService {
             recentOutput: this.config.store.llm.sendContextToCloud
                 ? this.guard.redactLines(context.recentOutput)
                 : undefined,
+            allowCommandProposals,
         }
     }
 

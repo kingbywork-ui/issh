@@ -8,7 +8,7 @@ import * as path from 'path'
 const MAX_MESSAGE_BYTES = 64 * 1024
 const REQUEST_TIMEOUT_MS = 5000
 const START_ATTEMPTS = 50
-const PROTOCOL_VERSION = '0.3.0'
+const PROTOCOL_VERSION = '0.4.0'
 
 export interface RuntimeRequest {
     jsonrpc: '2.0'

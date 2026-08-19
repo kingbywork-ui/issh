@@ -35,6 +35,7 @@ export interface AgentPromptContext {
     shell?: string | null
     os?: string | null
     recentOutput?: string[]
+    allowCommandProposals?: boolean
 }
 
 /** @hidden */
@@ -159,7 +160,9 @@ export class LLMService {
                             'You are a single issh workspace agent.',
                             'Analyze the user request and terminal context, then return a concise result.',
                             'Do not claim that you executed commands or changed the host.',
-                            'If execution is required, clearly propose commands for the user or a separately authorized tool to run.',
+                            context?.allowCommandProposals
+                                ? 'If execution is required, clearly propose commands for the user or a separately authorized tool to run.'
+                                : 'Do not propose shell commands because this Agent lacks the command.propose scope.',
                         ].join(' '),
                     },
                     {

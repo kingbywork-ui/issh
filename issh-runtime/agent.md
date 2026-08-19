@@ -2,16 +2,19 @@
 
 ## Scope
 
-`issh-runtime` is the Rust migration boundary for issh. The current phase persists Workspace, Session Binding, Agent, Task, and ordered event state behind the versioned local RPC boundary.
+`issh-runtime` is the Rust migration boundary for issh. The current phase persists Workspace, Session Binding, scoped Agent, Task, and ordered audit/event state behind the versioned local RPC boundary while Cordis remains an isolated Node orchestration adapter.
 
 ## Rules
 
 - Keep the runtime independent of Angular, Electron, Cordis, and Herdr implementation details.
-- Keep SSH, PTY, SFTP, Cordis, and Herdr outside the runtime until their scheduled phases.
+- Keep SSH, PTY, SFTP, Cordis implementation details, and Herdr outside the runtime. Rust exposes only generic Agent scope and Task operations.
 - SQLite stores runtime state and event metadata only; secrets remain outside this database.
 - Session snapshots mirror Electron-owned tabs; the Rust runtime must not take terminal input ownership in this phase.
 - Reconnect bindings by stable profile identity when Electron recreates a terminal tab. Do not silently resume interrupted LLM work after Runtime restart.
 - The Phase 3 LLM adapter is advisory only and must not execute shell commands or claim host-side changes.
+- A terminal profile may be bound to only one Workspace. Agents may access only capabilities listed in their persisted scopes.
+- Record scope authorization/denial and cross-Workspace binding denial as ordered security events.
+- `command.execute` never bypasses command normalization or the issh dangerous-command confirmation dialog.
 - Use JSON-RPC 2.0 control messages terminated by a newline.
 - Reject messages larger than 64 KiB.
 - Windows transport must reject remote clients and must not expose a TCP port.

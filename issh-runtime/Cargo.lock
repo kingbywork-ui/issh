@@ -89,7 +89,7 @@ dependencies = [
 
 [[package]]
 name = "issh-runtime-protocol"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -97,7 +97,7 @@ dependencies = [
 
 [[package]]
 name = "issh-runtime-workspace"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "rusqlite",
  "serde",
@@ -106,7 +106,7 @@ dependencies = [
 
 [[package]]
 name = "isshd"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "issh-runtime-protocol",
  "issh-runtime-workspace",

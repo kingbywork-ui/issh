@@ -132,6 +132,14 @@ test('security-sensitive source boundaries remain enabled', () => {
     const bridge = fs.readFileSync(path.join(llmRoot, 'services/agentBridge.service.ts'), 'utf8')
     assert.match(bridge, /AUDIT_LOG_MAX_BYTES/)
     assert.match(bridge, /rotateAuditLogIfNeeded/)
+    assert.match(bridge, /scope: 'command\.execute'/)
+    assert.match(bridge, /task\.output\.includes\(command\)/)
+    assert.match(bridge, /confirmDangerous: true/)
+
+    const cordis = fs.readFileSync(path.join(llmRoot, 'services/cordisOrchestrator.service.ts'), 'utf8')
+    assert.match(cordis, /new Context\(\)/)
+    assert.match(cordis, /runContext\.effect/)
+    assert.match(cordis, /entry\.fiber\.dispose\(\)/)
 
     const winscp = fs.readFileSync(path.join(sshRoot, 'services/ssh.service.ts'), 'utf8')
     assert.doesNotMatch(winscp, /x-tunnelpasswordplain|x-tunnelpassphraseplain|\/passphrase=/)

@@ -13,6 +13,7 @@ h3.mb-3 Agent Workspace
         .llm-section-meta
             .llm-section-title Runtime 状态
             .llm-section-desc(*ngIf='runtimeHealth') 协议 {{ runtimeHealth.protocolVersion }} · Runtime {{ runtimeHealth.runtimeVersion }} · PID {{ runtimeHealth.pid }}
+            .llm-section-desc(*ngIf='cordisHealth') Cordis Fibers {{ cordisHealth.cordisFibers }} · 活跃编排 {{ cordisHealth.activeRuns }}
             .llm-section-desc(*ngIf='!runtimeHealth') 尚未连接
         button.btn.btn-secondary.btn-sm(type='button', (click)='refresh()', [disabled]='loading')
             i.fas.fa-circle-notch.fa-spin.me-1(*ngIf='loading')
@@ -65,20 +66,51 @@ h3.mb-3 Agent Workspace
             .col-md-5
                 select.form-control([(ngModel)]='selectedSessionId')
                     option(value='') 不绑定终端上下文
-                    option(*ngFor='let session of sessions', [value]='session.id') {{ session.title || session.profileName || session.id }}
+                    option(*ngFor='let session of sessions', [value]='session.id', [disabled]='!isBound(session.id)') {{ session.title || session.profileName || session.id }}{{ isBound(session.id) ? '' : '（需先绑定）' }}
             .col-md-2
                 button.btn.btn-primary.btn-block(type='button', (click)='registerAgent()', [disabled]='!agentName.trim() || detailLoading') 注册
+        .form-check.mb-3
+            input.form-check-input(type='checkbox', id='agent-command-execute', [(ngModel)]='agentCanExecute')
+            label.form-check-label(for='agent-command-execute') 允许该 Agent 在用户明确点击后执行结果中的命令
+            small.text-muted.d-block 默认关闭；危险命令无论此权限如何都必须经过 issh 原生确认框。
         .text-muted.mb-3(*ngIf='!agents.length') 当前 Workspace 尚无 Agent。
         .form-group(*ngIf='agents.length')
             label 目标 Agent
             select.form-control([(ngModel)]='selectedAgentId')
                 option(*ngFor='let agent of agents', [value]='agent.id') {{ agent.name }} · {{ agent.sessionId ? '已绑定终端' : '无终端上下文' }}
+            small.text-muted.d-block.mt-1(*ngFor='let agent of agents') {{ agent.name }} scopes：{{ agent.scopes.join(', ') }}
         .form-group(*ngIf='agents.length')
             label 任务提示
             textarea.form-control(rows='3', maxlength='16000', placeholder='描述要分析的问题或下一步操作；Agent 只返回建议。', [(ngModel)]='agentPrompt')
         button.btn.btn-primary(type='button', *ngIf='agents.length', (click)='promptAgent()', [disabled]='!agentPrompt.trim() || prompting')
             i.fas.fa-circle-notch.fa-spin.me-1(*ngIf='prompting')
             span {{ prompting ? '等待结果…' : '发起任务' }}
+
+.llm-section(*ngIf='selectedWorkspaceId && agents.length')
+    .llm-section-header
+        .llm-section-icon
+            i.fas.fa-project-diagram
+        .llm-section-meta
+            .llm-section-title Cordis 多 Agent 编排
+            .llm-section-desc 同一 Workspace 内并行调度；取消会 dispose 对应 Fiber 并终止所有未完成任务。
+    .llm-section-body
+        .border-bottom.py-2(*ngFor='let agent of agents')
+            label.mb-0
+                input.me-2(type='checkbox', [checked]='isAgentSelected(agent.id)', (change)='toggleAgentSelection(agent.id)')
+                span {{ agent.name }}
+                small.text-muted.ms-2 {{ agent.sessionId || '无终端上下文' }}
+        .form-group.mt-3
+            label 共享任务提示（已选 {{ selectedAgentIds.length }} 个 Agent）
+            textarea.form-control(rows='3', maxlength='16000', [(ngModel)]='multiAgentPrompt', placeholder='例如：分别检查各自主机的服务状态并给出汇总建议。')
+        button.btn.btn-primary(type='button', (click)='dispatchAgents()', [disabled]='!selectedAgentIds.length || !multiAgentPrompt.trim() || dispatching')
+            i.fas.fa-circle-notch.fa-spin.me-1(*ngIf='dispatching')
+            span {{ dispatching ? '等待编排结果…' : '并行调度' }}
+        .mt-3(*ngIf='runs.length')
+            .d-flex.align-items-center.border-bottom.py-2(*ngFor='let run of runs')
+                .flex-grow-1
+                    strong {{ run.id }}
+                    small.text-muted.d-block {{ run.status }} · {{ run.taskIds.length }} 个任务
+                button.btn.btn-outline-danger.btn-sm(type='button', *ngIf="run.status === 'running'", (click)='cancelRun(run.id)') 取消编排
 
 .llm-section(*ngIf='selectedWorkspaceId')
     .llm-section-header
@@ -97,6 +129,11 @@ h3.mb-3 Agent Workspace
                 button.btn.btn-outline-danger.btn-sm(type='button', *ngIf='!isTaskTerminal(task)', (click)='cancelTask(task.id)') 取消
             pre.mt-2.mb-0.text-wrap(*ngIf='task.output') {{ task.output }}
             .alert.alert-danger.mt-2.mb-0(*ngIf='task.error') {{ task.error }}
+            .input-group.mt-2(*ngIf="task.status === 'completed' && agentCanRunCommands(task.agentId)")
+                input.form-control(type='text', [(ngModel)]='taskCommands[task.id]', placeholder='粘贴结果中建议的完整命令')
+                .input-group-append
+                    button.btn.btn-secondary(type='button', (click)='runTaskCommand(task, false)') 仅预览
+                    button.btn.btn-danger(type='button', (click)='runTaskCommand(task, true)') 明确执行
 
 .llm-section(*ngIf='selectedWorkspaceId')
     .llm-section-header

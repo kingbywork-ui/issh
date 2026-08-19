@@ -1,4 +1,4 @@
-export const AGENT_BRIDGE_PROTOCOL_VERSION = '1.2.0'
+export const AGENT_BRIDGE_PROTOCOL_VERSION = '1.3.0'
 
 const tabProperty = {
     type: 'string',
@@ -109,6 +109,12 @@ export const AGENT_BRIDGE_TOOLS = [
                 workspaceId: { type: 'string', minLength: 1 },
                 name: { type: 'string', minLength: 1, maxLength: 120 },
                 sessionId: { type: 'string', minLength: 1, description: 'Optional open tab id used as terminal context.' },
+                scopes: {
+                    type: 'array',
+                    uniqueItems: true,
+                    items: { enum: ['context.read', 'llm.prompt', 'command.propose', 'command.execute'] },
+                    description: 'Optional least-privilege Agent capability set.',
+                },
             },
             additionalProperties: false,
         },
@@ -196,6 +202,84 @@ export const AGENT_BRIDGE_TOOLS = [
                 workspaceId: { type: 'string', minLength: 1 },
                 afterSequence: { type: 'number', minimum: 0 },
                 limit: { type: 'number', minimum: 1, maximum: 500 },
+            },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_cordis_health',
+        scope: 'read',
+        description: 'Inspect the isolated Cordis orchestration kernel and active Fiber count.',
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    },
+    {
+        name: 'issh_agent_dispatch',
+        scope: 'exec',
+        description: 'Dispatch one prompt concurrently to 1-16 agents in the same Workspace through Cordis.',
+        inputSchema: {
+            type: 'object',
+            required: ['workspaceId', 'agentIds', 'prompt'],
+            properties: {
+                workspaceId: { type: 'string', minLength: 1 },
+                agentIds: {
+                    type: 'array',
+                    minItems: 1,
+                    maxItems: 16,
+                    uniqueItems: true,
+                    items: { type: 'string', minLength: 1 },
+                },
+                prompt: { type: 'string', minLength: 1, maxLength: 16000 },
+            },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_run_wait',
+        scope: 'read',
+        description: 'Wait for a Cordis multi-agent run to complete, fail, cancel, or time out.',
+        inputSchema: {
+            type: 'object',
+            required: ['runId'],
+            properties: {
+                runId: { type: 'string', minLength: 1 },
+                timeoutMs: { type: 'number', minimum: 1, maximum: 3600000 },
+            },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_run_collect',
+        scope: 'read',
+        description: 'Collect the latest persisted task results for a Cordis multi-agent run.',
+        inputSchema: {
+            type: 'object',
+            required: ['runId'],
+            properties: { runId: { type: 'string', minLength: 1 } },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_run_cancel',
+        scope: 'exec',
+        description: 'Dispose a Cordis run Fiber and cancel every unfinished task in the run.',
+        inputSchema: {
+            type: 'object',
+            required: ['runId'],
+            properties: { runId: { type: 'string', minLength: 1 } },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_task_run_command',
+        scope: 'exec',
+        description: 'Preview or explicitly execute a command present in a task result. Requires the Agent command.execute scope; dangerous commands always require an issh user confirmation.',
+        inputSchema: {
+            type: 'object',
+            required: ['taskId', 'command'],
+            properties: {
+                taskId: { type: 'string', minLength: 1 },
+                command: { type: 'string', minLength: 1 },
+                execute: { type: 'boolean', default: false },
             },
             additionalProperties: false,
         },

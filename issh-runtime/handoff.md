@@ -1,5 +1,16 @@
 # issh-runtime Handoff
 
+## Phase 3 - Cordis multi-agent and scoped execution complete
+
+- Bumped Runtime/protocol to `0.4.0` and Agent Bridge protocol to `1.3.0` with 36 MCP tools.
+- Added persisted Agent scopes: `context.read`, `llm.prompt`, `command.propose`, and opt-in `command.execute`. Existing databases migrate to the safe three-scope default.
+- Enforced cross-Workspace isolation: one terminal profile cannot be bound to multiple Workspaces, and an Agent cannot attach to a terminal that is not bound to its Workspace.
+- Added ordered security events for scope authorization/denial and rejected cross-Workspace binding/registration attempts. Existing JSONL Agent Bridge audit continues to cover every external RPC.
+- Added Cordis `4.0.0-rc.8` behind one Angular service boundary. It dispatches one prompt concurrently to 1-16 Agents, exposes health/wait/collect/cancel, and disposes the run Fiber to cancel unfinished Tasks without closing SSH sessions.
+- Added a multi-Agent Workspace UI, per-Agent scopes, run state, and task-result command preview/execute controls. Execution requires `command.execute`, the command must exist in the persisted result, the user must explicitly select execute, and dangerous commands still show the native issh confirmation.
+- Cordis run grouping is process-local by design in this MVP; Rust Tasks, results, recovery state, and ordered events remain durable. Herdr and Rust-owned SSH/PTY/SFTP remain outside this phase.
+- Verification: Rust format, Clippy with warnings denied, 14 Rust tests, debug and Windows x64 release builds, Node Runtime smoke, 22 Agent protocol tests, application/plugin type checks and builds, the full root build, Cordis four-Fiber lifecycle smoke, and the 12-check GUI smoke all passed.
+
 ## Phase 2 - Persistent single-agent workflow complete
 
 - Bumped Runtime/protocol to `0.3.0` and replaced the in-memory Workspace store with SQLite WAL persistence for Workspace, Session Binding, Agent, Task, and ordered Runtime Event records.
