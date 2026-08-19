@@ -72,6 +72,9 @@ win:
   icon: "./build/windows/icon.ico"
   artifactName: issh-${version}-portable-${env.ARCH}.${ext}
   signAndEditExecutable: true
+  extraResources:
+  - from: issh-runtime/target/${env.ISSH_RUNTIME_TARGET}/release/isshd.exe
+    to: issh-runtime/isshd.exe
   signtoolOptions:
     rfc3161TimeStampServer: http://timestamp.sectigo.com
 portable:

@@ -1,11 +1,12 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub const PROTOCOL_VERSION: &str = "0.1.0";
+pub const PROTOCOL_VERSION: &str = "0.2.0";
 pub const MAX_MESSAGE_BYTES: usize = 64 * 1024;
 
 pub const INVALID_REQUEST: i32 = -32600;
 pub const METHOD_NOT_FOUND: i32 = -32601;
+pub const INVALID_PARAMS: i32 = -32602;
 pub const PARSE_ERROR: i32 = -32700;
 pub const MESSAGE_TOO_LARGE: i32 = -32001;
 
@@ -126,7 +127,7 @@ mod tests {
             Value::from(1),
             HealthResult {
                 protocol_version: PROTOCOL_VERSION,
-                runtime_version: "0.1.0",
+                runtime_version: "0.2.0",
                 pid: 42,
                 started_at_unix_ms: 123,
                 capabilities: vec!["runtime.health"],
@@ -135,7 +136,7 @@ mod tests {
         let value = serde_json::to_value(response).expect("response should serialize");
 
         assert_eq!(value["result"]["protocolVersion"], PROTOCOL_VERSION);
-        assert_eq!(value["result"]["runtimeVersion"], "0.1.0");
+        assert_eq!(value["result"]["runtimeVersion"], "0.2.0");
         assert_eq!(value["result"]["startedAtUnixMs"], 123);
     }
 }

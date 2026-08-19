@@ -80,11 +80,80 @@ try {
     }))
     assert.equal(health.jsonrpc, '2.0')
     assert.equal(health.id, 'health')
-    assert.equal(health.result.protocolVersion, '0.1.0')
-    assert.equal(health.result.runtimeVersion, '0.1.0')
+    assert.equal(health.result.protocolVersion, '0.2.0')
+    assert.equal(health.result.runtimeVersion, '0.2.0')
     assert.ok(Number.isInteger(health.result.pid))
     assert.ok(Number.isInteger(health.result.startedAtUnixMs))
-    assert.deepEqual(health.result.capabilities, ['runtime.health'])
+    assert.deepEqual(health.result.capabilities, [
+        'runtime.health',
+        'session.sync',
+        'session.list',
+        'workspace.create',
+        'workspace.list',
+        'workspace.bind',
+        'workspace.unbind',
+    ])
+
+    const synchronized = await request(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'sync',
+        method: 'session.sync',
+        params: {
+            sessions: [{
+                id: 'ssh-tab-1',
+                title: 'production',
+                customTitle: null,
+                active: true,
+                focused: true,
+                profileType: 'ssh',
+                profileName: 'Production',
+                profileId: 'profile-1',
+                host: 'example.test',
+                user: 'operator',
+                port: 22,
+                connected: true,
+            }],
+        },
+    }))
+    assert.deepEqual(synchronized.result, { sessionCount: 1, removedBindings: 0 })
+
+    const sessions = await request(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'sessions',
+        method: 'session.list',
+    }))
+    assert.equal(sessions.result[0].id, 'ssh-tab-1')
+
+    const created = await request(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'create-workspace',
+        method: 'workspace.create',
+        params: { name: 'Operations' },
+    }))
+    assert.equal(created.result.id, 'workspace-1')
+
+    const bound = await request(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'bind-workspace',
+        method: 'workspace.bind',
+        params: { workspaceId: created.result.id, sessionId: 'ssh-tab-1' },
+    }))
+    assert.equal(bound.result.bindings[0].sessionId, 'ssh-tab-1')
+
+    const workspaces = await request(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'workspaces',
+        method: 'workspace.list',
+    }))
+    assert.equal(workspaces.result[0].name, 'Operations')
+
+    const unbound = await request(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'unbind-workspace',
+        method: 'workspace.unbind',
+        params: { workspaceId: created.result.id, sessionId: 'ssh-tab-1' },
+    }))
+    assert.deepEqual(unbound.result.bindings, [])
 
     const invalid = await request('{invalid-json')
     assert.equal(invalid.error.code, -32700)

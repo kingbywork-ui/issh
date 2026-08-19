@@ -1,0 +1,52 @@
+h3.mb-3 Agent Workspace
+
+.alert.alert-info
+    strong Rust Runtime 工作区
+    div 将当前打开的终端会话绑定到 Workspace，供外部 MCP 智能体共享同一组真实 SSH 窗口。会话仍由 issh 管理。
+
+.alert.alert-danger(*ngIf='error') {{ error }}
+
+.llm-section
+    .llm-section-header
+        .llm-section-icon
+            i.fas.fa-heartbeat
+        .llm-section-meta
+            .llm-section-title Runtime 状态
+            .llm-section-desc(*ngIf='runtimeHealth') 协议 {{ runtimeHealth.protocolVersion }} · Runtime {{ runtimeHealth.runtimeVersion }} · PID {{ runtimeHealth.pid }}
+            .llm-section-desc(*ngIf='!runtimeHealth') 尚未连接
+        button.btn.btn-secondary.btn-sm(type='button', (click)='refresh()', [disabled]='loading')
+            i.fas.fa-circle-notch.fa-spin.me-1(*ngIf='loading')
+            i.fas.fa-sync-alt.me-1(*ngIf='!loading')
+            span 刷新
+
+.llm-section
+    .llm-section-header
+        .llm-section-icon
+            i.fas.fa-layer-group
+        .llm-section-meta
+            .llm-section-title Workspace
+            .llm-section-desc 创建协作空间并选择当前要管理的空间。
+    .llm-section-body
+        .d-flex.align-items-center.mb-3
+            input.form-control.me-2(type='text', maxlength='120', placeholder='例如：生产环境巡检', [(ngModel)]='workspaceName', (keydown.enter)='createWorkspace()')
+            button.btn.btn-primary(type='button', (click)='createWorkspace()', [disabled]='!workspaceName.trim()') 创建
+        select.form-control(*ngIf='workspaces.length', [(ngModel)]='selectedWorkspaceId')
+            option(*ngFor='let workspace of workspaces', [value]='workspace.id') {{ workspace.name }}（{{ workspace.bindings.length }} 个会话）
+        .text-muted(*ngIf='!workspaces.length && !loading') 尚无 Workspace。
+
+.llm-section
+    .llm-section-header
+        .llm-section-icon
+            i.fas.fa-terminal
+        .llm-section-meta
+            .llm-section-title 打开的终端会话
+            .llm-section-desc 绑定后，智能体可以通过 Workspace 发现这些会话；点击“聚焦”切回对应 tab。
+    .llm-section-body
+        .text-muted(*ngIf='!sessions.length') 当前没有打开的终端会话。
+        .d-flex.align-items-center.border-bottom.py-2(*ngFor='let session of sessions')
+            input.me-2(type='checkbox', [checked]='isBound(session.id)', [disabled]='!selectedWorkspaceId', (change)='toggleBinding(session.id)')
+            .flex-grow-1
+                .font-weight-bold {{ session.title || session.profileName || session.id }}
+                small.text-muted.d-block {{ session.user || '' }}{{ session.user && session.host ? '@' : '' }}{{ session.host || session.profileType || 'terminal' }} · {{ session.connected ? '已连接' : '未连接' }}
+            span.badge.badge-success.me-2(*ngIf='session.active') 当前
+            button.btn.btn-secondary.btn-sm(type='button', (click)='focusSession(session.id)') 聚焦

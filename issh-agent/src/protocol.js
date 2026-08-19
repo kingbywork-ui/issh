@@ -1,4 +1,4 @@
-export const AGENT_BRIDGE_PROTOCOL_VERSION = '1.0.0'
+export const AGENT_BRIDGE_PROTOCOL_VERSION = '1.1.0'
 
 const tabProperty = {
     type: 'string',
@@ -34,6 +34,67 @@ export const AGENT_BRIDGE_TOOLS = [
         inputSchema: {
             type: 'object',
             properties: {},
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_runtime_health',
+        scope: 'read',
+        description: 'Check the Rust issh Runtime and list the protocol capabilities available to workspace-aware agents.',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_workspace_list',
+        scope: 'read',
+        description: 'List in-memory agent workspaces and their bindings to currently open issh terminal sessions.',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_workspace_create',
+        scope: 'write',
+        description: 'Create an in-memory agent workspace used to group open terminal sessions.',
+        inputSchema: {
+            type: 'object',
+            required: ['name'],
+            properties: {
+                name: { type: 'string', minLength: 1, maxLength: 120, description: 'Workspace display name.' },
+            },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_workspace_bind',
+        scope: 'write',
+        description: 'Bind an open issh terminal session to an agent workspace.',
+        inputSchema: {
+            type: 'object',
+            required: ['workspaceId', 'sessionId'],
+            properties: {
+                workspaceId: { type: 'string', minLength: 1 },
+                sessionId: { type: 'string', minLength: 1, description: 'Tab id returned by issh_list_sessions.' },
+            },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_workspace_unbind',
+        scope: 'write',
+        description: 'Remove an open terminal session binding from an agent workspace.',
+        inputSchema: {
+            type: 'object',
+            required: ['workspaceId', 'sessionId'],
+            properties: {
+                workspaceId: { type: 'string', minLength: 1 },
+                sessionId: { type: 'string', minLength: 1, description: 'Tab id returned by issh_list_sessions.' },
+            },
             additionalProperties: false,
         },
     },

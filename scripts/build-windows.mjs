@@ -123,12 +123,42 @@ function cleanPreviousWinUnpacked () {
     }
 }
 
+function buildRustRuntime (targetArchitecture) {
+    const targets = {
+        x64: 'x86_64-pc-windows-msvc',
+        arm64: 'aarch64-pc-windows-msvc',
+    }
+    const rustTarget = targets[targetArchitecture]
+    if (!rustTarget) {
+        throw new Error(`Rust Runtime does not support Windows architecture: ${targetArchitecture}`)
+    }
+    const repositoryRoot = fileURLToPath(new URL('..', import.meta.url))
+    const manifest = path.join(repositoryRoot, 'issh-runtime', 'Cargo.toml')
+    console.log(`Building Rust Runtime for ${rustTarget}...`)
+    execFileSync(process.env.CARGO || 'cargo', [
+        'build',
+        '--manifest-path', manifest,
+        '--release',
+        '--bin', 'isshd',
+        '--target', rustTarget,
+    ], {
+        cwd: repositoryRoot,
+        stdio: 'inherit',
+    })
+    const executable = path.join(repositoryRoot, 'issh-runtime', 'target', rustTarget, 'release', 'isshd.exe')
+    if (!existsSync(executable)) {
+        throw new Error(`Rust Runtime build did not produce ${executable}`)
+    }
+    process.env.ISSH_RUNTIME_TARGET = rustTarget
+}
+
 const isTag = (process.env.GITHUB_REF || process.env.BUILD_SOURCEBRANCH || '').startsWith('refs/tags/')
 const keypair = process.env.SM_KEYPAIR_ALIAS
 
 process.env.ARCH = process.env.ARCH || process.arch
 configureReleaseTarget(process.platform, process.env.ARCH)
 const electronDist = getLocalElectronDist(process.env.ARCH)
+buildRustRuntime(process.env.ARCH)
 
 console.log('Signing enabled:', !!keypair)
 console.log(electronDist

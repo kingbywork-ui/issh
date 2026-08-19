@@ -80,6 +80,7 @@ For the lowest initial cost there is no separate QA or DevOps role. BA owns acce
 
 - Implement runtime lifecycle, session/binding abstraction, Agent Bridge compatibility, Workspace shell, session listing, binding, and tab focus.
 - Demo an existing SSH tab being listed and bound through the new API without changing its behavior.
+- Status (2026-08-19): implemented on `dev`. Workspace state is intentionally in memory; persistence, Agent/Task objects, Cordis dispatch, and Herdr remain gated to later phases.
 
 ### Weeks 5-6: single-agent workflow
 

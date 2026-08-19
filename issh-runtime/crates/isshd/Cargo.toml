@@ -6,6 +6,8 @@ license.workspace = true
 
 [dependencies]
 issh-runtime-protocol = { path = "../protocol" }
+issh-runtime-workspace = { path = "../workspace" }
+serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 

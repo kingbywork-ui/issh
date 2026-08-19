@@ -10,17 +10,26 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "issh-runtime-protocol"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
 ]
 
 [[package]]
+name = "issh-runtime-workspace"
+version = "0.2.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "isshd"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "issh-runtime-protocol",
+ "issh-runtime-workspace",
+ "serde",
  "serde_json",
  "tokio",
  "windows-sys",

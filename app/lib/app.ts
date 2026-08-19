@@ -11,6 +11,7 @@ import { saveConfig } from './config'
 import { Window, WindowOptions } from './window'
 import { PTYManager } from './pty'
 import { ConfigSyncRendererAction, ConfigSyncServer } from './configSyncServer'
+import { RuntimeManager, RuntimeRequest } from './runtime'
 
 /* eslint-disable block-scoped-var */
 
@@ -35,6 +36,7 @@ export class Application {
     private quitRequested = false
     private configSyncRenderer?: WebContents
     private configSyncRequestID = 0
+    private runtimeManager = new RuntimeManager()
     userPluginsPath: string
 
     // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
@@ -134,6 +136,13 @@ export class Application {
             return configSyncServer.getStatus()
         })
 
+        ipcMain.handle('runtime:request', async (event, request: RuntimeRequest) => {
+            if (!this.isTrustedRenderer(event.sender)) {
+                throw new Error('Rejected IPC sender')
+            }
+            return this.runtimeManager.request(request)
+        })
+
         if (process.platform === 'linux') {
             app.commandLine.appendSwitch('no-sandbox')
             if ((this.configStore.appearance?.opacity || 1) !== 1) {
@@ -164,6 +173,7 @@ export class Application {
 
         app.on('before-quit', () => {
             this.quitRequested = true
+            this.runtimeManager.stop()
         })
 
         app.on('window-all-closed', () => {

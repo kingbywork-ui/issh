@@ -11,13 +11,14 @@ import { TerminalDecorator } from 'issh-terminal'
 
 import { LLMConfigProvider } from './config'
 import { LLMHotkeyProvider } from './hotkeys'
-import { AgentBridgeSettingsTabProvider, LLMSettingsTabProvider, AboutSettingsTabProvider } from './settings'
+import { AgentBridgeSettingsTabProvider, LLMSettingsTabProvider, AboutSettingsTabProvider, WorkspaceSettingsTabProvider } from './settings'
 import { LLMDecorator } from './decorator'
 import { AutocompletePanelComponent } from './components/autocompletePanel.component'
 import { LLMSettingsTabComponent } from './components/llmSettingsTab.component'
 import { AgentBridgeSettingsTabComponent } from './components/agentBridgeSettingsTab.component'
 import { AboutSettingsTabComponent } from './components/aboutSettingsTab.component'
 import { LLMTerminalHostComponent } from './components/llmTerminalHost.component'
+import { WorkspaceSettingsTabComponent } from './components/workspaceSettingsTab.component'
 
 /** @hidden */
 @NgModule({
@@ -33,6 +34,7 @@ import { LLMTerminalHostComponent } from './components/llmTerminalHost.component
         { provide: HotkeyProvider, useClass: LLMHotkeyProvider, multi: true },
         { provide: SettingsTabProvider, useClass: LLMSettingsTabProvider, multi: true },
         { provide: SettingsTabProvider, useClass: AgentBridgeSettingsTabProvider, multi: true },
+        { provide: SettingsTabProvider, useClass: WorkspaceSettingsTabProvider, multi: true },
         { provide: SettingsTabProvider, useClass: AboutSettingsTabProvider, multi: true },
         { provide: TerminalDecorator, useClass: LLMDecorator, multi: true },
     ],
@@ -42,6 +44,7 @@ import { LLMTerminalHostComponent } from './components/llmTerminalHost.component
         AboutSettingsTabComponent,
         LLMSettingsTabComponent,
         LLMTerminalHostComponent,
+        WorkspaceSettingsTabComponent,
     ],
 })
 export default class LLMModule { }

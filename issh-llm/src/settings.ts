@@ -3,6 +3,7 @@ import { SettingsTabProvider } from 'issh-settings'
 import { AgentBridgeSettingsTabComponent } from './components/agentBridgeSettingsTab.component'
 import { LLMSettingsTabComponent } from './components/llmSettingsTab.component'
 import { AboutSettingsTabComponent } from './components/aboutSettingsTab.component'
+import { WorkspaceSettingsTabComponent } from './components/workspaceSettingsTab.component'
 
 /** @hidden */
 @Injectable()
@@ -27,6 +28,19 @@ export class AgentBridgeSettingsTabProvider extends SettingsTabProvider {
 
     getComponentType (): any {
         return AgentBridgeSettingsTabComponent
+    }
+}
+
+/** @hidden */
+@Injectable()
+export class WorkspaceSettingsTabProvider extends SettingsTabProvider {
+    id = 'agent-workspace'
+    icon = 'layer-group'
+    title = 'Agent Workspace'
+    group = 'ai' as const
+
+    getComponentType (): any {
+        return WorkspaceSettingsTabComponent
     }
 }
 

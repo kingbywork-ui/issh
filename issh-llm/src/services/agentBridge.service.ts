@@ -15,6 +15,7 @@ import { TerminalContextService } from './terminalContext.service'
 import { SensitiveInputService } from './sensitiveInput.service'
 import { DangerousCommandGuard } from './dangerousCommandGuard'
 import { normalizeCommand } from './commandValidation'
+import { RuntimeBridgeService } from './runtimeBridge.service'
 import {
     buildCodexDesktopConfigFields,
     CodexDesktopConfigFields,
@@ -121,6 +122,7 @@ export class AgentBridgeService {
         private profiles: ProfilesService,
         private context: TerminalContextService,
         private sensitiveInput: SensitiveInputService,
+        private runtime: RuntimeBridgeService,
         private zone: NgZone,
         log: LogService,
     ) {
@@ -793,6 +795,21 @@ export class AgentBridgeService {
                 case 'issh_list_sessions':
                     rpcResponse = { id, result: this.listSessions() }
                     break
+                case 'issh_runtime_health':
+                    rpcResponse = { id, result: await this.runtime.call('runtime.health') }
+                    break
+                case 'issh_workspace_list':
+                    rpcResponse = { id, result: await this.callWorkspaceRuntime('workspace.list') }
+                    break
+                case 'issh_workspace_create':
+                    rpcResponse = { id, result: await this.callWorkspaceRuntime('workspace.create', normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_workspace_bind':
+                    rpcResponse = { id, result: await this.callWorkspaceRuntime('workspace.bind', normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_workspace_unbind':
+                    rpcResponse = { id, result: await this.callWorkspaceRuntime('workspace.unbind', normalizedRequest.params ?? {}) }
+                    break
                 case 'issh_list_profiles':
                     rpcResponse = { id, result: await this.listProfiles() }
                     break
@@ -867,6 +884,18 @@ export class AgentBridgeService {
             'issh_batch_exec',
         ])
         if (!commandMethods.has(method ?? '')) {
+            const requiredTextParams: Record<string, string[]> = {
+                issh_workspace_create: ['name'],
+                issh_workspace_bind: ['workspaceId', 'sessionId'],
+                issh_workspace_unbind: ['workspaceId', 'sessionId'],
+            }
+            for (const name of requiredTextParams[method ?? ''] ?? []) {
+                if (typeof params[name] !== 'string' || !params[name].trim()) {
+                    const error: any = new Error(`The ${name} argument is required and must be a non-empty string.`)
+                    error.code = 'invalid_params'
+                    throw error
+                }
+            }
             return
         }
         if (typeof params.command !== 'string' || !params.command.trim()) {
@@ -887,7 +916,7 @@ export class AgentBridgeService {
         }
     }
 
-    private listSessions (): any[] {
+    listSessions (): any[] {
         this.syncRegisteredTabs()
         const activeTerminal = this.resolveActiveTerminalTab()
         return [...this.tabs.values()].map(entry => ({
@@ -904,6 +933,41 @@ export class AgentBridgeService {
             port: this.getProfileOption(entry.tab, 'port'),
             connected: this.isConnected(entry.tab),
         }))
+    }
+
+    private async callWorkspaceRuntime (method: string, params?: RpcParams): Promise<any> {
+        const sessions = this.listSessions().map(session => ({
+            ...session,
+            title: String(session.title ?? ''),
+            port: this.normalizeRuntimePort(session.port),
+        }))
+        await this.runtime.call('session.sync', { sessions })
+        return this.runtime.call(method, params)
+    }
+
+    getRuntimeHealth (): Promise<any> {
+        return this.runtime.call('runtime.health')
+    }
+
+    getWorkspaces (): Promise<any[]> {
+        return this.callWorkspaceRuntime('workspace.list')
+    }
+
+    createWorkspace (name: string): Promise<any> {
+        return this.callWorkspaceRuntime('workspace.create', { name })
+    }
+
+    bindWorkspaceSession (workspaceId: string, sessionId: string): Promise<any> {
+        return this.callWorkspaceRuntime('workspace.bind', { workspaceId, sessionId })
+    }
+
+    unbindWorkspaceSession (workspaceId: string, sessionId: string): Promise<any> {
+        return this.callWorkspaceRuntime('workspace.unbind', { workspaceId, sessionId })
+    }
+
+    private normalizeRuntimePort (value: any): number | null {
+        const port = Number(value)
+        return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null
     }
 
     private async listProfiles (): Promise<any[]> {
@@ -969,7 +1033,7 @@ export class AgentBridgeService {
         }
     }
 
-    private selectSession (params: RpcParams): any {
+    selectSession (params: RpcParams): any {
         const entry = this.resolveTab(params.tab)
         const parent = this.app.getParentTab(entry.tab)
         if (parent) {

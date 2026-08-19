@@ -1,10 +1,15 @@
 use issh_runtime_protocol::{
-    HealthResult, RpcError, RpcErrorResponse, RpcRequest, RpcResponse, INVALID_REQUEST,
-    MAX_MESSAGE_BYTES, MESSAGE_TOO_LARGE, METHOD_NOT_FOUND, PARSE_ERROR, PROTOCOL_VERSION,
+    HealthResult, RpcError, RpcErrorResponse, RpcRequest, RpcResponse, INVALID_PARAMS,
+    INVALID_REQUEST, MAX_MESSAGE_BYTES, MESSAGE_TOO_LARGE, METHOD_NOT_FOUND, PARSE_ERROR,
+    PROTOCOL_VERSION,
 };
+use issh_runtime_workspace::{SessionSnapshot, WorkspaceStore};
+use serde::de::DeserializeOwned;
+use serde::Deserialize;
 use serde_json::Value;
 use std::env;
 use std::io;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(windows)]
@@ -16,6 +21,38 @@ const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\issh-runtime-v1";
 struct Options {
     pipe_name: String,
     once: bool,
+}
+
+struct RuntimeState {
+    started_at_unix_ms: u128,
+    workspace: Mutex<WorkspaceStore>,
+}
+
+impl RuntimeState {
+    fn new(started_at_unix_ms: u128) -> Self {
+        Self {
+            started_at_unix_ms,
+            workspace: Mutex::new(WorkspaceStore::default()),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionSyncParams {
+    sessions: Vec<SessionSnapshot>,
+}
+
+#[derive(Deserialize)]
+struct WorkspaceCreateParams {
+    name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceBindingParams {
+    workspace_id: String,
+    session_id: String,
 }
 
 impl Options {
@@ -53,13 +90,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let options =
         Options::parse().map_err(|message| io::Error::new(io::ErrorKind::InvalidInput, message))?;
     let started_at_unix_ms = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
+    let state = Arc::new(RuntimeState::new(started_at_unix_ms));
 
-    run(options, started_at_unix_ms).await?;
+    run(options, state).await?;
     Ok(())
 }
 
 #[cfg(windows)]
-async fn run(options: Options, started_at_unix_ms: u128) -> io::Result<()> {
+async fn run(options: Options, state: Arc<RuntimeState>) -> io::Result<()> {
     use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
 
     fn create_pipe(pipe_name: &str, first: bool) -> io::Result<NamedPipeServer> {
@@ -81,7 +119,7 @@ async fn run(options: Options, started_at_unix_ms: u128) -> io::Result<()> {
         let server = create_pipe(&options.pipe_name, first)?;
         first = false;
         server.connect().await?;
-        handle_client(server, started_at_unix_ms).await?;
+        handle_client(server, &state).await?;
         if options.once {
             return Ok(());
         }
@@ -89,7 +127,7 @@ async fn run(options: Options, started_at_unix_ms: u128) -> io::Result<()> {
 }
 
 #[cfg(not(windows))]
-async fn run(_options: Options, _started_at_unix_ms: u128) -> io::Result<()> {
+async fn run(_options: Options, _state: Arc<RuntimeState>) -> io::Result<()> {
     Err(io::Error::new(
         io::ErrorKind::Unsupported,
         "Phase 0 only implements Windows Named Pipe transport",
@@ -99,7 +137,7 @@ async fn run(_options: Options, _started_at_unix_ms: u128) -> io::Result<()> {
 #[cfg(windows)]
 async fn handle_client(
     mut server: tokio::net::windows::named_pipe::NamedPipeServer,
-    started_at_unix_ms: u128,
+    state: &RuntimeState,
 ) -> io::Result<()> {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -130,7 +168,7 @@ async fn handle_client(
     let response = if oversized {
         serialize_error(Value::Null, MESSAGE_TOO_LARGE, "Message exceeds 64 KiB")
     } else {
-        dispatch(&message, started_at_unix_ms)
+        dispatch(&message, state)
     };
 
     server.write_all(&response).await?;
@@ -139,7 +177,7 @@ async fn handle_client(
     Ok(())
 }
 
-fn dispatch(message: &[u8], started_at_unix_ms: u128) -> Vec<u8> {
+fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
     let request = match serde_json::from_slice::<RpcRequest>(message) {
         Ok(request) => request,
         Err(_) => return serialize_error(Value::Null, PARSE_ERROR, "Invalid JSON"),
@@ -165,13 +203,91 @@ fn dispatch(message: &[u8], started_at_unix_ms: u128) -> Vec<u8> {
                 protocol_version: PROTOCOL_VERSION,
                 runtime_version: env!("CARGO_PKG_VERSION"),
                 pid: std::process::id(),
-                started_at_unix_ms,
-                capabilities: vec!["runtime.health"],
+                started_at_unix_ms: state.started_at_unix_ms,
+                capabilities: vec![
+                    "runtime.health",
+                    "session.sync",
+                    "session.list",
+                    "workspace.create",
+                    "workspace.list",
+                    "workspace.bind",
+                    "workspace.unbind",
+                ],
             },
         ))
         .expect("health response serialization cannot fail"),
+        "session.sync" => {
+            let params = match parse_params::<SessionSyncParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_workspace(state, id, |workspace| {
+                workspace.sync_sessions(params.sessions)
+            })
+        }
+        "session.list" => with_workspace(state, id, |workspace| {
+            Ok::<_, issh_runtime_workspace::WorkspaceError>(workspace.list_sessions())
+        }),
+        "workspace.create" => {
+            let params = match parse_params::<WorkspaceCreateParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_workspace(state, id, |workspace| {
+                workspace.create_workspace(params.name, now_unix_ms())
+            })
+        }
+        "workspace.list" => with_workspace(state, id, |workspace| {
+            Ok::<_, issh_runtime_workspace::WorkspaceError>(workspace.list_workspaces())
+        }),
+        "workspace.bind" => {
+            let params = match parse_params::<WorkspaceBindingParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_workspace(state, id, |workspace| {
+                workspace.bind(&params.workspace_id, &params.session_id, now_unix_ms())
+            })
+        }
+        "workspace.unbind" => {
+            let params = match parse_params::<WorkspaceBindingParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_workspace(state, id, |workspace| {
+                workspace.unbind(&params.workspace_id, &params.session_id)
+            })
+        }
         _ => serialize_error(id, METHOD_NOT_FOUND, "Method not found"),
     }
+}
+
+fn parse_params<T: DeserializeOwned>(params: Option<Value>) -> Result<T, RpcError> {
+    serde_json::from_value(params.unwrap_or_else(|| Value::Object(Default::default())))
+        .map_err(|error| RpcError::new(INVALID_PARAMS, format!("Invalid params: {error}")))
+}
+
+fn with_workspace<T, F>(state: &RuntimeState, id: Value, operation: F) -> Vec<u8>
+where
+    T: serde::Serialize,
+    F: FnOnce(&mut WorkspaceStore) -> Result<T, issh_runtime_workspace::WorkspaceError>,
+{
+    let mut workspace = match state.workspace.lock() {
+        Ok(workspace) => workspace,
+        Err(_) => return serialize_error(id, -32603, "Workspace state is unavailable"),
+    };
+    match operation(&mut workspace) {
+        Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+            .expect("workspace response serialization cannot fail"),
+        Err(error) => serialize_error(id, INVALID_PARAMS, error.to_string()),
+    }
+}
+
+fn now_unix_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 fn serialize_error(id: Value, code: i32, message: impl Into<String>) -> Vec<u8> {
@@ -183,22 +299,29 @@ fn serialize_error(id: Value, code: i32, message: impl Into<String>) -> Vec<u8> 
 mod tests {
     use super::*;
 
+    fn state() -> RuntimeState {
+        RuntimeState::new(123)
+    }
+
     #[test]
     fn dispatches_health() {
         let response = dispatch(
             br#"{"jsonrpc":"2.0","id":"health","method":"runtime.health","params":{}}"#,
-            123,
+            &state(),
         );
         let value: Value = serde_json::from_slice(&response).expect("response should be JSON");
 
         assert_eq!(value["id"], "health");
         assert_eq!(value["result"]["protocolVersion"], PROTOCOL_VERSION);
-        assert_eq!(value["result"]["capabilities"][0], "runtime.health");
+        assert!(value["result"]["capabilities"]
+            .as_array()
+            .expect("capabilities should be an array")
+            .contains(&Value::String("workspace.bind".to_string())));
     }
 
     #[test]
     fn returns_parse_error_for_invalid_json() {
-        let response = dispatch(b"not-json", 123);
+        let response = dispatch(b"not-json", &state());
         let value: Value = serde_json::from_slice(&response).expect("response should be JSON");
         assert_eq!(value["error"]["code"], PARSE_ERROR);
     }
@@ -207,10 +330,35 @@ mod tests {
     fn returns_method_not_found() {
         let response = dispatch(
             br#"{"jsonrpc":"2.0","id":9,"method":"missing.method"}"#,
-            123,
+            &state(),
         );
         let value: Value = serde_json::from_slice(&response).expect("response should be JSON");
         assert_eq!(value["id"], 9);
         assert_eq!(value["error"]["code"], METHOD_NOT_FOUND);
+    }
+
+    #[test]
+    fn syncs_session_and_binds_workspace() {
+        let state = state();
+        let sync = dispatch(
+            br#"{"jsonrpc":"2.0","id":1,"method":"session.sync","params":{"sessions":[{"id":"tab-1","title":"SSH","customTitle":null,"active":true,"focused":true,"profileType":"ssh","profileName":"server","profileId":"profile-1","host":"example.test","user":"developer","port":22,"connected":true}]}}"#,
+            &state,
+        );
+        let sync: Value = serde_json::from_slice(&sync).expect("sync should return JSON");
+        assert_eq!(sync["result"]["sessionCount"], 1);
+
+        let created = dispatch(
+            br#"{"jsonrpc":"2.0","id":2,"method":"workspace.create","params":{"name":"Operations"}}"#,
+            &state,
+        );
+        let created: Value = serde_json::from_slice(&created).expect("create should return JSON");
+        assert_eq!(created["result"]["id"], "workspace-1");
+
+        let bound = dispatch(
+            br#"{"jsonrpc":"2.0","id":3,"method":"workspace.bind","params":{"workspaceId":"workspace-1","sessionId":"tab-1"}}"#,
+            &state,
+        );
+        let bound: Value = serde_json::from_slice(&bound).expect("bind should return JSON");
+        assert_eq!(bound["result"]["bindings"][0]["sessionId"], "tab-1");
     }
 }
