@@ -6,7 +6,8 @@ const __dirname = url.fileURLToPath(new URL('.', import.meta.url))
 
 import { AngularWebpackPlugin } from '@ngtools/webpack'
 import { createEs2015LinkerPlugin } from '@angular/compiler-cli/linker/babel'
-process.env.ISSH_DEV ??= process.env.TABBY_DEV
+import { isDevelopmentBuild } from '../scripts/webpack-env.mjs'
+const isDev = isDevelopmentBuild()
 const linkerPlugin = createEs2015LinkerPlugin({
     linkerJitMode: true,
     fileSystem: {
@@ -27,10 +28,10 @@ export default () => ({
         preload: path.resolve(__dirname, 'src/entry.preload.ts'),
         bundle: path.resolve(__dirname, 'src/entry.ts'),
     },
-    mode: process.env.ISSH_DEV ? 'development' : 'production',
+    mode: isDev ? 'development' : 'production',
     optimization:{
         concatenateModules: false,
-        minimize: false,
+        minimize: !isDev,
     },
     context: __dirname,
     devtool: 'source-map',

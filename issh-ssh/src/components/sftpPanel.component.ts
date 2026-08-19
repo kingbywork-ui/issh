@@ -30,6 +30,8 @@ export class SFTPPanelComponent implements OnDestroy {
     @Output() pathChange = new EventEmitter<string>()
     pathSegments: PathSegment[] = []
     @Input() cwdDetectionAvailable = false
+    @Input() sudoMode = false
+    @Input() sudoPassword: string|null = null
     editingPath: string|null = null
     showFilter = false
     filterText = ''
@@ -69,7 +71,9 @@ export class SFTPPanelComponent implements OnDestroy {
     }
 
     private async initSFTP (): Promise<void> {
-        const sftp = await this.session.openSFTP()
+        const password = this.sudoPassword
+        this.sudoPassword = null
+        const sftp = await this.session.openSFTP(this.sudoMode ? password ?? undefined : undefined)
         if (this.destroyed) {
             await sftp.close()
             return
@@ -85,6 +89,12 @@ export class SFTPPanelComponent implements OnDestroy {
 
     private async handleSFTPClosed (): Promise<void> {
         if (this.destroyed || this.sftpReconnectInProgress) {
+            return
+        }
+        if (this.sudoMode) {
+            this.sftpDisconnected = true
+            this.notifications.error('sudo SFTP 会话已断开，请关闭面板后重新打开并验证密码')
+            this.detectChanges()
             return
         }
         this.sftpReconnectInProgress = true

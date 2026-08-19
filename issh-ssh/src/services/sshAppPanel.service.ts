@@ -10,6 +10,7 @@ import { SSHTabComponent } from '../components/sshTab.component'
 export class SSHAppPanelService implements OnDestroy {
     private tabs = new Set<SSHTabComponent>()
     private sftpRef: ComponentRef<SFTPPanelComponent> | null = null
+    private sftpPanelTab: SSHTabComponent | null = null
     private sendRef: ComponentRef<BatchInputPanelComponent> | null = null
     private activeTab: SSHTabComponent | null = null
     private sendPanelVisible = false
@@ -121,6 +122,11 @@ export class SSHAppPanelService implements OnDestroy {
     private syncPanels (): void {
         const tab = this.activeTab
         if (!tab || !this.tabs.has(tab)) {
+            this.sendPanelVisible = false
+            this.sendPanelTab = null
+            for (const item of this.tabs) {
+                item.sendPanelVisible = false
+            }
             this.appPanel.setPanelVisible('left', false)
             this.destroySftpPanel()
             this.syncSendPanel()
@@ -162,8 +168,7 @@ export class SSHAppPanelService implements OnDestroy {
 
         if (this.sftpRef) {
             const inst = this.sftpRef.instance
-            if (inst.session === tab.sshSession) {
-                inst.path = tab.sftpPath
+            if (this.sftpPanelTab === tab && inst.path === tab.sftpPath && inst.sudoMode === tab.sftpSudoMode) {
                 inst.cwdDetectionAvailable = tab.session?.supportsWorkingDirectory() ?? false
                 return
             }
@@ -174,8 +179,12 @@ export class SSHAppPanelService implements OnDestroy {
             environmentInjector: this.injector,
         })
         const inst = this.sftpRef.instance
+        this.sftpPanelTab = tab
         inst.session = tab.sshSession
         inst.path = tab.sftpPath
+        inst.sudoMode = tab.sftpSudoMode
+        inst.sudoPassword = tab.sftpSudoPassword
+        tab.sftpSudoPassword = null
         inst.cwdDetectionAvailable = tab.session?.supportsWorkingDirectory() ?? false
         this.sftpPanelSubscriptions.add(inst.pathChange.subscribe(path => {
             tab.sftpPath = path
@@ -232,6 +241,7 @@ export class SSHAppPanelService implements OnDestroy {
         this.appRef.detachView(this.sftpRef.hostView)
         this.sftpRef.destroy()
         this.sftpRef = null
+        this.sftpPanelTab = null
     }
 
     private destroySendPanel (): void {

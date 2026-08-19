@@ -23,12 +23,12 @@ div.mt-4
 
     .form-line
         .header
-            .title Gitea 服务地址
-            .description 例如 https://gitea.example.com
+            .title GitHub 服务地址
+            .description 例如 https://github.com
         input.form-control(
             type='text',
-            placeholder='https://gitea.example.com',
-            [(ngModel)]='config.store.about.giteaBaseUrl',
+            placeholder='https://github.com',
+            [(ngModel)]='githubBaseUrl',
             (blur)='config.save()'
         )
 
@@ -39,7 +39,18 @@ div.mt-4
         input.form-control(
             type='text',
             placeholder='owner/repo',
-            [(ngModel)]='config.store.about.giteaRepo',
+            [(ngModel)]='githubRepo',
+            (blur)='config.save()'
+        )
+
+    .form-line
+        .header
+            .title GitHub Token
+            .description 私有仓库必填，公开仓库可留空
+        input.form-control(
+            type='password',
+            placeholder='github_pat_…',
+            [(ngModel)]='config.store.about.githubToken',
             (blur)='config.save()'
         )
 

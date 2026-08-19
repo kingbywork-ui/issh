@@ -678,6 +678,7 @@ export class StartPageComponent extends BaseComponent {
         const targetGroupId = await this.selector.show<string>(
             `选择 "${profile.name}" 的分组`,
             this.getProfileGroupSelectorOptions(profile),
+            true,
         ).catch(() => null)
         if (targetGroupId === null || targetGroupId === (profile.group ?? '')) {
             return
@@ -693,21 +694,29 @@ export class StartPageComponent extends BaseComponent {
         const options: SelectorOption<string>[] = [{
             name: '未分组',
             description: profile.group ? undefined : '当前分组',
+            icon: 'fas fa-inbox',
             result: '',
             weight: 0,
         }]
 
         return options.concat(
-            this.profileGroups
+            this.flattenProfileGroupTree(this.rootGroups)
                 .filter(group => group.editable)
-                .map((group): SelectorOption<string> => ({
+                .map((group, index): SelectorOption<string> => ({
                     name: group.name,
                     description: group.id === profile.group ? '当前分组' : undefined,
+                    icon: 'fas fa-folder',
                     group: this.profilesService.resolveProfileGroupPath(group.parentGroupId ?? '').join(' / '),
                     result: group.id,
-                    weight: 1,
+                    weight: index + 1,
                 })),
         )
+    }
+
+    private flattenProfileGroupTree (groups: PartialProfileGroup<CollapsableProfileGroup>[]): PartialProfileGroup<CollapsableProfileGroup>[] {
+        return groups.reduce<PartialProfileGroup<CollapsableProfileGroup>[]>((result, group) => {
+            return result.concat(group, this.flattenProfileGroupTree(group.children ?? []))
+        }, [])
     }
 
     private async editProfile (profile: PartialProfile<Profile>): Promise<void> {

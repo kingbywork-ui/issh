@@ -49,6 +49,10 @@ export class LLMConfigProvider extends ConfigProvider {
             autocompletePanelOpacity: 20,
         },
         about: {
+            githubBaseUrl: '' as string,
+            githubRepo: '' as string,
+            githubToken: null as string | null,
+            // Legacy keys retained so existing update-source settings can be migrated.
             giteaBaseUrl: '' as string,
             giteaRepo: '' as string,
         },

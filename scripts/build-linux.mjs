@@ -4,10 +4,12 @@ import { build as builder } from 'electron-builder'
 import * as vars from './vars.mjs'
 import { getISSHEnvironmentVariable } from './environment.mjs'
 import { execFileSync } from 'child_process'
+import { configureReleaseTarget } from './release-target.mjs'
 
 const isTag = (process.env.GITHUB_REF || '').startsWith('refs/tags/')
 
 process.env.ARCH = (process.env.ARCH || process.arch) === 'arm' ? 'armv7l' : process.env.ARCH || process.arch
+configureReleaseTarget(process.platform, process.env.ARCH)
 
 if (getISSHEnvironmentVariable('SKIP_PREPACKAGE') !== '1') {
     console.log('Refreshing builtin plugins...')
@@ -19,7 +21,7 @@ if (getISSHEnvironmentVariable('SKIP_PREPACKAGE') !== '1') {
 
 builder({
     dir: true,
-    linux: ['deb', 'tar.gz', 'rpm', 'pacman', 'appimage'],
+    linux: ['tar.gz', 'appimage'],
     armv7l: process.env.ARCH === 'armv7l',
     arm64: process.env.ARCH === 'arm64',
     config: {

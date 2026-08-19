@@ -18,7 +18,7 @@ export class SelectorService {
         private ngbModal: NgbModal,
     ) { }
 
-    show <T> (name: string, options: SelectorOption<T>[]): Promise<T> {
+    show <T> (name: string, options: SelectorOption<T>[], compactTree = false): Promise<T> {
         const modal = this.ngbModal.open(SelectorModalComponent)
         this.current = modal
         modal.result.finally(() => {
@@ -27,6 +27,7 @@ export class SelectorService {
         const instance: SelectorModalComponent<T> = modal.componentInstance
         instance.name = name
         instance.options = options
+        instance.compactTree = compactTree
         return modal.result as Promise<T>
     }
 }

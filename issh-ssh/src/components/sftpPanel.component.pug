@@ -9,7 +9,7 @@
         [(ngModel)]='editingPath'
     )
     .breadcrumb(*ngIf='editingPath === null', (dblclick)='editPath()')
-        a.breadcrumb-item.text-decoration-none((click)='navigate("/")') SFTP
+        a.breadcrumb-item.text-decoration-none((click)='navigate("/")') {{sudoMode ? 'SUDO SFTP' : 'SFTP'}}
         a.breadcrumb-item.text-decoration-none(
             *ngFor='let segment of pathSegments',
             (click)='navigate(segment.path)'
@@ -24,7 +24,7 @@
         .disconnected-message
             i.fas.fa-exclamation-triangle.text-warning
             span SFTP 会话已断开
-            small SSH 连接可能已丢失，请重新连接
+            small {{sudoMode ? '请关闭面板后重新打开并验证密码' : 'SSH 连接可能已丢失，请重新连接'}}
     .list-group.list-group-light(*ngIf='sftp && fileList !== null && !sftpDisconnected')
         .list-group-item.list-group-item-action.d-flex.align-items-center(
             *ngIf='path !== "/"',

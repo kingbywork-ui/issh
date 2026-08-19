@@ -17,6 +17,7 @@ export class SelectorModalComponent<T> {
     @Input() filter = ''
     @Input() name: string
     @Input() selectedIndex = 0
+    @Input() compactTree = false
     hasGroups = false
     @ViewChildren('item') itemChildren: QueryList<ElementRef>
     private preventEdit: boolean
@@ -110,6 +111,10 @@ export class SelectorModalComponent<T> {
             return option.freeInputPattern.replace('%s', this.filter)
         }
         return option.name
+    }
+
+    getOptionDepth (option: SelectorOption<T>): number {
+        return option.group?.split(' / ').filter(Boolean).length ?? 0
     }
 
     selectOption (option: SelectorOption<T>): void {

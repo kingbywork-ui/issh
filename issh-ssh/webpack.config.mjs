@@ -7,4 +7,5 @@ import config from '../webpack.plugin.config.mjs'
 export default () => config({
     name: 'ssh',
     dirname: __dirname,
+    externals: ['ssh2-streams'],
 })

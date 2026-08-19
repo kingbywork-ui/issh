@@ -7,6 +7,7 @@ import { execFileSync, execSync } from 'child_process'
 import { existsSync, readFileSync, renameSync, rmSync } from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
+import { configureReleaseTarget } from './release-target.mjs'
 
 function getExecutableArchitecture (executable) {
     const bytes = readFileSync(executable)
@@ -126,6 +127,7 @@ const isTag = (process.env.GITHUB_REF || process.env.BUILD_SOURCEBRANCH || '').s
 const keypair = process.env.SM_KEYPAIR_ALIAS
 
 process.env.ARCH = process.env.ARCH || process.arch
+configureReleaseTarget(process.platform, process.env.ARCH)
 const electronDist = getLocalElectronDist(process.env.ARCH)
 
 console.log('Signing enabled:', !!keypair)

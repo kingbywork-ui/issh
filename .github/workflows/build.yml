@@ -1,461 +1,350 @@
-name: Package-Build
-on: [push, pull_request]
+name: Build release packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-packages-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+  YARN_VERSION: '1.22.22'
+
 jobs:
-  Lint:
+  preflight:
+    name: Preflight
     runs-on: ubuntu-24.04
-
+    timeout-minutes: 60
+    outputs:
+      version: ${{ steps.app-version.outputs.version }}
     steps:
-    - name: Checkout
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      with:
-        fetch-depth: 0
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
 
-    - name: Installing Node
-      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-      with:
-        node-version: 22
+      - name: Read application version
+        id: app-version
+        run: echo "version=$(node -p "require('./app/package.json').version")" >> "$GITHUB_OUTPUT"
 
-    - name: Install deps
-      run: |
-        sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
-        npm i -g yarn@1.22.22
-        cd app
-        yarn
-        cd ..
-        rm app/node_modules/.yarn-integrity
-        yarn
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
-    - name: Build typings
-      run: yarn run build:typings
+      - name: Cache Yarn packages
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: ~/.cache/yarn
+          key: linux-x64-yarn-${{ hashFiles('yarn.lock', 'app/yarn.lock') }}
+          restore-keys: linux-x64-yarn-
 
-    - name: Lint
-      run: yarn run lint
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev libsecret-1-dev
 
-  macOS-Build:
-    runs-on: macos-15
-    needs: Lint
-    strategy:
-      matrix:
-        include:
-          - arch: x86_64
-            rust_triple: x86_64-apple-darwin
-          - arch: arm64
-            rust_triple: aarch64-apple-darwin
-      fail-fast: false
+      - name: Install dependencies
+        run: |
+          npm install --global yarn@${YARN_VERSION}
+          yarn --frozen-lockfile --ignore-scripts --network-timeout 1000000
+          yarn --cwd app --frozen-lockfile --ignore-scripts --network-timeout 1000000
+          for package in issh-core issh-settings issh-terminal issh-community-color-schemes issh-ssh issh-local issh-electron issh-linkifier issh-auto-sudo-password issh-llm; do
+            yarn --cwd "$package" --pure-lockfile --ignore-scripts --network-timeout 1000000
+          done
+          yarn patch-package
+          yarn --cwd app patch-package
+          yarn --cwd issh-terminal patch-package
 
-    env:
-      ARCH: ${{matrix.arch}}
-      RUST_TARGET_TRIPLE: ${{matrix.rust_triple}}
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          expected="v$(node -p "require('./app/package.json').version")"
+          if [[ "${GITHUB_REF_NAME}" != "${expected}" ]]; then
+            echo "Release tag ${GITHUB_REF_NAME} must match app/package.json (${expected})." >&2
+            exit 1
+          fi
 
-    steps:
-    - name: Checkout
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      with:
-        fetch-depth: 0
+      - name: Type-check built-in plugins
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { spawnSync } from 'node:child_process'
+          import { builtinPlugins } from './scripts/vars.mjs'
+          for (const plugin of builtinPlugins) {
+            const result = spawnSync('npx', ['tsc', '-p', `${plugin}/tsconfig.json`, '--noEmit'], { stdio: 'inherit' })
+            if (result.status !== 0) process.exit(result.status ?? 1)
+          }
+          NODE
 
-    - name: Installing Node
-      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-      with:
-        node-version: 22
+      - name: Type-check Electron app
+        run: |
+          npx tsc -p app/tsconfig.main.json --noEmit
+          npx tsc -p app/tsconfig.json --noEmit
 
-    - run: rustup target add ${{matrix.rust_triple}}
+      - name: Run repository checks
+        run: |
+          yarn run lint
+          yarn run test:issh-agent
+          yarn run test:codex-desktop-config
+          yarn run test:environment-compat
+          yarn run test:migrations
+          yarn run audit:security
+          node scripts/test-webpack-mode.mjs
 
-    - name: Install deps
-      run: |
-        yarn --network-timeout 1000000
-      env:
-        ARCH: ${{matrix.arch}}
+      - name: Full build
+        run: yarn run build
 
-    - name: Webpack
-      run: yarn run build
-
-    - name: Prepackage plugins
-      run: scripts/prepackage-plugins.mjs
-      env:
-        ARCH: ${{matrix.arch}}
-
-    - run: sed -i '' 's/updateInfo = await/\/\/updateInfo = await/g' node_modules/app-builder-lib/out/targets/ArchiveTarget.js
-
-    # Work around electron-builder beta bug
-    - run: ln -s ../../node_modules/electron app/node_modules
-
-    - name: Build and sign packages
-      run: scripts/build-macos.mjs
-      if: github.event_name == 'push' && (github.ref_protected || startsWith(github.ref, 'refs/tags'))
-      env:
-        ARCH: ${{matrix.arch}}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        KEYGEN_TOKEN: ${{ secrets.KEYGEN_TOKEN }}
-        CSC_LINK: ${{ secrets.CSC_LINK }}
-        CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        APPSTORE_USERNAME: ${{ secrets.APPSTORE_USERNAME }}
-        APPSTORE_PASSWORD: ${{ secrets.APPSTORE_PASSWORD }}
-        USE_HARD_LINKS: false
-        # DEBUG: electron-builder,electron-builder:*
-
-    - name: Build packages without signing
-      run: scripts/build-macos.mjs
-      if: "! (github.event_name == 'push' && startsWith(github.ref, 'refs/tags'))"
-      env:
-        ARCH: ${{matrix.arch}}
-        # DEBUG: electron-builder,electron-builder:*
-
-    - name: Upload symbols
-      run: |
-        sudo npm install -g @sentry/cli@3.6.2 --unsafe-perm
-        ./scripts/sentry-upload.mjs
-      env:
-        SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-        SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-        SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
-
-    - name: Package artifacts
-      run: |
-        mkdir artifact-dmg
-        mv dist/*.dmg artifact-dmg/
-        mkdir artifact-zip
-        mv dist/*.zip artifact-zip/
-
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-      name: Upload DMG
-      with:
-        name: macOS .dmg (${{matrix.arch}})
-        path: artifact-dmg
-
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-      name: Upload ZIP
-      with:
-        name: macOS .zip (${{matrix.arch}})
-        path: artifact-zip
-
-  Linux-Build:
-    runs-on: ${{matrix.os}}
-    needs: Lint
-    strategy:
-      matrix:
-        include:
-          - build-arch: x64
-            arch: amd64
-            rust_triple: x86_64-unknown-linux-gnu
-            os: ubuntu-24.04
-          - build-arch: arm64
-            arch: arm64
-            rust_triple: aarch64-unknown-linux-gnu
-            triplet: aarch64-linux-gnu-
-            os: ubuntu-24.04-arm
-          - build-arch: arm
-            arch: armhf
-            rust_triple: arm-unknown-linux-gnueabihf
-            triplet: arm-linux-gnueabihf-
-            os: ubuntu-24.04
-      fail-fast: false
-
-    env:
-      CC: ${{matrix.triplet}}gcc
-      CXX: ${{matrix.triplet}}g++
-      ARCH: ${{matrix.build-arch}}
-      npm_config_arch: ${{matrix.build-arch}}
-      npm_config_target_arch: ${{matrix.build-arch}}
-      RUST_TARGET_TRIPLE: ${{matrix.rust_triple}}
-
-    steps:
-    - name: Checkout
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      with:
-        fetch-depth: 0
-
-    - name: Install Node
-      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-      with:
-        node-version: 22
-
-    - name: Install FPM
-      run: |
-        sudo gem install fpm
-
-    - run: rustup target add ${{matrix.rust_triple}}
-
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install libfontconfig1-dev libarchive-tools zsh crossbuild-essential-${{matrix.arch}}
-
-    - name: Setup tar to run as root
-      run: sudo chmod u+s "$(command -v tar)"
-      if: matrix.build-arch == 'arm'
-
-    - name: Download cached sysroot
-      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
-      id: dl-cached-sysroot
-      if: matrix.build-arch == 'arm'
-      with:
-        key: sysroot-${{matrix.build-arch}}
-        path: /${{matrix.build-arch}}-sysroot
-
-    - name: Setup crossbuild sysroot
-      run: |
-        sudo apt-get update -y && sudo apt-get install debootstrap qemu-user-static binfmt-support -y
-        sudo qemu-debootstrap --include=libfontconfig1-dev,libsecret-1-dev,libnss3,libatk1.0-0,libatk-bridge2.0-0,libgdk-pixbuf2.0-0,libgtk-3-0,libgbm1 --variant=buildd --exclude=snapd --components=main,restricted,universe,multiverse --extractor=dpkg-deb --arch ${{matrix.arch}} bionic /${{matrix.build-arch}}-sysroot/ http://ports.ubuntu.com/ubuntu-ports/
-        sudo find /${{matrix.build-arch}}-sysroot -type l -lname '/*' -exec sh -c 'file="$0"; dir=$(dirname "$file"); target=$(readlink "$0"); prefix=$(dirname "$dir" | sed 's@[^/]*@\.\.@g'); newtarget="$prefix$target"; ln -snf $newtarget $file' {} \; ;
-      if: matrix.build-arch == 'arm' && steps.dl-cached-sysroot.outputs.cache-hit != 'true'
-
-    - name: Setup env to use ${{matrix.build-arch}} sysroot
-      run: |
-        echo "CFLAGS=--sysroot=/${{matrix.build-arch}}-sysroot/" >> $GITHUB_ENV
-        echo "CXXFLAGS=--sysroot=/${{matrix.build-arch}}-sysroot/" >> $GITHUB_ENV
-        echo "LDFLAGS=--sysroot=/${{matrix.build-arch}}-sysroot/" >> $GITHUB_ENV
-
-        [[ ${npm_config_arch} == 'arm' ]] && echo "npm_config_arch=armv7l" >> $GITHUB_ENV
-
-        if [[ ${{matrix.arch}} == 'armhf' ]]; then
-          echo "PKG_CONFIG_PATH=/${{matrix.build-arch}}-sysroot/usr/lib/pkgconfig/:/${{matrix.build-arch}}-sysroot/usr/lib/arm-linux-gnueabihf/pkgconfig/" >> $GITHUB_ENV
-        elif [[ ${{matrix.arch}} == 'arm64' ]]; then
-          echo "PKG_CONFIG_PATH=/${{matrix.build-arch}}-sysroot/usr/lib/pkgconfig/:/${{matrix.build-arch}}-sysroot/usr/lib/aarch64-linux-gnu/pkgconfig/" >> $GITHUB_ENV
-        fi
-      if: matrix.build-arch == 'arm'
-
-    - name: Install npm_modules (native)
-      run: |
-        npm i -g yarn@1.22.22 node-gyp@12.3.0
-        yarn --network-timeout 1000000 --arch=${{matrix.build-arch}} --target-arch=${{matrix.build-arch}}
-
-    - name: Webpack (${{matrix.arch}})
-      run: yarn run build --arch=${{matrix.build-arch}} --target_arch=${{matrix.build-arch}}
-
-    - name: Prepackage plugins (${{matrix.arch}})
-      run: scripts/prepackage-plugins.mjs
-
-    - name: Build packages (${{matrix.arch}})
-      run: scripts/build-linux.mjs
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        KEYGEN_TOKEN: ${{ secrets.KEYGEN_TOKEN }}
-        USE_HARD_LINKS: false
-        USE_SYSTEM_FPM: true
-        # DEBUG: electron-builder,electron-builder:*
-
-    - name: Upload symbols (amd64 only)
-      run: |
-        sudo npm install -g @sentry/cli@3.6.2 --unsafe-perm
-        ./scripts/sentry-upload.mjs
-      if: matrix.build-arch == 'x64'
-      env:
-        SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-        SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-        SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
-
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-      name: Upload AppImage (${{matrix.arch}})
-      with:
-        name: Linux AppImage (${{matrix.arch}})
-        path: dist/*.AppImage
-
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-      name: Upload DEB (${{matrix.arch}})
-      with:
-        name: Linux DEB (${{matrix.arch}})
-        path: dist/*.deb
-
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-      name: Upload RPM (${{matrix.arch}})
-      with:
-        name: Linux RPM (${{matrix.arch}})
-        path: dist/*.rpm
-
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-      name: Upload Pacman Package (${{matrix.arch}})
-      with:
-        name: Linux Pacman (${{matrix.arch}})
-        path: dist/*.pacman
-
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-      name: Upload Linux tarball (${{matrix.arch}})
-      with:
-        name: Linux tarball (${{matrix.arch}})
-        path: dist/*.tar.gz
-
-  Windows-Build:
+  windows:
+    name: Windows ${{ matrix.arch }}
+    needs: preflight
     runs-on: windows-latest
-    needs: Lint
+    timeout-minutes: 120
     strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            rust-target: aarch64-pc-windows-msvc
+            vc-redist: https://aka.ms/vs/17/release/vc_redist.arm64.exe
+            pe-machine: 'AA64'
+    env:
+      ARCH: ${{ matrix.arch }}
+      ISSH_BUILD_VERSION: ${{ needs.preflight.outputs.version }}
+      npm_config_arch: ${{ matrix.arch }}
+      npm_config_target_arch: ${{ matrix.arch }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Yarn, Electron downloads and builder tools
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: |
+            ~\AppData\Local\Yarn\Cache
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: windows-${{ matrix.arch }}-build-cache-${{ hashFiles('yarn.lock', 'app/yarn.lock') }}
+          restore-keys: windows-${{ matrix.arch }}-build-cache-
+
+      - name: Set up Rust target and node-gyp
+        shell: powershell
+        run: |
+          rustup target add "${{ matrix.rust-target }}"
+          npm install --global yarn@${env:YARN_VERSION} node-gyp@12.3.0
+          $globalPrefix = npm prefix -g
+          "npm_config_node_gyp=$globalPrefix\node_modules\node-gyp\bin\node-gyp.js" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Download and verify Visual C++ Redistributable
+        shell: powershell
+        run: |
+          Invoke-WebRequest -Uri '${{ matrix.vc-redist }}' -OutFile build\vc_redist.exe
+          $signature = Get-AuthenticodeSignature build\vc_redist.exe
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Microsoft Corporation') {
+            throw "Visual C++ Redistributable signature validation failed: $($signature.Status)"
+          }
+
+      - name: Install dependencies
+        shell: powershell
+        run: yarn --frozen-lockfile --network-timeout 1000000
+
+      - name: Build source
+        shell: powershell
+        run: yarn run build
+
+      - name: Build unsigned NSIS installer
+        shell: powershell
+        run: node scripts/build-windows.mjs
+
+      - name: Verify Windows package
+        shell: powershell
+        run: |
+          $version = (Get-Content app\package.json -Raw | ConvertFrom-Json).version
+          $installer = Get-Item "dist\issh-$version-setup-${{ matrix.arch }}.exe"
+          if ($installer.Length -le 0) { throw 'Installer is empty' }
+
+          $unpackedExe = Get-ChildItem dist -Directory -Filter '*-unpacked' |
+            ForEach-Object { Join-Path $_.FullName 'issh.exe' } |
+            Where-Object { Test-Path $_ } |
+            Select-Object -First 1
+          if (-not $unpackedExe) { throw 'Packaged issh.exe was not found' }
+          $bytes = [System.IO.File]::ReadAllBytes($unpackedExe)
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+          $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4).ToString('X4')
+          if ($machine -ne '${{ matrix.pe-machine }}') { throw "Unexpected PE machine $machine" }
+
+          $appVersion = ([System.Diagnostics.FileVersionInfo]::GetVersionInfo($unpackedExe)).ProductVersion
+          if ($appVersion -ne "$version.0") { throw "Unexpected packaged application version $appVersion" }
+          $electronVersion = (Get-Content node_modules\electron\package.json -Raw | ConvertFrom-Json).version
+          if ($electronVersion -ne '43.2.0') { throw "Unexpected Electron dependency version $electronVersion" }
+
+          $metadata = Get-Content dist\latest.yml -Raw
+          if ($metadata -notmatch [regex]::Escape($installer.Name)) { throw 'latest.yml does not reference the installer' }
+          if ($metadata -notmatch "version:\s*$([regex]::Escape($version))") { throw 'latest.yml version mismatch' }
+
+          New-Item -ItemType Directory -Path "artifacts\windows-${{ matrix.arch }}" | Out-Null
+          Copy-Item $installer.FullName "artifacts\windows-${{ matrix.arch }}\"
+          Copy-Item dist\latest.yml "artifacts\windows-${{ matrix.arch }}\latest-windows-${{ matrix.arch }}.yml"
+          $hash = (Get-FileHash -Algorithm SHA256 $installer.FullName).Hash.ToLowerInvariant()
+          "$hash  $($installer.Name)" | Set-Content -NoNewline "artifacts\windows-${{ matrix.arch }}\$($installer.Name).sha256"
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: issh-windows-${{ matrix.arch }}
+          path: artifacts/windows-${{ matrix.arch }}/
+          if-no-files-found: error
+          retention-days: 30
+
+  linux:
+    name: Linux ${{ matrix.arch }}
+    if: ${{ false }} # Temporarily disabled while Windows release packaging is prioritized.
+    needs: preflight
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
       matrix:
         include:
           - arch: x64
-            rust_triple: x86_64-pc-windows-msvc
+            runner: ubuntu-24.04
+            rust-target: x86_64-unknown-linux-gnu
+            elf-machine: 'Advanced Micro Devices X86-64'
           - arch: arm64
-            rust_triple: aarch64-pc-windows-msvc
-      fail-fast: false
-
+            runner: ubuntu-24.04-arm
+            rust-target: aarch64-unknown-linux-gnu
+            elf-machine: 'AArch64'
     env:
-      RUST_TARGET_TRIPLE: ${{matrix.rust_triple}}
-      ARCH: ${{matrix.arch}}
-      # Branch name that enables DigiCert signing in PR builds for debugging.
-      # Change this value to match the feature branch you want to test signing on.
-      SIGN_ON_BRANCH: signing-debug
-
+      ARCH: ${{ matrix.arch }}
+      ISSH_BUILD_VERSION: ${{ needs.preflight.outputs.version }}
+      npm_config_arch: ${{ matrix.arch }}
+      npm_config_target_arch: ${{ matrix.arch }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
-    - name: Checkout
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      with:
-        fetch-depth: 0
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
 
-    - name: Add Windows SDK signtool to PATH
-      shell: powershell
-      run: |
-        $x64 = 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64'
-        $arm64 = 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\arm64'
-        $newPath = "$x64;$arm64;$env:PATH"
-        echo "PATH=$newPath" >> $env:GITHUB_ENV
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
-    - name: Decode certificate
-      if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags'))
-      env:
-        SM_CLIENT_CERT_FILE_B64: ${{ secrets.SM_CLIENT_CERT_FILE_B64 }}
-      run: |
-        SM_CLIENT_CERT_FILE=$RUNNER_TEMP/certificate.p12
-        echo "$SM_CLIENT_CERT_FILE_B64" | base64 --decode > $SM_CLIENT_CERT_FILE
-        echo "SM_CLIENT_CERT_FILE=$SM_CLIENT_CERT_FILE" >> "$GITHUB_ENV"
-      shell: bash
+      - name: Cache Yarn, Electron downloads and builder tools
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: |
+            ~/.cache/yarn
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: linux-${{ matrix.arch }}-build-cache-${{ hashFiles('yarn.lock', 'app/yarn.lock') }}
+          restore-keys: linux-${{ matrix.arch }}-build-cache-
 
-    - name: Setup Software Trust Manager
-      if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags'))
-      uses: digicert/code-signing-software-trust-action@cb502242630f8556eb815a4f9c1e8c64d2a2d2a3 # v1.0.0
-      env:
-        SM_HOST: ${{ vars.SM_HOST }}
-        SM_API_KEY: ${{ secrets.SM_API_KEY }}
-        SM_CLIENT_CERT_FILE: ${{ env.SM_CLIENT_CERT_FILE }}
-        SM_CLIENT_CERT_PASSWORD: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfontconfig1-dev libsecret-1-dev libarchive-tools file
+          npm install --global yarn@${YARN_VERSION} node-gyp@12.3.0
+          rustup target add '${{ matrix.rust-target }}'
 
-    - name: smctl diagnostics
-      if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags'))
-      shell: powershell
-      env:
-        SM_LOG_LEVEL: TRACE
-        SM_API_KEY: ${{ secrets.SM_API_KEY }}
-        SM_HOST: ${{ vars.SM_HOST }}
-        SM_KEYPAIR_ALIAS: ${{ vars.SM_KEYPAIR_ALIAS }}
-        SM_CODE_SIGNING_CERT_SHA1_HASH: ${{ vars.SM_CODE_SIGNING_CERT_SHA1_HASH }}
-        SM_CLIENT_CERT_FILE: ${{ env.SM_CLIENT_CERT_FILE }}
-        SM_CLIENT_CERT_PASSWORD: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
-      run: |
-        Write-Host "=== smctl version ==="
-        smctl.exe --version
+      - name: Install dependencies
+        run: yarn --frozen-lockfile --network-timeout 1000000
 
-        Write-Host "=== smctl healthcheck ==="
-        smctl.exe healthcheck
+      - name: Build source
+        run: yarn run build
 
-        Write-Host "=== smctl healthcheck --tools ==="
-        smctl.exe healthcheck --tools
+      - name: Build AppImage and tarball
+        run: node scripts/build-linux.mjs
 
-        Write-Host "=== smctl keypair ls ==="
-        smctl.exe keypair ls
+      - name: Verify Linux packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./app/package.json').version")"
+          appimage="dist/issh-${version}-linux-${{ matrix.arch }}.AppImage"
+          tarball="dist/issh-${version}-linux-${{ matrix.arch }}.tar.gz"
+          test -s "$appimage"
+          test -s "$tarball"
 
-        Write-Host "=== smctl certificate ls ==="
-        smctl.exe certificate ls
+          unpacked_exe="$(find dist -maxdepth 3 -type f -path '*-unpacked/issh' -print -quit)"
+          test -n "$unpacked_exe"
+          readelf -h "$unpacked_exe" | grep -F 'Machine:' | grep -F '${{ matrix.elf-machine }}'
+          test "$(ELECTRON_RUN_AS_NODE=1 "$unpacked_exe" -p 'process.versions.electron')" = '43.2.0'
 
-        Write-Host "=== Windows SDK signtool path(s) ==="
-        Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
+          chmod +x "$appimage"
+          rm -rf squashfs-root
+          "$appimage" --appimage-extract >/dev/null
+          test -x squashfs-root/issh
+          test -f squashfs-root/resources/app.asar
 
-    - name: Installing Node
-      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-      with:
-        node-version: 22
+          tar -tzf "$tarball" > tar-contents.txt
+          grep -E '(^|/)issh$' tar-contents.txt >/dev/null
+          grep -E '(^|/)resources/app\.asar$' tar-contents.txt >/dev/null
 
-    - run: rustup target add ${{matrix.rust_triple}}
+          output="artifacts/linux-${{ matrix.arch }}"
+          mkdir -p "$output"
+          cp "$appimage" "$tarball" "$output/"
+          (
+            cd "$output"
+            for package in *; do
+              sha256sum "$package" > "$package.sha256"
+            done
+          )
+        working-directory: .
 
-    - name: Update node-gyp
-      run: |
-        npm install --global node-gyp@12.3.0
-        npm prefix -g | % {npm config set node_gyp "$_\node_modules\node-gyp\bin\node-gyp.js"}
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: issh-linux-${{ matrix.arch }}
+          path: artifacts/linux-${{ matrix.arch }}/
+          if-no-files-found: error
+          retention-days: 30
 
-    - name: Download Visual C++ Redistributable
-      shell: bash
-      run: |
-        if [ "$ARCH" = "arm64" ]; then
-          curl -sSL -o build/vc_redist.exe "https://aka.ms/vs/17/release/vc_redist.arm64.exe"
-        else
-          curl -sSL -o build/vc_redist.exe "https://aka.ms/vs/17/release/vc_redist.x64.exe"
-        fi
-        ls -la build/vc_redist.exe
-    - name: Verify Visual C++ Redistributable signature
-      shell: powershell
-      run: |
-        $signature = Get-AuthenticodeSignature build/vc_redist.exe
-        if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Microsoft Corporation') {
-          throw "Visual C++ Redistributable signature validation failed: $($signature.Status)"
-        }
-    - name: Build
-      shell: powershell
-      run: |
-        npm i -g yarn@1.22.22 node-gyp@12.3.0
-        yarn --network-timeout 1000000
-        yarn run build
-        node scripts/prepackage-plugins.mjs
-      env:
-        ARCH: ${{matrix.arch}}
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - windows
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: issh-windows-*
+          path: release-assets
+          merge-multiple: true
 
-    - name: Build packages without signing
-      run: node scripts/build-windows.mjs
-      if: "! (github.event_name == 'push' && (startsWith(github.ref, 'refs/tags')))"
-      env:
-        ARCH: ${{matrix.arch}}
-
-    - name: Build and sign packages
-      if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags'))
-      shell: powershell
-      run: |
-        Get-FileHash $env:SM_CLIENT_CERT_FILE -Algorithm MD5
-        smksp_registrar.exe list
-        smctl.exe healthcheck
-        smctl.exe keypair ls
-        smctl windows certsync --keypair-alias $env:SM_KEYPAIR_ALIAS
-        smctl.exe certificate ls
-        C:\Windows\System32\certutil.exe -csp "DigiCert Signing Manager KSP" -key -user
-        smksp_cert_sync.exe
-
-        # not used but necessary for electron-builder to run
-        $env:WIN_CSC_LINK=$env:SM_CLIENT_CERT_FILE
-        $env:WIN_CSC_KEY_PASSWORD=$env:SM_CLIENT_CERT_PASSWORD
-
-        node scripts/build-windows.mjs
-      env:
-        ARCH: ${{matrix.arch}}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        KEYGEN_TOKEN: ${{ secrets.KEYGEN_TOKEN }}
-        SM_CLIENT_CERT_PASSWORD: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
-        SM_PUBLISHER_NAME: ${{ secrets.SM_PUBLISHER_NAME }}
-        SM_API_KEY: ${{ secrets.SM_API_KEY }}
-        SM_HOST: ${{ vars.SM_HOST }}
-        SM_CODE_SIGNING_CERT_SHA1_HASH: ${{ vars.SM_CODE_SIGNING_CERT_SHA1_HASH }}
-        SM_KEYPAIR_ALIAS: ${{ vars.SM_KEYPAIR_ALIAS }}
-        SM_LOG_LEVEL: TRACE
-        # DEBUG: electron-builder,electron-builder:*
-
-    - name: Upload symbols
-      run: |
-        npm install --no-save @sentry/cli@3.6.2
-        node scripts/sentry-upload.mjs
-      env:
-        SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-        SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-        SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
-
-    - name: Package artifacts
-      run: |
-        mkdir artifact-setup
-        mv dist/*-setup-*.exe artifact-setup/
-        mkdir artifact-portable
-        mv dist/*-portable-*.zip artifact-portable/
-
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-      name: Upload installer
-      with:
-        name: Windows installer (${{matrix.arch}})
-        path: artifact-setup
-
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-      name: Upload portable build
-      with:
-        name: Windows portable build (${{matrix.arch}})
-        path: artifact-portable
+      - name: Create release and upload assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t assets < <(find release-assets -maxdepth 1 -type f \( -name '*.exe' -o -name '*.sha256' \) | sort)
+          if [[ ${#assets[@]} -ne 2 ]]; then
+            printf 'Expected 2 Windows arm64 release assets, found %s:\n' "${#assets[@]}" >&2
+            printf '  %s\n' "${assets[@]}" >&2
+            exit 1
+          fi
+          if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" "${assets[@]}" --repo "${GITHUB_REPOSITORY}" --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" "${assets[@]}" --repo "${GITHUB_REPOSITORY}" --verify-tag --generate-notes --title "${GITHUB_REF_NAME}"
+          fi

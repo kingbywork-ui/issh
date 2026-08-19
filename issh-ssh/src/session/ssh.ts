@@ -12,6 +12,7 @@ import { HostKeyPromptModalComponent } from '../components/hostKeyPromptModal.co
 import { PasswordStorageService } from '../services/passwordStorage.service'
 import { SSHKnownHostsService } from '../services/sshKnownHosts.service'
 import { SFTPSession } from './sftp'
+import { SudoSFTPBackend } from './sudoSftp'
 import { SSHAlgorithmType, SSHProfile, AutoPrivateKeyLocator, PortForwardType } from '../api'
 import { ForwardedPort } from './forwards'
 import { X11Socket } from './x11'
@@ -369,9 +370,13 @@ export class SSHSession {
 
     private sftpClosed = false
 
-    async openSFTP (): Promise<SFTPSession> {
+    async openSFTP (sudoPassword?: string): Promise<SFTPSession> {
         if (!(this.ssh instanceof russh.AuthenticatedSSHClient)) {
             throw new Error('Cannot open SFTP session before auth')
+        }
+        if (sudoPassword !== undefined) {
+            const sudoSFTP = await SudoSFTPBackend.connect(this.ssh, sudoPassword)
+            return new SFTPSession(sudoSFTP, this.injector)
         }
         if (!this.sftp || this.sftpClosed) {
             this.sftp = await this.ssh.activateSFTP(await this.ssh.openSessionChannel())

@@ -73,12 +73,12 @@ export class ElectronPlatformService extends PlatformService {
         require('@electron/remote').clipboard.write(content)
     }
 
-    async installPlugin (name: string, version: string): Promise<void> {
-        await this.electron.ipcRenderer.invoke('plugin-manager:install', name, version)
+    async installPlugin (_name: string, _version: string): Promise<void> {
+        throw new Error('Plugin installation is not available in this build')
     }
 
-    async uninstallPlugin (name: string): Promise<void> {
-        await this.electron.ipcRenderer.invoke('plugin-manager:uninstall', name)
+    async uninstallPlugin (_name: string): Promise<void> {
+        throw new Error('Plugin uninstallation is not available in this build')
     }
 
     async isProcessRunning (name: string): Promise<boolean> {

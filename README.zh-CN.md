@@ -1,17 +1,21 @@
-![](docs/readme.png)
+![iSSH 0.1.1 主机管理器](docs/readme.png)
 
 ---
 
-基于 [Tabby](https://tabby.sh)（前身 **Terminus**）的定制分支，专注于 Windows 下的 SSH 与终端工作流。
+基于 [Tabby](https://tabby.sh)（前身 **Terminus**）的定制分支，专注于 Windows 和 Linux 下的 SSH 与终端工作流。
 
-基于 Tabby v1.0.7，针对日常 SSH 管理场景进行了 UI 优化和缺陷修复。
+当前应用版本为 **0.1.1**，针对 Windows 下的日常终端、SSH 主机管理、命令补全与外部 Agent 工作流进行了增强。
+
+> 完整安装、SSH、SFTP、配置同步、保险库、命令补全和 CLI / MCP 操作说明见[中文用户手册](./docs/user-manual/iSSH-使用手册.md)。下列截图均来自 0.1.1 当前构建。
 
 ## 下载
 
-预构建的 Windows 产物（构建后位于 `dist/` 目录）：
+带版本标签的 GitHub Release 会同时提供 x64 和 ARM64 未签名安装包：
 
-- `issh-0.1.0-setup-x64.exe` — NSIS 安装程序
-- `issh-0.1.0-portable-x64.zip` — 便携版压缩包
+- Windows：`issh-<version>-setup-<arch>.exe` NSIS 安装程序。
+- Linux：`issh-<version>-linux-<arch>.AppImage` 和 `.tar.gz` 通用包。
+
+AppImage 首次使用前执行 `chmod +x issh-*.AppImage`，之后即可直接运行；tar.gz 可解压到任意目录并运行其中的 `issh`。每个安装包都附带 `.sha256` 校验文件。开发构建也可从对应的 GitHub Actions 运行页面下载 Artifact。
 
 ## 功能特性
 
@@ -46,6 +50,10 @@
 - 增强的主机管理界面，采用卡片式布局
 - 改进的配置文件设置页，简化配置流程
 
+| 设置总览 | SSH Profile |
+|---|---|
+| ![iSSH 设置总览](docs/user-manual/assets/02-settings.png) | ![SSH Profile 编辑](docs/user-manual/assets/07-ssh-profile.png) |
+
 ### AI 助手（issh-llm）
 
 基于大语言模型的命令自动补全、下一条命令预测和本地 CLI/MCP Agent Bridge，直接内嵌于终端。
@@ -62,7 +70,7 @@
 
 #### 配置
 
-打开 **设置 → AI assistant** 进行配置：
+打开 **设置 → 命令补全** 进行配置：
 
 | 设置项 | 默认值 | 说明 |
 |---|---|---|
@@ -72,7 +80,7 @@
 | 模型 | `gpt-4o-mini` | 聊天补全模型名称 |
 | 补全专用模型 | 空 | 可选快速补全模型；留空时使用主模型 |
 | 补全时关闭思考 | 开 | 对支持的模型发送关闭/最低思考参数 |
-| AI 补全超时（ms） | `1000` | live AI 超时后继续使用本地历史/缓存候选 |
+| AI 补全超时（ms） | `3000` | 连续无响应超时后继续使用本地历史/缓存候选 |
 | 补全防抖（ms） | `600` | 输入时触发 live AI 补全的延迟 |
 | 历史候选上限 | `10` | 历史候选最大展示数量 |
 | 编辑器内 AI 补全 | 关 | 在 vim/nano alternate screen 内启用 AI 文本补全 |
@@ -81,6 +89,7 @@
 | 最大上下文行数 | `20` | AI 请求中包含的最近终端行数 |
 | 确认时执行 | 关 | 接受补全候选后立即回车执行 |
 | 面板水平/垂直偏移 | `32` / `52` | 让补全面板远离光标，减少遮挡 |
+| 面板不透明度 | `20%` | 数值越低越通透；100% 关闭毛玻璃效果 |
 
 输入 API key 后点击 **Test connection** 验证连接。
 
@@ -107,6 +116,8 @@
 
 所有快捷键均可在 **设置 → 快捷键** 中自定义。
 
+![命令补全设置](docs/user-manual/assets/04-autocomplete.png)
+
 #### 工作原理
 
 1. **命令补全**：插件从 xterm.js 缓冲区读取当前部分命令，收集终端上下文（操作系统、shell、工作目录、最近输出），并将历史、登录脚本、AI 预取和 live AI 候选去重排序后展示。
@@ -114,11 +125,13 @@
 3. **隐私**：启用「发送终端上下文到 API」时，最近终端输出会被包含以提升建议质量。敏感模式（API 密钥、令牌、密码、私钥）在发送前就地脱敏。禁用此选项则仅发送命令片段，不附带最近输出。
 4. **Agent Bridge**：可选 CLI/MCP bridge 通过 localhost 暴露 issh 会话给外部 agent，使用 token scope、SFTP 限制、危险命令确认和审计日志保护。
 
+![CLI / MCP 智能体设置](docs/user-manual/assets/03-agent-bridge.png)
+
 ### 安全加固与 Chromium 风险说明
 
 截至 2026-08-02，当前发行版使用 Electron `43.2.0`，内置 Chromium `150.0.7871.129`。官方稳定版尚未提供 Chromium `150.0.7871.219` 对应的 Electron，因此本项目采用补偿性加固；这些措施不能宣称已经移除 Chromium CVE。
 
-- 主窗口 CSP 仅允许本地脚本、打包资源，以及 HTTPS/WSS 和本机回环地址的连接；禁止对象加载和页面嵌入。
+- 主窗口 CSP 仅允许本地脚本和打包资源；网络连接支持 HTTPS/WSS，以及自定义 LLM API 所需的 HTTP 连接；禁止对象加载和页面嵌入。
 - 配置、插件安装/卸载、PTY、窗口控制和新窗口等特权 IPC 只接受应用自有的本地渲染器发送者。
 - Windows 打包启用 ASAR 完整性验证和 `onlyLoadAppFromAsar`；`runAsNode`、`NODE_OPTIONS` 和 CLI 调试参数 Fuse 保持禁用。
 - GPU 加速保留为 **设置 → 窗口 → Hacks → Disable GPU acceleration** 运行时开关，不默认关闭，以避免无必要的性能损失。
@@ -163,6 +176,9 @@ yarn run build
 
 # 构建 Windows 安装包
 node scripts/build-windows.mjs
+
+# 在 Linux 上构建 AppImage 和 tar.gz 通用包
+node scripts/build-linux.mjs
 ```
 
 如果 `prepackage-plugins.mjs` 因原生模块重建失败，可使用跳过标志：

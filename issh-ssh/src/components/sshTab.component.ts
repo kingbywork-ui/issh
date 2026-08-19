@@ -3,8 +3,8 @@ import { marker as _ } from '@biesbjerg/ngx-translate-extract-marker'
 import colors from 'ansi-colors'
 import { Component, Injector, } from '@angular/core'
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
-import { Platform, ProfilesService } from 'issh-core'
-import { BaseTerminalTabComponent, ConnectableTerminalTabComponent } from 'issh-terminal'
+import { Platform, ProfilesService, PromptModalComponent } from 'issh-core'
+import { BaseTerminalTabComponent, ConnectableTerminalTabComponent, XTermFrontend } from 'issh-terminal'
 import { SSHService } from '../services/ssh.service'
 import { KeyboardInteractivePrompt, SSHSession } from '../session/ssh'
 import { SSHPortForwardingModalComponent } from './sshPortForwardingModal.component'
@@ -33,6 +33,10 @@ export class SSHTabComponent extends ConnectableTerminalTabComponent<SSHProfile>
     sftpPanelVisible = false
     sendPanelVisible = false
     sftpPath = '/'
+    sftpSudoMode = false
+    sftpSudoPassword: string|null = null
+    private sudoSftpShellInput = ''
+    private sftpLoginDirectory: string|null = null
     enableToolbar = true
     activeKIPrompt: KeyboardInteractivePrompt|null = null
 
@@ -48,9 +52,7 @@ export class SSHTabComponent extends ConnectableTerminalTabComponent<SSHProfile>
         this.sessionChanged$.subscribe(() => {
             this.activeKIPrompt = null
             if (this.session?.open) {
-                this.sendPanelVisible = true
                 this.sshAppPanel.syncFromTab(this)
-                this.requestTerminalResize()
             }
         })
     }
@@ -104,6 +106,8 @@ export class SSHTabComponent extends ConnectableTerminalTabComponent<SSHProfile>
 
     onSftpPanelClosed (): void {
         this.sftpPanelVisible = false
+        this.sftpSudoMode = false
+        this.sftpSudoPassword = null
         this.sshAppPanel.syncFromTab(this)
         this.requestTerminalResize()
     }
@@ -203,10 +207,15 @@ export class SSHTabComponent extends ConnectableTerminalTabComponent<SSHProfile>
     }
 
     private async initializeSessionMaybeMultiplex (multiplex = true): Promise<void> {
+        this.sftpLoginDirectory = null
         this.sshSession = await this.setupOneSession(this.injector, this.profile, multiplex)
         const session = new SSHShellSession(this.injector, this.sshSession, this.profile)
 
         this.setSession(session)
+        this.sudoSftpShellInput = ''
+        this.attachSessionHandler(session.middleware.outputToSession$, data => {
+            this.handleSudoSFTPShellInput(data)
+        })
         this.attachSessionHandler(session.serviceMessage$, msg => {
             msg = msg.replace(/\n/g, '\r\n      ')
             this.write(`\r${colors.black.bgWhite(' SSH ')} ${msg}\r\n`)
@@ -218,9 +227,7 @@ export class SSHTabComponent extends ConnectableTerminalTabComponent<SSHProfile>
         this.session?.resize(this.size.columns, this.size.rows)
 
         if (this.session?.open) {
-            this.sendPanelVisible = true
             this.sshAppPanel.syncFromTab(this)
-            this.requestTerminalResize()
         }
     }
 
@@ -266,7 +273,42 @@ export class SSHTabComponent extends ConnectableTerminalTabComponent<SSHProfile>
     }
 
     async openSFTP (): Promise<void> {
-        this.sftpPath = await this.session?.getWorkingDirectory() ?? this.sftpPath
+        this.sftpPath = await this.resolveSFTPInitialPath()
+        this.sftpSudoMode = false
+        this.sftpSudoPassword = null
+        const authenticatedAsRoot = this.sshSession?.authUsername === 'root'
+        const rootDirectory = this.sftpPath === '/root' || this.sftpPath.startsWith('/root/')
+        if (rootDirectory && !authenticatedAsRoot) {
+            const response = await this.platform.showMessageBox({
+                type: 'warning',
+                message: this.translate.instant(_('当前 SSH 使用普通用户，但终端位于 root 目录。是否使用 sudo SFTP 模式？')),
+                detail: this.translate.instant(_('sudo SFTP 将验证 sudo/root 密码，并以 root 权限打开当前目录。')),
+                buttons: [
+                    this.translate.instant(_('使用 sudo SFTP')),
+                    this.translate.instant(_('使用普通 SFTP')),
+                    this.translate.instant(_('取消')),
+                ],
+                defaultId: 0,
+                cancelId: 2,
+            })
+            if (response.response === 2) {
+                return
+            }
+            if (response.response === 0) {
+                const modal = this.ngbModal.open(PromptModalComponent)
+                modal.componentInstance.prompt = this.translate.instant(_('请输入 {user}@{host} 的 sudo/root 密码'), {
+                    user: this.sshSession?.authUsername,
+                    host: this.profile.options.host,
+                })
+                modal.componentInstance.password = true
+                const result = await modal.result.catch(() => null)
+                if (!result?.value) {
+                    return
+                }
+                this.sftpSudoMode = true
+                this.sftpSudoPassword = result.value
+            }
+        }
         setTimeout(() => {
             this.sftpPanelVisible = true
             this.sshAppPanel.syncFromTab(this)
@@ -274,8 +316,116 @@ export class SSHTabComponent extends ConnectableTerminalTabComponent<SSHProfile>
         }, 100)
     }
 
+    private async resolveSFTPInitialPath (): Promise<string> {
+        const reportedDirectory = await this.session?.getWorkingDirectory()
+        if (reportedDirectory?.startsWith('/')) {
+            return reportedDirectory
+        }
+
+        const terminalDirectory = this.getWorkingDirectoryFromTerminal()
+        if (terminalDirectory) {
+            if (terminalDirectory === '~' || terminalDirectory.startsWith('~/')) {
+                const home = await this.getSFTPLoginDirectory()
+                if (home) {
+                    return home + terminalDirectory.slice(1)
+                }
+            }
+            return terminalDirectory
+        }
+
+        const loginDirectory = await this.getSFTPLoginDirectory()
+        if (loginDirectory) {
+            return loginDirectory
+        }
+
+        const username = this.sshSession?.authUsername
+        return username === 'root' ? '/root' : username ? `/home/${username}` : '/'
+    }
+
+    private async getSFTPLoginDirectory (): Promise<string|null> {
+        if (!this.sftpLoginDirectory) {
+            const output = await this.sshSession?.runReadonlyCommand('pwd', 2000)
+            this.sftpLoginDirectory = output
+                ?.split(/\r?\n/)
+                .map(line => line.trim())
+                .reverse()
+                .find(line => line.startsWith('/')) ?? null
+        }
+        return this.sftpLoginDirectory
+    }
+
+    private getWorkingDirectoryFromTerminal (): string|null {
+        if (!(this.frontend instanceof XTermFrontend)) {
+            return null
+        }
+        const buffer = this.frontend.xterm.buffer.active
+        const lastRow = buffer.baseY + buffer.cursorY
+        const lines: string[] = []
+        for (let row = Math.max(0, lastRow - 100); row <= lastRow; row++) {
+            lines.push(buffer.getLine(row)?.translateToString(true).trim() ?? '')
+        }
+
+        for (let index = lines.length - 2; index > 0; index--) {
+            const candidate = lines[index]
+            if (candidate.startsWith('/') && /(?:^|[#$>%]\s*)pwd\s*$/.test(lines[index - 1])) {
+                return candidate
+            }
+        }
+
+        const prompt = lines[lines.length - 1] ?? ''
+        const bracketPrompt = /\[[^\]]*\s((?:\/|~)[^\]]*)\][#$]\s*$/.exec(prompt)
+        if (bracketPrompt) {
+            return bracketPrompt[1]
+        }
+        const colonPrompt = /@[^:\s]+:((?:\/|~)[^#$]*?)[#$]\s*$/.exec(prompt)
+        return colonPrompt?.[1]?.trim() ?? null
+    }
+
+    private handleSudoSFTPShellInput (data: Buffer): void {
+        if (!this.sftpPanelVisible || !this.sftpSudoMode || this.alternateScreenActive) {
+            return
+        }
+        for (const char of data.toString('utf8')) {
+            if (char === '\x04') {
+                this.forceCloseSudoSFTP()
+                return
+            }
+            if (char === '\x7f' || char === '\b') {
+                this.sudoSftpShellInput = this.sudoSftpShellInput.slice(0, -1)
+                continue
+            }
+            if (char === '\r' || char === '\n') {
+                const command = this.sudoSftpShellInput.trim()
+                this.sudoSftpShellInput = ''
+                if (/^(?:exit(?:\s+\d+)?|logout)$/.test(command)) {
+                    this.forceCloseSudoSFTP()
+                    return
+                }
+                continue
+            }
+            if (char >= ' ') {
+                this.sudoSftpShellInput += char
+                this.sudoSftpShellInput = this.sudoSftpShellInput.slice(-256)
+            }
+        }
+    }
+
+    private forceCloseSudoSFTP (): void {
+        if (!this.sftpPanelVisible || !this.sftpSudoMode) {
+            return
+        }
+        this.sftpPanelVisible = false
+        this.sftpSudoMode = false
+        this.sftpSudoPassword = null
+        this.sudoSftpShellInput = ''
+        this.sshAppPanel.syncFromTab(this)
+        this.requestTerminalResize()
+        this.notifications.notice(this.translate.instant(_('已退出 root，sudo SFTP 会话已断开')))
+    }
+
     protected isSessionExplicitlyTerminated (): boolean {
         return super.isSessionExplicitlyTerminated() ||
+        this.session?.remoteEOFReceived === true ||
         this.recentInputs.charCodeAt(this.recentInputs.length - 1) === 4 ||
         this.recentInputs.endsWith('exit\r')
     }

@@ -1,7 +1,10 @@
 ---
 appId: org.issh
 productName: issh
-compression: normal
+compression: maximum
+electronLanguages:
+  - en-US
+  - zh-CN
 npmRebuild: false
 protocols:
   - name: issh URL
@@ -19,6 +22,21 @@ files:
 - '!**/node_modules/node-gyp'
 - '!**/node_modules/**/*.d.ts'
 - '!**/node_modules/**/*.map'
+- '!**/*.map'
+- '!**/*.{pdb,obj,iobj,ipdb,tlog,ilk,exp,lib}'
+- '!**/node_modules/npm/**'
+- '!**/node_modules/russh/**'
+- '!**/node_modules/serialport/**'
+- '!**/node_modules/serialport-binding-webserialapi/**'
+- '!**/node_modules/@serialport/**'
+- '!**/node_modules/@napi-rs/cli/**'
+- '!**/node_modules/patch-package/**'
+- '!**/node_modules/node-pty/prebuilds/**'
+- 'node_modules/node-pty/prebuilds/${env.ISSH_NODE_PTY_TARGET}/**'
+- '!**/node_modules/node-pty/build/**'
+- '!**/node_modules/node-pty/third_party/**'
+- '!**/node_modules/node-pty/src/**'
+- '!**/node_modules/node-pty/scripts/**'
 - '!**/node_modules/**/include/node'
 - '!**/node_modules/.bin'
 - '!**/node_modules/*/*/{esm5,fesm5,esm2015,fesm2015,_esm2015,_fesm2015}'
@@ -33,7 +51,12 @@ files:
 - '!**/deps/cpu_features/build'
 extraResources:
 - builtin-plugins
-- extras
+- from: extras
+  to: extras
+  filter:
+  - '**/*'
+  - '!clink/*'
+  - 'clink/clink_${env.ISSH_CLINK_ARCH}.exe'
 - from: issh-agent
   to: issh-agent
   filter:
@@ -43,7 +66,6 @@ extraResources:
 - from: node_modules/math-intrinsics
   to: app.asar.unpacked/node_modules/math-intrinsics
 asarUnpack:
-- 'dist/*.map'
 - node_modules/keytar/build/Release/*.node
 - node_modules/**/*.node
 win:

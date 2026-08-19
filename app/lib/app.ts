@@ -9,7 +9,6 @@ import { Subject, throttleTime } from 'rxjs'
 
 import { saveConfig } from './config'
 import { Window, WindowOptions } from './window'
-import { pluginManager } from './pluginManager'
 import { PTYManager } from './pty'
 import { ConfigSyncRendererAction, ConfigSyncServer } from './configSyncServer'
 
@@ -84,20 +83,6 @@ export class Application {
         debugLog('application-ctor:hotkey-subscription-done')
 
         debugLog('application-ctor:promise-ipc-begin')
-        ipcMain.handle('plugin-manager:install', (event, name, version) => {
-            if (!this.isTrustedRenderer(event.sender)) {
-                throw new Error('Rejected IPC sender')
-            }
-            return pluginManager.install(this.userPluginsPath, name, version)
-        })
-
-        ipcMain.handle('plugin-manager:uninstall', (event, name) => {
-            if (!this.isTrustedRenderer(event.sender)) {
-                throw new Error('Rejected IPC sender')
-            }
-            return pluginManager.uninstall(this.userPluginsPath, name)
-        })
-
         ipcMain.handle('get-default-mac-shell', async event => {
             if (!this.isTrustedRenderer(event.sender)) {
                 throw new Error('Rejected IPC sender')

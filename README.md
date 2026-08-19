@@ -1,17 +1,21 @@
-![](docs/readme.png)
+![iSSH 0.1.1 host manager](docs/readme.png)
 
 ---
 
-issh is a customized fork of [Tabby](https://tabby.sh) (formerly **Terminus**), focused on SSH and terminal workflows for Windows.
+issh is a customized fork of [Tabby](https://tabby.sh) (formerly **Terminus**), focused on SSH and terminal workflows for Windows and Linux.
 
-Based on Tabby v1.0.7, with UI enhancements and bug fixes for daily SSH management.
+The current application version is **0.1.1**, with focused improvements for Windows terminals, SSH host management, command autocomplete, and external agent workflows.
+
+> For complete installation, SSH, SFTP, configuration sync, vault, autocomplete, and CLI/MCP instructions, see the [Chinese user manual](./docs/user-manual/iSSH-使用手册.md). All screenshots below were captured from the current 0.1.1 build.
 
 ## Downloads
 
-Pre-built Windows artifacts (located in `dist/` after building):
+Tagged GitHub releases provide unsigned packages for both x64 and ARM64:
 
-- `issh-0.1.0-setup-x64.exe` — NSIS installer
-- `issh-0.1.0-portable-x64.zip` — portable archive
+- Windows: `issh-<version>-setup-<arch>.exe` NSIS installer.
+- Linux: `issh-<version>-linux-<arch>.AppImage` and `.tar.gz` portable packages.
+
+For AppImage, run `chmod +x issh-*.AppImage` once and then launch it directly. The tarball can be extracted anywhere and started with the included `issh` executable. Every package is accompanied by a `.sha256` checksum. Development builds are also available from the corresponding GitHub Actions run artifacts.
 
 ## Features
 
@@ -46,6 +50,10 @@ Pre-built Windows artifacts (located in `dist/` after building):
 - Enhanced host management interface with card-based layout
 - Improved profile settings tab with streamlined configuration flow
 
+| Settings overview | SSH profile |
+|---|---|
+| ![iSSH settings overview](docs/user-manual/assets/02-settings.png) | ![SSH profile editor](docs/user-manual/assets/07-ssh-profile.png) |
+
 ### AI Assistant (issh-llm)
 
 LLM-powered command autocomplete, next-command prediction, and local CLI/MCP agent bridge, built directly into the terminal.
@@ -62,7 +70,7 @@ LLM-powered command autocomplete, next-command prediction, and local CLI/MCP age
 
 #### Configuration
 
-Open **Settings → AI assistant** to configure:
+Open **Settings → Command autocomplete** to configure:
 
 | Setting | Default | Description |
 |---|---|---|
@@ -72,7 +80,7 @@ Open **Settings → AI assistant** to configure:
 | Model | `gpt-4o-mini` | Model name for chat completions |
 | Autocomplete model | empty | Optional fast model for autocomplete; falls back to Model |
 | Disable thinking for autocomplete | On | Sends provider-specific low/no-reasoning hints when supported |
-| Autocomplete timeout (ms) | `1000` | Live AI timeout; local history/cache remain available |
+| Autocomplete timeout (ms) | `3000` | Falls back to local/cached candidates after continuous inactivity |
 | Autocomplete debounce (ms) | `600` | Delay before triggering live AI autocomplete while typing |
 | History candidate limit | `10` | Maximum history suggestions shown before AI/script candidates |
 | Editor autocomplete | Off | Opt-in AI text completion inside vim/nano alternate screen |
@@ -81,6 +89,7 @@ Open **Settings → AI assistant** to configure:
 | Max context lines | `20` | Number of recent terminal lines included in AI requests |
 | Execute on confirm | Off | Auto-run accepted autocomplete suggestions without pressing Enter |
 | Panel offset X / Y | `32` / `52` | Moves the autocomplete panel away from the cursor |
+| Panel opacity | `20%` | Lower values are more transparent; 100% disables the glass effect |
 
 Click **Test connection** after entering your API key to verify connectivity.
 
@@ -107,6 +116,8 @@ Any provider that implements the OpenAI Chat Completions API (`/chat/completions
 
 All hotkeys are customizable in **Settings → Hotkeys**.
 
+![Command autocomplete settings](docs/user-manual/assets/04-autocomplete.png)
+
 #### How It Works
 
 1. **Autocomplete**: The plugin reads the current partial command from the xterm.js buffer, collects terminal context (OS, shell, working directory, recent output), and merges history, login-script, cached prediction, and live AI candidates with deduplication and ranking.
@@ -114,11 +125,13 @@ All hotkeys are customizable in **Settings → Hotkeys**.
 3. **Privacy**: When "Send terminal context to API" is enabled, recent terminal output is included to improve suggestion quality. Sensitive patterns (API keys, tokens, passwords, private keys) are redacted locally before sending. Disable this option to send only command fragments without recent output.
 4. **Agent Bridge**: The optional CLI/MCP bridge exposes local issh sessions to external agents over localhost using token scopes, SFTP limits, dangerous-command confirmation, and audit logging.
 
+![CLI / MCP Agent settings](docs/user-manual/assets/03-agent-bridge.png)
+
 ### Security Hardening and Chromium Risk
 
 As of 2026-08-02, the current release uses Electron `43.2.0` with Chromium `150.0.7871.129`. No stable Electron release currently ships Chromium `150.0.7871.219`, so this fork uses compensating controls; these controls do not claim to remove Chromium CVEs.
 
-- The main window has a local-page CSP that permits packaged resources plus HTTPS/WSS and loopback connections, while denying object loading and framing.
+- The main window has a local-page CSP that permits packaged resources plus HTTPS/WSS and HTTP connections required by configurable LLM endpoints, while denying object loading and framing.
 - Privileged configuration, plugin, PTY, window-control, and new-window IPC accepts only senders from the app-owned local renderer.
 - Windows packaging enables ASAR integrity validation and `onlyLoadAppFromAsar`; the `runAsNode`, `NODE_OPTIONS`, and CLI-inspect Fuses remain disabled.
 - GPU acceleration remains an operational toggle at **Settings → Window → Hacks → Disable GPU acceleration** rather than a forced default, avoiding an unnecessary performance trade-off.
@@ -163,6 +176,9 @@ yarn run build
 
 # Build Windows installer
 node scripts/build-windows.mjs
+
+# Build Linux AppImage and tar.gz packages (on Linux)
+node scripts/build-linux.mjs
 ```
 
 If `prepackage-plugins.mjs` fails due to native module rebuild issues, use the skip flag:

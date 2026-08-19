@@ -8,7 +8,6 @@ sh.exec(`${sentryCli} releases new ${vars.version}`)
 
 if (process.platform === 'darwin') {
     for (const path of [
-        'app/node_modules/@serialport/bindings/build/Release/bindings.node',
         'app/node_modules/node-pty/build/Release/pty.node',
         'app/node_modules/fontmanager-redux/build/Release/fontmanager.node',
         'app/node_modules/macos-native-processlist/build/Release/native.node',

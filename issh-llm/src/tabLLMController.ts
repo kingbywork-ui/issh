@@ -529,7 +529,6 @@ export class TabLLMController {
         const scriptEnabled = !editorMode && this.isScriptAutocompleteEnabled()
 
         this.updatePanelPosition()
-        this.showAutocomplete = historyEnabled || scriptEnabled || (requestAI && aiEnabled)
         this.aiLoading = false
         if (partialChanged) {
             this.selectedIndex = 0

@@ -3,7 +3,8 @@ import * as path from 'path'
 import wp from 'webpack'
 import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer'
 import { AngularWebpackPlugin } from '@ngtools/webpack'
-process.env.ISSH_DEV ??= process.env.TABBY_DEV
+import { isDevelopmentBuild } from './scripts/webpack-env.mjs'
+const isDev = isDevelopmentBuild()
 
 const bundleAnalyzer = new BundleAnalyzerPlugin({
     analyzerPort: 0,
@@ -33,11 +34,10 @@ export default options => {
         sourceMapOptions.append = '\n//# sourceMappingURL=../../../app.asar.unpacked/assets/webpack/[url]'
     }
 
-    if ((process.platform === 'win32' || process.platform === 'linux') && process.env.ISSH_DEV) {
+    if ((process.platform === 'win32' || process.platform === 'linux') && isDev) {
         devtoolPlugin = wp.EvalSourceMapDevToolPlugin
     }
 
-    const isDev = !!process.env.ISSH_DEV
     const config = {
         target: 'node',
         entry: 'src/index.ts',
@@ -52,14 +52,23 @@ export default options => {
         },
         mode: isDev ? 'development' : 'production',
         optimization:{
-            minimize: false,
+            minimize: !isDev,
         },
         cache: !isDev ? false : {
             type: 'filesystem',
             cacheDirectory: path.resolve(options.dirname, 'node_modules', '.webpack-cache'),
         },
         resolve: {
-            alias: options.alias ?? {},
+            // path-scurry (used by the Electron-side dependency graph) needs
+            // lru-cache v11's named LRUCache export. The app itself keeps the
+            // legacy v6 default export, so resolve this transitive import to
+            // path-scurry's compatible nested copy when it is available.
+            alias: {
+                ...options.alias ?? {},
+                ...(fs.existsSync(path.resolve(options.dirname, '../node_modules/path-scurry/node_modules/lru-cache'))
+                    ? { 'lru-cache': path.resolve(options.dirname, '../node_modules/path-scurry/node_modules/lru-cache') }
+                    : {}),
+            },
             modules: ['.', 'src', 'node_modules', '../app/node_modules', '../node_modules'].map(x => path.join(options.dirname, x)),
             extensions: ['.ts', '.js'],
             mainFields: ['esm2015', 'browser', 'module', 'main'],

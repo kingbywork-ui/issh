@@ -10,6 +10,7 @@ import * as russh from 'russh'
 
 export class SSHShellSession extends BaseSession {
     shell?: russh.Channel
+    remoteEOFReceived = false
     get serviceMessage$ (): Observable<string> { return this.serviceMessage }
     private serviceMessage = new Subject<string>()
     private ssh: SSHSession|null
@@ -59,6 +60,7 @@ export class SSHShellSession extends BaseSession {
 
         this.shell.eof$.subscribe(() => {
             this.logger.info('Shell session ended')
+            this.remoteEOFReceived = true
             if (this.open) {
                 this.destroy()
             }

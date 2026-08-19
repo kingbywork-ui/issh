@@ -4,10 +4,12 @@ import { build as builder } from 'electron-builder'
 import * as vars from './vars.mjs'
 import { getISSHEnvironmentVariable } from './environment.mjs'
 import { execFileSync } from 'child_process'
+import { configureReleaseTarget } from './release-target.mjs'
 
 const isTag = (process.env.GITHUB_REF || '').startsWith('refs/tags/')
 
 process.env.ARCH = process.env.ARCH || process.arch
+configureReleaseTarget(process.platform, process.env.ARCH)
 
 if (process.env.GITHUB_HEAD_REF) {
     delete process.env.CSC_LINK

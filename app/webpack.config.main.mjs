@@ -2,8 +2,9 @@ import * as path from 'path'
 import wp from 'webpack'
 import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer'
 import * as url from 'url'
+import { isDevelopmentBuild } from '../scripts/webpack-env.mjs'
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url))
-process.env.ISSH_DEV ??= process.env.TABBY_DEV
+const isDev = isDevelopmentBuild()
 
 const config = {
     name: 'issh-main',
@@ -11,7 +12,7 @@ const config = {
     entry: {
         main: path.resolve(__dirname, 'lib/index.ts'),
     },
-    mode: process.env.ISSH_DEV ? 'development' : 'production',
+    mode: isDev ? 'development' : 'production',
     context: __dirname,
     devtool: 'source-map',
     output: {
@@ -46,8 +47,6 @@ const config = {
         'any-promise': 'commonjs any-promise',
         'thenify': 'commonjs thenify',
         'thenify-all': 'commonjs thenify-all',
-        npm: 'commonjs npm',
-        'npm/package.json': 'commonjs npm/package.json',
         'node:os': 'commonjs os',
         'node-pty': 'commonjs node-pty',
         path: 'commonjs path',

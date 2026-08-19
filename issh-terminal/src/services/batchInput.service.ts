@@ -57,7 +57,7 @@ export class BatchInputService {
     send (tabs: BaseTerminalTabComponent<any>[], text: string, appendNewline: boolean): number {
         const payload = appendNewline ? `${text}\r` : text
         for (const tab of tabs) {
-            tab.sendInput(payload)
+            tab.sendInput(payload, true)
         }
         return tabs.length
     }

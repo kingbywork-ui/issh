@@ -15,11 +15,47 @@ export interface SFTPFile {
     modified: Date
 }
 
+export interface SFTPBackendMetadata {
+    type: russh.SFTPFileType
+    size: number
+    uid?: number
+    gid?: number
+    permissions?: number
+    atime?: number
+    mtime?: number
+}
+
+export interface SFTPBackendDirectoryEntry {
+    name: string
+    metadata: SFTPBackendMetadata
+}
+
+export interface SFTPBackendFile {
+    read (bytes: number): Promise<Uint8Array>
+    writeAll (data: Uint8Array): Promise<void>
+    flush (): Promise<void>
+    shutdown (): Promise<void>
+}
+
+export interface SFTPBackend {
+    closed$: Observable<void>
+    readDirectory (path: string): Promise<SFTPBackendDirectoryEntry[]>
+    stat (path: string): Promise<SFTPBackendMetadata>
+    readlink (path: string): Promise<string>
+    createDirectory (path: string): Promise<void>
+    rename (source: string, destination: string): Promise<void>
+    chmod (path: string, mode: string|number): Promise<void>
+    removeDirectory (path: string): Promise<void>
+    removeFile (path: string): Promise<void>
+    open (path: string, mode: number): Promise<SFTPBackendFile>
+    close (): Promise<void>
+}
+
 export class SFTPFileHandle {
     position = 0
 
     constructor (
-        private inner: russh.SFTPFile|null,
+        private inner: SFTPBackendFile|null,
     ) { }
 
     async read (): Promise<Uint8Array> {
@@ -57,7 +93,7 @@ export class SFTPSession {
     private closePromise: Promise<void>|null = null
     private closedEmitted = false
 
-    constructor (private sftp: russh.SFTP, injector: Injector, private onClosed?: () => void) {
+    constructor (private sftp: SFTPBackend, injector: Injector, private onClosed?: () => void) {
         this.logger = injector.get(LogService).create('sftp')
         sftp.closed$.subscribe(() => this.emitClosed())
     }
