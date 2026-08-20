@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms'
 import { NgbModule } from '@ng-bootstrap/ng-bootstrap'
 import { ToastrModule } from 'ngx-toastr'
 
-import ISSHCorePlugin, { ConfigProvider, HotkeyProvider } from 'issh-core'
+import ISSHCorePlugin, { ConfigProvider, HotkeyProvider, TabRecoveryProvider } from 'issh-core'
 import { SettingsTabProvider } from 'issh-settings'
 import { TerminalDecorator } from 'issh-terminal'
 
@@ -19,6 +19,8 @@ import { AgentBridgeSettingsTabComponent } from './components/agentBridgeSetting
 import { AboutSettingsTabComponent } from './components/aboutSettingsTab.component'
 import { LLMTerminalHostComponent } from './components/llmTerminalHost.component'
 import { WorkspaceSettingsTabComponent } from './components/workspaceSettingsTab.component'
+import { HerdrPaneTabComponent } from './components/herdrPaneTab.component'
+import { HerdrPaneRecoveryProvider } from './herdrPane.recoveryProvider'
 
 /** @hidden */
 @NgModule({
@@ -37,6 +39,7 @@ import { WorkspaceSettingsTabComponent } from './components/workspaceSettingsTab
         { provide: SettingsTabProvider, useClass: WorkspaceSettingsTabProvider, multi: true },
         { provide: SettingsTabProvider, useClass: AboutSettingsTabProvider, multi: true },
         { provide: TerminalDecorator, useClass: LLMDecorator, multi: true },
+        { provide: TabRecoveryProvider, useClass: HerdrPaneRecoveryProvider, multi: true },
     ],
     declarations: [
         AutocompletePanelComponent,
@@ -45,6 +48,7 @@ import { WorkspaceSettingsTabComponent } from './components/workspaceSettingsTab
         LLMSettingsTabComponent,
         LLMTerminalHostComponent,
         WorkspaceSettingsTabComponent,
+        HerdrPaneTabComponent,
     ],
 })
 export default class LLMModule { }

@@ -33,6 +33,7 @@ The Rust workspace is organized around these boundaries:
 - `bridge-compat`: compatibility for the existing `issh_*` CLI/MCP protocol.
 - `cordis-adapter`: high-level `prompt`, `wait`, `dispatch`, `cancel`, and result collection.
 - `herdr-adapter`: optional Herdr lifecycle, version handshake, workspace mapping, and state synchronization.
+- `pane-proxy`: producer-agnostic native-pane lifecycle, bounded raw-byte events, cursor subscriptions, resize, and exclusive input ownership. It is deliberately separate from SSH/PTY and Herdr transport implementations.
 
 Public runtime operations will grow from the Phase 0 health check into:
 
@@ -43,6 +44,7 @@ workspace.create / list / bind / unbind
 agent.register / prompt / wait / focus / read / report_state
 task.dispatch / cancel
 events.subscribe
+pane.list / open / snapshot / close / subscribe / write / resize
 ```
 
 All execution continues to follow `preview -> confirm -> execute`. Cordis and Herdr receive restricted capabilities, never the primary Agent Bridge token or SSH secrets.
@@ -110,6 +112,16 @@ For the lowest initial cost there is no separate QA or DevOps role. BA owns acce
 - Weeks 13-16: Tauri 2 + Svelte 5 vertical slice using the same RPC and data model.
 - Weeks 17-22: optional Herdr native-pane proxy only if pilot users require it. This includes raw terminal bytes, resize/control characters, input ownership, full-screen apps, and recovery.
 - Electron removal begins only after Rust SSH/PTY/SFTP and Tauri UI reach verified parity.
+
+### Phase 8 implementation status (2026-08-20)
+
+- The native-pane proxy is implemented and verified on `dev` without running a new package build. `issh-runtime-pane` owns the producer-agnostic lifecycle and stream contract: a 2 MiB in-memory output ring, 48 KiB subscription batches, sequence cursors, raw-byte preservation, producer checks, exclusive input ownership, bounded writes, and resize authorization.
+- Electron main now connects to the official Herdr terminal controller (`terminal session control`) for Herdr `0.8.2` / protocol `20`. It decodes ordered NDJSON `terminal.frame` records, preserves ANSI/control/raw bytes, forwards input and resize only after Rust ownership authorization, limits decoded frames to 2 MiB, splits Runtime pushes into 12 KiB chunks that remain below the 64 KiB JSON-RPC limit, and uses a bounded five-attempt reconnect policy.
+- The current compatibility UI opens a Herdr pane as a normal issh xterm tab, including full-screen/alternate-screen control sequences, resize, input, close, tab recovery, and recovered-tab deduplication. Closing the proxy releases Runtime input ownership and clears buffered bytes without terminating the underlying Herdr workspace or SSH session.
+- Runtime and Agent Bridge expose the pane contract through the secured Named Pipe and existing localhost/token/scope boundary. Agent Bridge protocol `1.5.0` provides seven `issh_pane_*` tools; writes require both the existing `write` scope and exclusive pane ownership.
+- A live UAT passed against the official Windows x64 Herdr `0.8.2` binary and an actual local `isshd`: attach, full frame, input, resize, output marker, release, close, and Runtime cleanup all succeeded. Rust format/Clippy/21 tests, both Runtime smokes, 33 Agent/Herdr tests, TypeScript checks, affected bundles, the full repository build, and the 12-check GUI smoke also passed.
+- A separate source-tree GUI UAT now covers the user path through Agent Workspace: connect the per-user Runtime from a fresh profile, create and map a Workspace, open the real Herdr pane in standard xterm, send a command through xterm, receive its marker through Electron pane events, and reopen the same pane without duplicating the tab. This UAT found and fixed a Named Pipe listener gap between consecutive RPCs, first-input ordering during asynchronous pane attachment, and Herdr `report-metadata` success responses with empty stdout.
+- Herdr remains optional and out of process; neither its binary nor terminal bytes are persisted or embedded. Tauri 2/Svelte 5 rendering remains the later Electron-removal gate and is not claimed as part of this compatibility implementation.
 
 ## Acceptance Targets
 

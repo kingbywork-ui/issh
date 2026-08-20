@@ -804,6 +804,49 @@ export class AgentBridgeService {
                 case 'issh_runtime_health':
                     rpcResponse = { id, result: await this.runtime.call('runtime.health') }
                     break
+                case 'issh_pane_list':
+                    rpcResponse = { id, result: await this.runtime.call('pane.list') }
+                    break
+                case 'issh_pane_snapshot':
+                    rpcResponse = { id, result: await this.runtime.call('pane.snapshot', normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_pane_subscribe':
+                    rpcResponse = { id, result: await this.runtime.call('pane.subscribe', normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_pane_claim_input':
+                    rpcResponse = { id, result: await this.runtime.call('pane.claimInput', normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_pane_release_input':
+                    rpcResponse = { id, result: await this.runtime.call('pane.releaseInput', normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_pane_write':
+                    try {
+                        const params: any = normalizedRequest.params ?? {}
+                        rpcResponse = {
+                            id,
+                            result: await this.herdr.writePane(params.paneId, params.ownerId, Buffer.from(params.data)),
+                        }
+                    } catch (error) {
+                        if (!String(error).includes('is not attached')) {
+                            throw error
+                        }
+                        rpcResponse = { id, result: await this.runtime.call('pane.write', normalizedRequest.params ?? {}) }
+                    }
+                    break
+                case 'issh_pane_resize':
+                    try {
+                        const params: any = normalizedRequest.params ?? {}
+                        rpcResponse = {
+                            id,
+                            result: await this.herdr.resizePane(params.paneId, params.actorId, params.columns, params.rows),
+                        }
+                    } catch (error) {
+                        if (!String(error).includes('is not attached')) {
+                            throw error
+                        }
+                        rpcResponse = { id, result: await this.runtime.call('pane.resize', normalizedRequest.params ?? {}) }
+                    }
+                    break
                 case 'issh_workspace_list':
                     rpcResponse = { id, result: await this.callWorkspaceRuntime('workspace.list') }
                     break
@@ -973,10 +1016,24 @@ export class AgentBridgeService {
                 issh_herdr_link: ['workspaceId', 'herdrWorkspaceId'],
                 issh_herdr_unlink: ['workspaceId'],
                 issh_herdr_sync: ['workspaceId'],
+                issh_pane_snapshot: ['paneId'],
+                issh_pane_subscribe: ['paneId'],
+                issh_pane_claim_input: ['paneId', 'ownerId'],
+                issh_pane_release_input: ['paneId', 'ownerId'],
+                issh_pane_write: ['paneId', 'ownerId'],
+                issh_pane_resize: ['paneId', 'actorId'],
             }
             for (const name of requiredTextParams[method ?? ''] ?? []) {
                 if (typeof params[name] !== 'string' || !params[name].trim()) {
                     const error: any = new Error(`The ${name} argument is required and must be a non-empty string.`)
+                    error.code = 'invalid_params'
+                    throw error
+                }
+            }
+            if (method === 'issh_pane_write') {
+                const data = params.data
+                if (!Array.isArray(data) || data.length < 1 || data.length > 65536 || data.some(byte => !Number.isInteger(byte) || byte < 0 || byte > 255)) {
+                    const error: any = new Error('The data argument is required and must be an array of 1-65536 unsigned octets.')
                     error.code = 'invalid_params'
                     throw error
                 }
@@ -1121,6 +1178,10 @@ export class AgentBridgeService {
 
     async getHerdrSnapshot (): Promise<any> {
         return this.herdr.remoteSnapshot(await this.herdr.snapshot())
+    }
+
+    getHerdrPaneDescriptors (snapshot: any, workspaceId?: string | null): any[] {
+        return this.herdr.paneDescriptors(snapshot, workspaceId)
     }
 
     async linkHerdrWorkspace (params: RpcParams): Promise<any> {

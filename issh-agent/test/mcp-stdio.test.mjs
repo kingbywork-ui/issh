@@ -42,11 +42,15 @@ test('stdio MCP uses newline-delimited JSON and exposes current schemas', async 
         params: {},
     })}\n`)
     const listed = JSON.parse(await toolsResponse)
-    assert.equal(listed.result.tools.length, 43)
+    assert.equal(listed.result.tools.length, 50)
     assert(!listed.result.tools.some(tool => tool.name.includes('rag')))
     assert.deepEqual(
         listed.result.tools.find(tool => tool.name === 'issh_sftp_write').inputSchema.required,
         ['path', 'content'],
+    )
+    assert.deepEqual(
+        listed.result.tools.find(tool => tool.name === 'issh_pane_write').inputSchema.required,
+        ['paneId', 'ownerId', 'data'],
     )
 })
 

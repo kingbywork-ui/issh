@@ -1,6 +1,6 @@
 import { loadConnection, rpc } from './client.mjs'
 
-const COMMANDS_WITH_CONTENT = new Set(['preview', 'insert', 'run', 'exec', 'batch-exec', 'sftp-write'])
+const COMMANDS_WITH_CONTENT = new Set(['preview', 'insert', 'run', 'exec', 'batch-exec', 'sftp-write', 'pane-write'])
 
 export function usage () {
     return `Usage:
@@ -24,6 +24,12 @@ export function usage () {
   issh-agent herdr-status|herdr-start|herdr-stop|herdr-snapshot
   issh-agent herdr-link --workspace-id <issh-id> --herdr-workspace-id <herdr-id>
   issh-agent herdr-unlink|herdr-sync --workspace-id <issh-id>
+  issh-agent pane-list
+  issh-agent pane-snapshot --pane-id <id>
+  issh-agent pane-subscribe --pane-id <id> [--after-sequence 0] [--max-events 64] [--pane-max-bytes 49152]
+  issh-agent pane-claim-input|pane-release-input --pane-id <id> --owner-id <id>
+  issh-agent pane-write --pane-id <id> --owner-id <id> [--hex <bytes>] -- <utf8-bytes>
+  issh-agent pane-resize --pane-id <id> --actor-id <id> --columns <n> --rows <n>
 
 Options:
   --bridge-file <path>  Path to the Agent Bridge connection JSON file
@@ -44,6 +50,9 @@ export function parseAgentArgs (argv) {
         encoding: 'utf8',
         offset: 0,
         limit: 8000,
+        afterSequence: 0,
+        maxEvents: 64,
+        paneMaxBytes: 49152,
         json: false,
         confirmDangerous: false,
         parallel: true,
@@ -77,6 +86,15 @@ export function parseAgentArgs (argv) {
             case '--output-id': options.outputId = requireValue(args, ++index, arg); break
             case '--workspace-id': options.workspaceId = requireValue(args, ++index, arg); break
             case '--herdr-workspace-id': options.herdrWorkspaceId = requireValue(args, ++index, arg); break
+            case '--pane-id': options.paneId = requireValue(args, ++index, arg); break
+            case '--owner-id': options.ownerId = requireValue(args, ++index, arg); break
+            case '--actor-id': options.actorId = requireValue(args, ++index, arg); break
+            case '--after-sequence': options.afterSequence = numberValue(args, ++index, arg, true); break
+            case '--max-events': options.maxEvents = numberValue(args, ++index, arg); break
+            case '--pane-max-bytes': options.paneMaxBytes = numberValue(args, ++index, arg); break
+            case '--columns': options.columns = numberValue(args, ++index, arg); break
+            case '--rows': options.rows = numberValue(args, ++index, arg); break
+            case '--hex': options.hex = requireValue(args, ++index, arg); break
             case '--offset': options.offset = numberValue(args, ++index, arg, true); break
             case '--limit': options.limit = numberValue(args, ++index, arg); break
             case '--bridge-file': options.bridgeFile = requireValue(args, ++index, arg); break
@@ -126,6 +144,13 @@ export function buildCall (command, options, positionals) {
         'herdr-link': ['issh_herdr_link', { workspaceId: options.workspaceId, herdrWorkspaceId: options.herdrWorkspaceId }],
         'herdr-unlink': ['issh_herdr_unlink', { workspaceId: options.workspaceId }],
         'herdr-sync': ['issh_herdr_sync', { workspaceId: options.workspaceId }],
+        'pane-list': ['issh_pane_list', {}],
+        'pane-snapshot': ['issh_pane_snapshot', { paneId: options.paneId }],
+        'pane-subscribe': ['issh_pane_subscribe', compact({ paneId: options.paneId, afterSequence: options.afterSequence, maxEvents: options.maxEvents, maxBytes: options.paneMaxBytes })],
+        'pane-claim-input': ['issh_pane_claim_input', { paneId: options.paneId, ownerId: options.ownerId }],
+        'pane-release-input': ['issh_pane_release_input', { paneId: options.paneId, ownerId: options.ownerId }],
+        'pane-write': ['issh_pane_write', { paneId: options.paneId, ownerId: options.ownerId, data: options.hex ? parseHex(options.hex) : Array.from(Buffer.from(content, 'utf8')) }],
+        'pane-resize': ['issh_pane_resize', { paneId: options.paneId, actorId: options.actorId, columns: options.columns, rows: options.rows }],
     }
     const call = calls[command]
     if (!call) {
@@ -148,7 +173,7 @@ export async function main (argv = process.argv.slice(2), output = console) {
 }
 
 function validateCall (command, params) {
-    if (COMMANDS_WITH_CONTENT.has(command) && !params.command && command !== 'sftp-write') {
+    if (COMMANDS_WITH_CONTENT.has(command) && !params.command && !['sftp-write', 'pane-write'].includes(command)) {
         throw new Error(`${command} requires content after --`)
     }
     if (command === 'sftp-write' && params.content === '') {
@@ -169,9 +194,33 @@ function validateCall (command, params) {
     if (command === 'herdr-link' && !params.herdrWorkspaceId) {
         throw new Error('herdr-link requires --herdr-workspace-id')
     }
+    if (command.startsWith('pane-') && command !== 'pane-list' && !params.paneId) {
+        throw new Error(`${command} requires --pane-id`)
+    }
+    if (['pane-claim-input', 'pane-release-input', 'pane-write'].includes(command) && !params.ownerId) {
+        throw new Error(`${command} requires --owner-id`)
+    }
+    if (command === 'pane-resize' && (!params.actorId || !params.columns || !params.rows)) {
+        throw new Error('pane-resize requires --actor-id, --columns, and --rows')
+    }
+    if (command === 'pane-write' && params.data.length === 0) {
+        throw new Error('pane-write requires --hex or content after --')
+    }
     if (!['utf8', 'base64'].includes(params.encoding) && (command === 'sftp-read' || command === 'sftp-write')) {
         throw new Error('--encoding must be utf8 or base64')
     }
+}
+
+function parseHex (value) {
+    const normalized = String(value).replace(/\s+/g, '')
+    if (!normalized || normalized.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(normalized)) {
+        throw new Error('--hex requires an even-length hexadecimal byte string')
+    }
+    const bytes = []
+    for (let index = 0; index < normalized.length; index += 2) {
+        bytes.push(Number.parseInt(normalized.slice(index, index + 2), 16))
+    }
+    return bytes
 }
 
 function printResult (result, rawJson, output) {

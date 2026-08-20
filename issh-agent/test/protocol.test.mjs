@@ -8,12 +8,14 @@ import { buildCall, parseAgentArgs } from '../src/cli.mjs'
 
 test('protocol exposes the complete current bridge surface without removed RAG tools', () => {
     const names = AGENT_BRIDGE_TOOLS.map(tool => tool.name)
-    assert.equal(names.length, 43)
+    assert.equal(names.length, 50)
     assert(names.includes('issh_get_output'))
     assert(names.includes('issh_workspace_bind'))
     assert(names.includes('issh_agent_prompt'))
     assert(names.includes('issh_task_cancel'))
     assert(names.includes('issh_herdr_sync'))
+    assert(names.includes('issh_pane_subscribe'))
+    assert(names.includes('issh_pane_write'))
     assert(!names.some(name => name.includes('rag')))
     assert.equal(AGENT_BRIDGE_METHOD_SCOPES.issh_select_session, 'write')
     assert.equal(AGENT_BRIDGE_METHOD_SCOPES.tabby_select_session, 'write')
@@ -36,6 +38,11 @@ test('MCP tools contain operation-specific schemas', () => {
     assert.equal(runCommand.inputSchema.properties.execute.default, false)
     const herdrLink = tools.find(tool => tool.name === 'issh_herdr_link')
     assert.deepEqual(herdrLink.inputSchema.required, ['workspaceId', 'herdrWorkspaceId'])
+    const paneWrite = tools.find(tool => tool.name === 'issh_pane_write')
+    assert.deepEqual(paneWrite.inputSchema.required, ['paneId', 'ownerId', 'data'])
+    assert.equal(paneWrite.inputSchema.properties.data.items.maximum, 255)
+    assert.equal(AGENT_BRIDGE_METHOD_SCOPES.issh_pane_subscribe, 'read')
+    assert.equal(AGENT_BRIDGE_METHOD_SCOPES.issh_pane_write, 'write')
     assert.equal(AGENT_BRIDGE_METHOD_SCOPES.issh_herdr_stop, 'exec')
     assert.equal(AGENT_BRIDGE_METHOD_SCOPES.issh_herdr_snapshot, 'read')
 })
@@ -89,4 +96,18 @@ test('CLI exposes bounded Herdr lifecycle and workspace mapping calls', () => {
         () => buildCall('herdr-sync', {}, []),
         /requires --workspace-id/,
     )
+})
+
+test('CLI maps native pane proxy calls and raw byte input', () => {
+    const subscribe = parseAgentArgs(['pane-subscribe', '--pane-id', 'pane-1', '--after-sequence', '4'])
+    assert.deepEqual(buildCall(subscribe.command, subscribe.options, subscribe.positionals), [
+        'issh_pane_subscribe',
+        { paneId: 'pane-1', afterSequence: 4, maxEvents: 64, maxBytes: 49152 },
+    ])
+    const write = parseAgentArgs(['pane-write', '--pane-id', 'pane-1', '--owner-id', 'agent-a', '--hex', '1b5b324a'])
+    assert.deepEqual(buildCall(write.command, write.options, write.positionals), [
+        'issh_pane_write',
+        { paneId: 'pane-1', ownerId: 'agent-a', data: [0x1b, 0x5b, 0x32, 0x4a] },
+    ])
+    assert.throws(() => buildCall('pane-write', { paneId: 'pane-1', ownerId: 'agent-a', hex: '0' }, []), /even-length hexadecimal/)
 })

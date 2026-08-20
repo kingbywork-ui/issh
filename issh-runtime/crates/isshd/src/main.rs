@@ -1,3 +1,4 @@
+use issh_runtime_pane::{PaneOpenSpec, PaneStore, MAX_PANE_BATCH_BYTES};
 use issh_runtime_protocol::{
     HealthResult, RpcError, RpcErrorResponse, RpcRequest, RpcResponse, INVALID_PARAMS,
     INVALID_REQUEST, MAX_MESSAGE_BYTES, MESSAGE_TOO_LARGE, METHOD_NOT_FOUND, PARSE_ERROR,
@@ -27,6 +28,7 @@ struct Options {
 
 struct RuntimeState {
     started_at_unix_ms: u128,
+    panes: Mutex<PaneStore>,
     workspace: Mutex<WorkspaceStore>,
 }
 
@@ -37,6 +39,7 @@ impl RuntimeState {
     ) -> Result<Self, issh_runtime_workspace::WorkspaceError> {
         Ok(Self {
             started_at_unix_ms,
+            panes: Mutex::new(PaneStore::new()),
             workspace: Mutex::new(WorkspaceStore::open(database_path, now_unix_ms())?),
         })
     }
@@ -45,6 +48,7 @@ impl RuntimeState {
     fn in_memory(started_at_unix_ms: u128) -> Self {
         Self {
             started_at_unix_ms,
+            panes: Mutex::new(PaneStore::new()),
             workspace: Mutex::new(
                 WorkspaceStore::open_in_memory(now_unix_ms())
                     .expect("in-memory workspace should open"),
@@ -129,6 +133,90 @@ struct EventListParams {
     after_sequence: i64,
     #[serde(default = "default_event_limit")]
     limit: usize,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PaneOpenParams {
+    id: String,
+    workspace_id: String,
+    session_id: String,
+    title: String,
+    columns: u16,
+    rows: u16,
+    producer_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PaneIdParams {
+    pane_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PaneProducerParams {
+    pane_id: String,
+    producer_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PaneClaimParams {
+    pane_id: String,
+    owner_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PaneReleaseParams {
+    pane_id: String,
+    owner_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PaneWriteParams {
+    pane_id: String,
+    owner_id: String,
+    data: Vec<u8>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PaneResizeParams {
+    pane_id: String,
+    actor_id: String,
+    columns: u16,
+    rows: u16,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PanePushOutputParams {
+    pane_id: String,
+    producer_id: String,
+    data: Vec<u8>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PaneSubscribeParams {
+    pane_id: String,
+    #[serde(default)]
+    after_sequence: u64,
+    #[serde(default = "default_pane_max_events")]
+    max_events: usize,
+    #[serde(default = "default_pane_max_bytes")]
+    max_bytes: usize,
+}
+
+fn default_pane_max_events() -> usize {
+    64
+}
+
+fn default_pane_max_bytes() -> usize {
+    MAX_PANE_BATCH_BYTES
 }
 
 fn default_event_limit() -> usize {
@@ -218,15 +306,22 @@ async fn run(options: Options, state: Arc<RuntimeState>) -> io::Result<()> {
         unsafe { options.create_with_security_attributes_raw(pipe_name, security.as_mut_ptr()) }
     }
 
-    let mut first = true;
+    let mut server = create_pipe(&options.pipe_name, true)?;
     loop {
-        let server = create_pipe(&options.pipe_name, first)?;
-        first = false;
         server.connect().await?;
-        handle_client(server, &state).await?;
         if options.once {
-            return Ok(());
+            return handle_client(server, &state).await;
         }
+
+        // Create the next listening instance before replying to this client.
+        // Otherwise rapid sequential RPCs can land between pipe instances and
+        // fail with ENOENT even though the Runtime process is healthy.
+        let connected = server;
+        server = create_pipe(&options.pipe_name, false)?;
+        let client_state = Arc::clone(&state);
+        tokio::spawn(async move {
+            let _ = handle_client(connected, &client_state).await;
+        });
     }
 }
 
@@ -328,6 +423,16 @@ fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                     "task.complete",
                     "task.fail",
                     "event.list",
+                    "pane.list",
+                    "pane.open",
+                    "pane.snapshot",
+                    "pane.close",
+                    "pane.claimInput",
+                    "pane.releaseInput",
+                    "pane.write",
+                    "pane.resize",
+                    "pane.pushOutput",
+                    "pane.subscribe",
                 ],
             },
         ))
@@ -344,6 +449,106 @@ fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
         "session.list" => with_workspace(state, id, |workspace| {
             Ok::<_, issh_runtime_workspace::WorkspaceError>(workspace.list_sessions())
         }),
+        "pane.list" => with_panes(state, id, |panes| {
+            Ok::<_, issh_runtime_pane::PaneError>(panes.list())
+        }),
+        "pane.open" => {
+            let params = match parse_params::<PaneOpenParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_panes(state, id, |panes| {
+                panes.open(PaneOpenSpec {
+                    id: params.id,
+                    workspace_id: params.workspace_id,
+                    session_id: params.session_id,
+                    title: params.title,
+                    columns: params.columns,
+                    rows: params.rows,
+                    producer_id: params.producer_id,
+                })
+            })
+        }
+        "pane.snapshot" => {
+            let params = match parse_params::<PaneIdParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_panes(state, id, |panes| panes.snapshot(&params.pane_id))
+        }
+        "pane.close" => {
+            let params = match parse_params::<PaneProducerParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_panes(state, id, |panes| {
+                panes.close(&params.pane_id, &params.producer_id)
+            })
+        }
+        "pane.claimInput" => {
+            let params = match parse_params::<PaneClaimParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_panes(state, id, |panes| {
+                panes.claim_input(&params.pane_id, params.owner_id)
+            })
+        }
+        "pane.releaseInput" => {
+            let params = match parse_params::<PaneReleaseParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_panes(state, id, |panes| {
+                panes.release_input(&params.pane_id, &params.owner_id)
+            })
+        }
+        "pane.write" => {
+            let params = match parse_params::<PaneWriteParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_panes(state, id, |panes| {
+                panes.write(&params.pane_id, &params.owner_id, params.data)
+            })
+        }
+        "pane.resize" => {
+            let params = match parse_params::<PaneResizeParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_panes(state, id, |panes| {
+                panes.resize(
+                    &params.pane_id,
+                    &params.actor_id,
+                    params.columns,
+                    params.rows,
+                )
+            })
+        }
+        "pane.pushOutput" => {
+            let params = match parse_params::<PanePushOutputParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_panes(state, id, |panes| {
+                panes.push_output(&params.pane_id, &params.producer_id, params.data)
+            })
+        }
+        "pane.subscribe" => {
+            let params = match parse_params::<PaneSubscribeParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_panes(state, id, |panes| {
+                panes.subscribe(
+                    &params.pane_id,
+                    params.after_sequence,
+                    params.max_events,
+                    params.max_bytes,
+                )
+            })
+        }
         "workspace.create" => {
             let params = match parse_params::<WorkspaceCreateParams>(request.params) {
                 Ok(params) => params,
@@ -494,6 +699,22 @@ fn parse_params<T: DeserializeOwned>(params: Option<Value>) -> Result<T, RpcErro
         .map_err(|error| RpcError::new(INVALID_PARAMS, format!("Invalid params: {error}")))
 }
 
+fn with_panes<T, F>(state: &RuntimeState, id: Value, operation: F) -> Vec<u8>
+where
+    T: serde::Serialize,
+    F: FnOnce(&mut PaneStore) -> Result<T, issh_runtime_pane::PaneError>,
+{
+    let mut panes = match state.panes.lock() {
+        Ok(panes) => panes,
+        Err(_) => return serialize_error(id, -32603, "Pane state is unavailable"),
+    };
+    match operation(&mut panes) {
+        Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+            .expect("pane response serialization cannot fail"),
+        Err(error) => serialize_error(id, INVALID_PARAMS, error.to_string()),
+    }
+}
+
 fn with_workspace<T, F>(state: &RuntimeState, id: Value, operation: F) -> Vec<u8>
 where
     T: serde::Serialize,
@@ -587,5 +808,69 @@ mod tests {
         );
         let bound: Value = serde_json::from_slice(&bound).expect("bind should return JSON");
         assert_eq!(bound["result"]["bindings"][0]["sessionId"], "tab-1");
+    }
+
+    #[test]
+    fn dispatches_pane_lifecycle_and_input_ownership() {
+        let state = state();
+        let opened = dispatch(
+            br#"{"jsonrpc":"2.0","id":1,"method":"pane.open","params":{"id":"pane-1","workspaceId":"workspace-1","sessionId":"session-1","title":"Operations","columns":120,"rows":40,"producerId":"herdr-session"}}"#,
+            &state,
+        );
+        let opened: Value = serde_json::from_slice(&opened).expect("pane should open");
+        assert_eq!(opened["result"]["state"], "attached");
+
+        let claimed = dispatch(
+            br#"{"jsonrpc":"2.0","id":2,"method":"pane.claimInput","params":{"paneId":"pane-1","ownerId":"agent-a"}}"#,
+            &state,
+        );
+        let claimed: Value = serde_json::from_slice(&claimed).expect("input should be claimed");
+        assert_eq!(claimed["result"]["inputOwner"], "agent-a");
+
+        let write = dispatch(
+            br#"{"jsonrpc":"2.0","id":3,"method":"pane.write","params":{"paneId":"pane-1","ownerId":"agent-a","data":[27,91,65]}}"#,
+            &state,
+        );
+        let write: Value = serde_json::from_slice(&write).expect("write should return JSON");
+        assert_eq!(write["result"]["acceptedBytes"], 3);
+
+        let output = dispatch(
+            br#"{"jsonrpc":"2.0","id":4,"method":"pane.pushOutput","params":{"paneId":"pane-1","producerId":"herdr-session","data":[0,255,27]}}"#,
+            &state,
+        );
+        let output: Value = serde_json::from_slice(&output).expect("output should return JSON");
+        assert_eq!(output["result"]["data"], serde_json::json!([0, 255, 27]));
+
+        let subscription = dispatch(
+            br#"{"jsonrpc":"2.0","id":5,"method":"pane.subscribe","params":{"paneId":"pane-1","afterSequence":0,"maxEvents":10,"maxBytes":100}}"#,
+            &state,
+        );
+        let subscription: Value =
+            serde_json::from_slice(&subscription).expect("subscription should return JSON");
+        assert_eq!(subscription["result"]["events"][0]["sequence"], 1);
+        assert_eq!(subscription["result"]["nextAfterSequence"], 1);
+    }
+
+    #[test]
+    fn rejects_pane_input_hijack() {
+        let state = state();
+        dispatch(
+            br#"{"jsonrpc":"2.0","id":1,"method":"pane.open","params":{"id":"pane-1","workspaceId":"workspace-1","sessionId":"session-1","title":"Operations","columns":120,"rows":40,"producerId":"herdr-session"}}"#,
+            &state,
+        );
+        dispatch(
+            br#"{"jsonrpc":"2.0","id":2,"method":"pane.claimInput","params":{"paneId":"pane-1","ownerId":"agent-a"}}"#,
+            &state,
+        );
+        let response = dispatch(
+            br#"{"jsonrpc":"2.0","id":3,"method":"pane.claimInput","params":{"paneId":"pane-1","ownerId":"agent-b"}}"#,
+            &state,
+        );
+        let response: Value = serde_json::from_slice(&response).expect("response should be JSON");
+        assert_eq!(response["error"]["code"], INVALID_PARAMS);
+        assert!(response["error"]["message"]
+            .as_str()
+            .expect("error message")
+            .contains("owned by agent-a"));
     }
 }

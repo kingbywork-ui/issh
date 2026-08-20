@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+issh-runtime-pane = { path = "../pane" }
 issh-runtime-protocol = { path = "../protocol" }
 issh-runtime-workspace = { path = "../workspace" }
 serde.workspace = true

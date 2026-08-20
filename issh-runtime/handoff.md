@@ -1,5 +1,18 @@
 # issh-runtime Handoff
 
+## Phase 8 - Herdr native pane proxy complete
+
+- Implemented and verified on `dev` without running a new Electron/Windows package build.
+- Added the `issh-runtime-pane` crate with a producer-agnostic pane lifecycle, raw output event cursor, 2 MiB per-pane backpressure buffer, 48 KiB subscription batches, exclusive input ownership, bounded raw writes, and resize authorization.
+- Added additive Runtime RPC methods: `pane.list`, `pane.open`, `pane.snapshot`, `pane.close`, `pane.claimInput`, `pane.releaseInput`, `pane.write`, `pane.resize`, `pane.pushOutput`, and `pane.subscribe`.
+- Added seven Agent Bridge/MCP tools (`issh_pane_*`) plus CLI commands for list/snapshot/subscribe/claim/release/write/resize. The Agent Bridge protocol is now `1.5.0` with 50 tools; writes require the existing token `write` scope and a pane ownership token.
+- Electron main now adapts official Herdr `0.8.2` / protocol `20` `terminal session control` NDJSON frames to the generic Runtime contract. It preserves raw ANSI/control bytes, enforces sequence and frame bounds, splits byte-array RPC messages into 12 KiB chunks, authorizes input/resize through Rust before forwarding them to Herdr, and retries controller loss at most five times.
+- Added an issh xterm pane tab with full-screen control-sequence support, resize/input forwarding, recovery tokens, and recovered-tab deduplication. Closing it detaches the controller, releases ownership, and clears the Runtime ring without closing the underlying Herdr pane or SSH session.
+- Added `pane-smoke.mjs` and `herdr-pane-live-uat.mjs`. The live UAT passed against the official Windows x64 Herdr binary and a real local `isshd`, covering attach, full frame, input, resize, marker output, release, closed state, and zero buffered bytes.
+- Fixed the Windows server accept loop so the next Named Pipe instance exists before the current client receives its response. `runtime-smoke.mjs` now proves two immediate requests succeed without retry, preventing the fresh-profile Electron `ENOENT` race that the earlier retrying smoke client hid.
+- Added `herdr-pane-gui-uat.py`. It verifies a fresh isolated profile can create/map a Workspace, open the real pane in standard xterm, send a marker through xterm, receive the marker through Electron pane events, and reopen without a duplicate tab. Pane startup now orders first input/resize behind asynchronous attachment, and empty successful Herdr metadata output is accepted.
+- Verification passed: Rust format, Clippy with warnings denied, 21 Rust tests, Runtime and pane Named Pipe smoke, 33 Agent/Herdr tests, actual Runtime/Herdr live UAT, source-tree Herdr pane GUI UAT, app and `issh-llm` TypeScript checks/builds, the full repository build, the 12-check GUI smoke, and `git diff --check`. Tauri/Svelte embedding remains a separate Electron-removal gate.
+
 ## Phase 4 - Optional Herdr adapter and resilience complete
 
 - Added an optional Electron-main Herdr sidecar manager without changing the Rust Runtime schema or taking ownership of SSH, PTY, or SFTP.

@@ -1,6 +1,8 @@
 import { Component, HostBinding, OnInit } from '@angular/core'
 import { BaseComponent, ConfigService, NotificationsService } from 'issh-core'
 import { AgentBridgeService } from '../services/agentBridge.service'
+import { HerdrPaneDescriptor } from '../herdrPane.api'
+import { HerdrPaneService } from '../services/herdrPane.service'
 
 /** @hidden */
 @Component({
@@ -22,6 +24,8 @@ export class WorkspaceSettingsTabComponent extends BaseComponent implements OnIn
     runtimeHealth: any = null
     herdrStatus: any = null
     herdrWorkspaces: any[] = []
+    herdrPanes: HerdrPaneDescriptor[] = []
+    private herdrSnapshot: any = null
     herdrLinkedWorkspaceId: string | null = null
     selectedHerdrWorkspaceId = ''
     workspaceName = ''
@@ -43,6 +47,7 @@ export class WorkspaceSettingsTabComponent extends BaseComponent implements OnIn
 
     constructor (
         private agentBridge: AgentBridgeService,
+        private herdrPane: HerdrPaneService,
         public config: ConfigService,
         private notifications: NotificationsService,
     ) {
@@ -106,12 +111,16 @@ export class WorkspaceSettingsTabComponent extends BaseComponent implements OnIn
             this.herdrLinkedWorkspaceId = this.agentBridge.linkedHerdrWorkspaceId(this.selectedWorkspaceId)
             if (this.herdrStatus?.running && this.herdrStatus?.compatible) {
                 const snapshot = await this.agentBridge.getHerdrSnapshot()
+                this.herdrSnapshot = snapshot
                 this.herdrWorkspaces = snapshot?.workspaces ?? []
                 if (!this.herdrWorkspaces.some(workspace => workspace.workspace_id === this.selectedHerdrWorkspaceId)) {
                     this.selectedHerdrWorkspaceId = this.herdrLinkedWorkspaceId ?? this.herdrWorkspaces[0]?.workspace_id ?? ''
                 }
+                this.refreshHerdrPanes()
             } else {
                 this.herdrWorkspaces = []
+                this.herdrPanes = []
+                this.herdrSnapshot = null
             }
             if (!this.agents.some(agent => agent.id === this.selectedAgentId)) {
                 this.selectedAgentId = this.agents[0]?.id ?? ''
@@ -293,6 +302,7 @@ export class WorkspaceSettingsTabComponent extends BaseComponent implements OnIn
             const result = await this.agentBridge.stopHerdr()
             this.herdrStatus = result
             this.herdrWorkspaces = []
+            this.herdrPanes = []
             this.notifications.notice(result.stopped ? 'Herdr sidecar 已停止' : '未停止外部管理的 Herdr server')
         })
     }
@@ -331,6 +341,25 @@ export class WorkspaceSettingsTabComponent extends BaseComponent implements OnIn
             await this.agentBridge.syncHerdrWorkspace({ workspaceId: this.selectedWorkspaceId })
             this.notifications.notice('Workspace 状态已同步到 Herdr')
         })
+    }
+
+    selectHerdrWorkspace (workspaceId: string): void {
+        this.selectedHerdrWorkspaceId = workspaceId
+        this.refreshHerdrPanes()
+    }
+
+    openHerdrPane (pane: HerdrPaneDescriptor): void {
+        if (!this.selectedWorkspaceId) {
+            return
+        }
+        this.herdrPane.open(pane, this.selectedWorkspaceId)
+    }
+
+    private refreshHerdrPanes (): void {
+        this.herdrPanes = this.agentBridge.getHerdrPaneDescriptors(
+            this.herdrSnapshot,
+            this.selectedHerdrWorkspaceId || this.herdrLinkedWorkspaceId,
+        )
     }
 
     private async runHerdrAction (action: () => Promise<void>): Promise<void> {

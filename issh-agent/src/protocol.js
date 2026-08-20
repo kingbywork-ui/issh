@@ -1,4 +1,4 @@
-export const AGENT_BRIDGE_PROTOCOL_VERSION = '1.4.0'
+export const AGENT_BRIDGE_PROTOCOL_VERSION = '1.5.0'
 
 const tabProperty = {
     type: 'string',
@@ -44,6 +44,104 @@ export const AGENT_BRIDGE_TOOLS = [
         inputSchema: {
             type: 'object',
             properties: {},
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_pane_list',
+        scope: 'read',
+        description: 'List native pane proxy sessions currently attached to the issh Runtime.',
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    },
+    {
+        name: 'issh_pane_snapshot',
+        scope: 'read',
+        description: 'Read one pane dimensions, producer, input owner, and output cursor state.',
+        inputSchema: {
+            type: 'object',
+            required: ['paneId'],
+            properties: { paneId: { type: 'string', minLength: 1 } },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_pane_subscribe',
+        scope: 'read',
+        description: 'Poll raw pane output events from a cursor without persisting terminal bytes.',
+        inputSchema: {
+            type: 'object',
+            required: ['paneId'],
+            properties: {
+                paneId: { type: 'string', minLength: 1 },
+                afterSequence: { type: 'number', minimum: 0 },
+                maxEvents: { type: 'number', minimum: 1, maximum: 256 },
+                maxBytes: { type: 'number', minimum: 1, maximum: 49152 },
+            },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_pane_claim_input',
+        scope: 'write',
+        description: 'Claim exclusive input ownership for a pane before sending terminal bytes.',
+        inputSchema: {
+            type: 'object',
+            required: ['paneId', 'ownerId'],
+            properties: {
+                paneId: { type: 'string', minLength: 1 },
+                ownerId: { type: 'string', minLength: 1, maxLength: 128 },
+            },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_pane_release_input',
+        scope: 'write',
+        description: 'Release the caller-provided input ownership token for a pane.',
+        inputSchema: {
+            type: 'object',
+            required: ['paneId', 'ownerId'],
+            properties: {
+                paneId: { type: 'string', minLength: 1 },
+                ownerId: { type: 'string', minLength: 1, maxLength: 128 },
+            },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_pane_write',
+        scope: 'write',
+        description: 'Write raw terminal bytes to a pane only while holding its input ownership.',
+        inputSchema: {
+            type: 'object',
+            required: ['paneId', 'ownerId', 'data'],
+            properties: {
+                paneId: { type: 'string', minLength: 1 },
+                ownerId: { type: 'string', minLength: 1, maxLength: 128 },
+                data: {
+                    type: 'array',
+                    minItems: 1,
+                    maxItems: 65536,
+                    items: { type: 'integer', minimum: 0, maximum: 255 },
+                    description: 'Raw terminal bytes represented as unsigned octets.',
+                },
+            },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_pane_resize',
+        scope: 'write',
+        description: 'Resize a pane while holding input ownership or acting as its producer.',
+        inputSchema: {
+            type: 'object',
+            required: ['paneId', 'actorId', 'columns', 'rows'],
+            properties: {
+                paneId: { type: 'string', minLength: 1 },
+                actorId: { type: 'string', minLength: 1, maxLength: 128 },
+                columns: { type: 'integer', minimum: 1, maximum: 1000 },
+                rows: { type: 'integer', minimum: 1, maximum: 1000 },
+            },
             additionalProperties: false,
         },
     },

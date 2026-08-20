@@ -74,6 +74,37 @@ async function request (payload, attempts = 50) {
     throw lastError
 }
 
+function requestOnce (payload) {
+    return new Promise((resolve, reject) => {
+        const socket = net.createConnection(pipeName)
+        let response = ''
+        let settled = false
+        const finish = () => {
+            if (settled) {
+                return
+            }
+            settled = true
+            try {
+                resolve(JSON.parse(response.trim()))
+            } catch (error) {
+                reject(error)
+            }
+        }
+        socket.setEncoding('utf8')
+        socket.once('connect', () => socket.write(`${payload}\n`))
+        socket.on('data', chunk => { response += chunk })
+        socket.once('error', error => {
+            if (error.code === 'EPIPE' && response.trim()) {
+                finish()
+            } else if (!settled) {
+                settled = true
+                reject(error)
+            }
+        })
+        socket.once('close', finish)
+    })
+}
+
 let interruptedTaskId
 const primary = startRuntime()
 try {
@@ -109,7 +140,24 @@ try {
         'task.complete',
         'task.fail',
         'event.list',
+        'pane.list',
+        'pane.open',
+        'pane.snapshot',
+        'pane.close',
+        'pane.claimInput',
+        'pane.releaseInput',
+        'pane.write',
+        'pane.resize',
+        'pane.pushOutput',
+        'pane.subscribe',
     ])
+
+    const immediateHealth = await requestOnce(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'immediate-health',
+        method: 'runtime.health',
+    }))
+    assert.equal(immediateHealth.result.pid, health.result.pid)
 
     const synchronized = await request(JSON.stringify({
         jsonrpc: '2.0',

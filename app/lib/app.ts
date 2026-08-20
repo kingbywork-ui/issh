@@ -38,7 +38,18 @@ export class Application {
     private configSyncRenderer?: WebContents
     private configSyncRequestID = 0
     private runtimeManager = new RuntimeManager()
-    private herdrManager = new HerdrManager()
+    private herdrRendererCleanup = new Set<number>()
+    private herdrManager = new HerdrManager(
+        request => this.runtimeManager.request(request),
+        (rendererId, event) => {
+            const renderer = this.windows
+                .map(window => window.webContents)
+                .find(webContents => webContents.id === rendererId)
+            if (renderer && !renderer.isDestroyed()) {
+                renderer.send('herdr:pane-event', event)
+            }
+        },
+    )
     userPluginsPath: string
 
     // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
@@ -148,7 +159,15 @@ export class Application {
             if (!this.isTrustedRenderer(event.sender)) {
                 throw new Error('Rejected IPC sender')
             }
-            return this.herdrManager.request(request)
+            const rendererId = event.sender.id
+            if (request?.action === 'pane-attach' && !this.herdrRendererCleanup.has(rendererId)) {
+                this.herdrRendererCleanup.add(rendererId)
+                event.sender.once('destroyed', () => {
+                    this.herdrRendererCleanup.delete(rendererId)
+                    this.herdrManager.detachRenderer(rendererId)
+                })
+            }
+            return this.herdrManager.request(request, rendererId)
         })
 
         if (process.platform === 'linux') {

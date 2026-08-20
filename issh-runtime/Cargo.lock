@@ -88,6 +88,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "issh-runtime-pane"
+version = "0.4.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "issh-runtime-protocol"
 version = "0.4.0"
 dependencies = [
@@ -108,6 +115,7 @@ dependencies = [
 name = "isshd"
 version = "0.4.0"
 dependencies = [
+ "issh-runtime-pane",
  "issh-runtime-protocol",
  "issh-runtime-workspace",
  "serde",

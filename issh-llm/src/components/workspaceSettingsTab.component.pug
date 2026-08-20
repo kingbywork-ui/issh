@@ -46,11 +46,11 @@ h3.mb-3 Agent Workspace
         .d-flex.flex-wrap
             button.btn.btn-primary.btn-sm.me-2(type='button', (click)='startHerdr()', [disabled]='herdrBusy || !config.store.llm.herdrEnabled') 启动 / 连接
             button.btn.btn-outline-danger.btn-sm(type='button', (click)='stopHerdr()', [disabled]='herdrBusy || !herdrStatus?.running') 停止 issh 所属 sidecar
-        small.text-muted.d-block.mt-2 仅同步 Workspace 标识和 Agent/Task 聚合计数；不会发送终端输出、SSH 凭据或主 Agent Bridge token。
+        small.text-muted.d-block.mt-2 常规同步仅发送 Workspace 标识和 Agent/Task 聚合计数。只有明确点击“接管并打开”时，选定 pane 的 ANSI 字节流才会进入本机 issh xterm；SSH 凭据和主 Agent Bridge token 始终不会传给 Herdr。
         .mt-3(*ngIf='selectedWorkspaceId && herdrStatus?.running && herdrStatus?.compatible')
             label Herdr Workspace 映射
             .input-group
-                select.form-control([(ngModel)]='selectedHerdrWorkspaceId')
+                select.form-control([(ngModel)]='selectedHerdrWorkspaceId', (ngModelChange)='selectHerdrWorkspace($event)')
                     option(value='') 选择 Herdr Workspace
                     option(*ngFor='let workspace of herdrWorkspaces', [value]='workspace.workspace_id') {{ workspace.label || workspace.workspace_id }}
                 .input-group-append
@@ -58,6 +58,16 @@ h3.mb-3 Agent Workspace
                     button.btn.btn-outline-secondary(type='button', *ngIf='herdrLinkedWorkspaceId', (click)='syncHerdrWorkspace()', [disabled]='herdrBusy') 同步
                     button.btn.btn-outline-danger(type='button', *ngIf='herdrLinkedWorkspaceId', (click)='unlinkHerdrWorkspace()', [disabled]='herdrBusy') 解除
             small.text-muted.d-block.mt-1(*ngIf='herdrLinkedWorkspaceId') 当前关联：{{ herdrLinkedWorkspaceId }}
+            .mt-3
+                label Herdr 实时终端
+                .text-muted.mb-2(*ngIf='!herdrPanes.length') 当前 Herdr Workspace 没有可打开的 pane。
+                .d-flex.align-items-center.justify-content-between.border.rounded.p-2.mb-2(*ngFor='let pane of herdrPanes')
+                    div
+                        strong {{ pane.title }}
+                        small.text-muted.d-block {{ pane.paneId }} · {{ pane.cwd || '工作目录未知' }}
+                    button.btn.btn-outline-primary.btn-sm(type='button', (click)='openHerdrPane(pane)', [disabled]='herdrBusy')
+                        i.fas.fa-external-link-alt.me-1
+                        span 接管并打开
 
 .llm-section
     .llm-section-header

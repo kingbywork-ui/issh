@@ -9,8 +9,16 @@ const MAX_LOG_BYTES = 64 * 1024
 const MAX_QUEUE_DEPTH = 32
 const MAX_CONCURRENT_COMMANDS = 2
 const COMMAND_TIMEOUT_MS = 10000
+const MAX_PANE_FRAME_BYTES = 2 * 1024 * 1024
+const MAX_PANE_LINE_BYTES = Math.ceil(MAX_PANE_FRAME_BYTES * 4 / 3) + 4096
+const MAX_PANE_WRITE_BYTES = 64 * 1024
+// JSON-RPC represents pane bytes as decimal numbers. 12 KiB remains below the
+// Runtime's 64 KiB message cap even when every byte serializes as `255,`.
+const PANE_PUSH_CHUNK_BYTES = 12 * 1024
+const MAX_PANE_RECONNECT_ATTEMPTS = 5
 
 export type HerdrAction = 'status' | 'start' | 'stop' | 'snapshot' | 'sync-workspace'
+    | 'pane-attach' | 'pane-input' | 'pane-resize' | 'pane-detach'
 
 export interface HerdrRequest {
     action: HerdrAction
@@ -23,6 +31,26 @@ export interface HerdrRequest {
     agentCount?: number
     taskCount?: number
     sequence?: number
+    paneId?: string
+    target?: string
+    title?: string
+    ownerId?: string
+    columns?: number
+    rows?: number
+    data?: number[]
+    takeover?: boolean
+}
+
+export interface HerdrPaneEvent {
+    paneId: string
+    type: 'output' | 'state'
+    data?: number[]
+    full?: boolean
+    width?: number
+    height?: number
+    state?: 'attached' | 'reconnecting' | 'closed' | 'error'
+    reason?: string
+    reconnectAttempt?: number
 }
 
 interface HerdrStatus {
@@ -50,6 +78,40 @@ interface QueueEntry {
     reject: (error: unknown) => void
 }
 
+interface RuntimeResponse {
+    result?: any
+    error?: { code: number, message: string }
+}
+
+type RuntimeRequest = (request: {
+    jsonrpc: '2.0'
+    id: string
+    method: string
+    params?: unknown
+}) => Promise<RuntimeResponse>
+
+type PaneEventSink = (rendererId: number, event: HerdrPaneEvent) => void
+
+interface PaneBridge {
+    paneId: string
+    target: string
+    title: string
+    workspaceId: string
+    ownerId: string
+    producerId: string
+    rendererId: number
+    columns: number
+    rows: number
+    request: HerdrRequest
+    child?: ChildProcess
+    closing: boolean
+    stdoutBuffer: Buffer
+    outputChain: Promise<void>
+    lastHerdrSequence: number | null
+    reconnectAttempts: number
+    reconnectTimer?: NodeJS.Timeout
+}
+
 export class HerdrManager {
     private child?: ChildProcess
     private desiredRunning = false
@@ -63,14 +125,20 @@ export class HerdrManager {
     private queue: QueueEntry[] = []
     private lastRequest?: HerdrRequest
     private workspaceSyncs = new Map<string, HerdrRequest>()
+    private paneBridges = new Map<string, PaneBridge>()
 
-    request (request: HerdrRequest): Promise<unknown> {
+    constructor (
+        private runtimeRequest?: RuntimeRequest,
+        private paneEventSink?: PaneEventSink,
+    ) {}
+
+    request (request: HerdrRequest, rendererId = 0): Promise<unknown> {
         this.validateRequest(request)
         if (this.queue.length >= MAX_QUEUE_DEPTH) {
             return Promise.reject(new Error(`Herdr adapter queue is full (${MAX_QUEUE_DEPTH})`))
         }
         return new Promise((resolve, reject) => {
-            this.queue.push({ run: () => this.perform(request), resolve, reject })
+            this.queue.push({ run: () => this.perform(request, rendererId), resolve, reject })
             this.drainQueue()
         })
     }
@@ -86,10 +154,29 @@ export class HerdrManager {
         if (child && child.exitCode === null && child.signalCode === null) {
             child.kill()
         }
+        for (const bridge of this.paneBridges.values()) {
+            bridge.closing = true
+            if (bridge.reconnectTimer) {
+                clearTimeout(bridge.reconnectTimer)
+            }
+            bridge.child?.stdin?.write(`${JSON.stringify({ type: 'terminal.release' })}\n`)
+            if (bridge.child && bridge.child.exitCode === null && bridge.child.signalCode === null) {
+                bridge.child.kill()
+            }
+        }
+        this.paneBridges.clear()
+    }
+
+    detachRenderer (rendererId: number): void {
+        for (const bridge of [...this.paneBridges.values()]) {
+            if (bridge.rendererId === rendererId) {
+                void this.detachPane(bridge.request, rendererId, true)
+            }
+        }
     }
 
     private validateRequest (request: HerdrRequest): void {
-        if (!request || !['status', 'start', 'stop', 'snapshot', 'sync-workspace'].includes(request.action)) {
+        if (!request || !['status', 'start', 'stop', 'snapshot', 'sync-workspace', 'pane-attach', 'pane-input', 'pane-resize', 'pane-detach'].includes(request.action)) {
             throw new Error('Invalid Herdr adapter request')
         }
         this.validateSession(request.session)
@@ -114,7 +201,7 @@ export class HerdrManager {
         }
     }
 
-    private async perform (request: HerdrRequest): Promise<unknown> {
+    private async perform (request: HerdrRequest, rendererId: number): Promise<unknown> {
         this.lastRequest = { ...request }
         switch (request.action) {
             case 'status': return this.readStatus(request)
@@ -122,6 +209,10 @@ export class HerdrManager {
             case 'stop': return this.stop(request)
             case 'snapshot': return this.snapshot(request)
             case 'sync-workspace': return this.syncWorkspace(request)
+            case 'pane-attach': return this.attachPane(request, rendererId)
+            case 'pane-input': return this.writePane(request, rendererId)
+            case 'pane-resize': return this.resizePane(request, rendererId)
+            case 'pane-detach': return this.detachPane(request, rendererId)
         }
     }
 
@@ -254,7 +345,464 @@ export class HerdrManager {
         ]
         const result = await this.runCli(request, args)
         this.workspaceSyncs.set(isshWorkspaceId, { ...request })
-        return JSON.parse(result.stdout)
+        return result.stdout.trim()
+            ? JSON.parse(result.stdout)
+            : { ok: true, workspaceId, sequence }
+    }
+
+    private async attachPane (request: HerdrRequest, rendererId: number): Promise<unknown> {
+        this.assertPaneRuntime()
+        await this.assertReady(request)
+        const paneId = this.requiredId(request.paneId, 'paneId')
+        const target = this.requiredId(request.target, 'target')
+        const workspaceId = this.requiredId(request.workspaceId, 'workspaceId')
+        const ownerId = this.requiredId(request.ownerId, 'ownerId')
+        const columns = this.safeDimension(request.columns, 'columns')
+        const rows = this.safeDimension(request.rows, 'rows')
+        const title = String(request.title ?? target).trim().slice(0, 160) || target
+        const producerId = this.producerId(request, target)
+
+        const existing = this.paneBridges.get(paneId)
+        if (existing) {
+            if (existing.target !== target || existing.ownerId !== ownerId) {
+                throw new Error(`Herdr pane ${paneId} is already attached by another owner`)
+            }
+            existing.rendererId = rendererId
+            existing.columns = columns
+            existing.rows = rows
+            existing.request = { ...request }
+            if (!this.bridgeIsRunning(existing)) {
+                existing.closing = false
+                existing.reconnectAttempts = 0
+                await this.spawnPaneController(existing)
+            }
+            return this.paneAttachment(existing)
+        }
+
+        await this.ensureRuntimePane({
+            paneId,
+            workspaceId,
+            target,
+            title,
+            columns,
+            rows,
+            producerId,
+        })
+        await this.callRuntime('pane.claimInput', { paneId, ownerId })
+
+        const bridge: PaneBridge = {
+            paneId,
+            target,
+            title,
+            workspaceId,
+            ownerId,
+            producerId,
+            rendererId,
+            columns,
+            rows,
+            request: { ...request },
+            closing: false,
+            stdoutBuffer: Buffer.alloc(0),
+            outputChain: Promise.resolve(),
+            lastHerdrSequence: null,
+            reconnectAttempts: 0,
+        }
+        this.paneBridges.set(paneId, bridge)
+        try {
+            await this.spawnPaneController(bridge)
+            return this.paneAttachment(bridge)
+        } catch (error) {
+            this.paneBridges.delete(paneId)
+            await this.callRuntime('pane.releaseInput', { paneId, ownerId }).catch(() => undefined)
+            await this.callRuntime('pane.close', { paneId, producerId }).catch(() => undefined)
+            throw error
+        }
+    }
+
+    private async writePane (request: HerdrRequest, rendererId: number): Promise<unknown> {
+        const bridge = this.requirePaneBridge(request, rendererId)
+        const ownerId = this.requiredId(request.ownerId, 'ownerId')
+        const data = this.safeBytes(request.data)
+        await this.callRuntime('pane.write', {
+            paneId: bridge.paneId,
+            ownerId,
+            data,
+        })
+        await this.writePaneCommand(bridge, {
+            type: 'terminal.input',
+            bytes: Buffer.from(data).toString('base64'),
+        })
+        return { paneId: bridge.paneId, acceptedBytes: data.length }
+    }
+
+    private async resizePane (request: HerdrRequest, rendererId: number): Promise<unknown> {
+        const bridge = this.requirePaneBridge(request, rendererId)
+        const actorId = this.requiredId(request.ownerId, 'ownerId')
+        const columns = this.safeDimension(request.columns, 'columns')
+        const rows = this.safeDimension(request.rows, 'rows')
+        await this.callRuntime('pane.resize', {
+            paneId: bridge.paneId,
+            actorId,
+            columns,
+            rows,
+        })
+        await this.writePaneCommand(bridge, {
+            type: 'terminal.resize',
+            cols: columns,
+            rows,
+            cell_width_px: 0,
+            cell_height_px: 0,
+        })
+        bridge.columns = columns
+        bridge.rows = rows
+        return { paneId: bridge.paneId, columns, rows }
+    }
+
+    private async detachPane (request: HerdrRequest, rendererId: number, shutdown = false): Promise<unknown> {
+        const paneId = this.requiredId(request.paneId, 'paneId')
+        const bridge = this.paneBridges.get(paneId)
+        if (!bridge) {
+            return { paneId, detached: false, reason: 'not_attached' }
+        }
+        if (!shutdown && bridge.rendererId !== rendererId) {
+            throw new Error(`Herdr pane ${paneId} belongs to another renderer`)
+        }
+        if (!shutdown && this.requiredId(request.ownerId, 'ownerId') !== bridge.ownerId) {
+            throw new Error(`Herdr pane ${paneId} detach ownership mismatch`)
+        }
+        bridge.closing = true
+        if (bridge.reconnectTimer) {
+            clearTimeout(bridge.reconnectTimer)
+            bridge.reconnectTimer = undefined
+        }
+        await this.writePaneCommand(bridge, { type: 'terminal.release' }).catch(() => undefined)
+        const child = bridge.child
+        bridge.child = undefined
+        if (child && child.exitCode === null && child.signalCode === null) {
+            child.kill()
+        }
+        this.paneBridges.delete(paneId)
+        await this.callRuntime('pane.releaseInput', {
+            paneId,
+            ownerId: bridge.ownerId,
+        }).catch(() => undefined)
+        await this.callRuntime('pane.close', {
+            paneId,
+            producerId: bridge.producerId,
+        }).catch(() => undefined)
+        if (!shutdown) {
+            this.emitPaneEvent(bridge, { paneId, type: 'state', state: 'closed', reason: 'detached' })
+        }
+        return { paneId, detached: true }
+    }
+
+    private async ensureRuntimePane (pane: {
+        paneId: string
+        workspaceId: string
+        target: string
+        title: string
+        columns: number
+        rows: number
+        producerId: string
+    }): Promise<void> {
+        try {
+            await this.callRuntime('pane.open', {
+                id: pane.paneId,
+                workspaceId: pane.workspaceId,
+                sessionId: pane.target,
+                title: pane.title,
+                columns: pane.columns,
+                rows: pane.rows,
+                producerId: pane.producerId,
+            })
+        } catch (error) {
+            const snapshot = await this.callRuntime('pane.snapshot', { paneId: pane.paneId })
+            if (snapshot?.producerId !== pane.producerId) {
+                throw error
+            }
+        }
+    }
+
+    private async spawnPaneController (bridge: PaneBridge): Promise<void> {
+        if (bridge.closing || this.bridgeIsRunning(bridge)) {
+            return
+        }
+        const binary = this.resolveBinary(bridge.request)
+        const args = [
+            ...this.sessionArgs(bridge.request),
+            'terminal', 'session', 'control', bridge.target,
+            ...(bridge.request.takeover === false ? [] : ['--takeover']),
+            '--cols', String(bridge.columns),
+            '--rows', String(bridge.rows),
+        ]
+        bridge.stdoutBuffer = Buffer.alloc(0)
+        bridge.lastHerdrSequence = null
+        const child = spawn(binary, args, {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            windowsHide: true,
+        })
+        bridge.child = child
+        child.stdout?.on('data', (chunk: Buffer) => this.consumePaneStdout(bridge, chunk))
+        child.stderr?.on('data', (chunk: Buffer) => {
+            this.recentLog = `${this.recentLog}${chunk.toString('utf8')}`.slice(-MAX_LOG_BYTES)
+        })
+        child.once('exit', code => this.handlePaneExit(bridge, child, code))
+        await new Promise<void>((resolve, reject) => {
+            const onSpawn = (): void => {
+                child.off('error', onError)
+                resolve()
+            }
+            const onError = (error: Error): void => {
+                child.off('spawn', onSpawn)
+                reject(error)
+            }
+            child.once('spawn', onSpawn)
+            child.once('error', onError)
+        })
+    }
+
+    private consumePaneStdout (bridge: PaneBridge, chunk: Buffer): void {
+        if (bridge.closing || bridge.child === undefined) {
+            return
+        }
+        bridge.stdoutBuffer = Buffer.concat([bridge.stdoutBuffer, chunk])
+        if (bridge.stdoutBuffer.length > MAX_PANE_LINE_BYTES && bridge.stdoutBuffer.indexOf(0x0a) === -1) {
+            this.failPaneBridge(bridge, `Herdr terminal record exceeds ${MAX_PANE_LINE_BYTES} bytes`)
+            return
+        }
+        while (true) {
+            const newline = bridge.stdoutBuffer.indexOf(0x0a)
+            if (newline === -1) {
+                return
+            }
+            const line = bridge.stdoutBuffer.subarray(0, newline)
+            bridge.stdoutBuffer = bridge.stdoutBuffer.subarray(newline + 1)
+            if (!line.length) {
+                continue
+            }
+            if (line.length > MAX_PANE_LINE_BYTES) {
+                this.failPaneBridge(bridge, `Herdr terminal record exceeds ${MAX_PANE_LINE_BYTES} bytes`)
+                return
+            }
+            bridge.outputChain = bridge.outputChain
+                .then(() => this.handlePaneRecord(bridge, line.toString('utf8')))
+                .catch(error => this.failPaneBridge(bridge, error instanceof Error ? error.message : String(error)))
+        }
+    }
+
+    private async handlePaneRecord (bridge: PaneBridge, line: string): Promise<void> {
+        const record = JSON.parse(line) as any
+        if (record?.type === 'terminal.closed') {
+            this.emitPaneEvent(bridge, {
+                paneId: bridge.paneId,
+                type: 'state',
+                state: 'reconnecting',
+                reason: String(record.reason ?? 'Herdr terminal stream closed'),
+                reconnectAttempt: bridge.reconnectAttempts + 1,
+            })
+            return
+        }
+        if (record?.type !== 'terminal.frame' || record.encoding !== 'ansi') {
+            throw new Error('Invalid Herdr terminal record')
+        }
+        const sequence = Number(record.seq)
+        const width = this.safeDimension(record.width, 'frame width')
+        const height = this.safeDimension(record.height, 'frame height')
+        if (!Number.isSafeInteger(sequence) || sequence < 0
+            || bridge.lastHerdrSequence !== null && sequence <= bridge.lastHerdrSequence) {
+            throw new Error('Herdr terminal frame sequence is invalid or out of order')
+        }
+        const data = this.decodeBase64(record.bytes)
+        if (data.length > MAX_PANE_FRAME_BYTES) {
+            throw new Error(`Herdr terminal frame exceeds ${MAX_PANE_FRAME_BYTES} decoded bytes`)
+        }
+        const firstFrame = bridge.lastHerdrSequence === null
+        bridge.lastHerdrSequence = sequence
+        if (firstFrame) {
+            bridge.reconnectAttempts = 0
+            this.emitPaneEvent(bridge, {
+                paneId: bridge.paneId,
+                type: 'state',
+                state: 'attached',
+            })
+        }
+        for (let offset = 0; offset < data.length; offset += PANE_PUSH_CHUNK_BYTES) {
+            const chunk = data.subarray(offset, offset + PANE_PUSH_CHUNK_BYTES)
+            await this.callRuntime('pane.pushOutput', {
+                paneId: bridge.paneId,
+                producerId: bridge.producerId,
+                data: [...chunk],
+            })
+            this.emitPaneEvent(bridge, {
+                paneId: bridge.paneId,
+                type: 'output',
+                data: [...chunk],
+                full: record.full === true && offset === 0,
+                width,
+                height,
+            })
+        }
+    }
+
+    private handlePaneExit (bridge: PaneBridge, child: ChildProcess, code: number | null): void {
+        if (bridge.child !== child) {
+            return
+        }
+        bridge.child = undefined
+        if (bridge.closing) {
+            return
+        }
+        this.schedulePaneReconnect(bridge, `Herdr terminal controller exited with code ${code ?? 'unknown'}`)
+    }
+
+    private schedulePaneReconnect (bridge: PaneBridge, reason: string): void {
+        if (bridge.closing || bridge.reconnectTimer) {
+            return
+        }
+        if (bridge.reconnectAttempts >= MAX_PANE_RECONNECT_ATTEMPTS) {
+            this.emitPaneEvent(bridge, {
+                paneId: bridge.paneId,
+                type: 'state',
+                state: 'error',
+                reason,
+                reconnectAttempt: bridge.reconnectAttempts,
+            })
+            return
+        }
+        const delay = Math.min(500 * (2 ** bridge.reconnectAttempts), 8000)
+        bridge.reconnectAttempts++
+        this.emitPaneEvent(bridge, {
+            paneId: bridge.paneId,
+            type: 'state',
+            state: 'reconnecting',
+            reason,
+            reconnectAttempt: bridge.reconnectAttempts,
+        })
+        bridge.reconnectTimer = setTimeout(() => {
+            bridge.reconnectTimer = undefined
+            void this.spawnPaneController(bridge).catch(error => {
+                this.schedulePaneReconnect(bridge, error instanceof Error ? error.message : String(error))
+            })
+        }, delay)
+    }
+
+    private failPaneBridge (bridge: PaneBridge, reason: string): void {
+        this.lastError = `Herdr pane ${bridge.target}: ${reason}`
+        const child = bridge.child
+        bridge.child = undefined
+        if (child && child.exitCode === null && child.signalCode === null) {
+            child.kill()
+        }
+        this.schedulePaneReconnect(bridge, reason)
+    }
+
+    private writePaneCommand (bridge: PaneBridge, command: Record<string, unknown>): Promise<void> {
+        const stdin = bridge.child?.stdin
+        if (!stdin || stdin.destroyed || !stdin.writable) {
+            return Promise.reject(new Error(`Herdr pane ${bridge.paneId} is not connected`))
+        }
+        const payload = `${JSON.stringify(command)}\n`
+        return new Promise((resolve, reject) => {
+            const onError = (error: Error): void => {
+                stdin.off('drain', onDrain)
+                reject(error)
+            }
+            const onDrain = (): void => {
+                stdin.off('error', onError)
+                resolve()
+            }
+            stdin.once('error', onError)
+            if (stdin.write(payload)) {
+                stdin.off('error', onError)
+                resolve()
+            } else {
+                stdin.once('drain', onDrain)
+            }
+        })
+    }
+
+    private requirePaneBridge (request: HerdrRequest, rendererId: number): PaneBridge {
+        const paneId = this.requiredId(request.paneId, 'paneId')
+        const bridge = this.paneBridges.get(paneId)
+        if (!bridge || bridge.closing) {
+            throw new Error(`Herdr pane ${paneId} is not attached`)
+        }
+        if (bridge.rendererId !== rendererId) {
+            throw new Error(`Herdr pane ${paneId} belongs to another renderer`)
+        }
+        return bridge
+    }
+
+    private paneAttachment (bridge: PaneBridge): unknown {
+        return {
+            paneId: bridge.paneId,
+            target: bridge.target,
+            title: bridge.title,
+            workspaceId: bridge.workspaceId,
+            ownerId: bridge.ownerId,
+            columns: bridge.columns,
+            rows: bridge.rows,
+            attached: this.bridgeIsRunning(bridge),
+        }
+    }
+
+    private bridgeIsRunning (bridge: PaneBridge): boolean {
+        return !!bridge.child && bridge.child.exitCode === null && bridge.child.signalCode === null
+    }
+
+    private producerId (request: HerdrRequest, target: string): string {
+        const session = request.session?.trim() || 'default'
+        return `herdr:${session}:${target}`.slice(0, 128)
+    }
+
+    private assertPaneRuntime (): void {
+        if (!this.runtimeRequest || !this.paneEventSink) {
+            throw new Error('Herdr pane transport is unavailable in this host')
+        }
+    }
+
+    private async callRuntime (method: string, params: unknown): Promise<any> {
+        if (!this.runtimeRequest) {
+            throw new Error('issh Runtime is unavailable')
+        }
+        const response = await this.runtimeRequest({
+            jsonrpc: '2.0',
+            id: `herdr-pane-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            method,
+            params,
+        })
+        if (response.error) {
+            throw new Error(response.error.message)
+        }
+        return response.result
+    }
+
+    private emitPaneEvent (bridge: PaneBridge, event: HerdrPaneEvent): void {
+        this.paneEventSink?.(bridge.rendererId, event)
+    }
+
+    private safeDimension (value: unknown, name: string): number {
+        const dimension = Math.floor(Number(value))
+        if (!Number.isFinite(dimension) || dimension < 1 || dimension > 65535) {
+            throw new Error(`${name} must be an integer between 1 and 65535`)
+        }
+        return dimension
+    }
+
+    private safeBytes (value: unknown): number[] {
+        if (!Array.isArray(value) || value.length > MAX_PANE_WRITE_BYTES
+            || value.some(byte => !Number.isInteger(byte) || byte < 0 || byte > 255)) {
+            throw new Error(`data must be an unsigned byte array no larger than ${MAX_PANE_WRITE_BYTES} bytes`)
+        }
+        return value
+    }
+
+    private decodeBase64 (value: unknown): Buffer {
+        if (typeof value !== 'string' || value.length > Math.ceil(MAX_PANE_FRAME_BYTES * 4 / 3) + 4
+            || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
+            throw new Error('Herdr terminal frame contains invalid base64 bytes')
+        }
+        return Buffer.from(value, 'base64')
     }
 
     private async replayWorkspaceSyncs (lifecycleRequest: HerdrRequest): Promise<void> {
