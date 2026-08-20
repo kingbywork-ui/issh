@@ -103,6 +103,7 @@ For the lowest initial cost there is no separate QA or DevOps role. BA owns acce
 ### Weeks 11-12: pilot release
 
 - Complete Windows packaging, upgrade/rollback checks, security tests, performance baselines, accessibility review, UAT, documentation, and release gate.
+- Status (2026-08-20): conditional pilot gate completed on `dev`. The normal NSIS x64 build reused the validated local Electron 43.2.0 runtime, produced `dist/issh-0.1.3-setup-x64.exe`, and packaged the Rust Runtime plus Agent Bridge/Herdr adapter markers. TypeScript, Rust, Agent/Herdr, runtime, GUI, security, performance, and accessibility checks passed; see `PILOT_RELEASE_GATE.md` for exact evidence and artifact hash. Live installer upgrade/rollback, real Herdr-binary UAT, and two-host/four-agent SSH UAT remain explicit pre-production tasks because they would require an isolated install and authorized external systems.
 
 ## Post-MVP Gates
 

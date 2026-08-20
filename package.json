@@ -146,6 +146,7 @@
     "test:codex-desktop-config": "node scripts/test-codex-desktop-config.mjs",
     "test:environment-compat": "node scripts/test-environment-compat.mjs",
     "test:migrations": "node scripts/test-issh-migrations.mjs",
+    "test:pilot-release-gate": "node scripts/pilot-release-gate.mjs",
     "audit:rename": "node scripts/audit-issh-residuals.mjs",
     "audit:security": "node scripts/security-audit.mjs && node scripts/harden-embedded-npm.mjs --check",
     "audit:embedded-npm": "node scripts/harden-embedded-npm.mjs --check"
