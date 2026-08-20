@@ -113,6 +113,14 @@ For the lowest initial cost there is no separate QA or DevOps role. BA owns acce
 - Weeks 17-22: optional Herdr native-pane proxy only if pilot users require it. This includes raw terminal bytes, resize/control characters, input ownership, full-screen apps, and recovery.
 - Electron removal begins only after Rust SSH/PTY/SFTP and Tauri UI reach verified parity.
 
+### Phase 9 implementation status (2026-08-20)
+
+- The first Electron-independent desktop slice now exists in `issh-tauri`: a Tauri 2 native host, Svelte 5 interface, strict CSP, and a minimal `core:default` capability set. It has no Angular or Electron imports and does not expose a network listener.
+- The real development path `Svelte -> Tauri command -> current-user Named Pipe -> isshd -> runtime.health` has been exercised successfully. Tauri resolves or starts the existing `isshd`, validates the 64 KiB JSON-RPC limit and protocol `0.4.0`, serializes startup, and stops only its owned child during shutdown. `ISSH_CONFIG_DIRECTORY` remains available as a migration bridge to the legacy per-user Runtime identity.
+- The initial operations-console UI reports Runtime protocol/version/PID/capabilities and the migration gates. It deliberately marks desktop-shell work as in progress rather than implying product parity.
+- Focused verification passed: Svelte diagnostics, Vite production build, Rust format, strict Clippy, two native command/response tests, a real source-tree Tauri window against `isshd`, and process-cleanup inspection after exit. No installer or portable package was produced.
+- This is the first replacement slice, not Electron removal. The next gate is Rust-owned local PTY and terminal streaming rendered by the Tauri client; SSH/SFTP, Vault, Workspace/Agent/Herdr UI, settings, plugins, tray/updater, protocol compatibility, migration, and packaged parity still follow. The Electron client remains a reference implementation only and receives no replacement-exclusive features.
+
 ### Phase 8 implementation status (2026-08-20)
 
 - The native-pane proxy is implemented and verified on `dev` without running a new package build. `issh-runtime-pane` owns the producer-agnostic lifecycle and stream contract: a 2 MiB in-memory output ring, 48 KiB subscription batches, sequence cursors, raw-byte preservation, producer checks, exclusive input ownership, bounded writes, and resize authorization.

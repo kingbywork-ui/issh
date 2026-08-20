@@ -1,0 +1,27 @@
+[package]
+name = "issh-tauri"
+version = "0.1.0"
+description = "Native issh desktop client"
+authors = ["issh Developers"]
+edition = "2021"
+
+[lib]
+name = "issh_tauri_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1.0.151"
+sha2 = "0.11.0"
+tauri = { version = "2.11.5", features = [] }
+tokio = { version = "1.53.1", features = ["io-util", "net", "sync", "time"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
