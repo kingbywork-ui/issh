@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{Manager, Runtime, State};
+use tauri::{Manager, Runtime, State, WebviewUrl, WebviewWindowBuilder};
 use tokio::sync::Mutex as AsyncMutex;
 
 const MAX_MESSAGE_BYTES: usize = 64 * 1024;
@@ -144,6 +144,24 @@ pub fn run() {
     let app = tauri::Builder::default()
         .setup(|app| {
             app.manage(RuntimeManager::new(app.handle())?);
+            if app.get_webview_window("main").is_none() {
+                WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                    .title("issh")
+                    .inner_size(1180.0, 760.0)
+                    .min_inner_size(760.0, 560.0)
+                    .resizable(true)
+                    .center()
+                    .build()
+                    .map_err(|error| format!("无法创建 issh 主窗口：{error}"))?;
+            }
+            if let Some(window) = app.get_webview_window("main") {
+                window
+                    .show()
+                    .map_err(|error| format!("无法显示 issh 主窗口：{error}"))?;
+                window
+                    .set_focus()
+                    .map_err(|error| format!("无法聚焦 issh 主窗口：{error}"))?;
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![runtime_health, runtime_request])

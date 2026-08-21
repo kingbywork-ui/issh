@@ -121,6 +121,15 @@ For the lowest initial cost there is no separate QA or DevOps role. BA owns acce
 - Focused verification passed: Svelte diagnostics, Vite production build, Rust format, strict Clippy, two native command/response tests, a real source-tree Tauri window against `isshd`, and process-cleanup inspection after exit. No installer or portable package was produced.
 - This is the first replacement slice, not Electron removal. The next gate is Rust-owned local PTY and terminal streaming rendered by the Tauri client; SSH/SFTP, Vault, Workspace/Agent/Herdr UI, settings, plugins, tray/updater, protocol compatibility, migration, and packaged parity still follow. The Electron client remains a reference implementation only and receives no replacement-exclusive features.
 
+### Phase 10 implementation status (2026-08-21)
+
+- Added `issh-runtime-session`, an independent local-session crate based on `portable-pty 0.9.0`. Windows uses an explicit `cmd.exe /d` ConPTY child; non-Windows keeps the native default shell path for the future Unix socket target.
+- `SessionStore` owns only the child, PTY master, reader thread, writer, dimensions, and cleanup state. Raw output is retained in a 2 MiB bounded sequence ring with 4 KiB events, 12 KiB subscription batches, cursor recovery, and dropped-byte accounting. Writes are bounded to 12 KiB and dimensions to 1-1000.
+- Added additive Runtime methods `session.openLocal`, `session.snapshot`, `session.write`, `session.resize`, `session.subscribe`, and `session.close`. Existing `session.list` Workspace semantics remain unchanged. SSH/SFTP are not falsely represented as implemented.
+- Tauri/Svelte now owns an xterm.js terminal workbench. `@xterm/xterm 5.4.0` renders raw bytes, `@xterm/addon-fit 0.9.0` drives resize RPC, and `runtime_request` remains the only native command boundary. The UI has a signal-rail terminal layout, live session telemetry, sequence cursor, error state, and explicit cleanup.
+- Focused verification passed: Rust format, strict Clippy, 20 workspace tests, Runtime health smoke, local PTY smoke (ConPTY startup, DSR cursor response, marker echo, resize, close and cleanup), Svelte diagnostics, and Vite production build. No package was built.
+- The Electron removal gate is still open: Tauri local terminal is the first functional parity slice, but SSH transport, SFTP, Vault, Workspace/Agent/Herdr screens, settings, plugin loading, tray/updater, migration and packaged parity remain to be migrated and verified.
+
 ### Phase 8 implementation status (2026-08-20)
 
 - The native-pane proxy is implemented and verified on `dev` without running a new package build. `issh-runtime-pane` owns the producer-agnostic lifecycle and stream contract: a 2 MiB in-memory output ring, 48 KiB subscription batches, sequence cursors, raw-byte preservation, producer checks, exclusive input ownership, bounded writes, and resize authorization.

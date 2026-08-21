@@ -1,5 +1,19 @@
 # issh-runtime Handoff
 
+## Phase 10 - Local PTY session migration complete (2026-08-21)
+
+- Added the `issh-runtime-session` crate and its own `agent.md`/`handoff.md`.
+- Local sessions use `portable-pty 0.9.0`; Windows uses explicit `cmd.exe /d`
+  through ConPTY. The store owns the child and PTY handles, retains raw output
+  in a bounded 2 MiB cursor ring, supports write/resize/subscribe and cleans up
+  only its own child.
+- Runtime exposes additive `session.openLocal`, `session.snapshot`,
+  `session.write`, `session.resize`, `session.subscribe`, and `session.close`.
+  Existing Workspace `session.list` remains compatible.
+- `issh-tauri` renders the session through xterm.js and fit-driven resize. Local
+  PTY smoke passed marker echo, DSR response, resize and close cleanup.
+- SSH, SFTP, Vault, and Electron removal remain future gates.
+
 ## Phase 8 - Herdr native pane proxy complete
 
 - Implemented and verified on `dev` without running a new Electron/Windows package build.

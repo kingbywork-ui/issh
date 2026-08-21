@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@tauri-apps/api": "2.11.1",
+    "@xterm/addon-fit": "^0.9.0",
+    "@xterm/xterm": "^5.4.0",
     "svelte": "5.56.9"
   },
   "devDependencies": {

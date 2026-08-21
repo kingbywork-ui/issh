@@ -4,6 +4,7 @@ use issh_runtime_protocol::{
     INVALID_REQUEST, MAX_MESSAGE_BYTES, MESSAGE_TOO_LARGE, METHOD_NOT_FOUND, PARSE_ERROR,
     PROTOCOL_VERSION,
 };
+use issh_runtime_session::{LocalSessionSpec, SessionStore, MAX_SESSION_BATCH_BYTES};
 use issh_runtime_workspace::{SessionSnapshot, WorkspaceStore};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -29,6 +30,7 @@ struct Options {
 struct RuntimeState {
     started_at_unix_ms: u128,
     panes: Mutex<PaneStore>,
+    sessions: Mutex<SessionStore>,
     workspace: Mutex<WorkspaceStore>,
 }
 
@@ -40,6 +42,7 @@ impl RuntimeState {
         Ok(Self {
             started_at_unix_ms,
             panes: Mutex::new(PaneStore::new()),
+            sessions: Mutex::new(SessionStore::new()),
             workspace: Mutex::new(WorkspaceStore::open(database_path, now_unix_ms())?),
         })
     }
@@ -49,6 +52,7 @@ impl RuntimeState {
         Self {
             started_at_unix_ms,
             panes: Mutex::new(PaneStore::new()),
+            sessions: Mutex::new(SessionStore::new()),
             workspace: Mutex::new(
                 WorkspaceStore::open_in_memory(now_unix_ms())
                     .expect("in-memory workspace should open"),
@@ -209,6 +213,71 @@ struct PaneSubscribeParams {
     max_events: usize,
     #[serde(default = "default_pane_max_bytes")]
     max_bytes: usize,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LocalSessionOpenParams {
+    #[serde(default = "default_local_session_title")]
+    title: String,
+    cwd: Option<PathBuf>,
+    #[serde(default = "default_session_columns")]
+    columns: u16,
+    #[serde(default = "default_session_rows")]
+    rows: u16,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionIdParams {
+    session_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionWriteParams {
+    session_id: String,
+    data: Vec<u8>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionResizeParams {
+    session_id: String,
+    columns: u16,
+    rows: u16,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionSubscribeParams {
+    session_id: String,
+    #[serde(default)]
+    after_sequence: u64,
+    #[serde(default = "default_session_max_events")]
+    max_events: usize,
+    #[serde(default = "default_session_max_bytes")]
+    max_bytes: usize,
+}
+
+fn default_local_session_title() -> String {
+    "本地终端".to_string()
+}
+
+fn default_session_columns() -> u16 {
+    120
+}
+
+fn default_session_rows() -> u16 {
+    36
+}
+
+fn default_session_max_events() -> usize {
+    64
+}
+
+fn default_session_max_bytes() -> usize {
+    MAX_SESSION_BATCH_BYTES
 }
 
 fn default_pane_max_events() -> usize {
@@ -407,6 +476,12 @@ fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                     "runtime.health",
                     "session.sync",
                     "session.list",
+                    "session.openLocal",
+                    "session.snapshot",
+                    "session.write",
+                    "session.resize",
+                    "session.subscribe",
+                    "session.close",
                     "workspace.create",
                     "workspace.list",
                     "workspace.bind",
@@ -449,6 +524,66 @@ fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
         "session.list" => with_workspace(state, id, |workspace| {
             Ok::<_, issh_runtime_workspace::WorkspaceError>(workspace.list_sessions())
         }),
+        "session.openLocal" => {
+            let params = match parse_params::<LocalSessionOpenParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_sessions(state, id, |sessions| {
+                sessions.open_local(LocalSessionSpec {
+                    title: params.title,
+                    cwd: params.cwd,
+                    columns: params.columns,
+                    rows: params.rows,
+                })
+            })
+        }
+        "session.snapshot" => {
+            let params = match parse_params::<SessionIdParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_sessions(state, id, |sessions| sessions.snapshot(&params.session_id))
+        }
+        "session.write" => {
+            let params = match parse_params::<SessionWriteParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_sessions(state, id, |sessions| {
+                sessions.write(&params.session_id, params.data)
+            })
+        }
+        "session.resize" => {
+            let params = match parse_params::<SessionResizeParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_sessions(state, id, |sessions| {
+                sessions.resize(&params.session_id, params.columns, params.rows)
+            })
+        }
+        "session.subscribe" => {
+            let params = match parse_params::<SessionSubscribeParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_sessions(state, id, |sessions| {
+                sessions.subscribe(
+                    &params.session_id,
+                    params.after_sequence,
+                    params.max_events,
+                    params.max_bytes,
+                )
+            })
+        }
+        "session.close" => {
+            let params = match parse_params::<SessionIdParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_sessions(state, id, |sessions| sessions.close(&params.session_id))
+        }
         "pane.list" => with_panes(state, id, |panes| {
             Ok::<_, issh_runtime_pane::PaneError>(panes.list())
         }),
@@ -711,6 +846,22 @@ where
     match operation(&mut panes) {
         Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
             .expect("pane response serialization cannot fail"),
+        Err(error) => serialize_error(id, INVALID_PARAMS, error.to_string()),
+    }
+}
+
+fn with_sessions<T, F>(state: &RuntimeState, id: Value, operation: F) -> Vec<u8>
+where
+    T: serde::Serialize,
+    F: FnOnce(&mut SessionStore) -> Result<T, issh_runtime_session::SessionError>,
+{
+    let mut sessions = match state.sessions.lock() {
+        Ok(sessions) => sessions,
+        Err(_) => return serialize_error(id, -32603, "Session state is unavailable"),
+    };
+    match operation(&mut sessions) {
+        Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+            .expect("session response serialization cannot fail"),
         Err(error) => serialize_error(id, INVALID_PARAMS, error.to_string()),
     }
 }

@@ -1,0 +1,9 @@
+[package]
+name = "issh-runtime-session"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+portable-pty.workspace = true
+serde.workspace = true
