@@ -1,5 +1,30 @@
 # issh-runtime Handoff
 
+## Phase 13 - SFTP subsystem bridge complete (2026-08-24)
+
+- Extended `issh-runtime-ssh` `SshSftpSession` with chunked transfer primitives:
+  `read_file_chunk(path, offset, length)` returns `SftpReadChunk { offset, data,
+  total_size, eof }` using seek + bounded reads, and `write_file_chunk(path,
+  offset, data, truncate)` returns `SftpWriteOutcome { total_size }` using
+  `OpenFlags`-based open with optional TRUNCATE. Both enforce
+  `MAX_SFTP_CHUNK_BYTES` (4 MiB) and the existing `MAX_SFTP_FILE_BYTES` cap.
+- `isshd` now exposes the full SFTP RPC surface: `sftp.open`, `sftp.read`,
+  `sftp.write`, `sftp.list`, `sftp.stat`, `sftp.mkdir`, `sftp.remove`,
+  `sftp.removeDir`, `sftp.rename`, and `sftp.close`. Reads and writes are
+  chunk-capped at 32 KiB per RPC with base64 payloads; `sftp.list` is paginated
+  with `SFTP_MAX_LIST_PAGE`. All calls route through `with_sftp_session` with a
+  `SFTP_RPC_TIMEOUT_MS` timeout and structured `SftpRpcError` mapping.
+- `sftp.read` no longer reads whole files into memory: it delegates to the new
+  chunk API and returns `eof` so clients can stream. `sftp.write` accepts
+  `offset`/`truncate`/`eof` params for streaming uploads, and `sftp.close`
+  removes the session from the registry before closing.
+- Added two ssh-crate tests covering exact-range chunk reads (including
+  past-EOF), append vs truncate writes, and the chunk-size limit rejection.
+  Workspace now has 38 tests; fmt, Clippy (warnings denied), and full workspace
+  checks pass.
+- Vault, Tauri SSH/SFTP UI, and packaging remain future gates. No package was
+  built.
+
 ## Phase 12 - SSH session migration complete (2026-08-24)
 
 - Extended `issh-runtime-ssh` with `open_interactive(columns, rows)`: it opens
