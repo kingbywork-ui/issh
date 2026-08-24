@@ -4,6 +4,7 @@ members = [
     "crates/pane",
     "crates/session",
     "crates/ssh",
+    "crates/vault",
     "crates/workspace",
     "crates/isshd",
 ]

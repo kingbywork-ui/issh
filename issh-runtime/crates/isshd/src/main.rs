@@ -9,6 +9,7 @@ use issh_runtime_session::{
     MAX_SESSION_BATCH_BYTES,
 };
 use issh_runtime_ssh::{SshConnection, SshConnectionSpec, SshInteractiveChannel, SshSftpSession};
+use issh_runtime_vault::{VaultStatus, VaultStore};
 use issh_runtime_workspace::{SessionSnapshot, WorkspaceStore};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -26,12 +27,15 @@ mod windows_security;
 
 const SSH_CONNECT_TIMEOUT_MS: u64 = 10_000;
 
+const DEFAULT_VAULT_FILE: &str = "vault.json";
+
 const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\issh-runtime-v1";
 
 #[derive(Debug)]
 struct Options {
     pipe_name: String,
     database_path: PathBuf,
+    vault_path: PathBuf,
     once: bool,
 }
 
@@ -43,13 +47,18 @@ struct RuntimeState {
     ssh_pumps: Mutex<HashMap<String, tokio::task::JoinHandle<()>>>,
     ssh_connections: Mutex<HashMap<String, SshConnection>>,
     sftp_sessions: Mutex<HashMap<String, Arc<SshSftpSession>>>,
+    vault: Mutex<VaultStore>,
 }
 
 impl RuntimeState {
     fn open(
         started_at_unix_ms: u128,
         database_path: &std::path::Path,
+        vault_path: &std::path::Path,
     ) -> Result<Self, issh_runtime_workspace::WorkspaceError> {
+        let vault = VaultStore::open(vault_path).map_err(|error| {
+            issh_runtime_workspace::WorkspaceError::Storage(format!("vault open failed: {error}"))
+        })?;
         Ok(Self {
             started_at_unix_ms,
             panes: Mutex::new(PaneStore::new()),
@@ -58,11 +67,19 @@ impl RuntimeState {
             ssh_pumps: Mutex::new(HashMap::new()),
             ssh_connections: Mutex::new(HashMap::new()),
             sftp_sessions: Mutex::new(HashMap::new()),
+            vault: Mutex::new(vault),
         })
     }
 
     #[cfg(test)]
     fn in_memory(started_at_unix_ms: u128) -> Self {
+        let vault_dir = std::env::temp_dir().join(format!(
+            "isshd-vault-test-{}-{}",
+            std::process::id(),
+            started_at_unix_ms
+        ));
+        let _ = std::fs::remove_dir_all(&vault_dir);
+        let vault_path = vault_dir.join("vault.json");
         Self {
             started_at_unix_ms,
             panes: Mutex::new(PaneStore::new()),
@@ -74,6 +91,7 @@ impl RuntimeState {
             ssh_pumps: Mutex::new(HashMap::new()),
             ssh_connections: Mutex::new(HashMap::new()),
             sftp_sessions: Mutex::new(HashMap::new()),
+            vault: Mutex::new(VaultStore::open(&vault_path).expect("vault store should open")),
         }
     }
 
@@ -279,6 +297,35 @@ struct LocalSessionOpenParams {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct VaultUnlockParams {
+    passphrase: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VaultSetEnabledParams {
+    enabled: bool,
+    #[serde(default)]
+    passphrase: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VaultSecretIdParams {
+    id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VaultPutSecretParams {
+    id: String,
+    #[serde(default)]
+    description: String,
+    value: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct SshSessionOpenParams {
     #[serde(default = "default_ssh_session_title")]
     title: String,
@@ -293,6 +340,8 @@ struct SshSessionOpenParams {
     private_key_path: Option<PathBuf>,
     private_key_passphrase: Option<String>,
     expected_host_key: String,
+    #[serde(default)]
+    vault_secret_id: Option<String>,
 }
 
 fn default_ssh_session_title() -> String {
@@ -511,6 +560,14 @@ impl Options {
         let mut database_path = env::var_os("ISSH_RUNTIME_DATABASE")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("issh-runtime.sqlite3"));
+        let mut vault_path = env::var_os("ISSH_VAULT_FILE")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                database_path
+                    .parent()
+                    .unwrap_or_else(|| std::path::Path::new("."))
+                    .join(DEFAULT_VAULT_FILE)
+            });
         let mut once = false;
         let mut args = env::args().skip(1);
 
@@ -529,9 +586,16 @@ impl Options {
                         .map(PathBuf::from)
                         .ok_or_else(|| "--database requires a non-empty value".to_string())?;
                 }
+                "--vault" => {
+                    vault_path = args
+                        .next()
+                        .filter(|value| !value.trim().is_empty())
+                        .map(PathBuf::from)
+                        .ok_or_else(|| "--vault requires a non-empty value".to_string())?;
+                }
                 "--once" => once = true,
                 "--help" | "-h" => {
-                    println!("Usage: isshd [--pipe <name>] [--database <path>] [--once]");
+                    println!("Usage: isshd [--pipe <name>] [--database <path>] [--vault <path>] [--once]");
                     std::process::exit(0);
                 }
                 unknown => return Err(format!("Unknown argument: {unknown}")),
@@ -541,6 +605,7 @@ impl Options {
         Ok(Self {
             pipe_name,
             database_path,
+            vault_path,
             once,
         })
     }
@@ -558,9 +623,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         std::fs::create_dir_all(parent)?;
     }
+    if let Some(parent) = options
+        .vault_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        std::fs::create_dir_all(parent)?;
+    }
     let state = Arc::new(RuntimeState::open(
         started_at_unix_ms,
         &options.database_path,
+        &options.vault_path,
     )?);
 
     run(options, state).await?;
@@ -704,6 +777,14 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                     "sftp.rename",
                     "sftp.close",
                     "ssh.probe",
+                    "vault.status",
+                    "vault.unlock",
+                    "vault.lock",
+                    "vault.setEnabled",
+                    "vault.listSecrets",
+                    "vault.getSecret",
+                    "vault.putSecret",
+                    "vault.deleteSecret",
                     "workspace.create",
                     "workspace.list",
                     "workspace.bind",
@@ -1057,6 +1138,76 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                 )
             })
         }
+        "vault.status" => match vault_status(state).await {
+            Ok(status) => serde_json::to_vec(&RpcResponse::new(id, status))
+                .expect("vault status serialization cannot fail"),
+            Err(error) => serialize_error(id, error.code, error.message),
+        },
+        "vault.unlock" => {
+            let params = match parse_params::<VaultUnlockParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            match vault_unlock(state, params.passphrase).await {
+                Ok(status) => serde_json::to_vec(&RpcResponse::new(id, status))
+                    .expect("vault status serialization cannot fail"),
+                Err(error) => serialize_error(id, error.code, error.message),
+            }
+        }
+        "vault.lock" => match vault_lock(state).await {
+            Ok(status) => serde_json::to_vec(&RpcResponse::new(id, status))
+                .expect("vault status serialization cannot fail"),
+            Err(error) => serialize_error(id, error.code, error.message),
+        },
+        "vault.setEnabled" => {
+            let params = match parse_params::<VaultSetEnabledParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            match vault_set_enabled(state, params.enabled, params.passphrase).await {
+                Ok(status) => serde_json::to_vec(&RpcResponse::new(id, status))
+                    .expect("vault status serialization cannot fail"),
+                Err(error) => serialize_error(id, error.code, error.message),
+            }
+        }
+        "vault.listSecrets" => match vault_list_secrets(state).await {
+            Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+                .expect("vault secret list serialization cannot fail"),
+            Err(error) => serialize_error(id, error.code, error.message),
+        },
+        "vault.getSecret" => {
+            let params = match parse_params::<VaultSecretIdParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            match vault_get_secret(state, params.id).await {
+                Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+                    .expect("vault secret serialization cannot fail"),
+                Err(error) => serialize_error(id, error.code, error.message),
+            }
+        }
+        "vault.putSecret" => {
+            let params = match parse_params::<VaultPutSecretParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            match vault_put_secret(state, params.id, params.description, params.value).await {
+                Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+                    .expect("vault put response serialization cannot fail"),
+                Err(error) => serialize_error(id, error.code, error.message),
+            }
+        }
+        "vault.deleteSecret" => {
+            let params = match parse_params::<VaultSecretIdParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            match vault_delete_secret(state, params.id).await {
+                Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+                    .expect("vault delete response serialization cannot fail"),
+                Err(error) => serialize_error(id, error.code, error.message),
+            }
+        }
         "workspace.create" => {
             let params = match parse_params::<WorkspaceCreateParams>(request.params) {
                 Ok(params) => params,
@@ -1252,15 +1403,157 @@ impl RemoteShellIo for SshShellBridge {
     }
 }
 
+fn resolve_vault_credentials(
+    state: &RuntimeState,
+    vault_secret_id: Option<&str>,
+    inline_username: String,
+    inline_password: Option<String>,
+) -> Result<(Option<String>, Option<String>), RpcError> {
+    let Some(secret_id) = vault_secret_id else {
+        return Ok((Some(inline_username), inline_password));
+    };
+    let vault = state
+        .vault
+        .lock()
+        .map_err(|_| RpcError::new(-32603, "Vault state is unavailable"))?;
+    if !vault.is_unlocked() {
+        return Ok((Some(inline_username), inline_password));
+    }
+    let secret = vault.get_secret(secret_id).map_err(vault_rpc_error)?;
+    let username = if inline_username.trim().is_empty() {
+        Some(secret.key.id)
+    } else {
+        Some(inline_username)
+    };
+    Ok((username, Some(secret.value)))
+}
+
+fn vault_rpc_error(error: issh_runtime_vault::VaultError) -> RpcError {
+    use issh_runtime_vault::VaultError;
+    match error {
+        VaultError::Locked => RpcError::new(-32004, "Vault is locked"),
+        VaultError::AlreadyUnlocked => RpcError::new(-32004, "Vault is already unlocked"),
+        VaultError::BadPassphrase => {
+            RpcError::new(-32005, "Incorrect passphrase or corrupted vault")
+        }
+        VaultError::UnsupportedVersion(version) => RpcError::new(
+            -32006,
+            format!("Unsupported vault format version {version}"),
+        ),
+        VaultError::Malformed(message) => {
+            RpcError::new(-32007, format!("Vault file is malformed: {message}"))
+        }
+        VaultError::FileTooLarge => RpcError::new(-32007, "Vault file exceeds size limit"),
+        VaultError::NotFound(id) => RpcError::new(-32008, format!("Vault secret not found: {id}")),
+        VaultError::SecretTooLarge => RpcError::new(-32008, "Vault secret exceeds size limit"),
+        VaultError::TooManySecrets => RpcError::new(-32008, "Vault holds too many secrets"),
+        VaultError::Io(error) => RpcError::new(-32603, format!("Vault I/O error: {error}")),
+    }
+}
+
+async fn vault_status(state: &RuntimeState) -> Result<VaultStatus, RpcError> {
+    let vault = state
+        .vault
+        .lock()
+        .map_err(|_| RpcError::new(-32603, "Vault state is unavailable"))?;
+    Ok(vault.status())
+}
+
+async fn vault_unlock(state: &RuntimeState, passphrase: String) -> Result<VaultStatus, RpcError> {
+    let mut vault = state
+        .vault
+        .lock()
+        .map_err(|_| RpcError::new(-32603, "Vault state is unavailable"))?;
+    vault.unlock(&passphrase).map_err(vault_rpc_error)?;
+    Ok(vault.status())
+}
+
+async fn vault_lock(state: &RuntimeState) -> Result<VaultStatus, RpcError> {
+    let mut vault = state
+        .vault
+        .lock()
+        .map_err(|_| RpcError::new(-32603, "Vault state is unavailable"))?;
+    vault.lock();
+    Ok(vault.status())
+}
+
+async fn vault_set_enabled(
+    state: &RuntimeState,
+    enabled: bool,
+    passphrase: Option<String>,
+) -> Result<VaultStatus, RpcError> {
+    let mut vault = state
+        .vault
+        .lock()
+        .map_err(|_| RpcError::new(-32603, "Vault state is unavailable"))?;
+    vault
+        .set_enabled(enabled, passphrase.as_deref())
+        .map_err(vault_rpc_error)?;
+    Ok(vault.status())
+}
+
+async fn vault_list_secrets(state: &RuntimeState) -> Result<Value, RpcError> {
+    let vault = state
+        .vault
+        .lock()
+        .map_err(|_| RpcError::new(-32603, "Vault state is unavailable"))?;
+    let secrets = vault.list_secrets().map_err(vault_rpc_error)?;
+    Ok(serde_json::to_value(secrets).expect("vault secret list serialization cannot fail"))
+}
+
+async fn vault_get_secret(state: &RuntimeState, id: String) -> Result<Value, RpcError> {
+    let vault = state
+        .vault
+        .lock()
+        .map_err(|_| RpcError::new(-32603, "Vault state is unavailable"))?;
+    let secret = vault.get_secret(&id).map_err(vault_rpc_error)?;
+    Ok(serde_json::json!({
+        "id": secret.key.id,
+        "description": secret.key.description,
+        "value": secret.value,
+    }))
+}
+
+async fn vault_put_secret(
+    state: &RuntimeState,
+    id: String,
+    description: String,
+    value: String,
+) -> Result<Value, RpcError> {
+    let mut vault = state
+        .vault
+        .lock()
+        .map_err(|_| RpcError::new(-32603, "Vault state is unavailable"))?;
+    vault
+        .put_secret(&id, &description, &value)
+        .map_err(vault_rpc_error)?;
+    Ok(serde_json::json!({ "saved": true }))
+}
+
+async fn vault_delete_secret(state: &RuntimeState, id: String) -> Result<Value, RpcError> {
+    let mut vault = state
+        .vault
+        .lock()
+        .map_err(|_| RpcError::new(-32603, "Vault state is unavailable"))?;
+    vault.delete_secret(&id).map_err(vault_rpc_error)?;
+    Ok(serde_json::json!({ "deleted": true }))
+}
+
 async fn open_ssh_session(
     state: &RuntimeState,
     params: SshSessionOpenParams,
 ) -> Result<issh_runtime_session::SessionSnapshot, RpcError> {
+    let (username, password) = resolve_vault_credentials(
+        state,
+        params.vault_secret_id.as_deref(),
+        params.username.clone(),
+        params.password.clone(),
+    )?;
     let connect_fut = SshConnection::connect(SshConnectionSpec {
         host: params.host.clone(),
         port: params.port,
-        username: params.username.clone(),
-        password: params.password.clone(),
+        username: username.unwrap_or_else(|| params.username.clone()),
+        password,
         private_key_path: params.private_key_path.clone(),
         private_key_passphrase: params.private_key_passphrase.clone(),
         expected_host_key: params.expected_host_key.clone(),
@@ -1833,6 +2126,96 @@ mod tests {
         let value: Value = serde_json::from_slice(&response).expect("response should be JSON");
         assert_eq!(value["id"], 9);
         assert_eq!(value["error"]["code"], METHOD_NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn vault_roundtrip_over_rpc() {
+        let state = state();
+
+        let disabled = dispatch(
+            br#"{"jsonrpc":"2.0","id":1,"method":"vault.status","params":{}}"#,
+            &state,
+        )
+        .await;
+        let disabled: Value = serde_json::from_slice(&disabled).expect("status should be JSON");
+        assert_eq!(disabled["result"]["enabled"], false);
+
+        let enabled = dispatch(
+            br#"{"jsonrpc":"2.0","id":2,"method":"vault.setEnabled","params":{"enabled":true,"passphrase":"pass"}}"#,
+            &state,
+        )
+        .await;
+        let enabled: Value = serde_json::from_slice(&enabled).expect("setEnabled should be JSON");
+        assert_eq!(enabled["result"]["enabled"], true);
+        assert_eq!(enabled["result"]["unlocked"], true);
+
+        let put = dispatch(
+            br#"{"jsonrpc":"2.0","id":3,"method":"vault.putSecret","params":{"id":"ssh:web","description":"Web server","value":"secret1"}}"#,
+            &state,
+        )
+        .await;
+        let put: Value = serde_json::from_slice(&put).expect("putSecret should be JSON");
+        assert_eq!(put["result"]["saved"], true);
+
+        let listed = dispatch(
+            br#"{"jsonrpc":"2.0","id":4,"method":"vault.listSecrets","params":{}}"#,
+            &state,
+        )
+        .await;
+        let listed: Value = serde_json::from_slice(&listed).expect("listSecrets should be JSON");
+        let secrets = listed["result"]
+            .as_array()
+            .expect("secrets should be an array");
+        assert_eq!(secrets.len(), 1);
+        assert_eq!(secrets[0]["id"], "ssh:web");
+
+        let got = dispatch(
+            br#"{"jsonrpc":"2.0","id":5,"method":"vault.getSecret","params":{"id":"ssh:web"}}"#,
+            &state,
+        )
+        .await;
+        let got: Value = serde_json::from_slice(&got).expect("getSecret should be JSON");
+        assert_eq!(got["result"]["value"], "secret1");
+
+        let locked = dispatch(
+            br#"{"jsonrpc":"2.0","id":6,"method":"vault.lock","params":{}}"#,
+            &state,
+        )
+        .await;
+        let locked: Value = serde_json::from_slice(&locked).expect("lock should be JSON");
+        assert_eq!(locked["result"]["unlocked"], false);
+
+        let refused = dispatch(
+            br#"{"jsonrpc":"2.0","id":7,"method":"vault.getSecret","params":{"id":"ssh:web"}}"#,
+            &state,
+        )
+        .await;
+        let refused: Value = serde_json::from_slice(&refused).expect("locked get should be JSON");
+        assert_eq!(refused["error"]["code"], -32004);
+
+        let unlocked = dispatch(
+            br#"{"jsonrpc":"2.0","id":8,"method":"vault.unlock","params":{"passphrase":"pass"}}"#,
+            &state,
+        )
+        .await;
+        let unlocked: Value = serde_json::from_slice(&unlocked).expect("unlock should be JSON");
+        assert_eq!(unlocked["result"]["unlocked"], true);
+
+        let wrong = dispatch(
+            br#"{"jsonrpc":"2.0","id":9,"method":"vault.unlock","params":{"passphrase":"nope"}}"#,
+            &state,
+        )
+        .await;
+        let wrong: Value = serde_json::from_slice(&wrong).expect("bad unlock should be JSON");
+        assert_eq!(wrong["error"]["code"], -32005);
+
+        let deleted = dispatch(
+            br#"{"jsonrpc":"2.0","id":10,"method":"vault.deleteSecret","params":{"id":"ssh:web"}}"#,
+            &state,
+        )
+        .await;
+        let deleted: Value = serde_json::from_slice(&deleted).expect("deleteSecret should be JSON");
+        assert_eq!(deleted["result"]["deleted"], true);
     }
 
     #[tokio::test]
