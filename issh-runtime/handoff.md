@@ -1,5 +1,33 @@
 # issh-runtime Handoff
 
+## Phase 14 - Vault subsystem complete (2026-08-24)
+
+- New crate `issh-runtime-vault` implementing the issh Electron `StoredVault`
+  format: v1 AES-256-CBC (PKCS7) and v2 AES-256-GCM, both keyed by
+  PBKDF2-SHA512 (100k / 310k iterations, 8-byte salt, 12-byte GCM nonce).
+  Existing Electron `vault` files decrypt as-is; new writes always use v2.
+- `VaultStore` lifecycle: `open` (lazy, tolerates missing file), `create`,
+  `unlock`, `lock`, `set_enabled`, plus secret CRUD (`list_secrets`,
+  `get_secret`, `put_secret`, `delete_secret`) with atomic re-encrypt +
+  persist. Passphrase held in `Zeroizing<String>`; guards: 4 MiB vault file
+  cap, 64 KiB per-secret cap, 10k secrets cap. 7 unit tests including v1/v2
+  roundtrips and wrong-passphrase rejection.
+- `isshd` integration: `--vault <path>` flag and `ISSH_VAULT_FILE` env
+  (default: `<db dir>/vault.json`), `RuntimeState.vault` behind a
+  `std::sync::Mutex`, and RPC surface `vault.status`, `vault.unlock`,
+  `vault.lock`, `vault.setEnabled`, `vault.listSecrets`, `vault.getSecret`,
+  `vault.putSecret`, `vault.deleteSecret` with dedicated error codes
+  (-32004 locked, -32005 bad passphrase, -32006/07 malformed, -32008
+  secret-level).
+- `session.openSsh` now accepts optional `vaultSecretId`: when the vault is
+  unlocked, the secret value overrides the inline password (and fills the
+  username when the inline username is blank); when locked, it silently falls
+  back to inline credentials so UI flows degrade gracefully.
+- Workspace totals after this phase: 46 tests passing, `cargo fmt` clean,
+  Clippy zero warnings across all crates.
+- Tauri SSH/SFTP UI, and Electron main-process removal remain future gates.
+  No package was built.
+
 ## Phase 13 - SFTP subsystem bridge complete (2026-08-24)
 
 - Extended `issh-runtime-ssh` `SshSftpSession` with chunked transfer primitives:
