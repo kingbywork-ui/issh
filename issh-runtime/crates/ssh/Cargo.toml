@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 russh = { version = "0.62.7", default-features = false, features = ["flate2", "ring", "rsa"] }
+russh-sftp = { version = "2.4.0", default-features = false }
 tokio.workspace = true
 
 [dev-dependencies]
