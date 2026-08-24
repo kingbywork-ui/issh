@@ -10,8 +10,8 @@ use tokio::sync::mpsc;
 mod sftp;
 
 pub use sftp::{
-    SftpEntry, SftpError, SftpFileStat, SshSftpSession, MAX_SFTP_DIR_ENTRIES,
-    MAX_SFTP_FILE_BYTES, MAX_SFTP_PATH_BYTES, SFTP_SUBSYSTEM_NAME,
+    SftpEntry, SftpError, SftpFileStat, SshSftpSession, MAX_SFTP_DIR_ENTRIES, MAX_SFTP_FILE_BYTES,
+    MAX_SFTP_PATH_BYTES, SFTP_SUBSYSTEM_NAME,
 };
 
 pub const MAX_SSH_HOST_BYTES: usize = 255;
@@ -112,6 +112,7 @@ impl client::Handler for HostKeyHandler {
     }
 }
 
+#[derive(Clone)]
 pub struct SshConnection {
     handle: Arc<tokio::sync::Mutex<client::Handle<HostKeyHandler>>>,
 }
@@ -606,10 +607,10 @@ mod tests {
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     mod sftp_tests {
         use super::*;
+        use crate::sftp::MAX_SFTP_CHUNK_BYTES;
         use russh::server::{self, Auth, Session};
         use russh_sftp::protocol::{
-            Attrs, Data, File, FileAttributes, Handle, Name, OpenFlags, Status, StatusCode,
-            Version,
+            Attrs, Data, File, FileAttributes, Handle, Name, OpenFlags, Status, StatusCode, Version,
         };
         use std::collections::HashMap;
         use tokio::time::{timeout, Duration};
@@ -619,7 +620,9 @@ mod tests {
         #[derive(Clone)]
         struct SftpTestServer {
             files: MemFs,
-            channels: Arc<tokio::sync::Mutex<HashMap<russh::ChannelId, russh::Channel<russh::server::Msg>>>>,
+            channels: Arc<
+                tokio::sync::Mutex<HashMap<russh::ChannelId, russh::Channel<russh::server::Msg>>>,
+            >,
         }
 
         impl server::Handler for SftpTestServer {
@@ -721,7 +724,9 @@ mod tests {
                 pflags: OpenFlags,
                 _attrs: FileAttributes,
             ) -> Result<Handle, Self::Error> {
-                if pflags.contains(OpenFlags::READ) && !self.files.lock().unwrap().contains_key(&filename) {
+                if pflags.contains(OpenFlags::READ)
+                    && !self.files.lock().unwrap().contains_key(&filename)
+                {
                     return Err(StatusCode::NoSuchFile);
                 }
                 Ok(Handle {
@@ -730,11 +735,7 @@ mod tests {
                 })
             }
 
-            async fn close(
-                &mut self,
-                id: u32,
-                _handle: String,
-            ) -> Result<Status, Self::Error> {
+            async fn close(&mut self, id: u32, _handle: String) -> Result<Status, Self::Error> {
                 Ok(ok_status(id))
             }
 
@@ -746,9 +747,7 @@ mod tests {
                 len: u32,
             ) -> Result<Data, Self::Error> {
                 let files = self.files.lock().unwrap();
-                let data = files
-                    .get(&handle)
-                    .ok_or(StatusCode::NoSuchFile)?;
+                let data = files.get(&handle).ok_or(StatusCode::NoSuchFile)?;
                 let start = (offset as usize).min(data.len());
                 let end = (start + len as usize).min(data.len());
                 if start == end && offset as usize > data.len() {
@@ -780,11 +779,7 @@ mod tests {
                 Ok(ok_status(id))
             }
 
-            async fn stat(
-                &mut self,
-                id: u32,
-                path: String,
-            ) -> Result<Attrs, Self::Error> {
+            async fn stat(&mut self, id: u32, path: String) -> Result<Attrs, Self::Error> {
                 let files = self.files.lock().unwrap();
                 if !files.contains_key(&path) {
                     return Err(StatusCode::NoSuchFile);
@@ -795,11 +790,7 @@ mod tests {
                 })
             }
 
-            async fn opendir(
-                &mut self,
-                id: u32,
-                path: String,
-            ) -> Result<Handle, Self::Error> {
+            async fn opendir(&mut self, id: u32, path: String) -> Result<Handle, Self::Error> {
                 if path != "/" {
                     return Err(StatusCode::NoSuchFile);
                 }
@@ -810,11 +801,7 @@ mod tests {
                 Ok(Handle { id, handle: path })
             }
 
-            async fn readdir(
-                &mut self,
-                id: u32,
-                handle: String,
-            ) -> Result<Name, Self::Error> {
+            async fn readdir(&mut self, id: u32, handle: String) -> Result<Name, Self::Error> {
                 let done = self
                     .dir_read_done
                     .lock()
@@ -837,11 +824,7 @@ mod tests {
                 Ok(Name { id, files: entries })
             }
 
-            async fn remove(
-                &mut self,
-                id: u32,
-                filename: String,
-            ) -> Result<Status, Self::Error> {
+            async fn remove(&mut self, id: u32, filename: String) -> Result<Status, Self::Error> {
                 self.files.lock().unwrap().remove(&filename);
                 Ok(ok_status(id))
             }
@@ -855,11 +838,7 @@ mod tests {
                 Ok(ok_status(id))
             }
 
-            async fn rmdir(
-                &mut self,
-                id: u32,
-                _path: String,
-            ) -> Result<Status, Self::Error> {
+            async fn rmdir(&mut self, id: u32, _path: String) -> Result<Status, Self::Error> {
                 Ok(ok_status(id))
             }
 
@@ -876,11 +855,7 @@ mod tests {
                 Ok(ok_status(id))
             }
 
-            async fn realpath(
-                &mut self,
-                id: u32,
-                _path: String,
-            ) -> Result<Name, Self::Error> {
+            async fn realpath(&mut self, id: u32, _path: String) -> Result<Name, Self::Error> {
                 Ok(Name {
                     id,
                     files: vec![File::dummy("/")],
@@ -924,9 +899,7 @@ mod tests {
             (key, files)
         }
 
-        async fn connect_sftp(
-            files: &MemFs,
-        ) -> (SshConnection, SshSftpSession) {
+        async fn connect_sftp(files: &MemFs) -> (SshConnection, SshSftpSession) {
             let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0u16))
                 .await
                 .unwrap();
@@ -960,10 +933,14 @@ mod tests {
             let files: MemFs = Arc::new(std::sync::Mutex::new(HashMap::new()));
             let (connection, sftp) = connect_sftp(&files).await;
 
-            sftp.write_file("/hello.txt", b"sftp roundtrip").await
+            sftp.write_file("/hello.txt", b"sftp roundtrip")
+                .await
                 .expect("write should succeed");
 
-            let data = sftp.read_file("/hello.txt").await.expect("read should succeed");
+            let data = sftp
+                .read_file("/hello.txt")
+                .await
+                .expect("read should succeed");
             assert_eq!(data, b"sftp roundtrip".to_vec());
 
             let stat = sftp.stat("/hello.txt").await.expect("stat should succeed");
@@ -976,10 +953,15 @@ mod tests {
             sftp.rename("/hello.txt", "/renamed.txt")
                 .await
                 .expect("rename should succeed");
-            let data = sftp.read_file("/renamed.txt").await.expect("read should succeed");
+            let data = sftp
+                .read_file("/renamed.txt")
+                .await
+                .expect("read should succeed");
             assert_eq!(data, b"sftp roundtrip".to_vec());
 
-            sftp.remove_file("/renamed.txt").await.expect("remove should succeed");
+            sftp.remove_file("/renamed.txt")
+                .await
+                .expect("remove should succeed");
             assert!(sftp.read_file("/renamed.txt").await.is_err());
 
             sftp.close().await.expect("close should succeed");
@@ -1012,10 +994,91 @@ mod tests {
             let files: MemFs = Arc::new(std::sync::Mutex::new(HashMap::new()));
             let (_connection, sftp) = connect_sftp(&files).await;
             let result = timeout(Duration::from_secs(10), sftp.read_file("/missing.txt")).await;
+            assert!(matches!(result, Ok(Err(SftpError::Transfer(_))) | Err(_)));
+            sftp.close().await.expect("close should succeed");
+        }
+
+        #[tokio::test]
+        async fn sftp_chunked_read_returns_exact_ranges() {
+            let files: MemFs = Arc::new(std::sync::Mutex::new(HashMap::new()));
+            let (_connection, sftp) = connect_sftp(&files).await;
+
+            let payload: Vec<u8> = (0..64u8).cycle().take(256).collect();
+            sftp.write_file("/chunked.bin", &payload)
+                .await
+                .expect("write should succeed");
+
+            let first = sftp
+                .read_file_chunk("/chunked.bin", 0, 100)
+                .await
+                .expect("first chunk should succeed");
+            assert_eq!(first.offset, 0);
+            assert_eq!(first.data, payload[..100].to_vec());
+            assert_eq!(first.total_size, 256);
+            assert!(!first.eof);
+
+            let second = sftp
+                .read_file_chunk("/chunked.bin", 100, 100)
+                .await
+                .expect("second chunk should succeed");
+            assert_eq!(second.data, payload[100..200].to_vec());
+            assert!(!second.eof);
+
+            let tail = sftp
+                .read_file_chunk("/chunked.bin", 200, 100)
+                .await
+                .expect("tail chunk should succeed");
+            assert_eq!(tail.data, payload[200..].to_vec());
+            assert!(tail.eof);
+
+            let past_end = sftp
+                .read_file_chunk("/chunked.bin", 256, 100)
+                .await
+                .expect("past-end chunk should succeed");
+            assert!(past_end.data.is_empty());
+            assert!(past_end.eof);
+
+            sftp.close().await.expect("close should succeed");
+        }
+
+        #[tokio::test]
+        async fn sftp_chunked_write_appends_and_truncates() {
+            let files: MemFs = Arc::new(std::sync::Mutex::new(HashMap::new()));
+            let (_connection, sftp) = connect_sftp(&files).await;
+
+            let outcome = sftp
+                .write_file_chunk("/log.txt", 0, b"hello ", true)
+                .await
+                .expect("first write should succeed");
+            assert_eq!(outcome.total_size, 6);
+
+            let outcome = sftp
+                .write_file_chunk("/log.txt", 6, b"world", false)
+                .await
+                .expect("append write should succeed");
+            assert_eq!(outcome.total_size, 11);
+
+            let data = sftp
+                .read_file("/log.txt")
+                .await
+                .expect("read should succeed");
+            assert_eq!(data, b"hello world".to_vec());
+
+            sftp.write_file_chunk("/log.txt", 0, b"overwritten", true)
+                .await
+                .expect("truncate write should succeed");
+            let data = sftp
+                .read_file("/log.txt")
+                .await
+                .expect("read should succeed");
+            assert_eq!(data, b"overwritten".to_vec());
+
             assert!(matches!(
-                result,
-                Ok(Err(SftpError::Transfer(_))) | Err(_)
+                sftp.write_file_chunk("/big.bin", 0, &vec![0u8; MAX_SFTP_CHUNK_BYTES + 1], true)
+                    .await,
+                Err(SftpError::FileTooLarge { .. })
             ));
+
             sftp.close().await.expect("close should succeed");
         }
     }

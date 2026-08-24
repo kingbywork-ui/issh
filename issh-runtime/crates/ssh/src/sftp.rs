@@ -1,6 +1,7 @@
 use russh_sftp::client::SftpSession;
+use russh_sftp::protocol::OpenFlags;
 use std::fmt;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 pub const MAX_SFTP_PATH_BYTES: usize = 4096;
 pub const MAX_SFTP_FILE_BYTES: usize = 64 * 1024 * 1024;
@@ -63,6 +64,21 @@ pub struct SshSftpSession {
     session: SftpSession,
 }
 
+pub const MAX_SFTP_CHUNK_BYTES: usize = 4 * 1024 * 1024;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SftpReadChunk {
+    pub offset: u64,
+    pub data: Vec<u8>,
+    pub total_size: u64,
+    pub eof: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SftpWriteOutcome {
+    pub total_size: u64,
+}
+
 impl SshSftpSession {
     pub(crate) fn from_session(session: SftpSession) -> Self {
         Self { session }
@@ -92,6 +108,116 @@ impl SshSftpSession {
             .read(path)
             .await
             .map_err(|error| SftpError::Transfer(error.to_string()))
+    }
+
+    pub async fn read_file_chunk(
+        &self,
+        path: &str,
+        offset: u64,
+        length: usize,
+    ) -> Result<SftpReadChunk, SftpError> {
+        validate_path(path)?;
+        if length > MAX_SFTP_CHUNK_BYTES {
+            return Err(SftpError::FileTooLarge {
+                limit: MAX_SFTP_CHUNK_BYTES,
+            });
+        }
+        let metadata = self
+            .session
+            .metadata(path)
+            .await
+            .map_err(|error| SftpError::Transfer(error.to_string()))?;
+        let total_size = metadata.size.unwrap_or(0);
+        if total_size > MAX_SFTP_FILE_BYTES as u64 {
+            return Err(SftpError::FileTooLarge {
+                limit: MAX_SFTP_FILE_BYTES,
+            });
+        }
+        if offset >= total_size {
+            return Ok(SftpReadChunk {
+                offset,
+                data: Vec::new(),
+                total_size,
+                eof: true,
+            });
+        }
+        let remaining = (total_size - offset) as usize;
+        let take = remaining.min(length);
+        let mut file = self
+            .session
+            .open(path)
+            .await
+            .map_err(|error| SftpError::Transfer(error.to_string()))?;
+        file.seek(std::io::SeekFrom::Start(offset))
+            .await
+            .map_err(|error| SftpError::Transfer(error.to_string()))?;
+        let mut buffer = vec![0u8; take];
+        let mut filled = 0usize;
+        while filled < take {
+            let read = file
+                .read(&mut buffer[filled..])
+                .await
+                .map_err(|error| SftpError::Transfer(error.to_string()))?;
+            if read == 0 {
+                break;
+            }
+            filled += read;
+        }
+        buffer.truncate(filled);
+        let eof = offset + filled as u64 >= total_size;
+        Ok(SftpReadChunk {
+            offset,
+            data: buffer,
+            total_size,
+            eof,
+        })
+    }
+
+    pub async fn write_file_chunk(
+        &self,
+        path: &str,
+        offset: u64,
+        data: &[u8],
+        truncate: bool,
+    ) -> Result<SftpWriteOutcome, SftpError> {
+        validate_path(path)?;
+        if data.len() > MAX_SFTP_CHUNK_BYTES {
+            return Err(SftpError::FileTooLarge {
+                limit: MAX_SFTP_CHUNK_BYTES,
+            });
+        }
+        let flags = if truncate {
+            OpenFlags::WRITE | OpenFlags::CREATE | OpenFlags::TRUNCATE
+        } else {
+            OpenFlags::WRITE | OpenFlags::CREATE
+        };
+        let mut file = self
+            .session
+            .open_with_flags(path, flags)
+            .await
+            .map_err(|error| SftpError::Transfer(error.to_string()))?;
+        if offset > 0 {
+            file.seek(std::io::SeekFrom::Start(offset))
+                .await
+                .map_err(|error| SftpError::Transfer(error.to_string()))?;
+        }
+        file.write_all(data)
+            .await
+            .map_err(|error| SftpError::Transfer(error.to_string()))?;
+        let end = offset + data.len() as u64;
+        file.flush()
+            .await
+            .map_err(|error| SftpError::Transfer(error.to_string()))?;
+        file.close()
+            .await
+            .map_err(|error| SftpError::Transfer(error.to_string()))?;
+        let metadata = self
+            .session
+            .metadata(path)
+            .await
+            .map_err(|error| SftpError::Transfer(error.to_string()))?;
+        let total_size = metadata.size.unwrap_or(end).max(end);
+        Ok(SftpWriteOutcome { total_size })
     }
 
     pub async fn write_file(&self, path: &str, data: &[u8]) -> Result<(), SftpError> {

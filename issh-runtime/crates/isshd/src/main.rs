@@ -8,10 +8,10 @@ use issh_runtime_session::{
     LocalSessionSpec, RemoteShellError, RemoteShellIo, SessionStore, SshSessionSpec,
     MAX_SESSION_BATCH_BYTES,
 };
-use issh_runtime_ssh::{SshConnection, SshConnectionSpec, SshInteractiveChannel};
+use issh_runtime_ssh::{SshConnection, SshConnectionSpec, SshInteractiveChannel, SshSftpSession};
 use issh_runtime_workspace::{SessionSnapshot, WorkspaceStore};
 use serde::de::DeserializeOwned;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::env;
@@ -41,6 +41,8 @@ struct RuntimeState {
     sessions: Arc<Mutex<SessionStore>>,
     workspace: Mutex<WorkspaceStore>,
     ssh_pumps: Mutex<HashMap<String, tokio::task::JoinHandle<()>>>,
+    ssh_connections: Mutex<HashMap<String, SshConnection>>,
+    sftp_sessions: Mutex<HashMap<String, Arc<SshSftpSession>>>,
 }
 
 impl RuntimeState {
@@ -54,6 +56,8 @@ impl RuntimeState {
             sessions: Arc::new(Mutex::new(SessionStore::new())),
             workspace: Mutex::new(WorkspaceStore::open(database_path, now_unix_ms())?),
             ssh_pumps: Mutex::new(HashMap::new()),
+            ssh_connections: Mutex::new(HashMap::new()),
+            sftp_sessions: Mutex::new(HashMap::new()),
         })
     }
 
@@ -68,6 +72,8 @@ impl RuntimeState {
                     .expect("in-memory workspace should open"),
             ),
             ssh_pumps: Mutex::new(HashMap::new()),
+            ssh_connections: Mutex::new(HashMap::new()),
+            sftp_sessions: Mutex::new(HashMap::new()),
         }
     }
 
@@ -86,6 +92,21 @@ impl RuntimeState {
             if let Some(handle) = pumps.remove(session_id) {
                 handle.abort();
             }
+        }
+    }
+
+    fn register_ssh_connection(&self, session_id: &str, connection: SshConnection) {
+        if let Ok(mut connections) = self.ssh_connections.lock() {
+            connections.insert(session_id.to_string(), connection);
+        }
+    }
+
+    fn drop_ssh_connection(&self, session_id: &str) {
+        if let Ok(mut connections) = self.ssh_connections.lock() {
+            connections.remove(session_id);
+        }
+        if let Ok(mut sessions) = self.sftp_sessions.lock() {
+            sessions.remove(session_id);
         }
     }
 }
@@ -276,6 +297,132 @@ struct SshSessionOpenParams {
 
 fn default_ssh_session_title() -> String {
     "SSH 终端".to_string()
+}
+
+const SFTP_CHUNK_BYTES: usize = 32 * 1024;
+const SFTP_MAX_LIST_PAGE: usize = 512;
+const SFTP_RPC_TIMEOUT_MS: u64 = 30_000;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SftpOpenParams {
+    session_id: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SftpOpenResult {
+    session_id: String,
+    sftp_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SftpReadParams {
+    session_id: String,
+    path: String,
+    #[serde(default)]
+    offset: u64,
+    #[serde(default = "default_sftp_read_length")]
+    length: u64,
+}
+
+fn default_sftp_read_length() -> u64 {
+    SFTP_CHUNK_BYTES as u64
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SftpReadResult {
+    offset: u64,
+    length: usize,
+    data_base64: String,
+    eof: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SftpWriteParams {
+    session_id: String,
+    path: String,
+    #[serde(default)]
+    offset: u64,
+    #[serde(default)]
+    truncate: bool,
+    #[serde(default)]
+    #[allow(dead_code)]
+    eof: bool,
+    data_base64: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SftpWriteResult {
+    accepted_bytes: usize,
+    total_bytes: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SftpListParams {
+    session_id: String,
+    path: String,
+    #[serde(default)]
+    offset: usize,
+    #[serde(default = "default_sftp_list_limit")]
+    limit: usize,
+}
+
+fn default_sftp_list_limit() -> usize {
+    256
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SftpListResult {
+    path: String,
+    offset: usize,
+    entries: Vec<SftpEntryDto>,
+    total: usize,
+    has_more: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SftpEntryDto {
+    name: String,
+    path: String,
+    is_dir: bool,
+    is_file: bool,
+    is_symlink: bool,
+    size: u64,
+    modified_unix_secs: Option<u64>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SftpPathParams {
+    session_id: String,
+    path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SftpRenameParams {
+    session_id: String,
+    old_path: String,
+    new_path: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SftpStatResult {
+    path: String,
+    is_dir: bool,
+    is_file: bool,
+    is_symlink: bool,
+    size: u64,
+    modified_unix_secs: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -546,6 +693,16 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                     "session.resize",
                     "session.subscribe",
                     "session.close",
+                    "sftp.open",
+                    "sftp.read",
+                    "sftp.write",
+                    "sftp.list",
+                    "sftp.stat",
+                    "sftp.mkdir",
+                    "sftp.remove",
+                    "sftp.removeDir",
+                    "sftp.rename",
+                    "sftp.close",
                     "ssh.probe",
                     "workspace.create",
                     "workspace.list",
@@ -659,7 +816,118 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                 Err(error) => return serialize_error(id, error.code, error.message),
             };
             state.abort_ssh_pump(&params.session_id);
+            state.drop_ssh_connection(&params.session_id);
             with_sessions(state, id, |sessions| sessions.close(&params.session_id))
+        }
+        "sftp.open" => {
+            let params = match parse_params::<SftpOpenParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            match sftp_open(state, params).await {
+                Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+                    .expect("sftp open response serialization cannot fail"),
+                Err(error) => serialize_error(id, error.code, error.message),
+            }
+        }
+        "sftp.read" => {
+            let params = match parse_params::<SftpReadParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            match sftp_read(state, params).await {
+                Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+                    .expect("sftp read response serialization cannot fail"),
+                Err(error) => serialize_error(id, error.code, error.message),
+            }
+        }
+        "sftp.write" => {
+            let params = match parse_params::<SftpWriteParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            match sftp_write(state, params).await {
+                Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+                    .expect("sftp write response serialization cannot fail"),
+                Err(error) => serialize_error(id, error.code, error.message),
+            }
+        }
+        "sftp.list" => {
+            let params = match parse_params::<SftpListParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            match sftp_list(state, params).await {
+                Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+                    .expect("sftp list response serialization cannot fail"),
+                Err(error) => serialize_error(id, error.code, error.message),
+            }
+        }
+        "sftp.stat" => {
+            let params = match parse_params::<SftpPathParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            match sftp_stat(state, params).await {
+                Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+                    .expect("sftp stat response serialization cannot fail"),
+                Err(error) => serialize_error(id, error.code, error.message),
+            }
+        }
+        "sftp.mkdir" => {
+            let params = match parse_params::<SftpPathParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            match sftp_mkdir(state, params).await {
+                Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+                    .expect("sftp mkdir response serialization cannot fail"),
+                Err(error) => serialize_error(id, error.code, error.message),
+            }
+        }
+        "sftp.remove" => {
+            let params = match parse_params::<SftpPathParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            match sftp_remove(state, params).await {
+                Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+                    .expect("sftp remove response serialization cannot fail"),
+                Err(error) => serialize_error(id, error.code, error.message),
+            }
+        }
+        "sftp.removeDir" => {
+            let params = match parse_params::<SftpPathParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            match sftp_remove_dir(state, params).await {
+                Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+                    .expect("sftp removeDir response serialization cannot fail"),
+                Err(error) => serialize_error(id, error.code, error.message),
+            }
+        }
+        "sftp.rename" => {
+            let params = match parse_params::<SftpRenameParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            match sftp_rename(state, params).await {
+                Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+                    .expect("sftp rename response serialization cannot fail"),
+                Err(error) => serialize_error(id, error.code, error.message),
+            }
+        }
+        "sftp.close" => {
+            let params = match parse_params::<SessionIdParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            match sftp_close(state, &params.session_id).await {
+                Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+                    .expect("sftp close response serialization cannot fail"),
+                Err(error) => serialize_error(id, error.code, error.message),
+            }
         }
         "ssh.probe" => {
             let params = match parse_params::<SshProbeParams>(request.params) {
@@ -1049,6 +1317,7 @@ async fn open_ssh_session(
         run_ssh_session_pump(channel, command_rx, sessions, session_id).await;
     });
     state.register_ssh_pump(&snapshot.id, pump);
+    state.register_ssh_connection(&snapshot.id, connection);
     Ok(snapshot)
 }
 
@@ -1117,6 +1386,349 @@ fn flush_ssh_output(sessions: &Mutex<SessionStore>, session_id: &str, pending: &
         remaining -= take;
     }
     pending.clear();
+}
+
+async fn with_sftp_session<T, F, Fut>(
+    state: &RuntimeState,
+    session_id: &str,
+    operation: F,
+) -> Result<T, SftpRpcError>
+where
+    F: FnOnce(Arc<SshSftpSession>) -> Fut,
+    Fut: std::future::Future<Output = Result<T, issh_runtime_ssh::SftpError>>,
+{
+    let sftp = {
+        let sessions = state.sftp_sessions.lock();
+        let Ok(sessions) = sessions else {
+            return Err(SftpRpcError::internal("SFTP state is unavailable"));
+        };
+        match sessions.get(session_id) {
+            Some(sftp) => Arc::clone(sftp),
+            None => {
+                return Err(SftpRpcError::new(
+                    INVALID_PARAMS,
+                    format!("SFTP session not found: {session_id}"),
+                ))
+            }
+        }
+    };
+    match tokio::time::timeout(Duration::from_millis(SFTP_RPC_TIMEOUT_MS), operation(sftp)).await {
+        Ok(result) => result.map_err(SftpRpcError::from_sftp),
+        Err(_) => Err(SftpRpcError::new(
+            -32002,
+            format!("SFTP operation timed out after {SFTP_RPC_TIMEOUT_MS}ms"),
+        )),
+    }
+}
+
+struct SftpRpcError {
+    code: i32,
+    message: String,
+}
+
+impl SftpRpcError {
+    fn new(code: i32, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+        }
+    }
+
+    fn internal(message: impl Into<String>) -> Self {
+        Self::new(-32603, message)
+    }
+}
+
+impl From<SftpRpcError> for RpcError {
+    fn from(error: SftpRpcError) -> Self {
+        RpcError::new(error.code, error.message)
+    }
+}
+
+impl SftpRpcError {
+    fn from_sftp(error: issh_runtime_ssh::SftpError) -> Self {
+        match error {
+            issh_runtime_ssh::SftpError::InvalidPath => {
+                Self::new(INVALID_PARAMS, error.to_string())
+            }
+            issh_runtime_ssh::SftpError::FileTooLarge { .. }
+            | issh_runtime_ssh::SftpError::TooManyEntries { .. } => {
+                Self::new(-32001, error.to_string())
+            }
+            issh_runtime_ssh::SftpError::Channel(message) => {
+                Self::new(-32603, format!("SFTP channel error: {message}"))
+            }
+            issh_runtime_ssh::SftpError::Transfer(message) => {
+                Self::new(-32002, format!("SFTP transfer error: {message}"))
+            }
+            issh_runtime_ssh::SftpError::Closed => Self::new(-32003, "SFTP session is closed"),
+        }
+    }
+}
+
+async fn sftp_open(
+    state: &RuntimeState,
+    params: SftpOpenParams,
+) -> Result<SftpOpenResult, RpcError> {
+    let connection = {
+        let connections = state.ssh_connections.lock();
+        let Ok(connections) = connections else {
+            return Err(RpcError::new(-32603, "SSH connection state is unavailable"));
+        };
+        match connections.get(&params.session_id) {
+            Some(connection) => connection.clone(),
+            None => {
+                return Err(RpcError::new(
+                    INVALID_PARAMS,
+                    format!("SSH session not found: {}", params.session_id),
+                ))
+            }
+        }
+    };
+    let open_fut = connection.open_sftp();
+    let sftp = tokio::time::timeout(Duration::from_millis(SFTP_RPC_TIMEOUT_MS), open_fut)
+        .await
+        .map_err(|_| {
+            RpcError::new(
+                -32002,
+                format!("SFTP open timed out after {SFTP_RPC_TIMEOUT_MS}ms"),
+            )
+        })?
+        .map_err(|error| RpcError::new(-32603, format!("SFTP open failed: {error}")))?;
+    let sftp = Arc::new(sftp);
+    {
+        let sessions = state.sftp_sessions.lock();
+        let Ok(mut sessions) = sessions else {
+            return Err(RpcError::new(-32603, "SFTP state is unavailable"));
+        };
+        sessions.insert(params.session_id.clone(), Arc::clone(&sftp));
+    }
+    Ok(SftpOpenResult {
+        session_id: params.session_id.clone(),
+        sftp_id: params.session_id,
+    })
+}
+
+async fn sftp_read(
+    state: &RuntimeState,
+    params: SftpReadParams,
+) -> Result<SftpReadResult, RpcError> {
+    let length = params.length.min(SFTP_CHUNK_BYTES as u64) as usize;
+    let path = params.path.clone();
+    let offset = params.offset;
+    let session_id = params.session_id.clone();
+    let chunk = with_sftp_session(state, &session_id, move |sftp| async move {
+        sftp.read_file_chunk(&path, offset, length).await
+    })
+    .await?;
+    Ok(SftpReadResult {
+        offset: chunk.offset,
+        length: chunk.data.len(),
+        data_base64: base64_encode(&chunk.data),
+        eof: chunk.eof,
+    })
+}
+
+async fn sftp_write(
+    state: &RuntimeState,
+    params: SftpWriteParams,
+) -> Result<SftpWriteResult, RpcError> {
+    let data = base64_decode(&params.data_base64)?;
+    if data.len() > SFTP_CHUNK_BYTES {
+        return Err(RpcError::new(
+            -32001,
+            format!("SFTP write chunk exceeds {} bytes", SFTP_CHUNK_BYTES),
+        ));
+    }
+    let accepted = data.len();
+    let path = params.path.clone();
+    let offset = params.offset;
+    let truncate = params.truncate;
+    let session_id = params.session_id.clone();
+    let outcome = with_sftp_session(state, &session_id, move |sftp| async move {
+        sftp.write_file_chunk(&path, offset, &data, truncate).await
+    })
+    .await?;
+    Ok(SftpWriteResult {
+        accepted_bytes: accepted,
+        total_bytes: outcome.total_size,
+    })
+}
+
+async fn sftp_list(
+    state: &RuntimeState,
+    params: SftpListParams,
+) -> Result<SftpListResult, RpcError> {
+    let path = params.path.clone();
+    let session_id = params.session_id.clone();
+    let entries = with_sftp_session(state, &session_id, move |sftp| async move {
+        sftp.list_dir(&path).await
+    })
+    .await?;
+    let total = entries.len();
+    let limit = params.limit.min(SFTP_MAX_LIST_PAGE);
+    let end = params.offset.saturating_add(limit).min(total);
+    let page: Vec<SftpEntryDto> = entries
+        .into_iter()
+        .skip(params.offset)
+        .take(end.saturating_sub(params.offset))
+        .map(|entry| SftpEntryDto {
+            name: entry.name,
+            path: entry.path,
+            is_dir: entry.is_dir,
+            is_file: entry.is_file,
+            is_symlink: entry.is_symlink,
+            size: entry.size,
+            modified_unix_secs: entry.modified_unix_secs,
+        })
+        .collect();
+    let has_more = end < total;
+    Ok(SftpListResult {
+        path: params.path,
+        offset: params.offset,
+        entries: page,
+        total,
+        has_more,
+    })
+}
+
+async fn sftp_stat(
+    state: &RuntimeState,
+    params: SftpPathParams,
+) -> Result<SftpStatResult, RpcError> {
+    let path = params.path.clone();
+    let session_id = params.session_id.clone();
+    let stat = with_sftp_session(state, &session_id, move |sftp| async move {
+        sftp.stat(&path).await
+    })
+    .await?;
+    Ok(SftpStatResult {
+        path: stat.path,
+        is_dir: stat.is_dir,
+        is_file: stat.is_file,
+        is_symlink: stat.is_symlink,
+        size: stat.size,
+        modified_unix_secs: stat.modified_unix_secs,
+    })
+}
+
+async fn sftp_mkdir(state: &RuntimeState, params: SftpPathParams) -> Result<Value, RpcError> {
+    let path = params.path.clone();
+    let session_id = params.session_id.clone();
+    with_sftp_session(state, &session_id, move |sftp| async move {
+        sftp.mkdir(&path).await
+    })
+    .await?;
+    Ok(serde_json::json!({ "created": true }))
+}
+
+async fn sftp_remove(state: &RuntimeState, params: SftpPathParams) -> Result<Value, RpcError> {
+    let path = params.path.clone();
+    let session_id = params.session_id.clone();
+    with_sftp_session(state, &session_id, move |sftp| async move {
+        sftp.remove_file(&path).await
+    })
+    .await?;
+    Ok(serde_json::json!({ "removed": true }))
+}
+
+async fn sftp_remove_dir(state: &RuntimeState, params: SftpPathParams) -> Result<Value, RpcError> {
+    let path = params.path.clone();
+    let session_id = params.session_id.clone();
+    with_sftp_session(state, &session_id, move |sftp| async move {
+        sftp.remove_dir(&path).await
+    })
+    .await?;
+    Ok(serde_json::json!({ "removed": true }))
+}
+
+async fn sftp_rename(state: &RuntimeState, params: SftpRenameParams) -> Result<Value, RpcError> {
+    let old_path = params.old_path.clone();
+    let new_path = params.new_path.clone();
+    let session_id = params.session_id.clone();
+    with_sftp_session(state, &session_id, move |sftp| async move {
+        sftp.rename(&old_path, &new_path).await
+    })
+    .await?;
+    Ok(serde_json::json!({ "renamed": true }))
+}
+
+async fn sftp_close(state: &RuntimeState, session_id: &str) -> Result<Value, RpcError> {
+    let sftp = {
+        let sessions = state.sftp_sessions.lock();
+        let Ok(mut sessions) = sessions else {
+            return Err(RpcError::new(-32603, "SFTP state is unavailable"));
+        };
+        match sessions.remove(session_id) {
+            Some(sftp) => sftp,
+            None => {
+                return Err(RpcError::new(
+                    INVALID_PARAMS,
+                    format!("SFTP session not found: {session_id}"),
+                ))
+            }
+        }
+    };
+    match tokio::time::timeout(Duration::from_millis(SFTP_RPC_TIMEOUT_MS), sftp.close()).await {
+        Ok(Ok(())) => Ok(serde_json::json!({ "closed": true })),
+        Ok(Err(error)) => Err(SftpRpcError::from_sftp(error).into()),
+        Err(_) => Err(RpcError::new(
+            -32002,
+            format!("SFTP close timed out after {SFTP_RPC_TIMEOUT_MS}ms"),
+        )),
+    }
+}
+
+fn base64_encode(data: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
+    for chunk in data.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = *chunk.get(1).unwrap_or(&0) as u32;
+        let b2 = *chunk.get(2).unwrap_or(&0) as u32;
+        let triple = (b0 << 16) | (b1 << 8) | b2;
+        out.push(TABLE[(triple >> 18) as usize & 63] as char);
+        out.push(TABLE[(triple >> 12) as usize & 63] as char);
+        out.push(if chunk.len() > 1 {
+            TABLE[(triple >> 6) as usize & 63] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            TABLE[triple as usize & 63] as char
+        } else {
+            '='
+        });
+    }
+    out
+}
+
+fn base64_decode(input: &str) -> Result<Vec<u8>, RpcError> {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = Vec::with_capacity(input.len() / 4 * 3);
+    let mut buffer = 0u32;
+    let mut bits = 0u32;
+    for (index, byte) in input.bytes().enumerate() {
+        if byte == b'=' {
+            break;
+        }
+        let value = TABLE
+            .iter()
+            .position(|&candidate| candidate == byte)
+            .ok_or_else(|| {
+                RpcError::new(
+                    INVALID_PARAMS,
+                    format!("Invalid base64 character at index {index}"),
+                )
+            })? as u32;
+        buffer = (buffer << 6) | value;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((buffer >> bits) as u8);
+        }
+    }
+    Ok(out)
 }
 
 fn with_panes<T, F>(state: &RuntimeState, id: Value, operation: F) -> Vec<u8>
