@@ -125,6 +125,7 @@ try {
         'session.sync',
         'session.list',
         'session.openLocal',
+        'session.openSsh',
         'session.snapshot',
         'session.write',
         'session.resize',

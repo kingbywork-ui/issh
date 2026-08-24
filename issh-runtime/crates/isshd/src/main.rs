@@ -4,20 +4,27 @@ use issh_runtime_protocol::{
     INVALID_REQUEST, MAX_MESSAGE_BYTES, MESSAGE_TOO_LARGE, METHOD_NOT_FOUND, PARSE_ERROR,
     PROTOCOL_VERSION,
 };
-use issh_runtime_session::{LocalSessionSpec, SessionStore, MAX_SESSION_BATCH_BYTES};
-use issh_runtime_ssh::{SshConnection, SshConnectionSpec};
+use issh_runtime_session::{
+    LocalSessionSpec, RemoteShellError, RemoteShellIo, SessionStore, SshSessionSpec,
+    MAX_SESSION_BATCH_BYTES,
+};
+use issh_runtime_ssh::{SshConnection, SshConnectionSpec, SshInteractiveChannel};
 use issh_runtime_workspace::{SessionSnapshot, WorkspaceStore};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::env;
 use std::io;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::sync::mpsc;
 
 #[cfg(windows)]
 mod windows_security;
+
+const SSH_CONNECT_TIMEOUT_MS: u64 = 10_000;
 
 const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\issh-runtime-v1";
 
@@ -31,8 +38,9 @@ struct Options {
 struct RuntimeState {
     started_at_unix_ms: u128,
     panes: Mutex<PaneStore>,
-    sessions: Mutex<SessionStore>,
+    sessions: Arc<Mutex<SessionStore>>,
     workspace: Mutex<WorkspaceStore>,
+    ssh_pumps: Mutex<HashMap<String, tokio::task::JoinHandle<()>>>,
 }
 
 impl RuntimeState {
@@ -43,8 +51,9 @@ impl RuntimeState {
         Ok(Self {
             started_at_unix_ms,
             panes: Mutex::new(PaneStore::new()),
-            sessions: Mutex::new(SessionStore::new()),
+            sessions: Arc::new(Mutex::new(SessionStore::new())),
             workspace: Mutex::new(WorkspaceStore::open(database_path, now_unix_ms())?),
+            ssh_pumps: Mutex::new(HashMap::new()),
         })
     }
 
@@ -53,11 +62,30 @@ impl RuntimeState {
         Self {
             started_at_unix_ms,
             panes: Mutex::new(PaneStore::new()),
-            sessions: Mutex::new(SessionStore::new()),
+            sessions: Arc::new(Mutex::new(SessionStore::new())),
             workspace: Mutex::new(
                 WorkspaceStore::open_in_memory(now_unix_ms())
                     .expect("in-memory workspace should open"),
             ),
+            ssh_pumps: Mutex::new(HashMap::new()),
+        }
+    }
+
+    fn register_ssh_pump(&self, session_id: &str, handle: tokio::task::JoinHandle<()>) {
+        let mut pumps = match self.ssh_pumps.lock() {
+            Ok(pumps) => pumps,
+            Err(_) => return,
+        };
+        if let Some(previous) = pumps.insert(session_id.to_string(), handle) {
+            previous.abort();
+        }
+    }
+
+    fn abort_ssh_pump(&self, session_id: &str) {
+        if let Ok(mut pumps) = self.ssh_pumps.lock() {
+            if let Some(handle) = pumps.remove(session_id) {
+                handle.abort();
+            }
         }
     }
 }
@@ -226,6 +254,28 @@ struct LocalSessionOpenParams {
     columns: u16,
     #[serde(default = "default_session_rows")]
     rows: u16,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SshSessionOpenParams {
+    #[serde(default = "default_ssh_session_title")]
+    title: String,
+    #[serde(default = "default_session_columns")]
+    columns: u16,
+    #[serde(default = "default_session_rows")]
+    rows: u16,
+    host: String,
+    port: u16,
+    username: String,
+    password: Option<String>,
+    private_key_path: Option<PathBuf>,
+    private_key_passphrase: Option<String>,
+    expected_host_key: String,
+}
+
+fn default_ssh_session_title() -> String {
+    "SSH 终端".to_string()
 }
 
 #[derive(Deserialize)]
@@ -490,6 +540,7 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                     "session.sync",
                     "session.list",
                     "session.openLocal",
+                    "session.openSsh",
                     "session.snapshot",
                     "session.write",
                     "session.resize",
@@ -552,6 +603,17 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                 })
             })
         }
+        "session.openSsh" => {
+            let params = match parse_params::<SshSessionOpenParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            match open_ssh_session(state, params).await {
+                Ok(snapshot) => serde_json::to_vec(&RpcResponse::new(id, snapshot))
+                    .expect("session snapshot serialization cannot fail"),
+                Err(error) => serialize_error(id, error.code, error.message),
+            }
+        }
         "session.snapshot" => {
             let params = match parse_params::<SessionIdParams>(request.params) {
                 Ok(params) => params,
@@ -596,6 +658,7 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                 Ok(params) => params,
                 Err(error) => return serialize_error(id, error.code, error.message),
             };
+            state.abort_ssh_pump(&params.session_id);
             with_sessions(state, id, |sessions| sessions.close(&params.session_id))
         }
         "ssh.probe" => {
@@ -874,6 +937,186 @@ where
 fn parse_params<T: DeserializeOwned>(params: Option<Value>) -> Result<T, RpcError> {
     serde_json::from_value(params.unwrap_or_else(|| Value::Object(Default::default())))
         .map_err(|error| RpcError::new(INVALID_PARAMS, format!("Invalid params: {error}")))
+}
+
+enum SshShellCommand {
+    Write(Vec<u8>),
+    Resize(u16, u16),
+    Close,
+}
+
+struct SshShellBridge {
+    commands: mpsc::UnboundedSender<SshShellCommand>,
+    closed: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl SshShellBridge {
+    fn new(commands: mpsc::UnboundedSender<SshShellCommand>) -> Self {
+        Self {
+            commands,
+            closed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
+    }
+}
+
+impl RemoteShellIo for SshShellBridge {
+    fn try_write(&mut self, data: &[u8]) -> Result<(), RemoteShellError> {
+        if self.closed.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(RemoteShellError::Closed);
+        }
+        self.commands
+            .send(SshShellCommand::Write(data.to_vec()))
+            .map_err(|_| RemoteShellError::Closed)
+    }
+
+    fn try_resize(&mut self, columns: u16, rows: u16) -> Result<(), RemoteShellError> {
+        if self.closed.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(RemoteShellError::Closed);
+        }
+        self.commands
+            .send(SshShellCommand::Resize(columns, rows))
+            .map_err(|_| RemoteShellError::Closed)
+    }
+
+    fn request_close(&mut self) {
+        self.closed.store(true, std::sync::atomic::Ordering::SeqCst);
+        let _ = self.commands.send(SshShellCommand::Close);
+    }
+}
+
+async fn open_ssh_session(
+    state: &RuntimeState,
+    params: SshSessionOpenParams,
+) -> Result<issh_runtime_session::SessionSnapshot, RpcError> {
+    let connect_fut = SshConnection::connect(SshConnectionSpec {
+        host: params.host.clone(),
+        port: params.port,
+        username: params.username.clone(),
+        password: params.password.clone(),
+        private_key_path: params.private_key_path.clone(),
+        private_key_passphrase: params.private_key_passphrase.clone(),
+        expected_host_key: params.expected_host_key.clone(),
+    });
+    let connection =
+        tokio::time::timeout(Duration::from_millis(SSH_CONNECT_TIMEOUT_MS), connect_fut)
+            .await
+            .map_err(|_| {
+                RpcError::new(
+                    INVALID_PARAMS,
+                    format!("SSH connect timed out after {SSH_CONNECT_TIMEOUT_MS}ms"),
+                )
+            })?
+            .map_err(|error| RpcError::new(INVALID_PARAMS, error.to_string()))?;
+
+    let channel = {
+        let open_fut = connection.open_interactive(params.columns, params.rows);
+        match tokio::time::timeout(Duration::from_millis(SSH_CONNECT_TIMEOUT_MS), open_fut).await {
+            Ok(Ok(channel)) => channel,
+            Ok(Err(error)) => {
+                drop(connection);
+                return Err(RpcError::new(INVALID_PARAMS, error.to_string()));
+            }
+            Err(_) => {
+                drop(connection);
+                return Err(RpcError::new(
+                    INVALID_PARAMS,
+                    format!("SSH channel open timed out after {SSH_CONNECT_TIMEOUT_MS}ms"),
+                ));
+            }
+        }
+    };
+
+    let (command_tx, command_rx) = mpsc::unbounded_channel::<SshShellCommand>();
+    let bridge = SshShellBridge::new(command_tx);
+    let snapshot = {
+        let mut sessions = state
+            .sessions
+            .lock()
+            .map_err(|_| RpcError::new(-32603, "Session state is unavailable"))?;
+        sessions
+            .open_ssh(SshSessionSpec {
+                title: params.title.clone(),
+                columns: params.columns,
+                rows: params.rows,
+                shell: bridge,
+            })
+            .map_err(|error| RpcError::new(INVALID_PARAMS, error.to_string()))?
+    };
+
+    let session_id = snapshot.id.clone();
+    let sessions = Arc::clone(&state.sessions);
+    let pump = tokio::spawn(async move {
+        run_ssh_session_pump(channel, command_rx, sessions, session_id).await;
+    });
+    state.register_ssh_pump(&snapshot.id, pump);
+    Ok(snapshot)
+}
+
+async fn run_ssh_session_pump(
+    mut channel: SshInteractiveChannel,
+    mut command_rx: mpsc::UnboundedReceiver<SshShellCommand>,
+    sessions: Arc<Mutex<SessionStore>>,
+    session_id: String,
+) {
+    let mut pending_output: Vec<u8> = Vec::new();
+    loop {
+        tokio::select! {
+            command = command_rx.recv() => {
+                match command {
+                    Some(SshShellCommand::Write(data)) => {
+                        if channel.write(&data).await.is_err() {
+                            break;
+                        }
+                    }
+                    Some(SshShellCommand::Resize(columns, rows)) => {
+                        if channel.resize(columns, rows).await.is_err() {
+                            break;
+                        }
+                    }
+                    Some(SshShellCommand::Close) | None => {
+                        let _ = channel.close().await;
+                        break;
+                    }
+                }
+            }
+            chunk = channel.read_output() => {
+                match chunk {
+                    Some(chunk) => {
+                        pending_output.extend_from_slice(&chunk.data);
+                        if pending_output.len() >= MAX_SESSION_BATCH_BYTES {
+                            flush_ssh_output(sessions.as_ref(), &session_id, &mut pending_output);
+                        }
+                    }
+                    None => {
+                        flush_ssh_output(sessions.as_ref(), &session_id, &mut pending_output);
+                        if let Ok(mut store) = sessions.lock() {
+                            let _ = store.mark_ssh_exited(&session_id);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn flush_ssh_output(sessions: &Mutex<SessionStore>, session_id: &str, pending: &mut Vec<u8>) {
+    if pending.is_empty() {
+        return;
+    }
+    let mut store = match sessions.lock() {
+        Ok(store) => store,
+        Err(_) => return,
+    };
+    let mut remaining = pending.len();
+    while remaining > 0 {
+        let take = remaining.min(MAX_SESSION_BATCH_BYTES);
+        let batch: Vec<u8> =
+            pending[pending.len() - remaining..pending.len() - remaining + take].to_vec();
+        let _ = store.push_ssh_output(session_id, "output", batch);
+        remaining -= take;
+    }
+    pending.clear();
 }
 
 fn with_panes<T, F>(state: &RuntimeState, id: Value, operation: F) -> Vec<u8>

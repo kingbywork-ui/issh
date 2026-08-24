@@ -7,3 +7,6 @@ license.workspace = true
 [dependencies]
 russh = { version = "0.62.7", default-features = false, features = ["flate2", "ring", "rsa"] }
 tokio.workspace = true
+
+[dev-dependencies]
+rand = "0.10"

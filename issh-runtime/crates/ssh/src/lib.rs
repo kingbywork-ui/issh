@@ -1,15 +1,18 @@
 use russh::client;
 use russh::keys::{load_secret_key, PrivateKeyWithHashAlg, PublicKey};
-use russh::{Channel, Error as RusshError};
+use russh::{ChannelMsg, ChannelWriteHalf, Error as RusshError};
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::mpsc;
 
 pub const MAX_SSH_HOST_BYTES: usize = 255;
 pub const MAX_SSH_USER_BYTES: usize = 128;
 pub const MAX_SSH_PASSWORD_BYTES: usize = 4096;
 pub const MAX_SSH_FINGERPRINT_BYTES: usize = 128;
+pub const MAX_SSH_CHANNEL_BUFFER_MESSAGES: usize = 256;
+pub const SSH_INTERACTIVE_TERM: &str = "xterm-256color";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SshConnectionSpec {
@@ -71,6 +74,18 @@ impl From<RusshError> for SshError {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SshOutputKind {
+    Stdout,
+    Stderr,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SshOutputChunk {
+    pub kind: SshOutputKind,
+    pub data: Vec<u8>,
+}
+
 #[derive(Clone)]
 struct HostKeyHandler {
     expected_host_key: String,
@@ -91,7 +106,7 @@ impl client::Handler for HostKeyHandler {
 }
 
 pub struct SshConnection {
-    handle: client::Handle<HostKeyHandler>,
+    handle: Arc<tokio::sync::Mutex<client::Handle<HostKeyHandler>>>,
 }
 
 impl SshConnection {
@@ -142,24 +157,28 @@ impl SshConnection {
         if !authenticated {
             return Err(SshError::AuthenticationFailed);
         }
-        Ok(Self { handle })
+        Ok(Self {
+            handle: Arc::new(tokio::sync::Mutex::new(handle)),
+        })
     }
 
-    pub async fn open_shell(
-        &mut self,
+    pub async fn open_interactive(
+        &self,
         columns: u16,
         rows: u16,
-    ) -> Result<Channel<russh::client::Msg>, SshError> {
+    ) -> Result<SshInteractiveChannel, SshError> {
         validate_dimensions(columns, rows)?;
         let channel = self
             .handle
+            .lock()
+            .await
             .channel_open_session()
             .await
             .map_err(|error| SshError::Channel(error.to_string()))?;
         channel
             .request_pty(
                 true,
-                "xterm-256color",
+                SSH_INTERACTIVE_TERM,
                 columns as u32,
                 rows as u32,
                 0,
@@ -172,14 +191,150 @@ impl SshConnection {
             .request_shell(true)
             .await
             .map_err(|error| SshError::Channel(error.to_string()))?;
-        Ok(channel)
+        let (read_half, write_half) = channel.split();
+        let writer = SshChannelWriter {
+            write_half: Arc::new(tokio::sync::Mutex::new(write_half)),
+        };
+        let (output_tx, output_rx) = mpsc::channel(MAX_SSH_CHANNEL_BUFFER_MESSAGES);
+        tokio::spawn(async move {
+            let mut read_half = read_half;
+            while let Some(message) = read_half.wait().await {
+                match message {
+                    ChannelMsg::Data { data } => {
+                        if output_tx
+                            .send(SshOutputChunk {
+                                kind: SshOutputKind::Stdout,
+                                data: data.to_vec(),
+                            })
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                    ChannelMsg::ExtendedData { data, .. } => {
+                        if output_tx
+                            .send(SshOutputChunk {
+                                kind: SshOutputKind::Stderr,
+                                data: data.to_vec(),
+                            })
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                    ChannelMsg::ExitStatus { .. } | ChannelMsg::Eof | ChannelMsg::Close => break,
+                    _ => {}
+                }
+            }
+        });
+        Ok(SshInteractiveChannel {
+            handle: Arc::clone(&self.handle),
+            writer,
+            output: output_rx,
+        })
     }
 
     pub async fn disconnect(self) -> Result<(), SshError> {
         self.handle
+            .lock()
+            .await
             .disconnect(russh::Disconnect::ByApplication, "", "English")
             .await
             .map_err(|error| SshError::Transport(error.to_string()))
+    }
+}
+
+pub struct SshChannelWriter {
+    write_half: Arc<tokio::sync::Mutex<ChannelWriteHalf<russh::client::Msg>>>,
+}
+
+impl Clone for SshChannelWriter {
+    fn clone(&self) -> Self {
+        Self {
+            write_half: Arc::clone(&self.write_half),
+        }
+    }
+}
+
+impl SshChannelWriter {
+    pub async fn write(&self, data: &[u8]) -> Result<(), SshError> {
+        if data.is_empty() {
+            return Ok(());
+        }
+        self.write_half
+            .lock()
+            .await
+            .data_bytes(data.to_vec())
+            .await
+            .map_err(|error| SshError::Channel(error.to_string()))
+    }
+
+    pub async fn resize(&self, columns: u16, rows: u16) -> Result<(), SshError> {
+        validate_dimensions(columns, rows)?;
+        self.write_half
+            .lock()
+            .await
+            .window_change(columns as u32, rows as u32, 0, 0)
+            .await
+            .map_err(|error| SshError::Channel(error.to_string()))
+    }
+
+    pub async fn eof(&self) -> Result<(), SshError> {
+        self.write_half
+            .lock()
+            .await
+            .eof()
+            .await
+            .map_err(|error| SshError::Channel(error.to_string()))
+    }
+
+    pub async fn close(&self) -> Result<(), SshError> {
+        self.write_half
+            .lock()
+            .await
+            .close()
+            .await
+            .map_err(|error| SshError::Channel(error.to_string()))
+    }
+}
+
+pub struct SshInteractiveChannel {
+    handle: Arc<tokio::sync::Mutex<client::Handle<HostKeyHandler>>>,
+    writer: SshChannelWriter,
+    output: mpsc::Receiver<SshOutputChunk>,
+}
+
+impl SshInteractiveChannel {
+    pub fn writer(&self) -> SshChannelWriter {
+        self.writer.clone()
+    }
+
+    pub async fn write(&self, data: &[u8]) -> Result<(), SshError> {
+        self.writer.write(data).await
+    }
+
+    pub async fn resize(&self, columns: u16, rows: u16) -> Result<(), SshError> {
+        self.writer.resize(columns, rows).await
+    }
+
+    pub async fn read_output(&mut self) -> Option<SshOutputChunk> {
+        self.output.recv().await
+    }
+
+    pub async fn close(&self) -> Result<(), SshError> {
+        let writer = &self.writer;
+        let eof = writer.eof().await;
+        let close = writer.close().await;
+        let _ = self
+            .handle
+            .lock()
+            .await
+            .disconnect(russh::Disconnect::ByApplication, "", "English")
+            .await;
+        eof?;
+        close
     }
 }
 
@@ -265,5 +420,161 @@ mod tests {
         ));
         assert!(validate_dimensions(120, 36).is_ok());
         assert!(validate_dimensions(0, 36).is_err());
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    mod interactive {
+        use super::*;
+        use russh::server::{self, Auth, Session};
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use tokio::time::{timeout, Duration};
+
+        #[derive(Clone)]
+        struct TestServer {
+            pty_requested: Arc<AtomicBool>,
+            shell_requested: Arc<AtomicBool>,
+        }
+
+        impl server::Handler for TestServer {
+            type Error = RusshError;
+
+            async fn auth_password(
+                &mut self,
+                _user: &str,
+                password: &str,
+            ) -> Result<Auth, Self::Error> {
+                if password == "secret" {
+                    Ok(Auth::Accept)
+                } else {
+                    Ok(Auth::reject())
+                }
+            }
+
+            async fn channel_open_session(
+                &mut self,
+                _channel: russh::Channel<russh::server::Msg>,
+                reply: russh::server::ChannelOpenHandle,
+                _session: &mut Session,
+            ) -> Result<(), Self::Error> {
+                reply.accept().await;
+                Ok(())
+            }
+
+            async fn pty_request(
+                &mut self,
+                channel_id: russh::ChannelId,
+                _term: &str,
+                _col_width: u32,
+                _row_height: u32,
+                _pix_width: u32,
+                _pix_height: u32,
+                _modes: &[(russh::Pty, u32)],
+                session: &mut Session,
+            ) -> Result<(), Self::Error> {
+                self.pty_requested.store(true, Ordering::SeqCst);
+                session.channel_success(channel_id)?;
+                Ok(())
+            }
+
+            async fn shell_request(
+                &mut self,
+                channel_id: russh::ChannelId,
+                session: &mut Session,
+            ) -> Result<(), Self::Error> {
+                self.shell_requested.store(true, Ordering::SeqCst);
+                session.channel_success(channel_id)?;
+                session.data(channel_id, b"interactive-ready\r\n".to_vec())?;
+                Ok(())
+            }
+        }
+
+        async fn spawn_test_server(
+            port: u16,
+        ) -> (
+            Arc<russh::keys::PrivateKey>,
+            Arc<AtomicBool>,
+            Arc<AtomicBool>,
+        ) {
+            let key = Arc::new(
+                russh::keys::PrivateKey::random(&mut rand::rng(), russh::keys::Algorithm::Ed25519)
+                    .expect("test key should generate"),
+            );
+            let pty_requested = Arc::new(AtomicBool::new(false));
+            let shell_requested = Arc::new(AtomicBool::new(false));
+            let config = Arc::new(server::Config {
+                keys: vec![(*key).clone()],
+                ..Default::default()
+            });
+            let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port))
+                .await
+                .expect("test server should bind");
+            let pty_flag = Arc::clone(&pty_requested);
+            let shell_flag = Arc::clone(&shell_requested);
+            tokio::spawn(async move {
+                loop {
+                    let Ok((socket, _)) = listener.accept().await else {
+                        break;
+                    };
+                    let config = Arc::clone(&config);
+                    let pty_requested = Arc::clone(&pty_flag);
+                    let shell_requested = Arc::clone(&shell_flag);
+                    tokio::spawn(async move {
+                        let handler = TestServer {
+                            pty_requested,
+                            shell_requested,
+                        };
+                        let Ok(session) = server::run_stream(config, socket, handler).await else {
+                            return;
+                        };
+                        let _ = session.await;
+                    });
+                }
+            });
+            (key, pty_requested, shell_requested)
+        }
+
+        #[tokio::test]
+        async fn opens_interactive_channel_with_pty_and_shell() {
+            let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0u16))
+                .await
+                .unwrap();
+            let port = listener.local_addr().unwrap().port();
+            drop(listener);
+
+            let (key, pty_requested, shell_requested) = spawn_test_server(port).await;
+            let fingerprint = key.public_key().fingerprint(Default::default()).to_string();
+
+            let connection = SshConnection::connect(SshConnectionSpec {
+                host: "127.0.0.1".to_string(),
+                port,
+                username: "developer".to_string(),
+                password: Some("secret".to_string()),
+                private_key_path: None,
+                private_key_passphrase: None,
+                expected_host_key: fingerprint,
+            })
+            .await
+            .expect("connection should succeed");
+
+            let mut interactive = connection
+                .open_interactive(120, 36)
+                .await
+                .expect("interactive channel should open");
+
+            let chunk = timeout(Duration::from_secs(5), interactive.read_output())
+                .await
+                .expect("output should arrive")
+                .expect("channel should stay open");
+            assert_eq!(chunk.kind, SshOutputKind::Stdout);
+            assert_eq!(chunk.data, b"interactive-ready\r\n".to_vec());
+            assert!(pty_requested.load(Ordering::SeqCst));
+            assert!(shell_requested.load(Ordering::SeqCst));
+
+            interactive
+                .write(b"echo ok\r\n")
+                .await
+                .expect("write should succeed");
+            interactive.close().await.expect("close should succeed");
+        }
     }
 }

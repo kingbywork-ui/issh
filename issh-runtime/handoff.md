@@ -1,5 +1,36 @@
 # issh-runtime Handoff
 
+## Phase 12 - SSH session migration complete (2026-08-24)
+
+- Extended `issh-runtime-ssh` with `open_interactive(columns, rows)`: it opens
+  a session channel, requests a `xterm-256color` PTY and shell, splits the
+  russh channel, and streams stdout/stderr chunks through a bounded 256-message
+  mpsc queue. `SshChannelWriter` provides write/resize/eof/close, and the
+  interactive channel closes by sending EOF, closing the channel, and
+  disconnecting the shared client handle.
+- Added the `RemoteShellIo` trait (`try_write`/`try_resize`/`request_close`)
+  plus `SshSessionSpec` and `SshSession` to `issh-runtime-session`. SSH
+  sessions reuse the same bounded 2 MiB output ring, cursor sequencing, and
+  batched subscription contract as local PTY sessions; the store also exposes
+  `push_ssh_output` and `mark_ssh_exited` for the isshd output pump.
+- Added the `session.openSsh` RPC to `isshd`. Connect and interactive-channel
+  open are each wrapped in a 10 s tokio timeout so unreachable hosts fail with
+  a structured RPC error instead of hanging the Named Pipe client. A spawned
+  pump task bridges SSH output chunks into the session store, forwards
+  write/resize commands, marks exit on channel close, and detaches the pump
+  registration when the session ends.
+- Added `ssh-session-smoke.mjs` covering missing host key, bad dimensions,
+  and an unreachable host. `runtime-smoke.mjs` asserts the new method in the
+  capability list.
+- Verification passed: `cargo fmt --check`, Clippy with warnings denied, 32
+  workspace tests (including a real in-process russh server round-trip), and
+  all four Node smoke scripts.
+- Smoke-script timeout note: the unreachable-host case intentionally exceeds
+  the default 2 s client timeout (isshd takes up to 10 s to fail the TCP
+  connect), so that request uses a 30 s socket timeout with 10 attempts.
+- SFTP, Vault, Tauri SSH UI, and packaging remain future gates. No package
+  was built.
+
 ## Phase 11 - Rust SSH transport probe complete (2026-08-21)
 
 - Added `issh-runtime-ssh` after creating its required `agent.md` and
