@@ -519,6 +519,21 @@ struct SshProbeParams {
     expected_host_key: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SshDiscoverHostKeyParams {
+    host: String,
+    port: u16,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SshDiscoverHostKeyResult {
+    host: String,
+    port: u16,
+    fingerprint: String,
+}
+
 fn default_local_session_title() -> String {
     "本地终端".to_string()
 }
@@ -777,6 +792,7 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                     "sftp.rename",
                     "sftp.close",
                     "ssh.probe",
+                    "ssh.discoverHostKey",
                     "vault.status",
                     "vault.unlock",
                     "vault.lock",
@@ -1037,6 +1053,25 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                 serde_json::json!({ "connected": true }),
             ))
             .expect("SSH probe response serialization cannot fail")
+        }
+        "ssh.discoverHostKey" => {
+            let params = match parse_params::<SshDiscoverHostKeyParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            let host = params.host.trim().to_string();
+            match issh_runtime_ssh::SshConnection::discover_host_key(&host, params.port).await {
+                Ok(fingerprint) => {
+                    let result = SshDiscoverHostKeyResult {
+                        host,
+                        port: params.port,
+                        fingerprint,
+                    };
+                    serde_json::to_vec(&RpcResponse::new(id, result))
+                        .expect("ssh discover response serialization cannot fail")
+                }
+                Err(error) => serialize_error(id, INVALID_PARAMS, error.to_string()),
+            }
         }
         "pane.list" => with_panes(state, id, |panes| {
             Ok::<_, issh_runtime_pane::PaneError>(panes.list())

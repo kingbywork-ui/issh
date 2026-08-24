@@ -20,6 +20,7 @@ pub const MAX_SSH_PASSWORD_BYTES: usize = 4096;
 pub const MAX_SSH_FINGERPRINT_BYTES: usize = 128;
 pub const MAX_SSH_CHANNEL_BUFFER_MESSAGES: usize = 256;
 pub const SSH_INTERACTIVE_TERM: &str = "xterm-256color";
+pub const SSH_DISCOVERY_TIMEOUT_MS: u64 = 15_000;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SshConnectionSpec {
@@ -96,6 +97,7 @@ pub struct SshOutputChunk {
 #[derive(Clone)]
 struct HostKeyHandler {
     expected_host_key: String,
+    discovered: Option<Arc<std::sync::Mutex<Option<String>>>>,
 }
 
 impl client::Handler for HostKeyHandler {
@@ -108,6 +110,13 @@ impl client::Handler for HostKeyHandler {
         let fingerprint = server_public_key
             .fingerprint(Default::default())
             .to_string();
+        if let Some(discovered) = &self.discovered {
+            discovered
+                .lock()
+                .map(|mut slot| *slot = Some(fingerprint.clone()))
+                .ok();
+            return Ok(true);
+        }
         Ok(fingerprint == self.expected_host_key)
     }
 }
@@ -122,6 +131,7 @@ impl SshConnection {
         validate_spec(&spec)?;
         let handler = HostKeyHandler {
             expected_host_key: spec.expected_host_key.trim().to_string(),
+            discovered: None,
         };
         let config = client::Config {
             inactivity_timeout: Some(Duration::from_secs(60)),
@@ -269,6 +279,46 @@ impl SshConnection {
             .disconnect(russh::Disconnect::ByApplication, "", "English")
             .await
             .map_err(|error| SshError::Transport(error.to_string()))
+    }
+
+    pub async fn discover_host_key(host: &str, port: u16) -> Result<String, SshError> {
+        let host = host.trim();
+        if host.is_empty() || host.len() > MAX_SSH_HOST_BYTES {
+            return Err(SshError::InvalidHost);
+        }
+        if port == 0 {
+            return Err(SshError::InvalidPort);
+        }
+        let discovered = Arc::new(std::sync::Mutex::new(None::<String>));
+        let handler = HostKeyHandler {
+            expected_host_key: String::new(),
+            discovered: Some(Arc::clone(&discovered)),
+        };
+        let config = client::Config {
+            inactivity_timeout: Some(Duration::from_secs(60)),
+            ..Default::default()
+        };
+        let future = client::connect(Arc::new(config), (host, port), handler);
+        let handle = tokio::time::timeout(Duration::from_millis(SSH_DISCOVERY_TIMEOUT_MS), future)
+            .await
+            .map_err(|_| {
+                SshError::Transport(format!(
+                    "host-key discovery timed out after {SSH_DISCOVERY_TIMEOUT_MS}ms"
+                ))
+            })?
+            .map_err(|error| match error {
+                RusshError::UnknownKey => SshError::HostKeyRejected(String::new()),
+                other => SshError::Transport(other.to_string()),
+            })?;
+        let fingerprint = discovered
+            .lock()
+            .ok()
+            .and_then(|slot| slot.clone())
+            .ok_or_else(|| SshError::Transport("host key was not captured".to_string()))?;
+        let _ = handle
+            .disconnect(russh::Disconnect::ByApplication, "", "English")
+            .await;
+        Ok(fingerprint)
     }
 }
 
@@ -601,6 +651,48 @@ mod tests {
                 .await
                 .expect("write should succeed");
             interactive.close().await.expect("close should succeed");
+        }
+
+        #[tokio::test]
+        async fn discovers_host_key_fingerprint_without_trusting_it() {
+            let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0u16))
+                .await
+                .unwrap();
+            let port = listener.local_addr().unwrap().port();
+            drop(listener);
+
+            let (key, _pty_requested, _shell_requested) = spawn_test_server(port).await;
+            let expected = key.public_key().fingerprint(Default::default()).to_string();
+
+            let discovered = SshConnection::discover_host_key("127.0.0.1", port)
+                .await
+                .expect("discovery should succeed");
+            assert_eq!(discovered, expected);
+            assert!(discovered.starts_with("SHA256:"));
+
+            let mut value = spec();
+            value.host = "127.0.0.1".to_string();
+            value.port = port;
+            value.expected_host_key = discovered;
+            let connection = SshConnection::connect(value)
+                .await
+                .expect("connection with discovered fingerprint should succeed");
+            connection
+                .disconnect()
+                .await
+                .expect("disconnect should succeed");
+        }
+
+        #[tokio::test]
+        async fn discover_host_key_rejects_invalid_input() {
+            assert!(matches!(
+                SshConnection::discover_host_key("", 22).await,
+                Err(SshError::InvalidHost)
+            ));
+            assert!(matches!(
+                SshConnection::discover_host_key("127.0.0.1", 0).await,
+                Err(SshError::InvalidPort)
+            ));
         }
     }
 

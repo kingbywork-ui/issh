@@ -1,5 +1,33 @@
 # issh-runtime Handoff
 
+## Phase 15 - Tauri SSH/SFTP UI + host-key discovery (2026-08-24)
+
+- Extended `issh-runtime-ssh` with `SshConnection::discover_host_key(host,
+  port)`: a TOFU-style probe that connects, captures the server host-key
+  fingerprint (SHA256) without trusting it, disconnects, and returns the
+  fingerprint for UI confirmation. 15 s timeout, host/port validation, and a
+  dedicated `SSH_DISCOVERY_TIMEOUT_MS` constant. Two new tests cover
+  fingerprint capture against the local test server (reusing the discovered
+  fingerprint for a real connect) and invalid-input rejection.
+- Added the `ssh.discoverHostKey` RPC to `isshd` (registered in
+  capabilities), returning `{ host, port, fingerprint }`. The Tauri SSH
+  connect flow calls it first and shows the fingerprint for explicit user
+  confirmation before `session.openSsh` runs with `expectedHostKey`.
+- Tauri client (`issh-tauri`): `runtime.ts` now wraps the full SSH/SFTP/Vault
+  RPC surface (openSsh, discoverSshHostKey, sftp.* incl. chunked read/write
+  with base64 helpers, vault.status/unlock/lock/setEnabled/listSecrets/
+  getSecret/putSecret/deleteSecret).
+- Tauri UI (`App.svelte` + `SftpBrowser.svelte`): multi-tab terminal
+  workbench (local + SSH tabs, per-tab xterm panes, 80 ms output polling,
+  queued writes), SSH connect panel with host-key fingerprint confirmation
+  and optional vault-secret credential source, and an SFTP browser (list/
+  navigate/preview 256 KiB/ mkdir/rename/delete/upload chunked at 24 KiB).
+  `svelte-check` clean, `vite build` passes.
+- Added `scripts/ssh-discover-smoke.mjs` covering capabilities advertising,
+  invalid host/port rejection, and unreachable-host error mapping.
+- Electron main-process removal and packaging remain future gates. No
+  package was built.
+
 ## Phase 14 - Vault subsystem complete (2026-08-24)
 
 - New crate `issh-runtime-vault` implementing the issh Electron `StoredVault`
