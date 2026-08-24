@@ -8,6 +8,7 @@ license.workspace = true
 issh-runtime-pane = { path = "../pane" }
 issh-runtime-protocol = { path = "../protocol" }
 issh-runtime-session = { path = "../session" }
+issh-runtime-ssh = { path = "../ssh" }
 issh-runtime-workspace = { path = "../workspace" }
 serde.workspace = true
 serde_json.workspace = true

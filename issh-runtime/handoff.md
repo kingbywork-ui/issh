@@ -1,5 +1,17 @@
 # issh-runtime Handoff
 
+## Phase 11 - Rust SSH transport probe complete (2026-08-21)
+
+- Added `issh-runtime-ssh` after creating its required `agent.md` and
+  `handoff.md`. It uses `russh 0.62.7` with the `ring` backend, requires a
+  `SHA256:` host-key fingerprint, supports password/private-key authentication,
+  and exposes remote PTY open/resize primitives without persisting secrets.
+- Added `ssh.probe` to `isshd`; connect, host-key verification, authentication,
+  and disconnect are Rust-owned. `ssh-probe-smoke.mjs` validates the required
+  host-key parameter, and the full Runtime smoke passes with the new capability.
+- Persistent remote session streaming, SFTP, Vault, and Tauri SSH UI remain
+  future gates. No package was built.
+
 ## Phase 10 - Local PTY session migration complete (2026-08-21)
 
 - Added the `issh-runtime-session` crate and its own `agent.md`/`handoff.md`.

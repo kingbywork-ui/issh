@@ -5,6 +5,7 @@ use issh_runtime_protocol::{
     PROTOCOL_VERSION,
 };
 use issh_runtime_session::{LocalSessionSpec, SessionStore, MAX_SESSION_BATCH_BYTES};
+use issh_runtime_ssh::{SshConnection, SshConnectionSpec};
 use issh_runtime_workspace::{SessionSnapshot, WorkspaceStore};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -260,6 +261,18 @@ struct SessionSubscribeParams {
     max_bytes: usize,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SshProbeParams {
+    host: String,
+    port: u16,
+    username: String,
+    password: Option<String>,
+    private_key_path: Option<PathBuf>,
+    private_key_passphrase: Option<String>,
+    expected_host_key: String,
+}
+
 fn default_local_session_title() -> String {
     "本地终端".to_string()
 }
@@ -436,7 +449,7 @@ async fn handle_client(
     let response = if oversized {
         serialize_error(Value::Null, MESSAGE_TOO_LARGE, "Message exceeds 64 KiB")
     } else {
-        dispatch(&message, state)
+        dispatch(&message, state).await
     };
 
     server.write_all(&response).await?;
@@ -445,7 +458,7 @@ async fn handle_client(
     Ok(())
 }
 
-fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
+async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
     let request = match serde_json::from_slice::<RpcRequest>(message) {
         Ok(request) => request,
         Err(_) => return serialize_error(Value::Null, PARSE_ERROR, "Invalid JSON"),
@@ -482,6 +495,7 @@ fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                     "session.resize",
                     "session.subscribe",
                     "session.close",
+                    "ssh.probe",
                     "workspace.create",
                     "workspace.list",
                     "workspace.bind",
@@ -583,6 +597,34 @@ fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                 Err(error) => return serialize_error(id, error.code, error.message),
             };
             with_sessions(state, id, |sessions| sessions.close(&params.session_id))
+        }
+        "ssh.probe" => {
+            let params = match parse_params::<SshProbeParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            let connection = match SshConnection::connect(SshConnectionSpec {
+                host: params.host,
+                port: params.port,
+                username: params.username,
+                password: params.password,
+                private_key_path: params.private_key_path,
+                private_key_passphrase: params.private_key_passphrase,
+                expected_host_key: params.expected_host_key,
+            })
+            .await
+            {
+                Ok(connection) => connection,
+                Err(error) => return serialize_error(id, INVALID_PARAMS, error.to_string()),
+            };
+            if let Err(error) = connection.disconnect().await {
+                return serialize_error(id, -32603, error.to_string());
+            }
+            serde_json::to_vec(&RpcResponse::new(
+                id,
+                serde_json::json!({ "connected": true }),
+            ))
+            .expect("SSH probe response serialization cannot fail")
         }
         "pane.list" => with_panes(state, id, |panes| {
             Ok::<_, issh_runtime_pane::PaneError>(panes.list())
@@ -902,12 +944,13 @@ mod tests {
         RuntimeState::in_memory(123)
     }
 
-    #[test]
-    fn dispatches_health() {
+    #[tokio::test]
+    async fn dispatches_health() {
         let response = dispatch(
             br#"{"jsonrpc":"2.0","id":"health","method":"runtime.health","params":{}}"#,
             &state(),
-        );
+        )
+        .await;
         let value: Value = serde_json::from_slice(&response).expect("response should be JSON");
 
         assert_eq!(value["id"], "health");
@@ -918,105 +961,117 @@ mod tests {
             .contains(&Value::String("workspace.bind".to_string())));
     }
 
-    #[test]
-    fn returns_parse_error_for_invalid_json() {
-        let response = dispatch(b"not-json", &state());
+    #[tokio::test]
+    async fn returns_parse_error_for_invalid_json() {
+        let response = dispatch(b"not-json", &state()).await;
         let value: Value = serde_json::from_slice(&response).expect("response should be JSON");
         assert_eq!(value["error"]["code"], PARSE_ERROR);
     }
 
-    #[test]
-    fn returns_method_not_found() {
+    #[tokio::test]
+    async fn returns_method_not_found() {
         let response = dispatch(
             br#"{"jsonrpc":"2.0","id":9,"method":"missing.method"}"#,
             &state(),
-        );
+        )
+        .await;
         let value: Value = serde_json::from_slice(&response).expect("response should be JSON");
         assert_eq!(value["id"], 9);
         assert_eq!(value["error"]["code"], METHOD_NOT_FOUND);
     }
 
-    #[test]
-    fn syncs_session_and_binds_workspace() {
+    #[tokio::test]
+    async fn syncs_session_and_binds_workspace() {
         let state = state();
         let sync = dispatch(
             br#"{"jsonrpc":"2.0","id":1,"method":"session.sync","params":{"sessions":[{"id":"tab-1","title":"SSH","customTitle":null,"active":true,"focused":true,"profileType":"ssh","profileName":"server","profileId":"profile-1","host":"example.test","user":"developer","port":22,"connected":true}]}}"#,
             &state,
-        );
+        )
+        .await;
         let sync: Value = serde_json::from_slice(&sync).expect("sync should return JSON");
         assert_eq!(sync["result"]["sessionCount"], 1);
 
         let created = dispatch(
             br#"{"jsonrpc":"2.0","id":2,"method":"workspace.create","params":{"name":"Operations"}}"#,
             &state,
-        );
+        )
+        .await;
         let created: Value = serde_json::from_slice(&created).expect("create should return JSON");
         assert_eq!(created["result"]["id"], "workspace-1");
 
         let bound = dispatch(
             br#"{"jsonrpc":"2.0","id":3,"method":"workspace.bind","params":{"workspaceId":"workspace-1","sessionId":"tab-1"}}"#,
             &state,
-        );
+        )
+        .await;
         let bound: Value = serde_json::from_slice(&bound).expect("bind should return JSON");
         assert_eq!(bound["result"]["bindings"][0]["sessionId"], "tab-1");
     }
 
-    #[test]
-    fn dispatches_pane_lifecycle_and_input_ownership() {
+    #[tokio::test]
+    async fn dispatches_pane_lifecycle_and_input_ownership() {
         let state = state();
         let opened = dispatch(
             br#"{"jsonrpc":"2.0","id":1,"method":"pane.open","params":{"id":"pane-1","workspaceId":"workspace-1","sessionId":"session-1","title":"Operations","columns":120,"rows":40,"producerId":"herdr-session"}}"#,
             &state,
-        );
+        )
+        .await;
         let opened: Value = serde_json::from_slice(&opened).expect("pane should open");
         assert_eq!(opened["result"]["state"], "attached");
 
         let claimed = dispatch(
             br#"{"jsonrpc":"2.0","id":2,"method":"pane.claimInput","params":{"paneId":"pane-1","ownerId":"agent-a"}}"#,
             &state,
-        );
+        )
+        .await;
         let claimed: Value = serde_json::from_slice(&claimed).expect("input should be claimed");
         assert_eq!(claimed["result"]["inputOwner"], "agent-a");
 
         let write = dispatch(
             br#"{"jsonrpc":"2.0","id":3,"method":"pane.write","params":{"paneId":"pane-1","ownerId":"agent-a","data":[27,91,65]}}"#,
             &state,
-        );
+        )
+        .await;
         let write: Value = serde_json::from_slice(&write).expect("write should return JSON");
         assert_eq!(write["result"]["acceptedBytes"], 3);
 
         let output = dispatch(
             br#"{"jsonrpc":"2.0","id":4,"method":"pane.pushOutput","params":{"paneId":"pane-1","producerId":"herdr-session","data":[0,255,27]}}"#,
             &state,
-        );
+        )
+        .await;
         let output: Value = serde_json::from_slice(&output).expect("output should return JSON");
         assert_eq!(output["result"]["data"], serde_json::json!([0, 255, 27]));
 
         let subscription = dispatch(
             br#"{"jsonrpc":"2.0","id":5,"method":"pane.subscribe","params":{"paneId":"pane-1","afterSequence":0,"maxEvents":10,"maxBytes":100}}"#,
             &state,
-        );
+        )
+        .await;
         let subscription: Value =
             serde_json::from_slice(&subscription).expect("subscription should return JSON");
         assert_eq!(subscription["result"]["events"][0]["sequence"], 1);
         assert_eq!(subscription["result"]["nextAfterSequence"], 1);
     }
 
-    #[test]
-    fn rejects_pane_input_hijack() {
+    #[tokio::test]
+    async fn rejects_pane_input_hijack() {
         let state = state();
         dispatch(
             br#"{"jsonrpc":"2.0","id":1,"method":"pane.open","params":{"id":"pane-1","workspaceId":"workspace-1","sessionId":"session-1","title":"Operations","columns":120,"rows":40,"producerId":"herdr-session"}}"#,
             &state,
-        );
+        )
+        .await;
         dispatch(
             br#"{"jsonrpc":"2.0","id":2,"method":"pane.claimInput","params":{"paneId":"pane-1","ownerId":"agent-a"}}"#,
             &state,
-        );
+        )
+        .await;
         let response = dispatch(
             br#"{"jsonrpc":"2.0","id":3,"method":"pane.claimInput","params":{"paneId":"pane-1","ownerId":"agent-b"}}"#,
             &state,
-        );
+        )
+        .await;
         let response: Value = serde_json::from_slice(&response).expect("response should be JSON");
         assert_eq!(response["error"]["code"], INVALID_PARAMS);
         assert!(response["error"]["message"]

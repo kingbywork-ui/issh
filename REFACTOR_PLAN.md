@@ -130,6 +130,14 @@ For the lowest initial cost there is no separate QA or DevOps role. BA owns acce
 - Focused verification passed: Rust format, strict Clippy, 20 workspace tests, Runtime health smoke, local PTY smoke (ConPTY startup, DSR cursor response, marker echo, resize, close and cleanup), Svelte diagnostics, and Vite production build. No package was built.
 - The Electron removal gate is still open: Tauri local terminal is the first functional parity slice, but SSH transport, SFTP, Vault, Workspace/Agent/Herdr screens, settings, plugin loading, tray/updater, migration and packaged parity remain to be migrated and verified.
 
+### Phase 11 implementation status (2026-08-21)
+
+- Added `issh-runtime-ssh` using `russh 0.62.7` with the `ring` backend so the Rust SSH boundary does not require NASM on the Windows build host.
+- The transport accepts password or OpenSSH private-key authentication, requires a `SHA256:` host-key fingerprint, supports remote PTY shell open/resize primitives, and keeps credential material in memory only for the connection lifetime.
+- Added `ssh.probe` to `isshd`. It performs the Rust-owned connect, host-key verification, authentication, and clean disconnect without persisting secrets. Existing session/pane/workspace RPCs remain unchanged.
+- Added `ssh-probe-smoke.mjs` for invalid-parameter and host-key-required coverage. Runtime smoke was adjusted for the larger native binary startup/cleanup window and passed with the new capability.
+- This is an SSH transport/probe gate, not full remote-session parity yet. The next slice must attach a persistent remote PTY to the bounded session stream, then migrate SFTP and Vault before Tauri replaces the legacy SSH UI.
+
 ### Phase 8 implementation status (2026-08-20)
 
 - The native-pane proxy is implemented and verified on `dev` without running a new package build. `issh-runtime-pane` owns the producer-agnostic lifecycle and stream contract: a 2 MiB in-memory output ring, 48 KiB subscription batches, sequence cursors, raw-byte preservation, producer checks, exclusive input ownership, bounded writes, and resize authorization.

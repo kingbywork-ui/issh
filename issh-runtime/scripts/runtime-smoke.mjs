@@ -25,7 +25,7 @@ function startRuntime (...args) {
     })
 }
 
-function waitForExit (child, timeoutMs = 5000) {
+function waitForExit (child, timeoutMs = 20000) {
     return Promise.race([
         new Promise(resolve => child.once('exit', (code, signal) => resolve({ code, signal }))),
         wait(timeoutMs).then(() => {
@@ -34,7 +34,7 @@ function waitForExit (child, timeoutMs = 5000) {
     ])
 }
 
-async function request (payload, attempts = 50) {
+async function request (payload, attempts = 300) {
     let lastError
     for (let attempt = 0; attempt < attempts; attempt++) {
         try {
@@ -130,6 +130,7 @@ try {
         'session.resize',
         'session.subscribe',
         'session.close',
+        'ssh.probe',
         'workspace.create',
         'workspace.list',
         'workspace.bind',
