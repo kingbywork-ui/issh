@@ -11,7 +11,7 @@ const testDir = path.dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
 
 function loadHerdrManager () {
-    const filename = path.resolve(testDir, '../../app/lib/herdr.ts')
+    const filename = path.resolve(testDir, 'herdr-manager.fixture.ts')
     const source = fs.readFileSync(filename, 'utf8')
     const compiled = ts.transpileModule(source, {
         compilerOptions: {

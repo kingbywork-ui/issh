@@ -6,8 +6,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const pluginConfig = pathToFileURL(path.join(root, 'webpack.plugin.config.mjs')).href
-const appConfig = pathToFileURL(path.join(root, 'app', 'webpack.config.mjs')).href
-const mainConfig = pathToFileURL(path.join(root, 'app', 'webpack.config.main.mjs')).href
 const pluginDir = path.join(root, 'issh-llm').replaceAll('\\', '/')
 
 function readConfig (vars) {
@@ -17,13 +15,9 @@ function readConfig (vars) {
     Object.assign(env, vars)
     const source = `
         const plugin = (await import(${JSON.stringify(pluginConfig)})).default
-        const renderer = (await import(${JSON.stringify(appConfig)})).default
-        const main = (await import(${JSON.stringify(mainConfig)})).default
         const pluginConfig = plugin({ name: 'test', dirname: ${JSON.stringify(pluginDir)} })
         console.log(JSON.stringify({
             plugin: { mode: pluginConfig.mode, minimize: pluginConfig.optimization.minimize, evalSourceMap: pluginConfig.plugins.some(x => x.constructor.name === 'EvalSourceMapDevToolPlugin') },
-            renderer: { mode: renderer().mode, minimize: renderer().optimization.minimize },
-            main: { mode: main().mode },
         }))
     `
     const result = spawnSync(process.execPath, ['--input-type=module', '-e', source], { cwd: root, env, encoding: 'utf8' })
@@ -34,8 +28,6 @@ function readConfig (vars) {
 const production = readConfig({})
 assert.deepEqual(production, {
     plugin: { mode: 'production', minimize: true, evalSourceMap: false },
-    renderer: { mode: 'production', minimize: true },
-    main: { mode: 'production' },
 })
 
 for (const vars of [{ ISSH_DEV: '1' }, { TABBY_DEV: '1' }, { ISSH_DEV: 'true' }, { TABBY_DEV: 'true' }]) {
@@ -43,9 +35,6 @@ for (const vars of [{ ISSH_DEV: '1' }, { TABBY_DEV: '1' }, { ISSH_DEV: 'true' },
     assert.equal(development.plugin.mode, 'development')
     assert.equal(development.plugin.minimize, false)
     assert.equal(development.plugin.evalSourceMap, true)
-    assert.equal(development.renderer.mode, 'development')
-    assert.equal(development.renderer.minimize, false)
-    assert.equal(development.main.mode, 'development')
 }
 
 console.log('webpack mode tests passed: unset=production, 1/true primary and legacy=development')

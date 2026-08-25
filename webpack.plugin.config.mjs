@@ -69,7 +69,7 @@ export default options => {
                     ? { 'lru-cache': path.resolve(options.dirname, '../node_modules/path-scurry/node_modules/lru-cache') }
                     : {}),
             },
-            modules: ['.', 'src', 'node_modules', '../app/node_modules', '../node_modules'].map(x => path.join(options.dirname, x)),
+            modules: ['.', 'src', 'node_modules', '../node_modules'].map(x => path.join(options.dirname, x)),
             extensions: ['.ts', '.js'],
             mainFields: ['esm2015', 'browser', 'module', 'main'],
         },

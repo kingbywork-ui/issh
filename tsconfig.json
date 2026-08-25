@@ -29,17 +29,14 @@
     ],
     "paths": {
       "*": [
-        "../node_modules/*",
-        "../../app/node_modules/*",
-        "./app/node_modules/*"
+        "../node_modules/*"
       ],
       "issh-*": ["../../issh-*/src"],
     }
   },
   "typeAcquisition": {
     "include": [
-      "../node_modules",
-      "../../app/node_modules"
+      "../node_modules"
     ]
   },
   "angularCompilerOptions": {

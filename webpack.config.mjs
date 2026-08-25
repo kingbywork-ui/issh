@@ -2,8 +2,6 @@ import log from 'npmlog'
 import { builtinPlugins } from './scripts/vars.mjs'
 
 const paths = [
-    './app/webpack.config.mjs',
-    './app/webpack.config.main.mjs',
     ...builtinPlugins.map(x => `./${x}/webpack.config.mjs`),
 ]
 

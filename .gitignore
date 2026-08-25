@@ -1,6 +1,3 @@
-app/node_modules
-app/assets/webpack
-
 node_modules
 
 build/files.wxs

@@ -195,7 +195,7 @@ fn encrypt_vault_v1(vault: &Vault, passphrase: &str) -> StoredVault {
 
     let mut plaintext = serde_json::to_vec(vault).expect("vault serialization cannot fail");
     let padding = 16 - (plaintext.len() % 16);
-    plaintext.extend(std::iter::repeat(padding as u8).take(padding));
+    plaintext.extend(std::iter::repeat_n(padding as u8, padding));
 
     let mut buffer = plaintext;
     let mut encryptor = Aes256CbcEnc::new((&*key).into(), iv.as_slice().into());

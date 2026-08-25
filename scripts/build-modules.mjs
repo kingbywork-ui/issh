@@ -5,8 +5,6 @@ import webpack from 'webpack'
 import { promisify } from 'node:util'
 
 const configs = [
-    '../app/webpack.config.main.mjs',
-    '../app/webpack.config.mjs',
     ...vars.allPackages.map(x => `../${x}/webpack.config.mjs`),
 ];
 

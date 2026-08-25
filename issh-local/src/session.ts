@@ -217,9 +217,11 @@ export class Session extends BaseSession {
             console.info('Could not read working directory:', exc)
         }
 
-        try {
-            cwd = await fs.realpath(cwd)
-        } catch {}
+        if (cwd !== null) {
+            try {
+                cwd = (await fs.realpath(cwd)).toString()
+            } catch {}
+        }
 
         if (this.hostApp.platform === Platform.Windows && (cwd === this.initialCWD || cwd === process.env.WINDIR)) {
             // shell doesn't truly change its process' CWD
@@ -229,10 +231,12 @@ export class Session extends BaseSession {
         // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
         cwd = cwd || this.guessedCWD
 
-        try {
-            await fs.access(cwd)
-        } catch {
-            return null
+        if (cwd !== null) {
+            try {
+                await fs.access(cwd)
+            } catch {
+                return null
+            }
         }
         return cwd
     }

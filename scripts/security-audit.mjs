@@ -112,14 +112,12 @@ function auditWorkspace (label, cwd) {
 }
 
 const workspaceNames = [
-    'app',
     'issh-core',
     'issh-settings',
     'issh-terminal',
     'issh-community-color-schemes',
     'issh-ssh',
     'issh-local',
-    'issh-electron',
     'issh-linkifier',
     'issh-auto-sudo-password',
     'issh-llm',

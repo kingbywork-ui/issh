@@ -36,49 +36,10 @@ function loadTypeScriptModule (relativePath, mocks = {}, globals = {}) {
 
 const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'issh-migration-test-'))
 try {
-    const configDirectory = path.join(tempDirectory, 'config-root', 'issh')
-    const legacyDirectory = path.join(tempDirectory, 'config-root', 'Tabby')
-    fs.mkdirSync(configDirectory, { recursive: true })
-    fs.mkdirSync(legacyDirectory, { recursive: true })
-    const legacyConfig = path.join(legacyDirectory, 'config.yaml')
-    const currentConfig = path.join(configDirectory, 'config.yaml')
-    fs.writeFileSync(legacyConfig, 'language: legacy\n', 'utf8')
-
-    const configModule = loadTypeScriptModule('app/lib/config.ts', {
-        atomically: { writeFile: async () => {} },
-    }, {
-        process: {
-            env: { ISSH_CONFIG_DIRECTORY: configDirectory },
-            platform: process.platform,
-        },
-    })
-    const candidates = configModule.getLegacyConfigPaths(configDirectory, path.join(tempDirectory, 'home'))
-    assert.ok(candidates.some(candidate => path.resolve(candidate) === path.resolve(legacyConfig)))
-    assert.equal(configModule.migrateConfig([legacyConfig]), legacyConfig)
-    assert.equal(fs.readFileSync(currentConfig, 'utf8'), 'language: legacy\n')
-    assert.equal(fs.readFileSync(legacyConfig, 'utf8'), 'language: legacy\n')
-
-    fs.writeFileSync(currentConfig, 'language: current\n', 'utf8')
-    fs.writeFileSync(legacyConfig, 'language: newer-legacy\n', 'utf8')
-    assert.equal(configModule.migrateConfig([legacyConfig]), null)
-    assert.equal(fs.readFileSync(currentConfig, 'utf8'), 'language: current\n')
-
-    const pluginCompatibility = loadTypeScriptModule('app/src/pluginCompatibility.ts')
-    assert.deepEqual(JSON.parse(JSON.stringify(
-        pluginCompatibility.classifyPluginPackage('issh-example', ['issh-plugin']),
-    )), { supported: true, legacy: false })
-    assert.deepEqual(JSON.parse(JSON.stringify(
-        pluginCompatibility.classifyPluginPackage('tabby-example', ['tabby-plugin']),
-    )), { supported: true, legacy: true })
-    assert.deepEqual(JSON.parse(JSON.stringify(
-        pluginCompatibility.classifyPluginPackage('issh-example', ['unrelated']),
-    )), { supported: false, legacy: false })
-
     const pluginPackages = [
         'issh-auto-sudo-password',
         'issh-community-color-schemes',
         'issh-core',
-        'issh-electron',
         'issh-linkifier',
         'issh-llm',
         'issh-local',
@@ -92,30 +53,6 @@ try {
         assert.ok(manifest.keywords.includes('issh-builtin-plugin'), `${plugin} has no issh builtin marker`)
         assert.ok(!manifest.keywords.includes('tabby-builtin-plugin'), `${plugin} still publishes the legacy marker`)
     }
-
-    const warnings = []
-    const urlHandler = loadTypeScriptModule('app/lib/urlHandler.ts', {
-        './cli': {
-            createParserConfig: () => ({
-                commands: [{ command: 'profile', options: { name: { type: 'string' } } }],
-            }),
-        },
-    }, {
-        console: {
-            warn: message => warnings.push(message),
-            error: () => {},
-            log: () => {},
-        },
-    })
-    assert.equal(urlHandler.isISSHURL('issh://profile'), true)
-    assert.equal(urlHandler.isISSHURL('tabby://profile'), true)
-    assert.deepEqual(JSON.parse(JSON.stringify(urlHandler.parseISSHURL('tabby://profile?name=legacy'))), {
-        _: ['profile'],
-        name: 'legacy',
-    })
-    urlHandler.parseISSHURL('tabby://profile?name=again')
-    assert.equal(warnings.length, 1)
-    assert.match(warnings[0], /tabby:\/\/.*issh:\/\//)
 
     const storageValues = new Map([['tabby.appPanel.bottomHeightPx', '234']])
     const localStorage = {
@@ -153,7 +90,7 @@ try {
     assert.match(configServiceSource, /delete config\.configSync\.host/)
     assert.match(configServiceSource, /delete config\.configSync\.token/)
 
-    console.log('ISSH config, discovery, plugin, URL, and user-data migration tests passed')
+    console.log('ISSH plugin and user-data migration tests passed')
 } finally {
     fs.rmSync(tempDirectory, { recursive: true, force: true })
 }

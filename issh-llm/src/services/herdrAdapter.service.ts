@@ -1,5 +1,4 @@
 import { Injectable } from '@angular/core'
-import { ipcRenderer } from 'electron'
 import { ConfigService } from 'issh-core'
 import { Observable, Subject, filter } from 'rxjs'
 import { HerdrPaneDescriptor, HerdrPaneEvent, HerdrPaneOptions } from '../herdrPane.api'
@@ -17,11 +16,14 @@ export class HerdrAdapterService {
     private paneEvents = new Subject<HerdrPaneEvent>()
 
     constructor (private config: ConfigService) {
-        ipcRenderer.on('herdr:pane-event', (_event, paneEvent: HerdrPaneEvent) => {
-            if (paneEvent?.paneId && ['output', 'state'].includes(paneEvent.type)) {
-                this.paneEvents.next(paneEvent)
-            }
-        })
+        const ipcRenderer = this.getIpcRenderer()
+        if (ipcRenderer) {
+            ipcRenderer.on('herdr:pane-event', (_event, paneEvent: HerdrPaneEvent) => {
+                if (paneEvent?.paneId && ['output', 'state'].includes(paneEvent.type)) {
+                    this.paneEvents.next(paneEvent)
+                }
+            })
+        }
         this.config.ready$.subscribe(() => this.syncAutoStart())
         this.config.changed$.subscribe(() => this.syncAutoStart())
     }
@@ -158,7 +160,20 @@ export class HerdrAdapterService {
         }
     }
 
+    private getIpcRenderer (): any {
+        try {
+            const runtimeRequire = eval('require') // eslint-disable-line no-eval
+            return runtimeRequire('electron').ipcRenderer
+        } catch {
+            return null
+        }
+    }
+
     private request (action: string, params: Record<string, unknown> = {}): Promise<any> {
+        const ipcRenderer = this.getIpcRenderer()
+        if (!ipcRenderer) {
+            return Promise.reject(new Error('Herdr bridge is not available without Electron IPC'))
+        }
         return ipcRenderer.invoke('herdr:request', {
             action,
             ...this.options(),

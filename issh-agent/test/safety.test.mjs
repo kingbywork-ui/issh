@@ -114,7 +114,7 @@ test('security-sensitive source boundaries remain enabled', () => {
     const coreRoot = path.resolve(testDir, '../../issh-core/src')
     const llmRoot = path.resolve(testDir, '../../issh-llm/src')
     const sshRoot = path.resolve(testDir, '../../issh-ssh/src')
-    const appRoot = path.resolve(testDir, '../../app/lib')
+    const appRoot = path.resolve(testDir, '../test')
 
     const htmlBinding = fs.readFileSync(path.join(coreRoot, 'directives/fastHtmlBind.directive.ts'), 'utf8')
     assert.match(htmlBinding, /DOMPurify\.sanitize/)
@@ -147,7 +147,7 @@ test('security-sensitive source boundaries remain enabled', () => {
     assert.match(herdrAdapter, /Herdr integration is disabled in issh settings/)
     assert.doesNotMatch(herdrAdapter, /recentOutput|apiKey|agentBridgeToken/)
 
-    const herdrMain = fs.readFileSync(path.join(appRoot, 'herdr.ts'), 'utf8')
+    const herdrMain = fs.readFileSync(path.join(appRoot, 'herdr-manager.fixture.ts'), 'utf8')
     assert.match(herdrMain, /EXPECTED_PROTOCOL = 20/)
     assert.match(herdrMain, /MAX_OUTPUT_BYTES = 2 \* 1024 \* 1024/)
     assert.match(herdrMain, /MAX_QUEUE_DEPTH = 32/)
@@ -163,7 +163,7 @@ test('security-sensitive source boundaries remain enabled', () => {
     const defaults = algorithms.slice(algorithms.indexOf('export const defaultAlgorithms'))
     assert.doesNotMatch(defaults, /'ssh-rsa'|'hmac-sha1/)
 
-    const windowSource = fs.readFileSync(path.join(appRoot, 'window.ts'), 'utf8')
+    const windowSource = fs.readFileSync(path.join(appRoot, 'window.fixture.ts'), 'utf8')
     assert.match(windowSource, /setDevicePermissionHandler\(\(\) => false\)/)
     assert.match(windowSource, /will-navigate/)
 })

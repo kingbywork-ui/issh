@@ -69,7 +69,7 @@ function classifyResidual (relativePath, line) {
         return 'third-party-name'
     }
     if (
-        ['.all-contributorsrc', '.github/FUNDING.yml', 'app/dev-app-update.yml', 'locale/STOP.txt'].includes(relativePath)
+        ['.all-contributorsrc', '.github/FUNDING.yml', 'locale/STOP.txt'].includes(relativePath)
         || ['README.md', 'README.zh-CN.md'].includes(relativePath)
         || /(?:github\.com\/Eugeny\/tabby|api\.github\.com\/repos\/eugeny\/tabby\/releases|eugeny\.github\.io\/tabby|tabby\.sh\/go\/|github\.com\/Eugeny\/tabby-clippy)/i.test(line)
     ) {
@@ -81,9 +81,6 @@ function classifyResidual (relativePath, line) {
         || /tabby-(?:agent|mcp-server|plugin|builtin-plugin)/i.test(line)
         || /(?:\.tabby|tabby:\/\/|api\.tabby\.sh)/i.test(line)
         || /(?:Open Tabby here|Paste path into Tabby|LOCALAPPDATA\\tabby\\Update\.exe)/.test(line)
-        || (relativePath === 'app/lib/config.ts' && /['"]Tabby['"]/.test(line))
-        || (relativePath === 'app/lib/config.ts' && /path\.join\([^)]*['"]tabby['"]/.test(line))
-        || (relativePath === 'app/src/pluginCompatibility.ts' && /tabby-/i.test(line))
         || (relativePath === 'issh-agent/src/client.mjs' && /tabby/i.test(line))
         || (relativePath === 'issh-core/src/services/appPanel.service.ts' && /tabby\./i.test(line))
         || (relativePath === 'issh-agent/README.md' && /legacy Tabby/i.test(line))
@@ -145,7 +142,6 @@ const plugins = [
     'issh-community-color-schemes',
     'issh-ssh',
     'issh-local',
-    'issh-electron',
     'issh-linkifier',
     'issh-auto-sudo-password',
     'issh-llm',
@@ -158,20 +154,15 @@ for (const plugin of plugins) {
     assert.ok(!manifest.keywords.includes('tabby-builtin-plugin'), `${plugin} still publishes the old builtin marker`)
 }
 
-const appManifest = JSON.parse(fs.readFileSync(path.join(repositoryRoot, 'app', 'package.json'), 'utf8'))
+const appManifest = JSON.parse(fs.readFileSync(path.join(repositoryRoot, 'package.json'), 'utf8'))
 assert.equal(appManifest.name, 'issh')
 const englishReadme = fs.readFileSync(path.join(repositoryRoot, 'README.md'), 'utf8')
 const chineseReadme = fs.readFileSync(path.join(repositoryRoot, 'README.zh-CN.md'), 'utf8')
 for (const readme of [englishReadme, chineseReadme]) {
-    assert.ok(readme.includes(`issh-${appManifest.version}-setup-x64.exe`), 'README installer version does not match app/package.json')
+    assert.ok(readme.includes(`issh-${appManifest.version}-setup-x64.exe`), 'README installer version does not match package.json')
 }
 const agents = fs.readFileSync(path.join(repositoryRoot, 'AGENTS.md'), 'utf8')
-assert.ok(agents.includes(`当前版本 \`${appManifest.version}\``), 'AGENTS.md version does not match app/package.json')
-
-const builderConfig = fs.readFileSync(path.join(repositoryRoot, 'electron-builder.yml'), 'utf8')
-for (const marker of ['appId: org.issh', 'productName: issh', 'artifactName: issh-${version}-setup-${env.ARCH}.${ext}', 'shortcutName: issh']) {
-    assert.ok(builderConfig.includes(marker), `Missing builder identity: ${marker}`)
-}
+assert.ok(agents.includes(`当前版本 \`${appManifest.version}\``), 'AGENTS.md version does not match package.json')
 
 const categoryCounts = Object.fromEntries([...new Set(residuals.map(item => item.category))].sort().map(category => [
     category,
