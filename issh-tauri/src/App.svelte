@@ -3,12 +3,15 @@
     import { FitAddon } from '@xterm/addon-fit'
     import { Terminal } from '@xterm/xterm'
     import '@xterm/xterm/css/xterm.css'
+    import HostManager from './lib/HostManager.svelte'
     import SftpBrowser from './lib/SftpBrowser.svelte'
     import {
         closeSession,
         discoverSshHostKey,
         openLocalSession,
         openSshSession,
+        resolveKeyPassphrase,
+        resolveSshPassword,
         resizeSession,
         runtimeHealth,
         subscribeSession,
@@ -17,6 +20,7 @@
         writeSession,
         type RuntimeHealth,
         type RuntimeSessionSnapshot,
+        type SshHostProfile,
         type VaultSecretKey,
     } from './lib/runtime'
 
@@ -33,8 +37,8 @@
     let error = $state('')
     let tabs = $state<TerminalTab[]>([])
     let activeId = $state('')
-    let showConnect = $state(false)
     let showSftp = $state(false)
+    let showConnect = $state(false)
 
     // 连接表单
     let formHost = $state('')
@@ -50,6 +54,18 @@
     // TOFU 指纹确认
     let pendingFingerprint = $state('')
     let pendingConnect = $state(false)
+    // 指纹确认后暂存的连接参数（含 vault 密码解析结果）
+    interface PendingConnect {
+        host: string
+        port: number
+        user: string
+        password: string
+        keyPath: string
+        keyPassphrase: string
+        vaultSecretId: string
+        title?: string
+    }
+    let pendingParams: PendingConnect | null = null
 
     // Vault
     let vaultSecrets = $state<VaultSecretKey[]>([])
@@ -58,6 +74,7 @@
     let pollInFlight = false
 
     const activeTab = $derived(tabs.find((tab) => tab.session.id === activeId) ?? null)
+    const showStartPage = $derived(tabs.length === 0)
 
     const writeQueues = new Map<string, Promise<unknown>>()
 
@@ -87,30 +104,28 @@
             allowProposedApi: false,
             convertEol: false,
             cursorBlink: true,
-            fontFamily: '"Cascadia Code", Consolas, monospace',
+            fontFamily: '"Source Code Pro", Consolas, "Courier New", monospace',
             fontSize: 13,
             scrollback: 2_000,
             theme: {
-                background: '#09131b',
-                foreground: '#dce7e8',
-                cursor: '#45b99b',
-                cursorAccent: '#09131b',
-                selectionBackground: '#244a54',
-                black: '#09131b',
-                brightBlack: '#526b75',
-                green: '#45b99b',
-                brightGreen: '#72d6b8',
-                yellow: '#dca85c',
-                brightYellow: '#f0c87f',
-                red: '#e47a73',
-                brightRed: '#ff9b92',
-                cyan: '#66c7cb',
-                brightCyan: '#96e8e8',
-                blue: '#79a9db',
-                brightBlue: '#a6c8ef',
-                magenta: '#bd9bd8',
-                brightMagenta: '#d7b8ed',
-                white: '#dce7e8',
+                background: '#171717',
+                foreground: '#cacaca',
+                cursor: '#bbbbbb',
+                black: '#000000',
+                red: '#ff615a',
+                green: '#b1e969',
+                yellow: '#ebd99c',
+                blue: '#5da9f6',
+                magenta: '#e86aff',
+                cyan: '#82fff7',
+                white: '#dedacf',
+                brightBlack: '#313131',
+                brightRed: '#f58c80',
+                brightGreen: '#ddf88f',
+                brightYellow: '#eee5b2',
+                brightBlue: '#a5c7ff',
+                brightMagenta: '#ddaaff',
+                brightCyan: '#b7fff9',
                 brightWhite: '#ffffff',
             },
         })
@@ -154,6 +169,85 @@
         }
     }
 
+    async function connectHost (profile: SshHostProfile): Promise<void> {
+        connectError = ''
+        connecting = true
+        try {
+            // 从已解锁的 vault 解析保存的密码/口令
+            let password = ''
+            let keyPassphrase = ''
+            try {
+                password = (await resolveSshPassword(profile.user, profile.host, profile.port)) ?? ''
+                keyPassphrase = (await resolveKeyPassphrase(profile.user, profile.host, profile.port)) ?? ''
+            } catch {
+                // vault 未解锁时忽略，走指纹确认流程手动输入
+            }
+            await connectWithParams({
+                host: profile.host,
+                port: profile.port,
+                user: profile.user,
+                password,
+                keyPath: '',
+                keyPassphrase,
+                vaultSecretId: '',
+                title: profile.name,
+            })
+        } catch (cause) {
+            connectError = cause instanceof Error ? cause.message : String(cause)
+        } finally {
+            connecting = false
+        }
+    }
+
+    async function connectWithParams (params: {
+        host: string
+        port: number
+        user: string
+        password: string
+        keyPath: string
+        keyPassphrase: string
+        vaultSecretId: string
+        title?: string
+    }): Promise<void> {
+        const fingerprint = await discoverSshHostKey(params.host, params.port)
+        pendingFingerprint = fingerprint.fingerprint
+        pendingParams = params
+        pendingConnect = true
+    }
+
+    async function confirmFingerprint (): Promise<void> {
+        if (!pendingParams) return
+        connectError = ''
+        connecting = true
+        const params = pendingParams
+        try {
+            const session = await openSshSession({
+                title: params.title?.trim() || `${params.user}@${params.host}`,
+                host: params.host,
+                port: params.port,
+                username: params.user,
+                ...(params.password ? { password: params.password } : {}),
+                ...(params.keyPath ? { privateKeyPath: params.keyPath } : {}),
+                ...(params.keyPassphrase ? { privateKeyPassphrase: params.keyPassphrase } : {}),
+                expectedHostKey: pendingFingerprint,
+                ...(params.vaultSecretId ? { vaultSecretId: params.vaultSecretId } : {}),
+            })
+            pendingConnect = false
+            pendingFingerprint = ''
+            pendingParams = null
+            showConnect = false
+            formPassword = ''
+            formKeyPassphrase = ''
+            const tab: TerminalTab = { session, terminal: null, fitAddon: null, host: null, sequence: 0 }
+            tabs.push(tab)
+            activeId = session.id
+        } catch (cause) {
+            connectError = cause instanceof Error ? cause.message : String(cause)
+        } finally {
+            connecting = false
+        }
+    }
+
     async function mountTerminal (tab: TerminalTab, host: HTMLDivElement): Promise<void> {
         if (tab.terminal) return
         const terminal = makeTerminal()
@@ -170,10 +264,6 @@
     function terminalHostAction (node: HTMLDivElement, tab: TerminalTab): void {
         tab.host = node
         void mountTerminal(tab, node)
-    }
-
-    async function tick (): Promise<void> {
-        await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
     }
 
     async function pollOutput (tab: TerminalTab): Promise<void> {
@@ -245,39 +335,15 @@
             const port = Number(formPort) || 22
             if (!host) throw new Error('请输入主机地址')
             if (!formUser.trim()) throw new Error('请输入用户名')
-            const fingerprint = await discoverSshHostKey(host, port)
-            pendingFingerprint = fingerprint.fingerprint
-            pendingConnect = true
-        } catch (cause) {
-            connectError = cause instanceof Error ? cause.message : String(cause)
-        } finally {
-            connecting = false
-        }
-    }
-
-    async function confirmFingerprint (): Promise<void> {
-        connectError = ''
-        connecting = true
-        try {
-            const session = await openSshSession({
-                title: `${formUser.trim()}@${formHost.trim()}`,
-                host: formHost.trim(),
-                port: Number(formPort) || 22,
-                username: formUser.trim(),
-                ...(formPassword ? { password: formPassword } : {}),
-                ...(formKeyPath.trim() ? { privateKeyPath: formKeyPath.trim() } : {}),
-                ...(formKeyPassphrase ? { privateKeyPassphrase: formKeyPassphrase } : {}),
-                expectedHostKey: pendingFingerprint,
-                ...(formVaultSecretId ? { vaultSecretId: formVaultSecretId } : {}),
+            await connectWithParams({
+                host,
+                port,
+                user: formUser.trim(),
+                password: formPassword,
+                keyPath: formKeyPath.trim(),
+                keyPassphrase: formKeyPassphrase,
+                vaultSecretId: formVaultSecretId,
             })
-            pendingConnect = false
-            pendingFingerprint = ''
-            showConnect = false
-            formPassword = ''
-            formKeyPassphrase = ''
-            const tab: TerminalTab = { session, terminal: null, fitAddon: null, host: null, sequence: 0 }
-            tabs.push(tab)
-            activeId = session.id
         } catch (cause) {
             connectError = cause instanceof Error ? cause.message : String(cause)
         } finally {
@@ -288,7 +354,6 @@
     onMount(() => {
         void (async () => {
             await refresh()
-            await addLocalTab()
             await loadVaultSecrets()
         })()
         pollHandle = setInterval(pollAll, 80)
@@ -302,65 +367,90 @@
     })
 </script>
 
-<div class="shell">
-    <aside class="rail">
-        <div class="brand"><span class="brand-mark">issh</span><span>Tauri</span></div>
-        <nav>
-            <button class="nav-item" type="button" onclick={() => void addLocalTab()}>＋ 本地终端</button>
-            <button class="nav-item" type="button" onclick={() => { showConnect = true; void loadVaultSecrets() }}>⇢ SSH 连接</button>
-            {#if activeTab && activeTab.session.kind === 'ssh'}
-                <button class="nav-item" type="button" onclick={() => { showSftp = !showSftp }}>
-                    {showSftp ? '▤ 关闭 SFTP' : '▤ SFTP 浏览'}
-                </button>
-            {/if}
-        </nav>
-        <div class="session-list">
-            {#each tabs as tab (tab.session.id)}
+<div class="app-root">
+    <header class="tab-bar">
+        <div class="tabs">
+            {#each tabs as tab, index (tab.session.id)}
                 <button
-                    class="session-item"
+                    class="tab-header"
                     class:active={tab.session.id === activeId}
                     type="button"
                     onclick={() => activateTab(tab)}
                     title={tab.session.title}
                 >
-                    <span class="session-kind" data-kind={tab.session.kind}>{tab.session.kind === 'ssh' ? '⇢' : '▤'}</span>
-                    <span class="session-title">{tab.session.title}</span>
-                    <span class="session-state" data-state={tab.session.state}>{tab.session.state}</span>
+                    <span class="tab-index">{index + 1}</span>
+                    <span class="tab-name">{tab.session.title}</span>
                     <span
-                        class="session-close"
+                        class="tab-close"
                         role="button"
                         tabindex="0"
                         onclick={(event) => { event.stopPropagation(); void closeTab(tab) }}
-                        onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.stopPropagation(); void closeTab(tab) } }}
-                    >✕</span>
+                        onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.stopPropagation(); event.preventDefault(); void closeTab(tab) } }}
+                        aria-label="关闭标签页"
+                    >×</span>
                 </button>
             {/each}
         </div>
-        <footer class="rail-footer">
-            {#if health}
-                <span>Runtime {health.runtimeVersion} · PID {health.pid}</span>
-            {:else}
-                <span class="rail-offline">Runtime 未连接</span>
+        <div class="tab-bar-actions">
+            {#if activeTab && activeTab.session.kind === 'ssh'}
+                <button class="btn-tab-bar" type="button" onclick={() => { showSftp = !showSftp }} title="SFTP 文件浏览">
+                    {showSftp ? '关闭 SFTP' : 'SFTP'}
+                </button>
             {/if}
-        </footer>
-    </aside>
-
-    <main class="content">
-        {#if loading && tabs.length === 0}
-            <p class="status">正在连接 Runtime…</p>
+            <button class="btn-tab-bar" type="button" onclick={() => { showConnect = true; void loadVaultSecrets() }} title="新建 SSH 连接">＋ SSH</button>
+            <button class="btn-tab-bar" type="button" onclick={() => void addLocalTab()} title="新建本地终端">＋ 终端</button>
+        </div>
+        <div class="btn-space"></div>
+        {#if health}
+            <span class="runtime-badge" title={`Runtime ${health.runtimeVersion} · PID ${health.pid}`}>●</span>
+        {:else}
+            <span class="runtime-badge offline" title="Runtime 未连接">●</span>
         {/if}
-        {#if error}
-            <p class="status error" role="alert">{error}</p>
-        {/if}
+    </header>
 
-        {#if showConnect}
-            <section class="connect-panel" aria-label="SSH 连接">
+    <div class="app-workspace">
+        {#if showStartPage}
+            <HostManager onconnect={(profile) => void connectHost(profile)} onopenlocal={() => void addLocalTab()} />
+        {:else if showSftp && activeTab}
+            <SftpBrowser sessionId={activeTab.session.id} />
+        {:else}
+            <div class="terminal-stack">
+                {#each tabs as tab (tab.session.id)}
+                    <div
+                        class="terminal-pane"
+                        class:hidden={tab.session.id !== activeId}
+                        use:terminalHostAction={tab}
+                    ></div>
+                {/each}
+            </div>
+        {/if}
+    </div>
+
+    {#if showConnect}
+        <div
+            class="modal-backdrop"
+            role="presentation"
+            onclick={() => { showConnect = false; connectError = ''; pendingConnect = false }}
+            onkeydown={(event) => { if (event.key === 'Escape') { showConnect = false; connectError = ''; pendingConnect = false } }}
+        >
+            <div
+                class="connect-panel"
+                aria-label="SSH 连接"
+                role="dialog"
+                aria-modal="true"
+                tabindex="-1"
+                onclick={(event) => event.stopPropagation()}
+                onkeydown={(event) => event.stopPropagation()}
+            >
                 <h2>SSH 连接</h2>
                 {#if pendingConnect}
                     <div class="fingerprint-confirm">
                         <p>主机密钥指纹（SHA256）：</p>
                         <code class="fingerprint">{pendingFingerprint}</code>
                         <p class="fingerprint-hint">首次连接请核对指纹后继续。</p>
+                        {#if connectError}
+                            <p class="connect-error" role="alert">{connectError}</p>
+                        {/if}
                         <div class="connect-actions">
                             <button type="button" onclick={() => void confirmFingerprint()} disabled={connecting}>
                                 {connecting ? '连接中…' : '信任并连接'}
@@ -396,19 +486,18 @@
                         </div>
                     </div>
                 {/if}
-            </section>
-        {:else if showSftp && activeTab}
-            <SftpBrowser sessionId={activeTab.session.id} />
-        {:else}
-            <div class="terminal-stack">
-                {#each tabs as tab (tab.session.id)}
-                    <div
-                        class="terminal-pane"
-                        class:hidden={tab.session.id !== activeId}
-                        use:terminalHostAction={tab}
-                    ></div>
-                {/each}
             </div>
-        {/if}
-    </main>
+        </div>
+    {/if}
+
+    {#if error}
+        <button
+            type="button"
+            class="global-error"
+            onclick={() => { error = '' }}
+        >
+            {error}
+            <span class="global-error-close">×</span>
+        </button>
+    {/if}
 </div>

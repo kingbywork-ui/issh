@@ -1,5 +1,51 @@
 import { invoke } from '@tauri-apps/api/core'
 
+export interface SshHostProfile {
+    id: string
+    name: string
+    group: string
+    host: string
+    port: number
+    user: string
+    environment: string | null
+    remark: string | null
+    favorite: boolean
+    tags: string[]
+}
+
+export interface SshHostGroup {
+    id: string
+    name: string
+    parentGroupId: string | null
+}
+
+export interface HostProfilesResult {
+    encrypted: boolean
+    unlocked: boolean
+    profiles: SshHostProfile[]
+    groups: SshHostGroup[]
+}
+
+export function hostProfiles (): Promise<HostProfilesResult> {
+    return invoke<HostProfilesResult>('host_profiles')
+}
+
+export function unlockHostProfiles (passphrase: string): Promise<HostProfilesResult> {
+    return invoke<HostProfilesResult>('unlock_host_profiles', { passphrase })
+}
+
+export function lockHostProfiles (): Promise<HostProfilesResult> {
+    return invoke<HostProfilesResult>('lock_host_profiles')
+}
+
+export function resolveSshPassword (user: string, host: string, port: number): Promise<string | null> {
+    return invoke<string | null>('resolve_ssh_password', { user, host, port })
+}
+
+export function resolveKeyPassphrase (user: string, host: string, port: number): Promise<string | null> {
+    return invoke<string | null>('resolve_key_passphrase', { user, host, port })
+}
+
 export interface RuntimeHealth {
     protocolVersion: string
     runtimeVersion: string

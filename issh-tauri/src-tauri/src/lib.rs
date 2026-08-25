@@ -1,3 +1,6 @@
+mod host_profiles;
+
+use host_profiles::{HostProfileStore, HostProfilesResult};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -16,6 +19,7 @@ struct RuntimeManager {
     binary_path: PathBuf,
     child: Mutex<Option<Child>>,
     startup: AsyncMutex<()>,
+    hosts: HostProfileStore,
 }
 
 impl RuntimeManager {
@@ -36,6 +40,7 @@ impl RuntimeManager {
             binary_path,
             child: Mutex::new(None),
             startup: AsyncMutex::new(()),
+            hosts: HostProfileStore::new(&user_data),
         })
     }
 
@@ -140,6 +145,45 @@ async fn runtime_request(
     manager.request(request).await
 }
 
+#[tauri::command]
+fn host_profiles(manager: State<'_, RuntimeManager>) -> Result<HostProfilesResult, String> {
+    manager.hosts.read()
+}
+
+#[tauri::command]
+fn unlock_host_profiles(
+    manager: State<'_, RuntimeManager>,
+    passphrase: String,
+) -> Result<HostProfilesResult, String> {
+    manager.hosts.unlock(&passphrase)
+}
+
+#[tauri::command]
+fn lock_host_profiles(manager: State<'_, RuntimeManager>) -> Result<HostProfilesResult, String> {
+    manager.hosts.lock();
+    manager.hosts.read()
+}
+
+#[tauri::command]
+fn resolve_ssh_password(
+    manager: State<'_, RuntimeManager>,
+    user: String,
+    host: String,
+    port: u16,
+) -> Result<Option<String>, String> {
+    manager.hosts.resolve_ssh_password(&user, &host, port)
+}
+
+#[tauri::command]
+fn resolve_key_passphrase(
+    manager: State<'_, RuntimeManager>,
+    user: String,
+    host: String,
+    port: u16,
+) -> Result<Option<String>, String> {
+    manager.hosts.resolve_key_passphrase(&user, &host, port)
+}
+
 pub fn run() {
     let app = tauri::Builder::default()
         .setup(|app| {
@@ -164,7 +208,15 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![runtime_health, runtime_request])
+        .invoke_handler(tauri::generate_handler![
+            runtime_health,
+            runtime_request,
+            host_profiles,
+            unlock_host_profiles,
+            lock_host_profiles,
+            resolve_ssh_password,
+            resolve_key_passphrase
+        ])
         .build(tauri::generate_context!())
         .expect("failed to build issh Tauri client");
 

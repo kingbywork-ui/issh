@@ -92,16 +92,20 @@ fn derive_key(passphrase: &str, salt: &[u8], iterations: u32) -> Zeroizing<[u8; 
 }
 
 fn encrypt_vault(vault: &Vault, passphrase: &str) -> StoredVault {
+    let plaintext = serde_json::to_vec(vault).expect("vault serialization cannot fail");
+    encrypt_raw_plaintext(&plaintext, passphrase)
+}
+
+fn encrypt_raw_plaintext(plaintext: &[u8], passphrase: &str) -> StoredVault {
     let mut salt = [0u8; PBKDF_SALT_LENGTH];
     rand::thread_rng().fill_bytes(&mut salt);
     let mut iv = [0u8; CRYPT_IV_LENGTH_V2];
     rand::thread_rng().fill_bytes(&mut iv);
     let key = derive_key(passphrase, &salt, PBKDF_ITERATIONS_V2);
 
-    let plaintext = serde_json::to_vec(vault).expect("vault serialization cannot fail");
     let cipher = Aes256Gcm::new((&*key).into());
     let ciphertext = cipher
-        .encrypt(Nonce::from_slice(&iv), Payload::from(plaintext.as_slice()))
+        .encrypt(Nonce::from_slice(&iv), Payload::from(plaintext))
         .expect("AES-GCM encryption cannot fail");
     let (encrypted, tag) = ciphertext.split_at(ciphertext.len() - 16);
 
@@ -179,6 +183,65 @@ fn strip_pkcs7(buffer: &mut Vec<u8>) -> Result<(), VaultError> {
     let new_len = buffer.len() - padding as usize;
     buffer.truncate(new_len);
     Ok(())
+}
+
+/// Decrypts a stored vault and returns the raw plaintext JSON string.
+///
+/// Unlike [`VaultStore::unlock`], this does not require the plaintext to match
+/// the strict [`Vault`] shape, so it can decrypt Electron-era issh vaults whose
+/// secret keys use `{user, host, port}` objects instead of
+/// [`VaultSecretFileKey`]. Callers parse the JSON themselves.
+pub fn decrypt_stored_to_json(stored: &StoredVault, passphrase: &str) -> Result<String, VaultError> {
+    let salt = hex::decode(&stored.key_salt)
+        .map_err(|error| VaultError::Malformed(format!("keySalt: {error}")))?;
+    let iv =
+        hex::decode(&stored.iv).map_err(|error| VaultError::Malformed(format!("iv: {error}")))?;
+    let encrypted = base64::engine::general_purpose::STANDARD
+        .decode(&stored.contents)
+        .map_err(|error| VaultError::Malformed(format!("contents: {error}")))?;
+
+    let plaintext = match stored.version {
+        1 => {
+            let key = derive_key(passphrase, &salt, PBKDF_ITERATIONS_V1);
+            if iv.len() != 16 {
+                return Err(VaultError::Malformed("v1 iv must be 16 bytes".into()));
+            }
+            let mut decryptor = Aes256CbcDec::new((&*key).into(), iv.as_slice().into());
+            let mut buffer = encrypted;
+            if buffer.len() % 16 != 0 || buffer.is_empty() {
+                return Err(VaultError::Malformed(
+                    "v1 ciphertext length must be a multiple of 16".into(),
+                ));
+            }
+            for chunk in buffer.chunks_mut(16) {
+                decryptor.decrypt_block_mut(chunk.into());
+            }
+            strip_pkcs7(&mut buffer)?;
+            buffer
+        }
+        2 => {
+            let auth_tag = stored
+                .auth_tag
+                .as_ref()
+                .ok_or(VaultError::UnsupportedVersion(2))?;
+            let tag = hex::decode(auth_tag)
+                .map_err(|error| VaultError::Malformed(format!("authTag: {error}")))?;
+            if iv.len() != CRYPT_IV_LENGTH_V2 {
+                return Err(VaultError::Malformed("v2 iv must be 12 bytes".into()));
+            }
+            let iterations = stored.key_iterations.unwrap_or(PBKDF_ITERATIONS_V2);
+            let key = derive_key(passphrase, &salt, iterations);
+            let mut ciphertext = encrypted;
+            ciphertext.extend_from_slice(&tag);
+            let cipher = Aes256Gcm::new((&*key).into());
+            cipher
+                .decrypt(Nonce::from_slice(&iv), ciphertext.as_slice())
+                .map_err(|_| VaultError::BadPassphrase)?
+        }
+        version => return Err(VaultError::UnsupportedVersion(version)),
+    };
+
+    String::from_utf8(plaintext).map_err(|error| VaultError::Malformed(format!("vault UTF-8: {error}")))
 }
 
 /// Encrypts a fresh vault payload with PKCS7 padding for v1 compatibility tests.
@@ -457,6 +520,20 @@ mod tests {
         assert_eq!(stored.version, 1);
         let decrypted = decrypt_vault(&stored, "correct horse").expect("decrypt should succeed");
         assert_eq!(decrypted, vault);
+    }
+
+    #[test]
+    fn decrypt_stored_to_json_returns_raw_plaintext() {
+        // Electron-era issh vaults use {user, host, port} secret keys that do
+        // not deserialize into VaultSecretFileKey; the raw JSON API must still
+        // decrypt them. Encrypt the plaintext directly instead of going
+        // through the strict Vault type.
+        let plaintext = r#"{"config":{"language":"zh-CN"},"secrets":[{"type":"ssh:password","key":{"user":"root","host":"10.0.0.1","port":22},"value":"hunter2"}]}"#;
+        let stored = encrypt_raw_plaintext(plaintext.as_bytes(), "correct horse");
+        let roundtrip =
+            decrypt_stored_to_json(&stored, "correct horse").expect("decrypt should succeed");
+        assert_eq!(roundtrip, plaintext);
+        assert!(decrypt_stored_to_json(&stored, "wrong").is_err());
     }
 
     #[test]
