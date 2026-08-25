@@ -478,9 +478,19 @@ fn find_secret_by_hash(
         .map(str::to_string)
 }
 
-/// Electron 私钥路径支持 %h（host）/%r（user）模板，连接时替换。
+/// Electron 存的私钥路径可能是 file:// URI（file://c:\... 或 file:///c:/...），
+/// 且支持 %h（host）/%r（user）模板；连接时归一化为纯文件路径。
 fn expand_key_path(path: &str, user: &str, host: &str) -> String {
-    path.replace("%h", host).replace("%r", user)
+    let mut p = path.trim().to_string();
+    if let Some(stripped) = p.strip_prefix("file://").or_else(|| p.strip_prefix("FILE://")) {
+        p = stripped.to_string();
+        // file:///c:/... → c:/...（剥掉盘符前的多余斜杠）；Linux 绝对路径保留
+        let bytes = p.as_bytes();
+        if bytes.len() >= 3 && bytes[0] == b'/' && bytes[1].is_ascii_alphabetic() && bytes[2] == b':' {
+            p = p[1..].to_string();
+        }
+    }
+    p.replace("%h", host).replace("%r", user)
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
@@ -588,6 +598,30 @@ mod tests {
         assert_eq!(
             expand_key_path("C:/keys/%h/user_%r_key", "root", "10.0.0.1"),
             "C:/keys/10.0.0.1/user_root_key"
+        );
+    }
+
+    #[test]
+    fn expands_file_uri_key_path() {
+        // Electron 常见格式：file://c:\Users\me\.ssh\id_rsa（无三斜杠、小写盘符）
+        assert_eq!(
+            expand_key_path("file://c:\\Users\\me\\.ssh\\gccb", "root", "10.0.0.1"),
+            "c:\\Users\\me\\.ssh\\gccb"
+        );
+        // 标准 file URI：file:///c:/Users/me/.ssh/id_rsa
+        assert_eq!(
+            expand_key_path("file:///c:/Users/me/.ssh/id_rsa", "root", "10.0.0.1"),
+            "c:/Users/me/.ssh/id_rsa"
+        );
+        // Linux 绝对路径 file URI 不受影响
+        assert_eq!(
+            expand_key_path("file:///home/me/.ssh/id_ed25519", "root", "10.0.0.1"),
+            "/home/me/.ssh/id_ed25519"
+        );
+        // 纯路径不受影响
+        assert_eq!(
+            expand_key_path("C:\\Users\\me\\.ssh\\id_rsa", "root", "10.0.0.1"),
+            "C:\\Users\\me\\.ssh\\id_rsa"
         );
     }
 }

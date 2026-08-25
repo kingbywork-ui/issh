@@ -169,14 +169,26 @@
         }
     }
 
+    // Electron 存的私钥路径可能是 file:// URI（file://c:\... 或 file:///c:/...），
+    // isshd 只接受纯文件路径；%h/%r 模板连接时展开。
+    function normalizeKeyPath (path: string, host: string, user: string): string {
+        let p = path.trim()
+        if (p.toLowerCase().startsWith('file://')) {
+            p = p.slice(7)
+            // file:///c:/... → c:/...（盘符前的多余斜杠）；Linux 绝对路径 /home/... 保留
+            if (p.length >= 3 && p[0] === '/' && /[a-zA-Z]/.test(p[1]) && p[2] === ':') {
+                p = p.slice(1)
+            }
+        }
+        return p.replace(/%h/g, host).replace(/%r/g, user)
+    }
+
     async function connectHost (profile: SshHostProfile): Promise<void> {
         connectError = ''
         connecting = true
         try {
             const keyPath = profile.privateKeys[0] ?? ''
-            const expandedKeyPath = keyPath
-                ? keyPath.replace(/%h/g, profile.host).replace(/%r/g, profile.user)
-                : ''
+            const expandedKeyPath = keyPath ? normalizeKeyPath(keyPath, profile.host, profile.user) : ''
             // 从已解锁的 vault 解析保存的密码/口令
             let password = ''
             let keyPassphrase = ''
