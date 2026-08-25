@@ -3,6 +3,8 @@
     import {
         base64ToBytes,
         bytesToBase64,
+        openSftpSession,
+        sftpClose,
         sftpList,
         sftpMkdir,
         sftpRead,
@@ -182,8 +184,42 @@
         }
     }
 
+    // isshd 要求先 sftp.open 建立 SFTP 子系统通道，后续 sftp.list 等操作才能找到会话。
+    // sessionId 变化（切换 tab）时重新 open；卸载时关闭，避免通道泄漏。
+    let openedSessionId = ''
+
+    async function ensureOpen (): Promise<void> {
+        if (openedSessionId === sessionId) return
+        if (openedSessionId) {
+            try {
+                await sftpClose(openedSessionId)
+            } catch {
+                // 会话可能已关闭
+            }
+        }
+        await openSftpSession(sessionId)
+        openedSessionId = sessionId
+    }
+
     onMount(() => {
-        void refresh()
+        void (async () => {
+            loading = true
+            error = ''
+            try {
+                await ensureOpen()
+                await refresh()
+            } catch (cause) {
+                error = cause instanceof Error ? cause.message : String(cause)
+            } finally {
+                loading = false
+            }
+        })()
+        return () => {
+            if (openedSessionId) {
+                void sftpClose(openedSessionId).catch(() => {})
+                openedSessionId = ''
+            }
+        }
     })
 </script>
 

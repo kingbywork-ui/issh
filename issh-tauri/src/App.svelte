@@ -431,10 +431,13 @@
     <div class="app-workspace">
         {#if showStartPage}
             <HostManager onconnect={(profile) => void connectHost(profile)} onopenlocal={() => void addLocalTab()} />
-        {:else if showSftp && activeTab}
-            <SftpBrowser sessionId={activeTab.session.id} />
         {:else}
-            <div class="terminal-stack">
+            {#if showSftp && activeTab}
+                <SftpBrowser sessionId={activeTab.session.id} />
+            {/if}
+            <!-- 终端 stack 常驻 DOM：xterm open() 只能执行一次，
+                 若用 {#if} 切换会销毁/重建 DOM 导致切回终端空白 -->
+            <div class="terminal-stack" class:hidden={showSftp && !!activeTab}>
                 {#each tabs as tab (tab.session.id)}
                     <div
                         class="terminal-pane"

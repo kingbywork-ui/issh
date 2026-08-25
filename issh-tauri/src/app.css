@@ -216,6 +216,7 @@ button { font: inherit; color: inherit; }
 }
 
 .terminal-pane.hidden { display: none; }
+.terminal-stack.hidden { display: none; }
 .terminal-pane .xterm { height: 100%; }
 .terminal-pane .xterm-viewport { background: #171717 !important; }
 
