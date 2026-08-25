@@ -134,7 +134,11 @@ impl SshConnection {
             discovered: None,
         };
         let config = client::Config {
-            inactivity_timeout: Some(Duration::from_secs(60)),
+            // 空闲不回收连接：交互式终端会话可能长时间无输出（如 vim、挂起命令）。
+            // 保活交给 keepalive：30s 发一次 SSH keepalive，连续 3 次无响应才断开。
+            inactivity_timeout: None,
+            keepalive_interval: Some(Duration::from_secs(30)),
+            keepalive_max: 3,
             ..Default::default()
         };
         let mut handle =
@@ -484,6 +488,27 @@ mod tests {
         let mut value = spec();
         value.password = None;
         assert!(!matches!(validate_spec(&value), Ok(())));
+    }
+
+    #[test]
+    fn connection_config_keeps_idle_sessions_alive() {
+        // 回归：inactivity_timeout 曾设为 60s，空闲会话被 russh 回收，
+        // 用户输入时报 "Session is not running"。
+        let config = client::Config {
+            inactivity_timeout: Some(Duration::from_secs(60)),
+            ..Default::default()
+        };
+        assert!(config.inactivity_timeout.is_some());
+        // 新配置：不回收空闲连接，靠 keepalive 探活
+        let config = client::Config {
+            inactivity_timeout: None,
+            keepalive_interval: Some(Duration::from_secs(30)),
+            keepalive_max: 3,
+            ..Default::default()
+        };
+        assert_eq!(config.inactivity_timeout, None);
+        assert_eq!(config.keepalive_interval, Some(Duration::from_secs(30)));
+        assert_eq!(config.keepalive_max, 3);
     }
 
     #[test]
