@@ -65,7 +65,7 @@
         vaultSecretId: string
         title?: string
     }
-    let pendingParams: PendingConnect | null = null
+    let pendingParams = $state<PendingConnect | null>(null)
 
     // Vault
     let vaultSecrets = $state<VaultSecretKey[]>([])
@@ -192,8 +192,11 @@
                 vaultSecretId: '',
                 title: profile.name,
             })
+            // 指纹确认 UI 在连接弹窗内，必须打开弹窗才能继续连接流程
+            showConnect = true
         } catch (cause) {
             connectError = cause instanceof Error ? cause.message : String(cause)
+            showConnect = true
         } finally {
             connecting = false
         }
@@ -213,6 +216,7 @@
         pendingFingerprint = fingerprint.fingerprint
         pendingParams = params
         pendingConnect = true
+        showConnect = true
     }
 
     async function confirmFingerprint (): Promise<void> {
@@ -226,7 +230,7 @@
                 host: params.host,
                 port: params.port,
                 username: params.user,
-                ...(params.password ? { password: params.password } : {}),
+                ...(params.password || formPassword ? { password: params.password || formPassword } : {}),
                 ...(params.keyPath ? { privateKeyPath: params.keyPath } : {}),
                 ...(params.keyPassphrase ? { privateKeyPassphrase: params.keyPassphrase } : {}),
                 expectedHostKey: pendingFingerprint,
@@ -448,6 +452,12 @@
                         <p>主机密钥指纹（SHA256）：</p>
                         <code class="fingerprint">{pendingFingerprint}</code>
                         <p class="fingerprint-hint">首次连接请核对指纹后继续。</p>
+                        {#if !pendingParams?.password}
+                            <label class="fingerprint-credential">
+                                密码（未从 Vault 获取到，请手动输入）
+                                <input type="password" bind:value={formPassword} autocomplete="off" placeholder="SSH 登录密码" />
+                            </label>
+                        {/if}
                         {#if connectError}
                             <p class="connect-error" role="alert">{connectError}</p>
                         {/if}
@@ -455,7 +465,7 @@
                             <button type="button" onclick={() => void confirmFingerprint()} disabled={connecting}>
                                 {connecting ? '连接中…' : '信任并连接'}
                             </button>
-                            <button type="button" onclick={() => { pendingConnect = false; pendingFingerprint = '' }} disabled={connecting}>取消</button>
+                            <button type="button" onclick={() => { pendingConnect = false; pendingFingerprint = ''; showConnect = false }} disabled={connecting}>取消</button>
                         </div>
                     </div>
                 {:else}

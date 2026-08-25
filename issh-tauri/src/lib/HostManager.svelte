@@ -12,6 +12,7 @@
         name: string
         children: GroupNode[]
         count: number
+        profileIds: string[]
     }
 
     let { onconnect, onopenlocal }: {
@@ -123,11 +124,11 @@
         return { label: environment, cls: 'env-badge--info' }
     }
 
-    // 分组树：groups（带 parentGroupId）+ profiles 的 group 字符串路径
+    // 分组树：groups（带 parentGroupId，profile.group 存组 UUID）+ .ssh/config 导入的字符串路径
     function buildGroupTree (): GroupNode[] {
         const byId = new Map<string, GroupNode>()
         for (const group of groups) {
-            byId.set(group.id, { id: group.id, name: group.name, children: [], count: 0 })
+            byId.set(group.id, { id: group.id, name: group.name, children: [], count: 0, profileIds: [] })
         }
         const roots: GroupNode[] = []
         for (const group of groups) {
@@ -139,11 +140,16 @@
                 roots.push(node)
             }
         }
-        // profiles 的 group 是字符串路径（如 "Imported from .ssh/config" 或 "a / b"）
+        // profile.group 可能是组 UUID（Electron config）或字符串路径（.ssh/config 导入）
         const pathNodes = new Map<string, GroupNode>()
         for (const profile of profiles) {
             const path = profile.group?.trim()
             if (!path) continue
+            const groupNode = byId.get(path)
+            if (groupNode) {
+                groupNode.profileIds.push(profile.id)
+                continue
+            }
             const segments = path.split('/').map((s) => s.trim()).filter(Boolean)
             let parentNodes = roots
             let prefix = ''
@@ -151,16 +157,16 @@
                 prefix = prefix ? `${prefix} / ${segment}` : segment
                 let node = pathNodes.get(prefix)
                 if (!node) {
-                    node = { id: `path:${prefix}`, name: segment, children: [], count: 0 }
+                    node = { id: `path:${prefix}`, name: segment, children: [], count: 0, profileIds: [] }
                     pathNodes.set(prefix, node)
                     parentNodes.push(node)
                 }
-                node.count += 1
+                node.profileIds.push(profile.id)
                 parentNodes = node.children
             }
         }
         const countInto = (node: GroupNode): number => {
-            node.count = node.children.reduce((sum, child) => sum + countInto(child), node.count)
+            node.count = node.children.reduce((sum, child) => sum + countInto(child), node.profileIds.length)
             return node.count
         }
         for (const root of roots) countInto(root)
@@ -170,7 +176,24 @@
     const groupTree = $derived(buildGroupTree())
 
     function groupDisplayName (profile: SshHostProfile): string {
-        return profile.group?.trim() || '未分组'
+        const raw = profile.group?.trim()
+        if (!raw) return '未分组'
+        const group = groups.find((g) => g.id === raw)
+        return group ? group.name : raw
+    }
+
+    function findNode (nodes: GroupNode[], id: string): GroupNode | null {
+        for (const node of nodes) {
+            if (node.id === id) return node
+            const found = findNode(node.children, id)
+            if (found) return found
+        }
+        return null
+    }
+
+    function collectProfileIds (node: GroupNode, into: Set<string>): void {
+        for (const id of node.profileIds) into.add(id)
+        for (const child of node.children) collectProfileIds(child, into)
     }
 
     function visibleProfiles (): SshHostProfile[] {
@@ -180,8 +203,11 @@
             .map((id) => profiles.find((p) => p.id === id))
             .filter((p): p is SshHostProfile => Boolean(p))
         if (typeof view === 'object' && 'group' in view) {
-            const target = view.group
-            return profiles.filter((p) => groupDisplayName(p) === target || groupDisplayName(p).startsWith(`${target} / `))
+            const node = findNode(groupTree, view.group)
+            if (!node) return []
+            const ids = new Set<string>()
+            collectProfileIds(node, ids)
+            return profiles.filter((p) => ids.has(p.id))
         }
         return profiles
     }
@@ -190,7 +216,9 @@
         if (view === 'all') return '全部主机'
         if (view === 'favorites') return '收藏'
         if (view === 'recent') return '最近连接'
-        if (typeof view === 'object' && 'group' in view) return view.group
+        if (typeof view === 'object' && 'group' in view) {
+            return findNode(groupTree, view.group)?.name ?? view.group
+        }
         return '全部主机'
     }
 
@@ -205,7 +233,7 @@
     }
 
     function selectGroup (node: GroupNode): void {
-        view = { group: node.name }
+        view = { group: node.id }
     }
 
     function launch (profile: SshHostProfile): void {
@@ -218,7 +246,7 @@
     }
 
     function isGroupActive (node: GroupNode): boolean {
-        return typeof view === 'object' && 'group' in view && view.group === node.name
+        return typeof view === 'object' && 'group' in view && view.group === node.id
     }
 
     function railKind (profile: SshHostProfile): string {
