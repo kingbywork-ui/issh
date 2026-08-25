@@ -173,12 +173,16 @@
         connectError = ''
         connecting = true
         try {
+            const keyPath = profile.privateKeys[0] ?? ''
+            const expandedKeyPath = keyPath
+                ? keyPath.replace(/%h/g, profile.host).replace(/%r/g, profile.user)
+                : ''
             // 从已解锁的 vault 解析保存的密码/口令
             let password = ''
             let keyPassphrase = ''
             try {
                 password = (await resolveSshPassword(profile.user, profile.host, profile.port)) ?? ''
-                keyPassphrase = (await resolveKeyPassphrase(profile.user, profile.host, profile.port)) ?? ''
+                keyPassphrase = (await resolveKeyPassphrase(profile.user, profile.host, profile.port, expandedKeyPath || undefined)) ?? ''
             } catch {
                 // vault 未解锁时忽略，走指纹确认流程手动输入
             }
@@ -187,7 +191,7 @@
                 port: profile.port,
                 user: profile.user,
                 password,
-                keyPath: '',
+                keyPath: expandedKeyPath,
                 keyPassphrase,
                 vaultSecretId: '',
                 title: profile.name,
@@ -232,7 +236,7 @@
                 username: params.user,
                 ...(params.password || formPassword ? { password: params.password || formPassword } : {}),
                 ...(params.keyPath ? { privateKeyPath: params.keyPath } : {}),
-                ...(params.keyPassphrase ? { privateKeyPassphrase: params.keyPassphrase } : {}),
+                ...(params.keyPassphrase || formKeyPassphrase ? { privateKeyPassphrase: params.keyPassphrase || formKeyPassphrase } : {}),
                 expectedHostKey: pendingFingerprint,
                 ...(params.vaultSecretId ? { vaultSecretId: params.vaultSecretId } : {}),
             })
@@ -452,7 +456,15 @@
                         <p>主机密钥指纹（SHA256）：</p>
                         <code class="fingerprint">{pendingFingerprint}</code>
                         <p class="fingerprint-hint">首次连接请核对指纹后继续。</p>
-                        {#if !pendingParams?.password}
+                        {#if pendingParams?.keyPath}
+                            <p class="fingerprint-key">私钥：{pendingParams.keyPath}</p>
+                            {#if !pendingParams.keyPassphrase}
+                                <label class="fingerprint-credential">
+                                    私钥口令（未从 Vault 获取到，请手动输入；无口令密钥可留空）
+                                    <input type="password" bind:value={formKeyPassphrase} autocomplete="off" placeholder="私钥口令（可选）" />
+                                </label>
+                            {/if}
+                        {:else if !pendingParams?.password}
                             <label class="fingerprint-credential">
                                 密码（未从 Vault 获取到，请手动输入）
                                 <input type="password" bind:value={formPassword} autocomplete="off" placeholder="SSH 登录密码" />

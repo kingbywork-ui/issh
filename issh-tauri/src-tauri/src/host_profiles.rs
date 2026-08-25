@@ -1,6 +1,7 @@
 use issh_runtime_vault::{decrypt_stored_to_json, StoredVault};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha512};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -21,6 +22,10 @@ pub struct SshHostProfile {
     pub port: u16,
     #[serde(default)]
     pub user: String,
+    #[serde(default)]
+    pub auth: Option<String>,
+    #[serde(default)]
+    pub private_keys: Vec<String>,
     #[serde(default)]
     pub environment: Option<String>,
     #[serde(default)]
@@ -208,6 +213,7 @@ impl HostProfileStore {
         user: &str,
         host: &str,
         port: u16,
+        key_path: Option<&str>,
     ) -> Result<Option<String>, String> {
         let guard = self
             .unlocked
@@ -216,6 +222,19 @@ impl HostProfileStore {
         let Some(unlocked) = guard.as_ref() else {
             return Ok(None);
         };
+        // Electron 存储密钥口令的 key 是 sha512(密钥文件内容)；按连接 key 查不到
+        if let Some(path) = key_path {
+            let expanded = expand_key_path(path, user, host);
+            if let Ok(contents) = std::fs::read_to_string(&expanded) {
+                let digest = Sha512::digest(contents.as_bytes());
+                let hash = hex_encode(&digest);
+                if let Some(passphrase) =
+                    find_secret_by_hash(&unlocked.secrets, VAULT_SECRET_TYPE_PASSPHRASE, &hash)
+                {
+                    return Ok(Some(passphrase));
+                }
+            }
+        }
         Ok(find_connection_secret(
             &unlocked.secrets,
             VAULT_SECRET_TYPE_PASSPHRASE,
@@ -326,6 +345,27 @@ fn profile_from_json(entry: &Value) -> Option<SshHostProfile> {
             .and_then(Value::as_str)
             .unwrap_or("")
             .to_string(),
+        auth: options
+            .get("auth")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        private_keys: options
+            .get("privateKeys")
+            .and_then(Value::as_array)
+            .map(|keys| {
+                keys.iter()
+                    .filter_map(|key| {
+                        if let Some(path) = key.as_str() {
+                            Some(path.to_string())
+                        } else {
+                            key.get("name")
+                                .and_then(Value::as_str)
+                                .map(str::to_string)
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
         environment: entry
             .get("environment")
             .and_then(Value::as_str)
@@ -418,6 +458,35 @@ fn find_connection_secret(
     None
 }
 
+/// Electron 存密钥口令用 key = { hash: sha512(key contents) }。
+fn find_secret_by_hash(
+    secrets: &[Value],
+    secret_type: &str,
+    hash: &str,
+) -> Option<String> {
+    secrets
+        .iter()
+        .find(|secret| {
+            secret.get("type").and_then(Value::as_str) == Some(secret_type)
+                && secret
+                    .get("key")
+                    .and_then(|key| key.get("hash"))
+                    .and_then(Value::as_str)
+                    == Some(hash)
+        })
+        .and_then(|secret| secret.get("value").and_then(Value::as_str))
+        .map(str::to_string)
+}
+
+/// Electron 私钥路径支持 %h（host）/%r（user）模板，连接时替换。
+fn expand_key_path(path: &str, user: &str, host: &str) -> String {
+    path.replace("%h", host).replace("%r", user)
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -481,7 +550,7 @@ mod tests {
             "name": "web (.ssh/config)",
             "type": "ssh",
             "group": "Imported from .ssh/config",
-            "options": { "host": "10.0.0.5", "port": 22, "user": "root" },
+            "options": { "host": "10.0.0.5", "port": 22, "user": "root", "auth": "publicKey", "privateKeys": ["C:/Users/me/.ssh/id_ed25519"] },
             "favorite": true,
             "tags": ["prod"],
         });
@@ -489,7 +558,36 @@ mod tests {
         assert_eq!(profile.host, "10.0.0.5");
         assert_eq!(profile.user, "root");
         assert_eq!(profile.port, 22);
+        assert_eq!(profile.auth.as_deref(), Some("publicKey"));
+        assert_eq!(
+            profile.private_keys,
+            vec!["C:/Users/me/.ssh/id_ed25519".to_string()]
+        );
         assert!(profile.favorite);
         assert_eq!(profile.tags, vec!["prod".to_string()]);
+    }
+
+    #[test]
+    fn finds_passphrase_by_key_content_hash() {
+        let contents = "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----";
+        let digest = Sha512::digest(contents.as_bytes());
+        let hash = hex_encode(&digest);
+        let secrets = vec![serde_json::json!({
+            "type": VAULT_SECRET_TYPE_PASSPHRASE,
+            "key": { "hash": hash },
+            "value": "secret-passphrase",
+        })];
+        assert_eq!(
+            find_secret_by_hash(&secrets, VAULT_SECRET_TYPE_PASSPHRASE, &hash),
+            Some("secret-passphrase".to_string())
+        );
+    }
+
+    #[test]
+    fn expands_key_path_templates() {
+        assert_eq!(
+            expand_key_path("C:/keys/%h/user_%r_key", "root", "10.0.0.1"),
+            "C:/keys/10.0.0.1/user_root_key"
+        );
     }
 }

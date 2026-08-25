@@ -180,8 +180,11 @@ fn resolve_key_passphrase(
     user: String,
     host: String,
     port: u16,
+    key_path: Option<String>,
 ) -> Result<Option<String>, String> {
-    manager.hosts.resolve_key_passphrase(&user, &host, port)
+    manager
+        .hosts
+        .resolve_key_passphrase(&user, &host, port, key_path.as_deref())
 }
 
 pub fn run() {

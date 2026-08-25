@@ -7,6 +7,8 @@ export interface SshHostProfile {
     host: string
     port: number
     user: string
+    auth: string | null
+    privateKeys: string[]
     environment: string | null
     remark: string | null
     favorite: boolean
@@ -42,8 +44,8 @@ export function resolveSshPassword (user: string, host: string, port: number): P
     return invoke<string | null>('resolve_ssh_password', { user, host, port })
 }
 
-export function resolveKeyPassphrase (user: string, host: string, port: number): Promise<string | null> {
-    return invoke<string | null>('resolve_key_passphrase', { user, host, port })
+export function resolveKeyPassphrase (user: string, host: string, port: number, keyPath?: string): Promise<string | null> {
+    return invoke<string | null>('resolve_key_passphrase', { user, host, port, keyPath })
 }
 
 export interface RuntimeHealth {
