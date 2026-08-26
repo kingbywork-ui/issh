@@ -356,6 +356,8 @@ const SFTP_RPC_TIMEOUT_MS: u64 = 30_000;
 #[serde(rename_all = "camelCase")]
 struct SftpOpenParams {
     session_id: String,
+    #[serde(default)]
+    sudo_password: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -1813,7 +1815,12 @@ async fn sftp_open(
             }
         }
     };
-    let open_fut = connection.open_sftp();
+    let open_fut = async {
+        match params.sudo_password.as_deref() {
+            Some(password) => connection.open_sudo_sftp(password).await,
+            None => connection.open_sftp().await,
+        }
+    };
     let sftp = tokio::time::timeout(Duration::from_millis(SFTP_RPC_TIMEOUT_MS), open_fut)
         .await
         .map_err(|_| {

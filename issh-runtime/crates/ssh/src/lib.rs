@@ -276,6 +276,33 @@ impl SshConnection {
         Ok(SshSftpSession::from_session(session))
     }
 
+    pub async fn open_sudo_sftp(&self, password: &str) -> Result<SshSftpSession, SshError> {
+        if password.is_empty() || password.len() > MAX_SSH_PASSWORD_BYTES {
+            return Err(SshError::Channel("sudo password is required".to_string()));
+        }
+        let channel = self
+            .handle
+            .lock()
+            .await
+            .channel_open_session()
+            .await
+            .map_err(|error| SshError::Channel(error.to_string()))?;
+        let command = "sudo -k -S -p '' -- sh -c 'for p in \"$(command -v sftp-server 2>/dev/null)\" /usr/lib/openssh/sftp-server /usr/lib/ssh/sftp-server /usr/libexec/openssh/sftp-server; do [ -n \"$p\" ] && [ -x \"$p\" ] && exec \"$p\"; done; exit 127'";
+        channel
+            .exec(true, command)
+            .await
+            .map_err(|error| SshError::Channel(error.to_string()))?;
+        let password_input = format!("{password}\n").into_bytes();
+        channel
+            .data(&password_input[..])
+            .await
+            .map_err(|error| SshError::Channel(error.to_string()))?;
+        let session = russh_sftp::client::SftpSession::new(channel.into_stream())
+            .await
+            .map_err(|error| SshError::Channel(error.to_string()))?;
+        Ok(SshSftpSession::from_session(session))
+    }
+
     pub async fn disconnect(self) -> Result<(), SshError> {
         self.handle
             .lock()

@@ -827,18 +827,23 @@ button { font: inherit; color: inherit; }
 .sftp-toolbar { display: flex; gap: 6px; align-items: center; }
 
 .sftp-crumb {
-    flex: 1;
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    direction: rtl;
+    border: 0;
+    background: transparent;
     text-align: left;
     color: var(--ops-fg);
     font: 12px/1.4 var(--ops-font-mono);
     user-select: text;
-    cursor: text;
+    cursor: pointer;
 }
+
+.sftp-crumbs { display: flex; align-items: center; min-width: 0; flex: 1; overflow: hidden; }
+.sftp-crumb:hover { color: var(--ops-signal); text-decoration: underline; }
+.crumb-separator { color: var(--ops-fg-muted); padding: 0 3px; }
+.sftp-path-input { flex: 1; min-width: 120px; min-height: 30px; border: 1px solid var(--ops-signal-border); border-radius: var(--ops-radius); background: var(--ops-base); color: var(--ops-fg); font: 12px/1 var(--ops-font-mono); padding: 0 8px; }
 
 .sftp-path {
     flex: 1;
@@ -883,6 +888,12 @@ button { font: inherit; color: inherit; }
 
 .sftp-error { margin: 0; color: var(--ops-danger); font-size: 12px; }
 .sftp-notice { margin: 0; color: var(--ops-signal); font-size: 12px; }
+.sftp-disconnected { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px solid rgba(242, 116, 104, 0.45); background: rgba(242, 116, 104, 0.08); color: var(--ops-danger); font-size: 12px; }
+.sftp-parent-row { display: flex; gap: 10px; width: 100%; min-height: 38px; align-items: center; padding: 0 14px; border: 0; border-bottom: 1px solid rgba(36, 48, 65, 0.6); background: transparent; color: var(--ops-fg-muted); text-align: left; cursor: pointer; }
+.sftp-parent-row:hover { background: var(--ops-signal-hover); color: var(--ops-fg); }
+.sftp-sudo-modal { width: min(460px, calc(100vw - 32px)); }
+.sftp-sudo-label { display: flex; flex-direction: column; gap: 6px; color: var(--ops-fg-muted); font-size: 12px; }
+.sftp-sudo-label input { min-height: 34px; border: 1px solid var(--ops-line); border-radius: var(--ops-radius); background: var(--ops-base); color: var(--ops-fg); padding: 0 10px; }
 
 .sftp-list {
     border: 1px solid var(--ops-line);
@@ -975,6 +986,26 @@ button { font: inherit; color: inherit; }
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
+
+/* ===== 首次启动 Welcome tab，与 issh 的首次启动逻辑对应 ===== */
+.welcome-home { display: flex; flex: 1; min-height: 0; overflow: auto; justify-content: center; padding: 30px 18px; }
+.welcome-card { width: min(640px, 100%); margin: auto; color: var(--ops-fg); }
+.welcome-brand-mark { width: 60px; height: 60px; display: grid; place-items: center; border: 1px solid var(--ops-signal-border); border-radius: 14px; background: #101b23; color: var(--ops-signal); font: 700 25px/1 var(--ops-font-mono); box-shadow: 0 0 0 5px rgba(80, 224, 216, 0.06); }
+.welcome-card h1 { margin: 14px 0 4px; font: 700 30px/1.1 var(--ops-font-sans); letter-spacing: 0; }
+.welcome-lead { margin: 0 0 24px; color: var(--ops-fg-muted); font-size: 14px; }
+.welcome-setting { padding: 16px 0; border-top: 1px solid var(--ops-line); }
+.welcome-setting-title { margin-bottom: 9px; color: var(--ops-fg); font-size: 13px; font-weight: 600; }
+.welcome-setting select { min-height: 34px; min-width: 220px; padding: 0 10px; border: 1px solid var(--ops-line); border-radius: var(--ops-radius); background: var(--ops-base); color: var(--ops-fg); }
+.welcome-choice-group { display: flex; flex-wrap: wrap; gap: 6px; }
+.welcome-choice-group button { min-height: 32px; padding: 0 12px; border: 1px solid var(--ops-line); border-radius: var(--ops-radius); background: var(--ops-panel); color: var(--ops-fg-muted); cursor: pointer; }
+.welcome-choice-group button.active, .welcome-choice-group button:hover { border-color: var(--ops-signal-border); color: var(--ops-signal); background: var(--ops-signal-hover); }
+.welcome-toggle { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 0; border-top: 1px solid var(--ops-line); cursor: pointer; }
+.welcome-toggle span { display: flex; flex-direction: column; gap: 3px; }
+.welcome-toggle strong { font-size: 13px; font-weight: 600; }
+.welcome-toggle small { color: var(--ops-fg-muted); font-size: 11px; }
+.welcome-toggle input { width: 17px; height: 17px; accent-color: var(--ops-signal); }
+.welcome-close { margin-top: 24px; min-height: 36px; padding: 0 16px; border: 1px solid var(--ops-signal-border); border-radius: var(--ops-radius); background: var(--ops-signal); color: #081217; font-weight: 700; cursor: pointer; }
+.welcome-close:hover { filter: brightness(1.08); }
 
 /* ===== 全局错误提示 ===== */
 

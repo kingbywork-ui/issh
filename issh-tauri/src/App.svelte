@@ -4,6 +4,7 @@
     import { Terminal } from '@xterm/xterm'
     import '@xterm/xterm/css/xterm.css'
     import HostManager from './lib/HostManager.svelte'
+    import WelcomeHome from './lib/WelcomeHome.svelte'
     import SftpBrowser from './lib/SftpBrowser.svelte'
     import BatchInputPanel from './lib/BatchInputPanel.svelte'
     import ProfileSelector from './lib/ProfileSelector.svelte'
@@ -50,9 +51,14 @@
     let tabs = $state<TerminalTab[]>([])
     let activeId = $state('')
     let showSftp = $state(false)
+    let sftpInitialPath = $state('/')
+    let sftpSudoMode = $state(false)
+    let sftpSudoPassword = $state('')
+    let sftpPrompt = $state<{ tab: TerminalTab, path: string } | null>(null)
     let showSend = $state(false)
     let showConnect = $state(false)
     let showSelector = $state(false)
+    let showWelcome = $state(false)
 
     // 连接表单
     let formHost = $state('')
@@ -183,10 +189,69 @@
     function activateTab (tab: TerminalTab): void {
         activeId = tab.session.id
         showSftp = false
+        sftpSudoPassword = ''
+        sftpSudoMode = false
         requestAnimationFrame(() => {
             tab.fitAddon?.fit()
             tab.terminal?.focus()
         })
+    }
+
+    function terminalWorkingDirectory (tab: TerminalTab): string | null {
+        const buffer = tab.terminal?.buffer.active
+        if (!buffer) return null
+        const lines: string[] = []
+        const start = Math.max(0, buffer.baseY - 80)
+        for (let index = start; index <= buffer.baseY + buffer.cursorY; index++) {
+            const line = buffer.getLine(index)?.translateToString(true).trim()
+            if (line) lines.push(line)
+        }
+        for (let index = lines.length - 1; index >= 0; index--) {
+            const match = lines[index].match(/(?:^|\s)(\/[^\s:$>]+|~(?:\/[^\s:$>]*)?)(?:\s*[$#>]\s*)$/)
+            if (match) return match[1]
+        }
+        return null
+    }
+
+    function sftpHome (tab: TerminalTab): string {
+        const user = tab.ssh?.user.trim() || ''
+        return user === 'root' ? '/root' : user ? `/home/${user}` : '/'
+    }
+
+    function resolveSftpPath (tab: TerminalTab): string {
+        const path = terminalWorkingDirectory(tab)
+        if (!path || path === '~') return path === '~' ? sftpHome(tab) : sftpHome(tab)
+        return path.startsWith('~/') ? `${sftpHome(tab)}${path.slice(1)}` : path
+    }
+
+    function openSftpForTab (tab: TerminalTab): void {
+        const path = resolveSftpPath(tab)
+        const isRootPath = path === '/root' || path.startsWith('/root/')
+        if (isRootPath && tab.ssh?.user !== 'root') {
+            sftpPrompt = { tab, path }
+            return
+        }
+        sftpInitialPath = path
+        sftpSudoMode = false
+        sftpSudoPassword = ''
+        showSftp = true
+    }
+
+    function openNormalSftp (): void {
+        if (!sftpPrompt) return
+        sftpInitialPath = sftpPrompt.path
+        sftpSudoMode = false
+        sftpSudoPassword = ''
+        sftpPrompt = null
+        showSftp = true
+    }
+
+    function openSudoSftp (): void {
+        if (!sftpPrompt || !sftpSudoPassword.trim()) return
+        sftpInitialPath = sftpPrompt.path
+        sftpSudoMode = true
+        sftpPrompt = null
+        showSftp = true
     }
 
     async function addLocalTab (): Promise<void> {
@@ -460,6 +525,7 @@
     }
 
     onMount(() => {
+        try { showWelcome = localStorage.getItem('issh.enableWelcomeTab') !== 'false' } catch { showWelcome = true }
         void (async () => {
             await refresh()
             await loadVaultSecrets()
@@ -517,11 +583,15 @@
 
     <div class="app-workspace" class:left-open={showSftp && !!activeTab} class:bottom-open={showSend}>
         {#if showStartPage}
-            <HostManager onconnect={(profile) => void connectHost(profile)} onopenlocal={() => void addLocalTab()} />
+            {#if showWelcome}
+                <WelcomeHome onclose={() => { showWelcome = false }} />
+            {:else}
+                <HostManager onconnect={(profile) => void connectHost(profile)} onopenlocal={() => void addLocalTab()} />
+            {/if}
         {:else}
             {#if showSftp && activeTab && activeTab.session.kind === 'ssh'}
                 <aside class="app-panel-left" aria-label="SFTP 面板">
-                    <SftpBrowser sessionId={activeTab.session.id} onclose={() => { showSftp = false }} />
+                    <SftpBrowser sessionId={activeTab.session.id} initialPath={sftpInitialPath} sudoMode={sftpSudoMode} sudoPassword={sftpSudoPassword} onclose={() => { showSftp = false; sftpSudoPassword = '' }} />
                 </aside>
             {/if}
 
@@ -544,7 +614,7 @@
                                     <button class="toolbar-btn" type="button" onclick={() => void reconnectTab(tab)} disabled={connecting} title="重新连接">
                                         ↻ <span>Reconnect</span>
                                     </button>
-                                    <button class="toolbar-btn" type="button" onclick={() => { showSftp = !showSftp }} title="SFTP 文件浏览">
+                                    <button class="toolbar-btn" type="button" onclick={() => { if (showSftp) showSftp = false; else openSftpForTab(tab) }} title="SFTP 文件浏览">
                                         🗀 <span>SFTP</span>
                                     </button>
                                 {/if}
@@ -670,5 +740,22 @@
             {error}
             <span class="global-error-close">×</span>
         </button>
+    {/if}
+
+    {#if sftpPrompt}
+        <div class="modal-backdrop" role="presentation" onclick={() => { sftpPrompt = null }}>
+            <div class="confirm-modal sftp-sudo-modal" role="dialog" aria-modal="true" aria-labelledby="sftp-sudo-title" tabindex="-1" onclick={(event) => event.stopPropagation()} onkeydown={(event) => event.stopPropagation()}>
+                <h2 id="sftp-sudo-title">打开 root 路径</h2>
+                <p>当前路径为 <code>{sftpPrompt.path}</code>，普通用户可能没有访问权限。</p>
+                <label class="sftp-sudo-label">sudo 密码（仅用于本次 SFTP 通道）
+                    <input type="password" bind:value={sftpSudoPassword} autocomplete="off" onkeydown={(event) => { if (event.key === 'Enter') openSudoSftp() }} />
+                </label>
+                <div class="connect-actions">
+                    <button type="button" onclick={openSudoSftp} disabled={!sftpSudoPassword.trim()}>使用 sudo SFTP</button>
+                    <button type="button" onclick={openNormalSftp}>普通 SFTP</button>
+                    <button type="button" onclick={() => { sftpPrompt = null; sftpSudoPassword = '' }}>取消</button>
+                </div>
+            </div>
+        </div>
     {/if}
 </div>

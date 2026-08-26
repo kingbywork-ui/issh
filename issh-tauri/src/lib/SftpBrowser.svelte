@@ -16,7 +16,7 @@
         type SftpEntry,
     } from './runtime'
 
-    let { sessionId, onclose }: { sessionId: string, onclose?: () => void } = $props()
+    let { sessionId, initialPath = '/', sudoMode = false, sudoPassword = '', onclose }: { sessionId: string, initialPath?: string, sudoMode?: boolean, sudoPassword?: string, onclose?: () => void } = $props()
 
     let cwd = $state('/')
     let entries = $state<SftpEntry[]>([])
@@ -31,6 +31,9 @@
     let renameValue = $state('')
     let uploadPath = $state('')
     let uploadFile: File | null = $state(null)
+    let editingPath = $state(false)
+    let pathInput = $state('/')
+    let disconnected = $state(false)
 
     const PREVIEW_LIMIT = 256 * 1024
     const UPLOAD_CHUNK = 24 * 1024
@@ -53,8 +56,10 @@
         try {
             const result = await sftpList(sessionId, cwd)
             entries = result.entries
+            disconnected = false
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
+            disconnected = true
         } finally {
             loading = false
         }
@@ -68,7 +73,34 @@
     }
 
     function joinPath (dir: string, name: string): string {
-        return dir === '/' ? `/${name}` : `${dir}/${name}`
+        const clean = name.replace(/^\/+/, '')
+        return dir === '/' ? `/${clean}` : `${dir}/${clean}`
+    }
+
+    function normalizePath (path: string): string {
+        const parts: string[] = []
+        for (const part of path.trim().split('/')) {
+            if (!part || part === '.') continue
+            if (part === '..') parts.pop()
+            else parts.push(part)
+        }
+        return `/${parts.join('/')}` || '/'
+    }
+
+    function breadcrumbs (): Array<{ label: string, path: string }> {
+        const result = [{ label: sudoMode ? 'SUDO SFTP' : 'SFTP', path: '/' }]
+        let path = ''
+        for (const part of cwd.split('/').filter(Boolean)) {
+            path += `/${part}`
+            result.push({ label: part, path })
+        }
+        return result
+    }
+
+    async function navigate (path: string): Promise<void> {
+        cwd = normalizePath(path)
+        pathInput = cwd
+        await refresh()
     }
 
     async function openEntry (entry: SftpEntry): Promise<void> {
@@ -197,7 +229,7 @@
                 // 会话可能已关闭
             }
         }
-        await openSftpSession(sessionId)
+        await openSftpSession(sessionId, sudoPassword || undefined)
         openedSessionId = sessionId
     }
 
@@ -218,7 +250,8 @@
             error = ''
             try {
                 await ensureOpen()
-                cwd = '/'
+                cwd = normalizePath(initialPath)
+                pathInput = cwd
                 await refresh()
             } catch (cause) {
                 error = cause instanceof Error ? cause.message : String(cause)
@@ -229,12 +262,22 @@
     })
 </script>
 
-<section class="sftp-browser" aria-label="SFTP 文件浏览器">
+<section class="sftp-browser" aria-label={sudoMode ? 'SUDO SFTP 文件浏览器' : 'SFTP 文件浏览器'}>
     <header class="sftp-toolbar">
         <button class="sftp-nav" type="button" onclick={() => { cwd = parentPath(cwd); void refresh() }} disabled={cwd === '/' || loading} title="上级目录">
             ↑
         </button>
-        <span class="sftp-crumb" title={cwd}>{cwd}</span>
+        <nav class="sftp-crumbs" aria-label="当前路径">
+            {#each breadcrumbs() as crumb, index (crumb.path)}
+                {#if index > 0}<span class="crumb-separator">/</span>{/if}
+                <button type="button" class="sftp-crumb" ondblclick={() => { editingPath = true; pathInput = cwd }} onclick={() => void navigate(crumb.path)} title={crumb.path}>
+                    {crumb.label}
+                </button>
+            {/each}
+        </nav>
+        {#if editingPath}
+            <input class="sftp-path-input" bind:value={pathInput} onkeydown={(event) => { if (event.key === 'Enter') { editingPath = false; void navigate(pathInput) } if (event.key === 'Escape') editingPath = false }} onblur={() => { editingPath = false }} aria-label="SFTP 路径" />
+        {/if}
         <button class="sftp-nav" type="button" onclick={() => void refresh()} disabled={loading} title="刷新">
             {loading ? '…' : '↻'}
         </button>
@@ -268,8 +311,17 @@
     {#if notice}
         <p class="sftp-notice">{notice}</p>
     {/if}
+    {#if disconnected}
+        <div class="sftp-disconnected" role="alert">
+            <strong>{sudoMode ? 'SUDO SFTP 会话已断开' : 'SFTP 会话已断开'}</strong>
+            <span>{sudoMode ? '请关闭面板后重新打开，并确认 sudo 密码。' : '请刷新或重新打开 SFTP 面板。'}</span>
+        </div>
+    {/if}
 
     <div class="sftp-list" role="list">
+        {#if cwd !== '/'}
+            <button class="sftp-parent-row" type="button" onclick={() => { cwd = parentPath(cwd); void refresh() }}>↖ <span>..</span></button>
+        {/if}
         {#each entries as entry (entry.path)}
             <div class="sftp-row" role="listitem">
                 <button class="sftp-entry" type="button" onclick={() => void openEntry(entry)} title={entry.path}>

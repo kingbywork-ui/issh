@@ -258,8 +258,11 @@ export interface SftpOpenResult {
     sftpId: string
 }
 
-export function openSftpSession (sessionId: string): Promise<SftpOpenResult> {
-    return runtimeRequest<SftpOpenResult>('sftp.open', { sessionId })
+export function openSftpSession (sessionId: string, sudoPassword?: string): Promise<SftpOpenResult> {
+    return runtimeRequest<SftpOpenResult>('sftp.open', {
+        sessionId,
+        ...(sudoPassword ? { sudoPassword } : {}),
+    })
 }
 
 export interface SftpReadChunkResult {
