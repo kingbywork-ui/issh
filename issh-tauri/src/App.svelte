@@ -50,6 +50,7 @@
     let error = $state('')
     let tabs = $state<TerminalTab[]>([])
     let activeId = $state('')
+    let showHome = $state(false)
     let showSftp = $state(false)
     let sftpInitialPath = $state('/')
     let sftpSudoMode = $state(false)
@@ -99,7 +100,13 @@
     let pollInFlight = false
 
     const activeTab = $derived(tabs.find((tab) => tab.session.id === activeId) ?? null)
-    const showStartPage = $derived(tabs.length === 0)
+    const showStartPage = $derived(tabs.length === 0 || showHome)
+
+    function showHomePage (): void {
+        showHome = true
+        showSftp = false
+        showSend = false
+    }
 
     const writeQueues = new Map<string, Promise<unknown>>()
     const writeQueueLengths = new Map<string, number>()
@@ -188,6 +195,7 @@
 
     function activateTab (tab: TerminalTab): void {
         activeId = tab.session.id
+        showHome = false
         showSftp = false
         sftpSudoPassword = ''
         sftpSudoMode = false
@@ -260,6 +268,7 @@
             const tab: TerminalTab = { session, terminal: null, fitAddon: null, host: null, sequence: 0, ssh: null }
             tabs.push(tab)
             activeId = session.id
+            showHome = false
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
         }
@@ -363,6 +372,7 @@
             }
             tabs.push(tab)
             activeId = session.id
+            showHome = false
         } catch (cause) {
             connectError = cause instanceof Error ? cause.message : String(cause)
         } finally {
@@ -436,6 +446,11 @@
             tab.sequence = subscription.nextAfterSequence
             for (const event of subscription.events) {
                 tab.terminal?.write(Uint8Array.from(event.data))
+            }
+            // issh 的默认 behaviorOnSessionEnd=auto：远端 shell 自然退出后关闭页签。
+            // 先写入本次订阅的最后输出（例如 logout），再释放终端和 session。
+            if (tab.session.state !== 'running') {
+                await closeTab(tab)
             }
         } catch {
             // 轮询失败静默处理：下一轮自动重试，避免每轮刷新全局错误提示
@@ -610,6 +625,9 @@
                                     <strong class="toolbar-host">{tab.ssh.user}@{tab.ssh.host}:{tab.ssh.port}</strong>
                                 {/if}
                                 <span class="toolbar-spacer"></span>
+                                <button class="toolbar-btn" type="button" onclick={showHomePage} title="返回 Home">
+                                    ⌂ <span>Home</span>
+                                </button>
                                 {#if tab.ssh}
                                     <button class="toolbar-btn" type="button" onclick={() => void reconnectTab(tab)} disabled={connecting} title="重新连接">
                                         ↻ <span>Reconnect</span>

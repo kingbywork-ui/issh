@@ -45,11 +45,6 @@
         return `${size} B`
     }
 
-    function formatTime (unixSecs: number | null): string {
-        if (!unixSecs) return '—'
-        return new Date(unixSecs * 1000).toLocaleString()
-    }
-
     async function refresh (): Promise<void> {
         loading = true
         error = ''
@@ -329,8 +324,6 @@
                         {entry.isDir ? '▤' : entry.isSymlink ? '⇄' : '▪'}
                     </span>
                     <span class="sftp-name">{entry.name}</span>
-                    <span class="sftp-size">{entry.isDir ? '—' : formatSize(entry.size)}</span>
-                    <span class="sftp-time">{formatTime(entry.modifiedUnixSecs)}</span>
                 </button>
                 <span class="sftp-ops">
                     <button type="button" onclick={() => beginRename(entry)} title="重命名">改</button>

@@ -265,13 +265,26 @@ button { font: inherit; color: inherit; }
     overflow: hidden;
 }
 
-.app-workspace.bottom-open { flex-wrap: wrap; }
+.app-workspace.bottom-open {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 168px;
+}
+
+.app-workspace.bottom-open.left-open {
+    grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+}
 
 .app-workspace.bottom-open .app-panel-left,
 .app-workspace.bottom-open .app-panel-center {
-    height: calc(100% - 168px);
+    grid-row: 1;
+    height: auto;
     min-height: 0;
 }
+
+.app-workspace.bottom-open .app-panel-left { grid-column: 1; }
+.app-workspace.bottom-open:not(.left-open) .app-panel-center { grid-column: 1; }
+.app-workspace.bottom-open.left-open .app-panel-center { grid-column: 2; }
 
 .app-panel-bottom {
     display: none;
@@ -279,7 +292,10 @@ button { font: inherit; color: inherit; }
 
 .app-workspace.bottom-open .app-panel-bottom {
     display: flex;
-    flex: 1 0 100%;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    flex: none;
+    min-height: 0;
     height: 168px;
     border-top: 1px solid var(--ops-line);
     background: var(--ops-panel);
@@ -909,7 +925,7 @@ button { font: inherit; color: inherit; }
 .sftp-entry {
     flex: 1;
     display: grid;
-    grid-template-columns: 24px 1fr 90px 150px;
+    grid-template-columns: 24px minmax(0, 1fr);
     align-items: center;
     gap: 8px;
     min-height: 40px;
@@ -985,6 +1001,27 @@ button { font: inherit; color: inherit; }
     font: 12px/1.5 var(--ops-font-mono);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+}
+
+@media (max-width: 620px) {
+    .app-workspace.left-open .app-panel-left {
+        flex: 0 1 min(320px, 100vw);
+        width: min(320px, 100vw);
+        max-width: 100%;
+    }
+
+    .sftp-browser { padding: 8px; gap: 6px; }
+    .sftp-toolbar { gap: 4px; }
+    .sftp-nav { width: 30px; min-width: 30px; padding: 0; }
+    .sftp-crumbs { overflow: hidden; }
+    .sftp-crumb { max-width: 118px; padding: 0 2px; overflow: hidden; text-overflow: ellipsis; }
+    .sftp-actions { gap: 5px; }
+    .sftp-actions .sftp-input { flex: 1 1 120px; width: auto; min-width: 0; }
+    .sftp-actions .sftp-file { flex: 1 1 110px; min-width: 0; max-width: 150px; }
+    .sftp-actions button { padding: 0 8px; }
+    .sftp-entry { grid-template-columns: 20px minmax(0, 1fr); gap: 5px; padding: 0 8px; }
+    .sftp-ops { padding-right: 5px; }
+    .sftp-ops button { min-width: 26px; padding: 0 4px; }
 }
 
 /* ===== 首次启动 Welcome tab，与 issh 的首次启动逻辑对应 ===== */
