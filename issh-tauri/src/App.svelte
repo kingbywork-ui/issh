@@ -144,6 +144,7 @@
     }
 
     function makeTerminal (): Terminal {
+        const light = document.documentElement.dataset.colorScheme === 'light'
         return new Terminal({
             allowProposedApi: false,
             convertEol: false,
@@ -152,25 +153,25 @@
             fontSize: 13,
             scrollback: 2_000,
             theme: {
-                background: '#171717',
-                foreground: '#cacaca',
-                cursor: '#bbbbbb',
-                black: '#000000',
-                red: '#ff615a',
-                green: '#b1e969',
-                yellow: '#ebd99c',
-                blue: '#5da9f6',
-                magenta: '#e86aff',
-                cyan: '#82fff7',
-                white: '#dedacf',
-                brightBlack: '#313131',
-                brightRed: '#f58c80',
-                brightGreen: '#ddf88f',
-                brightYellow: '#eee5b2',
-                brightBlue: '#a5c7ff',
-                brightMagenta: '#ddaaff',
-                brightCyan: '#b7fff9',
-                brightWhite: '#ffffff',
+                background: light ? '#f6f8fa' : '#171717',
+                foreground: light ? '#1f2933' : '#cacaca',
+                cursor: light ? '#1f2933' : '#bbbbbb',
+                black: light ? '#1f2933' : '#000000',
+                red: light ? '#b42318' : '#ff615a',
+                green: light ? '#18794e' : '#b1e969',
+                yellow: light ? '#9a6700' : '#ebd99c',
+                blue: light ? '#0969da' : '#5da9f6',
+                magenta: light ? '#8250df' : '#e86aff',
+                cyan: light ? '#0969a8' : '#82fff7',
+                white: light ? '#ffffff' : '#dedacf',
+                brightBlack: light ? '#6e7781' : '#313131',
+                brightRed: light ? '#cf222e' : '#f58c80',
+                brightGreen: light ? '#1a7f37' : '#ddf88f',
+                brightYellow: light ? '#7d4e00' : '#eee5b2',
+                brightBlue: light ? '#0550ae' : '#a5c7ff',
+                brightMagenta: light ? '#6639ba' : '#ddaaff',
+                brightCyan: light ? '#075985' : '#b7fff9',
+                brightWhite: light ? '#ffffff' : '#ffffff',
             },
         })
     }
@@ -540,6 +541,11 @@
     }
 
     onMount(() => {
+        try {
+            const scheme = localStorage.getItem('issh.colorScheme') ?? 'dark'
+            document.documentElement.dataset.colorScheme = scheme
+            document.documentElement.style.colorScheme = scheme === 'auto' ? 'light dark' : scheme
+        } catch {}
         try { showWelcome = localStorage.getItem('issh.enableWelcomeTab') !== 'false' } catch { showWelcome = true }
         void (async () => {
             await refresh()

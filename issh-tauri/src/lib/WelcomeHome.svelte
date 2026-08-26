@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { onMount } from 'svelte'
     let { onclose }: { onclose: () => void } = $props()
 
     const welcomeKey = 'issh.enableWelcomeTab'
@@ -6,6 +7,25 @@
     let colorScheme = $state(localStorage.getItem('issh.colorScheme') ?? 'dark')
     let analytics = $state(localStorage.getItem('issh.analytics') !== 'false')
     let globalHotkey = $state(localStorage.getItem('issh.globalHotkey') !== 'false')
+
+    function applyColorScheme (): void {
+        document.documentElement.dataset.colorScheme = colorScheme
+        document.documentElement.style.colorScheme = colorScheme === 'auto' ? 'light dark' : colorScheme
+        persist('issh.colorScheme', colorScheme)
+    }
+
+    function selectColorScheme (scheme: 'auto' | 'dark' | 'light'): void {
+        colorScheme = scheme
+        applyColorScheme()
+    }
+
+    onMount(() => {
+        applyColorScheme()
+        const media = window.matchMedia('(prefers-color-scheme: light)')
+        const update = (): void => { if (colorScheme === 'auto') applyColorScheme() }
+        media.addEventListener('change', update)
+        return () => media.removeEventListener('change', update)
+    })
 
     function persist (key: string, value: string): void {
         try { localStorage.setItem(key, value) } catch {}
@@ -39,9 +59,9 @@
         <div class="welcome-setting">
             <div class="welcome-setting-title">颜色方案</div>
             <div class="welcome-choice-group" role="group" aria-label="颜色方案">
-                <button type="button" class:active={colorScheme === 'auto'} onclick={() => { colorScheme = 'auto'; persist('issh.colorScheme', colorScheme) }}>跟随系统</button>
-                <button type="button" class:active={colorScheme === 'dark'} onclick={() => { colorScheme = 'dark'; persist('issh.colorScheme', colorScheme) }}>始终深色</button>
-                <button type="button" class:active={colorScheme === 'light'} onclick={() => { colorScheme = 'light'; persist('issh.colorScheme', colorScheme) }}>始终浅色</button>
+                <button type="button" class:active={colorScheme === 'auto'} onclick={() => selectColorScheme('auto')}>跟随系统</button>
+                <button type="button" class:active={colorScheme === 'dark'} onclick={() => selectColorScheme('dark')}>始终深色</button>
+                <button type="button" class:active={colorScheme === 'light'} onclick={() => selectColorScheme('light')}>始终浅色</button>
             </div>
         </div>
 

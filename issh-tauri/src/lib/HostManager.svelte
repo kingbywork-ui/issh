@@ -17,14 +17,49 @@
     let environment = $state('')
     let favoritesOnly = $state(false)
     let recentOnly = $state(false)
-    let view = $state<'all' | 'favorites' | 'recent' | { group: string }>('all')
+    let view = $state<'all' | 'favorites' | 'recent' | { group: string }>(loadStartView())
     let recentIds = $state<string[]>(loadRecent())
-    let collapsed = $state(new Set<string>())
+    let collapsed = $state<Set<string>>(loadCollapsedGroups())
     let menu = $state<{ x: number, y: number, items: ContextMenuItem[] } | null>(null)
     let editorProfile = $state<SshHostProfile | null>(null)
     let editorGroup = $state<SshHostGroup | null>(null)
     const recentKey = 'issh.recentHosts'
+    const activeGroupKey = 'startPageActiveGroupId'
+    const activeViewKey = 'startPageActiveView'
+    const collapsedGroupsKey = 'profileGroupCollapsed'
     function loadRecent (): string[] { try { const value = JSON.parse(localStorage.getItem(recentKey) ?? '[]'); return Array.isArray(value) ? value.filter((x): x is string => typeof x === 'string') : [] } catch { return [] } }
+    function loadStartView (): 'all' | 'favorites' | 'recent' | { group: string } {
+        try {
+            const group = localStorage.getItem(activeGroupKey)
+            if (group) return { group }
+            const savedView = localStorage.getItem(activeViewKey)
+            if (savedView === 'favorites' || savedView === 'recent') return savedView
+        } catch {}
+        return 'all'
+    }
+    function loadCollapsedGroups (): Set<string> {
+        try {
+            const value = JSON.parse(localStorage.getItem(collapsedGroupsKey) ?? '{}') as Record<string, boolean>
+            return new Set(Object.entries(value).filter(([, collapsed]) => collapsed).map(([id]) => id))
+        } catch { return new Set<string>() }
+    }
+    function persistView (next: 'all' | 'favorites' | 'recent' | { group: string }): void {
+        try {
+            if (typeof next === 'object') {
+                localStorage.setItem(activeGroupKey, next.group)
+                localStorage.removeItem(activeViewKey)
+            } else if (next === 'favorites' || next === 'recent') {
+                localStorage.setItem(activeViewKey, next)
+                localStorage.removeItem(activeGroupKey)
+            } else {
+                localStorage.removeItem(activeGroupKey)
+                localStorage.removeItem(activeViewKey)
+            }
+        } catch {}
+    }
+    function persistCollapsedGroups (next: Set<string>): void {
+        try { localStorage.setItem(collapsedGroupsKey, JSON.stringify(Object.fromEntries([...next].map((id) => [id, true])))) } catch {}
+    }
     function recordRecent (profile: SshHostProfile): void { recentIds = [profile.id, ...recentIds.filter((id) => id !== profile.id)].slice(0, 6); try { localStorage.setItem(recentKey, JSON.stringify(recentIds)) } catch {} }
     async function refresh (): Promise<void> { loading = true; error = ''; try { const result = await hostProfiles(); profiles = result.profiles; groups = result.groups; encrypted = result.encrypted; unlocked = !result.encrypted || result.unlocked } catch (cause) { error = cause instanceof Error ? cause.message : String(cause) } finally { loading = false } }
     async function unlock (passphrase: string): Promise<void> { try { const result = await unlockHostProfiles(passphrase); profiles = result.profiles; groups = result.groups; encrypted = result.encrypted; unlocked = result.unlocked } catch (cause) { error = cause instanceof Error ? cause.message : String(cause) } }
@@ -43,7 +78,7 @@
     function saveGroup (group: SshHostGroup): void { void mutate({ action: groups.some((item) => item.id === group.id) ? 'updateGroup' : 'createGroup', group }) }
     function newProfile (): void { editorProfile = { id: '', name: '', group: '', host: '', port: 22, user: '', auth: null, privateKeys: [], environment: null, remark: null, favorite: false, tags: [] } }
     function newGroup (parentGroupId: string | null = null): void { editorGroup = { id: `group-${Date.now().toString(36)}`, name: '', parentGroupId } }
-    function resetFilters (): void { query = ''; environment = ''; favoritesOnly = false; recentOnly = false; view = 'all' }
+    function resetFilters (): void { query = ''; environment = ''; favoritesOnly = false; recentOnly = false; view = 'all'; persistView(view) }
     function title (): string { if (view === 'favorites') return '收藏'; if (view === 'recent') return '最近连接'; if (typeof view === 'object') return findNode(groupTree, view.group)?.name ?? '分组'; return '全部主机' }
     function launch (profile: SshHostProfile): void { recordRecent(profile); onconnect(profile) }
     onMount(() => { void refresh() })
@@ -54,10 +89,10 @@
 {:else}<div class="start-page-layout">
     <aside class="start-page-sidebar" oncontextmenu={(event) => showMenu(event, [{ label: '新建分组', action: () => newGroup() }, { label: '新建 SSH 主机', action: newProfile }])}>
         <div class="sidebar-heading"><span>连接</span><button class="icon-button" type="button" title="新建分组" onclick={() => newGroup()}>＋</button></div>
-        <button class="sidebar-tree-item root-item" class:active={view === 'all'} type="button" onclick={() => { view = 'all'; favoritesOnly = false; recentOnly = false }}>▦ <span>全部</span><b>{profiles.length}</b></button>
-        <button class="sidebar-tree-item root-item" class:active={view === 'favorites'} type="button" onclick={() => { view = 'favorites'; favoritesOnly = true; recentOnly = false }}>★ <span>收藏</span><b>{profiles.filter((p) => p.favorite).length}</b></button>
-        <button class="sidebar-tree-item root-item" class:active={view === 'recent'} type="button" onclick={() => { view = 'recent'; recentOnly = true; favoritesOnly = false }}>↻ <span>最近</span><b>{recentIds.length}</b></button>
-        {#snippet renderGroup(node: GroupNode, level: number)}<div class="sidebar-group-row" role="treeitem" style:padding-left={`${12 + level * 18}px`} oncontextmenu={(event) => showMenu(event, groupItems(node))}><button class="tree-toggle" type="button" onclick={() => { const next = new Set(collapsed); next.has(node.id) ? next.delete(node.id) : next.add(node.id); collapsed = next }}>{node.children.length && !collapsed.has(node.id) ? '▾' : '▸'}</button><button class="sidebar-tree-item" class:active={typeof view === 'object' && view.group === node.id} type="button" onclick={() => { view = { group: node.id }; favoritesOnly = false; recentOnly = false }}>▣ <span>{node.name}</span><b>{node.count}</b></button></div>{#if !collapsed.has(node.id)}{#each node.children as child (child.id)}{@render renderGroup(child, level + 1)}{/each}{/if}{/snippet}
+        <button class="sidebar-tree-item root-item" class:active={view === 'all'} type="button" onclick={() => { view = 'all'; favoritesOnly = false; recentOnly = false; persistView(view) }}>▦ <span>全部</span><b>{profiles.length}</b></button>
+        <button class="sidebar-tree-item root-item" class:active={view === 'favorites'} type="button" onclick={() => { view = 'favorites'; favoritesOnly = true; recentOnly = false; persistView(view) }}>★ <span>收藏</span><b>{profiles.filter((p) => p.favorite).length}</b></button>
+        <button class="sidebar-tree-item root-item" class:active={view === 'recent'} type="button" onclick={() => { view = 'recent'; recentOnly = true; favoritesOnly = false; persistView(view) }}>↻ <span>最近</span><b>{recentIds.length}</b></button>
+        {#snippet renderGroup(node: GroupNode, level: number)}<div class="sidebar-group-row" role="treeitem" style:padding-left={`${12 + level * 18}px`} oncontextmenu={(event) => showMenu(event, groupItems(node))}><button class="tree-toggle" type="button" onclick={() => { const next = new Set(collapsed); next.has(node.id) ? next.delete(node.id) : next.add(node.id); collapsed = next; persistCollapsedGroups(next) }}>{node.children.length && !collapsed.has(node.id) ? '▾' : '▸'}</button><button class="sidebar-tree-item" class:active={typeof view === 'object' && view.group === node.id} type="button" onclick={() => { view = { group: node.id }; favoritesOnly = false; recentOnly = false; persistView(view) }}>▣ <span>{node.name}</span><b>{node.count}</b></button></div>{#if !collapsed.has(node.id)}{#each node.children as child (child.id)}{@render renderGroup(child, level + 1)}{/each}{/if}{/snippet}
         {#each groupTree as node (node.id)}{@render renderGroup(node, 0)}{/each}
         {#if encrypted}<div class="sidebar-footer"><button class="lock-button" type="button" onclick={lock}>🔒 锁定配置</button></div>{/if}
     </aside>
