@@ -6,6 +6,8 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 pub const MAX_SESSION_BUFFER_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_SESSION_EVENT_BYTES: usize = 4 * 1024;
 pub const MAX_SESSION_BATCH_BYTES: usize = 12 * 1024;
@@ -224,8 +226,11 @@ impl LocalSession {
         if let Ok(mut output) = self.output.lock() {
             output.state = "closed".to_string();
         }
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        // 进程树（cmd + conhost）的终止与 ConPTY 句柄清理统一由
+        // SessionStore::close 的后台清理线程执行（先杀 conhost 再 taskkill
+        // 杀 cmd 树，最后析构 entry 触发 ClosePseudoConsole）。这里绝不做
+        // 任何可能阻塞的系统调用：stop() 运行在持 sessions 锁的 RPC
+        // dispatch 线程上，一旦阻塞会使 isshd 的所有会话请求全部堵死。
     }
 }
 
@@ -576,7 +581,41 @@ impl SessionStore {
             .remove(session_id)
             .ok_or_else(|| SessionError::SessionNotFound(session_id.to_string()))?;
         entry.stop();
-        entry.snapshot()
+        let snap = entry.snapshot();
+        // Windows ConPTY：SessionEntry 析构时 ClosePseudoConsole 会同步等待
+        // conhost 退出，而 conhost 可能因后台 reader 线程仍持有读端句柄而
+        // 迟迟不退出，导致析构长时间阻塞。close() 运行在 RPC dispatch 线程
+        // 上且持有 sessions 锁，一旦阻塞会使 isshd 的所有会话请求（poll/
+        // subscribe 等）全部堵死。因此把清理移到独立线程：先杀进程树
+        // （cmd + conhost，conhost 死后读端立即关闭、reader 线程 EOF 退出），
+        // 再析构 entry，ClosePseudoConsole 就能快速返回。
+        let cleanup_pid = snap.as_ref().ok().and_then(|snapshot| snapshot.pid);
+        std::thread::spawn(move || {
+            #[cfg(windows)]
+            if let Some(pid) = cleanup_pid {
+                // ConPTY 的 conhost 进程由 isshd 直接启动（不在 cmd 进程树中），
+                // 必须单独终止：conhost 与 cmd 在 ConPTY 创建时几乎同时诞生
+                // （毫秒级），在 cmd 还活着时用其创建时间匹配出本会话的 conhost。
+                // 若不先杀 conhost，cmd 死后 ClosePseudoConsole 会永久等待
+                // conhost 退出，而 conhost 因读端句柄被 reader 线程持有而滞留。
+                let script = format!(
+                    "$cmdTime = (Get-Process -Id {0} -ErrorAction SilentlyContinue).StartTime; if ($cmdTime) {{ Get-Process conhost -ErrorAction SilentlyContinue | Where-Object {{ [math]::Abs(($_.StartTime - $cmdTime).TotalMilliseconds) -lt 2000 }} | ForEach-Object {{ Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }} }}",
+                    pid
+                );
+                let _ = std::process::Command::new("powershell")
+                    .args(["-NoProfile", "-Command", &script])
+                    .creation_flags(0x0800_0000)
+                    .output();
+            }
+            if let Some(pid) = cleanup_pid {
+                let _ = std::process::Command::new("taskkill")
+                    .args(["/T", "/F", "/PID", &pid.to_string()])
+                    .creation_flags(0x0800_0000)
+                    .output();
+            }
+            drop(entry);
+        });
+        snap
     }
 
     fn session_mut(&mut self, session_id: &str) -> Result<&mut SessionEntry, SessionError> {

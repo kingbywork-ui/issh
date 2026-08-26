@@ -5,6 +5,8 @@
     import '@xterm/xterm/css/xterm.css'
     import HostManager from './lib/HostManager.svelte'
     import SftpBrowser from './lib/SftpBrowser.svelte'
+    import BatchInputPanel from './lib/BatchInputPanel.svelte'
+    import ProfileSelector from './lib/ProfileSelector.svelte'
     import {
         closeSession,
         discoverSshHostKey,
@@ -24,12 +26,22 @@
         type VaultSecretKey,
     } from './lib/runtime'
 
+    interface SshTabInfo {
+        host: string
+        port: number
+        user: string
+        hostKeyFingerprint: string
+        profile: SshHostProfile | null
+        keyPath: string
+    }
+
     interface TerminalTab {
         session: RuntimeSessionSnapshot
         terminal: Terminal | null
         fitAddon: FitAddon | null
         host: HTMLDivElement | null
         sequence: number
+        ssh: SshTabInfo | null
     }
 
     let health: RuntimeHealth | null = $state(null)
@@ -38,7 +50,9 @@
     let tabs = $state<TerminalTab[]>([])
     let activeId = $state('')
     let showSftp = $state(false)
+    let showSend = $state(false)
     let showConnect = $state(false)
+    let showSelector = $state(false)
 
     // 连接表单
     let formHost = $state('')
@@ -64,11 +78,16 @@
         keyPassphrase: string
         vaultSecretId: string
         title?: string
+        profile: SshHostProfile | null
     }
     let pendingParams = $state<PendingConnect | null>(null)
 
     // Vault
     let vaultSecrets = $state<VaultSecretKey[]>([])
+
+    const POLL_INTERVAL_MS = 250
+    // 每个会话的写队列上限：超出后丢弃输入，避免粘贴风暴把 RPC 队列打满拖垮 UI
+    const MAX_WRITE_QUEUE = 64
 
     let pollHandle: ReturnType<typeof setInterval> | null = null
     let pollInFlight = false
@@ -77,12 +96,24 @@
     const showStartPage = $derived(tabs.length === 0)
 
     const writeQueues = new Map<string, Promise<unknown>>()
+    const writeQueueLengths = new Map<string, number>()
 
     function enqueueWrite (sessionId: string, operation: () => Promise<unknown>): void {
+        const length = (writeQueueLengths.get(sessionId) ?? 0) + 1
+        if (length > MAX_WRITE_QUEUE) {
+            return
+        }
+        writeQueueLengths.set(sessionId, length)
         const previous = writeQueues.get(sessionId) ?? Promise.resolve()
-        const next = previous.then(operation).catch((cause: unknown) => {
-            error = cause instanceof Error ? cause.message : String(cause)
-        })
+        const next = previous
+            .then(operation)
+            .catch(() => {
+                // 写失败静默处理：会话断开时 xterm 高频 onData 不应刷屏报错
+            })
+            .finally(() => {
+                const remaining = (writeQueueLengths.get(sessionId) ?? 1) - 1
+                writeQueueLengths.set(sessionId, Math.max(0, remaining))
+            })
         writeQueues.set(sessionId, next)
     }
 
@@ -161,7 +192,7 @@
     async function addLocalTab (): Promise<void> {
         try {
             const session = await openLocalSession()
-            const tab: TerminalTab = { session, terminal: null, fitAddon: null, host: null, sequence: 0 }
+            const tab: TerminalTab = { session, terminal: null, fitAddon: null, host: null, sequence: 0, ssh: null }
             tabs.push(tab)
             activeId = session.id
         } catch (cause) {
@@ -207,6 +238,7 @@
                 keyPassphrase,
                 vaultSecretId: '',
                 title: profile.name,
+                profile,
             })
             // 指纹确认 UI 在连接弹窗内，必须打开弹窗才能继续连接流程
             showConnect = true
@@ -218,16 +250,7 @@
         }
     }
 
-    async function connectWithParams (params: {
-        host: string
-        port: number
-        user: string
-        password: string
-        keyPath: string
-        keyPassphrase: string
-        vaultSecretId: string
-        title?: string
-    }): Promise<void> {
+    async function connectWithParams (params: PendingConnect): Promise<void> {
         const fingerprint = await discoverSshHostKey(params.host, params.port)
         pendingFingerprint = fingerprint.fingerprint
         pendingParams = params
@@ -258,11 +281,66 @@
             showConnect = false
             formPassword = ''
             formKeyPassphrase = ''
-            const tab: TerminalTab = { session, terminal: null, fitAddon: null, host: null, sequence: 0 }
+            const tab: TerminalTab = {
+                session,
+                terminal: null,
+                fitAddon: null,
+                host: null,
+                sequence: 0,
+                ssh: {
+                    host: params.host,
+                    port: params.port,
+                    user: params.user,
+                    hostKeyFingerprint: pendingFingerprint,
+                    profile: params.profile,
+                    keyPath: params.keyPath,
+                },
+            }
             tabs.push(tab)
             activeId = session.id
         } catch (cause) {
             connectError = cause instanceof Error ? cause.message : String(cause)
+        } finally {
+            connecting = false
+        }
+    }
+
+    // issh 分支 sshTab 工具栏的 Reconnect：复用上次连接参数重新连接
+    async function reconnectTab (tab: TerminalTab): Promise<void> {
+        if (!tab.ssh || connecting) return
+        const info = tab.ssh
+        connectError = ''
+        connecting = true
+        try {
+            // 先关闭旧会话，避免 isshd 侧会话泄漏
+            try {
+                await closeSession(tab.session.id)
+            } catch {
+                // 会话可能已关闭
+            }
+            let password = ''
+            let keyPassphrase = ''
+            try {
+                password = (await resolveSshPassword(info.user, info.host, info.port)) ?? ''
+                keyPassphrase = (await resolveKeyPassphrase(info.user, info.host, info.port, info.keyPath || undefined)) ?? ''
+            } catch {
+                // vault 未解锁时忽略
+            }
+            const session = await openSshSession({
+                title: info.profile?.name || `${info.user}@${info.host}`,
+                host: info.host,
+                port: info.port,
+                username: info.user,
+                ...(password ? { password } : {}),
+                ...(info.keyPath ? { privateKeyPath: info.keyPath } : {}),
+                ...(keyPassphrase ? { privateKeyPassphrase: keyPassphrase } : {}),
+                expectedHostKey: info.hostKeyFingerprint,
+            })
+            tab.session = session
+            tab.sequence = 0
+            tab.terminal?.clear()
+        } catch (cause) {
+            error = cause instanceof Error ? cause.message : String(cause)
         } finally {
             connecting = false
         }
@@ -294,10 +372,8 @@
             for (const event of subscription.events) {
                 tab.terminal?.write(Uint8Array.from(event.data))
             }
-        } catch (cause) {
-            if (tab.session.state !== 'closed') {
-                error = cause instanceof Error ? cause.message : String(cause)
-            }
+        } catch {
+            // 轮询失败静默处理：下一轮自动重试，避免每轮刷新全局错误提示
         }
     }
 
@@ -322,6 +398,7 @@
         tab.terminal?.dispose()
         tabs = tabs.filter((candidate) => candidate.session.id !== tab.session.id)
         writeQueues.delete(tab.session.id)
+        writeQueueLengths.delete(tab.session.id)
         if (activeId === tab.session.id) {
             const next = tabs[0]
             if (next) {
@@ -329,6 +406,7 @@
             } else {
                 activeId = ''
                 showSftp = false
+                showSend = false
             }
         }
     }
@@ -363,6 +441,7 @@
                 keyPath: formKeyPath.trim(),
                 keyPassphrase: formKeyPassphrase,
                 vaultSecretId: formVaultSecretId,
+                profile: null,
             })
         } catch (cause) {
             connectError = cause instanceof Error ? cause.message : String(cause)
@@ -371,12 +450,21 @@
         }
     }
 
+    function sendToSession (sessionId: string, bytes: Uint8Array): void {
+        enqueueWrite(sessionId, async () => { await writeSession(sessionId, bytes) })
+    }
+
+    function openNewSshForm (): void {
+        showConnect = true
+        void loadVaultSecrets()
+    }
+
     onMount(() => {
         void (async () => {
             await refresh()
             await loadVaultSecrets()
         })()
-        pollHandle = setInterval(pollAll, 80)
+        pollHandle = setInterval(pollAll, POLL_INTERVAL_MS)
         return () => {
             if (pollHandle) clearInterval(pollHandle)
             for (const tab of tabs) {
@@ -389,6 +477,13 @@
 
 <div class="app-root">
     <header class="tab-bar">
+        <button
+            class="btn-tab-bar profile-button"
+            type="button"
+            onclick={() => { showSelector = true }}
+            title="Profiles & connections"
+            aria-label="Profiles & connections"
+        >▦</button>
         <div class="tabs">
             {#each tabs as tab, index (tab.session.id)}
                 <button
@@ -398,6 +493,7 @@
                     onclick={() => activateTab(tab)}
                     title={tab.session.title}
                 >
+                    <span class="tab-status" class:open={tab.session.state !== 'closed'}></span>
                     <span class="tab-index">{index + 1}</span>
                     <span class="tab-name">{tab.session.title}</span>
                     <span
@@ -411,15 +507,6 @@
                 </button>
             {/each}
         </div>
-        <div class="tab-bar-actions">
-            {#if activeTab && activeTab.session.kind === 'ssh'}
-                <button class="btn-tab-bar" type="button" onclick={() => { showSftp = !showSftp }} title="SFTP 文件浏览">
-                    {showSftp ? '关闭 SFTP' : 'SFTP'}
-                </button>
-            {/if}
-            <button class="btn-tab-bar" type="button" onclick={() => { showConnect = true; void loadVaultSecrets() }} title="新建 SSH 连接">＋ SSH</button>
-            <button class="btn-tab-bar" type="button" onclick={() => void addLocalTab()} title="新建本地终端">＋ 终端</button>
-        </div>
         <div class="btn-space"></div>
         {#if health}
             <span class="runtime-badge" title={`Runtime ${health.runtimeVersion} · PID ${health.pid}`}>●</span>
@@ -428,26 +515,73 @@
         {/if}
     </header>
 
-    <div class="app-workspace">
+    <div class="app-workspace" class:left-open={showSftp && !!activeTab} class:bottom-open={showSend}>
         {#if showStartPage}
             <HostManager onconnect={(profile) => void connectHost(profile)} onopenlocal={() => void addLocalTab()} />
         {:else}
-            {#if showSftp && activeTab}
-                <SftpBrowser sessionId={activeTab.session.id} />
+            {#if showSftp && activeTab && activeTab.session.kind === 'ssh'}
+                <aside class="app-panel-left" aria-label="SFTP 面板">
+                    <SftpBrowser sessionId={activeTab.session.id} onclose={() => { showSftp = false }} />
+                </aside>
             {/if}
-            <!-- 终端 stack 常驻 DOM：xterm open() 只能执行一次，
-                 若用 {#if} 切换会销毁/重建 DOM 导致切回终端空白 -->
-            <div class="terminal-stack" class:hidden={showSftp && !!activeTab}>
-                {#each tabs as tab (tab.session.id)}
-                    <div
-                        class="terminal-pane"
-                        class:hidden={tab.session.id !== activeId}
-                        use:terminalHostAction={tab}
-                    ></div>
-                {/each}
+
+            <div class="app-panel-center">
+                <!-- 终端 stack 常驻 DOM：xterm open() 只能执行一次，
+                     若用 {#if} 切换会销毁/重建 DOM 导致切回终端空白 -->
+                <div class="terminal-stack">
+                    {#each tabs as tab (tab.session.id)}
+                        <div
+                            class="terminal-pane"
+                            class:hidden={tab.session.id !== activeId}
+                        >
+                            <div class="terminal-toolbar">
+                                {#if tab.ssh}
+                                    <i class="status-dot" class:open={tab.session.state !== 'closed'}></i>
+                                    <strong class="toolbar-host">{tab.ssh.user}@{tab.ssh.host}:{tab.ssh.port}</strong>
+                                {/if}
+                                <span class="toolbar-spacer"></span>
+                                {#if tab.ssh}
+                                    <button class="toolbar-btn" type="button" onclick={() => void reconnectTab(tab)} disabled={connecting} title="重新连接">
+                                        ↻ <span>Reconnect</span>
+                                    </button>
+                                    <button class="toolbar-btn" type="button" onclick={() => { showSftp = !showSftp }} title="SFTP 文件浏览">
+                                        🗀 <span>SFTP</span>
+                                    </button>
+                                {/if}
+                                <button class="toolbar-btn" type="button" onclick={() => { showSend = !showSend }} title="向多个标签发送输入">
+                                    ✈ <span>Send</span>
+                                </button>
+                            </div>
+                            <div
+                                class="terminal-host"
+                                use:terminalHostAction={tab}
+                            ></div>
+                        </div>
+                    {/each}
+                </div>
             </div>
+
+            {#if showSend}
+                <div class="app-panel-bottom">
+                    <BatchInputPanel
+                        tabs={tabs.map((tab) => tab.session)}
+                        activeId={activeId}
+                        onclose={() => { showSend = false }}
+                        onwrited={(sessionId, bytes) => sendToSession(sessionId, bytes)}
+                    />
+                </div>
+            {/if}
         {/if}
     </div>
+
+    {#if showSelector}
+        <ProfileSelector
+            onconnect={(profile) => void connectHost(profile)}
+            onopenlocal={() => void addLocalTab()}
+            onnewssh={openNewSshForm}
+            onclose={() => { showSelector = false }}
+        />
+    {/if}
 
     {#if showConnect}
         <div

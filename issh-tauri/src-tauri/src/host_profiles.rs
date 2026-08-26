@@ -1,4 +1,4 @@
-use issh_runtime_vault::{decrypt_stored_to_json, StoredVault};
+use issh_runtime_vault::{decrypt_stored_to_json, encrypt_json_to_stored, StoredVault};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha512};
@@ -64,6 +64,20 @@ struct UnlockedConfig {
     profiles: Vec<SshHostProfile>,
     groups: Vec<SshHostGroup>,
     secrets: Vec<Value>,
+    vault: Value,
+    root: serde_yaml::Value,
+    passphrase: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostProfileMutation {
+    pub action: String,
+    pub profile: Option<SshHostProfile>,
+    pub profile_id: Option<String>,
+    pub group: Option<SshHostGroup>,
+    pub group_id: Option<String>,
+    pub profile_ids: Option<Vec<String>>,
 }
 
 impl HostProfileStore {
@@ -160,6 +174,9 @@ impl HostProfileStore {
             profiles: profiles.clone(),
             groups: groups.clone(),
             secrets,
+            vault,
+            root: parsed,
+            passphrase: passphrase.to_string(),
         });
         Ok(HostProfilesResult {
             encrypted: true,
@@ -244,6 +261,44 @@ impl HostProfileStore {
         ))
     }
 
+    pub fn mutate(&self, mutation: HostProfileMutation) -> Result<HostProfilesResult, String> {
+        let action = mutation.action.trim();
+        if action.is_empty() {
+            return Err("缺少配置变更动作".to_string());
+        }
+        let raw = std::fs::read_to_string(&self.config_path).ok();
+        let encrypted = raw
+            .as_deref()
+            .and_then(|value| serde_yaml::from_str::<serde_yaml::Value>(value).ok())
+            .and_then(|value| value.get("encrypted").and_then(|v| v.as_bool()))
+            .unwrap_or(false);
+
+        if encrypted {
+            let mut guard = self.unlocked.lock().map_err(|_| "主机配置状态不可用".to_string())?;
+            let unlocked = guard.as_mut().ok_or_else(|| "请先解锁主机配置".to_string())?;
+            apply_mutation(&mut unlocked.profiles, &mut unlocked.groups, &mutation)?;
+            let config = unlocked.vault.get_mut("config").ok_or_else(|| "Vault 配置缺少 config".to_string())?;
+            write_model_to_json(config, &unlocked.profiles, &unlocked.groups);
+            let plaintext = serde_json::to_string(&unlocked.vault).map_err(|e| format!("Vault 序列化失败：{e}"))?;
+            let stored = encrypt_json_to_stored(&plaintext, &unlocked.passphrase);
+            if let serde_yaml::Value::Mapping(map) = &mut unlocked.root {
+                map.insert(serde_yaml::Value::String("vault".into()), serde_yaml::to_value(stored).map_err(|e| format!("Vault 序列化失败：{e}"))?);
+            }
+            persist_yaml(&self.config_path, &unlocked.root)?;
+            return Ok(result_from_unlocked(unlocked));
+        }
+
+        let mut parsed = raw
+            .ok_or_else(|| "无法读取 config.yaml".to_string())
+            .and_then(|value| serde_yaml::from_str::<serde_yaml::Value>(&value).map_err(|e| format!("config.yaml 解析失败：{e}")))?;
+        let mut profiles = profiles_from_config(&parsed);
+        let mut groups = groups_from_config(&parsed);
+        apply_mutation(&mut profiles, &mut groups, &mutation)?;
+        write_model_to_yaml(&mut parsed, &profiles, &groups);
+        persist_yaml(&self.config_path, &parsed)?;
+        Ok(HostProfilesResult { encrypted: false, unlocked: true, profiles, groups })
+    }
+
     fn read_cache_only(&self) -> Result<HostProfilesResult, String> {
         let profiles = self.read_cache_profiles().unwrap_or_default();
         Ok(HostProfilesResult {
@@ -268,6 +323,126 @@ impl HostProfileStore {
         Ok(entries.iter().filter_map(profile_from_json).collect())
     }
 }
+
+fn result_from_unlocked(unlocked: &UnlockedConfig) -> HostProfilesResult {
+    HostProfilesResult { encrypted: true, unlocked: true, profiles: unlocked.profiles.clone(), groups: unlocked.groups.clone() }
+}
+
+fn apply_mutation(profiles: &mut Vec<SshHostProfile>, groups: &mut Vec<SshHostGroup>, mutation: &HostProfileMutation) -> Result<(), String> {
+    match mutation.action.as_str() {
+        "createProfile" => {
+            let profile = mutation.profile.clone().ok_or_else(|| "缺少主机数据".to_string())?;
+            validate_profile(&profile, profiles, groups, None)?;
+            profiles.push(profile);
+        }
+        "updateProfile" => {
+            let profile = mutation.profile.clone().ok_or_else(|| "缺少主机数据".to_string())?;
+            validate_profile(&profile, profiles, groups, Some(&profile.id))?;
+            let target = profiles.iter_mut().find(|item| item.id == profile.id).ok_or_else(|| "主机不存在".to_string())?;
+            *target = profile;
+        }
+        "deleteProfile" => {
+            let id = mutation.profile_id.as_deref().ok_or_else(|| "缺少主机 ID".to_string())?;
+            profiles.retain(|item| item.id != id);
+        }
+        "createGroup" => {
+            let group = mutation.group.clone().ok_or_else(|| "缺少分组数据".to_string())?;
+            validate_group(&group, groups, None)?;
+            groups.push(group);
+        }
+        "updateGroup" => {
+            let group = mutation.group.clone().ok_or_else(|| "缺少分组数据".to_string())?;
+            validate_group(&group, groups, Some(&group.id))?;
+            let target = groups.iter_mut().find(|item| item.id == group.id).ok_or_else(|| "分组不存在".to_string())?;
+            *target = group;
+        }
+        "deleteGroup" => {
+            let id = mutation.group_id.as_deref().ok_or_else(|| "缺少分组 ID".to_string())?;
+            if groups.iter().any(|item| item.parent_group_id.as_deref() == Some(id)) {
+                return Err("请先处理子分组后再删除".to_string());
+            }
+            if profiles.iter().any(|item| item.group == id) {
+                return Err("请先移动或删除分组中的主机".to_string());
+            }
+            groups.retain(|item| item.id != id);
+        }
+        "moveProfiles" => {
+            let ids = mutation.profile_ids.as_deref().unwrap_or_default();
+            let target = mutation.group_id.as_deref().unwrap_or("");
+            if !target.is_empty() && !groups.iter().any(|item| item.id == target) { return Err("目标分组不存在".to_string()); }
+            for profile in profiles.iter_mut().filter(|item| ids.contains(&item.id)) { profile.group = target.to_string(); }
+        }
+        "toggleFavorite" => {
+            let id = mutation.profile_id.as_deref().ok_or_else(|| "缺少主机 ID".to_string())?;
+            let profile = profiles.iter_mut().find(|item| item.id == id).ok_or_else(|| "主机不存在".to_string())?;
+            profile.favorite = !profile.favorite;
+        }
+        _ => return Err(format!("不支持的配置变更动作：{action}", action = mutation.action)),
+    }
+    Ok(())
+}
+
+fn validate_profile(profile: &SshHostProfile, profiles: &[SshHostProfile], groups: &[SshHostGroup], current: Option<&str>) -> Result<(), String> {
+    if profile.id.trim().is_empty() || profile.name.trim().is_empty() || profile.host.trim().is_empty() || profile.user.trim().is_empty() { return Err("主机名称、地址、用户名和 ID 不能为空".to_string()); }
+    if profiles.iter().any(|item| Some(item.id.as_str()) != current && item.id == profile.id) { return Err("主机 ID 已存在".to_string()); }
+    if !profile.group.is_empty() && !groups.iter().any(|item| item.id == profile.group) { return Err("主机所属分组不存在".to_string()); }
+    Ok(())
+}
+
+fn validate_group(group: &SshHostGroup, groups: &[SshHostGroup], current: Option<&str>) -> Result<(), String> {
+    if group.id.trim().is_empty() || group.name.trim().is_empty() { return Err("分组名称和 ID 不能为空".to_string()); }
+    if groups.iter().any(|item| Some(item.id.as_str()) != current && item.id == group.id) { return Err("分组 ID 已存在".to_string()); }
+    if group.parent_group_id.as_deref() == Some(&group.id) { return Err("分组不能成为自己的父分组".to_string()); }
+    if let Some(parent) = group.parent_group_id.as_deref() { if !groups.iter().any(|item| item.id == parent) { return Err("父分组不存在".to_string()); } }
+    if let Some(current_id) = current {
+        let mut cursor = group.parent_group_id.as_deref();
+        let mut seen = std::collections::HashSet::new();
+        while let Some(id) = cursor {
+            if id == current_id || !seen.insert(id) { return Err("分组层级不能形成循环".to_string()); }
+            cursor = groups.iter().find(|item| item.id == id).and_then(|item| item.parent_group_id.as_deref());
+        }
+    }
+    Ok(())
+}
+
+fn write_model_to_yaml(config: &mut serde_yaml::Value, profiles: &[SshHostProfile], groups: &[SshHostGroup]) {
+    if let serde_yaml::Value::Mapping(map) = config {
+        map.insert(serde_yaml::Value::String("profiles".into()), serde_yaml::to_value(profiles).unwrap_or_default());
+        map.insert(serde_yaml::Value::String("groups".into()), serde_yaml::to_value(groups).unwrap_or_default());
+    }
+}
+
+fn write_model_to_json(config: &mut Value, profiles: &[SshHostProfile], groups: &[SshHostGroup]) {
+    if let Value::Object(map) = config {
+        let entries = profiles.iter().map(|profile| serde_json::json!({
+            "id": profile.id,
+            "name": profile.name,
+            "type": "ssh",
+            "group": profile.group,
+            "favorite": profile.favorite,
+            "environment": profile.environment,
+            "remark": profile.remark,
+            "tags": profile.tags,
+            "options": {
+                "host": profile.host,
+                "port": profile.port,
+                "user": profile.user,
+                "auth": profile.auth,
+                "privateKeys": profile.private_keys,
+            },
+        })).collect::<Vec<_>>();
+        map.insert("profiles".into(), Value::Array(entries));
+        map.insert("groups".into(), serde_json::to_value(groups).unwrap_or(Value::Array(Vec::new())));
+    }
+}
+
+fn persist_yaml(path: &Path, value: &serde_yaml::Value) -> Result<(), String> {
+    let payload = serde_yaml::to_string(value).map_err(|e| format!("配置序列化失败：{e}"))?;
+    let tmp = path.with_extension("yaml.tmp");
+    std::fs::write(&tmp, payload).map_err(|e| format!("配置写入失败：{e}"))?;
+    std::fs::rename(&tmp, path).map_err(|e| format!("配置替换失败：{e}"))
+}
+
 
 fn profiles_from_config(parsed: &serde_yaml::Value) -> Vec<SshHostProfile> {
     parsed

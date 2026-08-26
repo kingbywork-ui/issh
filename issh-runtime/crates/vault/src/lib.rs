@@ -244,6 +244,13 @@ pub fn decrypt_stored_to_json(stored: &StoredVault, passphrase: &str) -> Result<
     String::from_utf8(plaintext).map_err(|error| VaultError::Malformed(format!("vault UTF-8: {error}")))
 }
 
+/// Encrypts an arbitrary JSON payload using the current Electron-compatible
+/// v2 vault format. This is used by clients that preserve additional config
+/// fields outside the strict runtime `Vault` schema.
+pub fn encrypt_json_to_stored(plaintext: &str, passphrase: &str) -> StoredVault {
+    encrypt_raw_plaintext(plaintext.as_bytes(), passphrase)
+}
+
 /// Encrypts a fresh vault payload with PKCS7 padding for v1 compatibility tests.
 #[cfg(test)]
 fn encrypt_vault_v1(vault: &Vault, passphrase: &str) -> StoredVault {

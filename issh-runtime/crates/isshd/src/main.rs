@@ -1680,9 +1680,9 @@ async fn run_ssh_session_pump(
                 match chunk {
                     Some(chunk) => {
                         pending_output.extend_from_slice(&chunk.data);
-                        if pending_output.len() >= MAX_SESSION_BATCH_BYTES {
-                            flush_ssh_output(sessions.as_ref(), &session_id, &mut pending_output);
-                        }
+                        // 每个 chunk 立即刷出到 session store：登录提示符/MOTD 通常远小于
+                        // MAX_SESSION_BATCH_BYTES，攒批会导致小输出永远不刷出 → 终端黑屏。
+                        flush_ssh_output(sessions.as_ref(), &session_id, &mut pending_output);
                     }
                     None => {
                         flush_ssh_output(sessions.as_ref(), &session_id, &mut pending_output);

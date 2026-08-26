@@ -1,6 +1,6 @@
 mod host_profiles;
 
-use host_profiles::{HostProfileStore, HostProfilesResult};
+use host_profiles::{HostProfileMutation, HostProfileStore, HostProfilesResult};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -47,7 +47,7 @@ impl RuntimeManager {
     async fn request(&self, request: Value) -> Result<Value, String> {
         validate_request(&request)?;
         self.ensure_started().await?;
-        send_request(&self.pipe_name, &request, Duration::from_secs(5)).await
+        send_request(&self.pipe_name, &request, request_timeout(&request)).await
     }
 
     async fn ensure_started(&self) -> Result<(), String> {
@@ -165,6 +165,14 @@ fn lock_host_profiles(manager: State<'_, RuntimeManager>) -> Result<HostProfiles
 }
 
 #[tauri::command]
+fn mutate_host_profiles(
+    manager: State<'_, RuntimeManager>,
+    mutation: HostProfileMutation,
+) -> Result<HostProfilesResult, String> {
+    manager.hosts.mutate(mutation)
+}
+
+#[tauri::command]
 fn resolve_ssh_password(
     manager: State<'_, RuntimeManager>,
     user: String,
@@ -217,6 +225,7 @@ pub fn run() {
             host_profiles,
             unlock_host_profiles,
             lock_host_profiles,
+            mutate_host_profiles,
             resolve_ssh_password,
             resolve_key_passphrase
         ])
@@ -247,6 +256,19 @@ fn validate_request(request: &Value) -> Result<(), String> {
         return Err(format!("Runtime 请求超过 {MAX_MESSAGE_BYTES} 字节"));
     }
     Ok(())
+}
+
+// isshd 的 session.openSsh 允许 10s 连接 + 10s 开通道，sftp.open 允许 30s；
+// 前端 pipe 超时必须大于 runtime 侧上限，否则慢网络下会「假失败」且会话在 runtime 侧泄漏。
+fn request_timeout(request: &Value) -> Duration {
+    let method = request.get("method").and_then(Value::as_str).unwrap_or("");
+    match method {
+        "session.openSsh" => Duration::from_secs(30),
+        "sftp.open" | "sftp.read" | "sftp.write" | "sftp.list" | "sftp.stat" | "sftp.mkdir"
+        | "sftp.remove" | "sftp.removeDir" | "sftp.rename" | "sftp.close" | "ssh.probe"
+        | "ssh.discoverHostKey" => Duration::from_secs(35),
+        _ => Duration::from_secs(10),
+    }
 }
 
 fn assert_compatible(response: &Value) -> Result<(), String> {

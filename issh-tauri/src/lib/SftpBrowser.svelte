@@ -16,7 +16,7 @@
         type SftpEntry,
     } from './runtime'
 
-    let { sessionId }: { sessionId: string } = $props()
+    let { sessionId, onclose }: { sessionId: string, onclose?: () => void } = $props()
 
     let cwd = $state('/')
     let entries = $state<SftpEntry[]>([])
@@ -202,18 +202,6 @@
     }
 
     onMount(() => {
-        void (async () => {
-            loading = true
-            error = ''
-            try {
-                await ensureOpen()
-                await refresh()
-            } catch (cause) {
-                error = cause instanceof Error ? cause.message : String(cause)
-            } finally {
-                loading = false
-            }
-        })()
         return () => {
             if (openedSessionId) {
                 void sftpClose(openedSessionId).catch(() => {})
@@ -221,24 +209,38 @@
             }
         }
     })
+
+    // sessionId 变化（切换 SSH tab）时重新打开 SFTP 通道并回到根目录
+    $effect(() => {
+        void sessionId
+        void (async () => {
+            loading = true
+            error = ''
+            try {
+                await ensureOpen()
+                cwd = '/'
+                await refresh()
+            } catch (cause) {
+                error = cause instanceof Error ? cause.message : String(cause)
+            } finally {
+                loading = false
+            }
+        })()
+    })
 </script>
 
 <section class="sftp-browser" aria-label="SFTP 文件浏览器">
     <header class="sftp-toolbar">
-        <button class="sftp-nav" type="button" onclick={() => { cwd = parentPath(cwd); void refresh() }} disabled={cwd === '/' || loading}>
-            ↑ 上级
+        <button class="sftp-nav" type="button" onclick={() => { cwd = parentPath(cwd); void refresh() }} disabled={cwd === '/' || loading} title="上级目录">
+            ↑
         </button>
-        <input
-            class="sftp-path"
-            type="text"
-            bind:value={cwd}
-            onkeydown={(event) => { if (event.key === 'Enter') void refresh() }}
-            aria-label="当前目录"
-            disabled={loading}
-        />
-        <button class="sftp-nav" type="button" onclick={() => void refresh()} disabled={loading}>
-            {loading ? '加载中…' : '刷新'}
+        <span class="sftp-crumb" title={cwd}>{cwd}</span>
+        <button class="sftp-nav" type="button" onclick={() => void refresh()} disabled={loading} title="刷新">
+            {loading ? '…' : '↻'}
         </button>
+        {#if onclose}
+            <button class="sftp-nav close" type="button" onclick={onclose} title="关闭 SFTP">×</button>
+        {/if}
     </header>
 
     <div class="sftp-actions">

@@ -28,6 +28,16 @@ export interface HostProfilesResult {
     groups: SshHostGroup[]
 }
 
+export interface HostProfileMutation {
+    action: 'createProfile' | 'updateProfile' | 'deleteProfile' | 'createGroup' | 'updateGroup' | 'deleteGroup' | 'moveProfiles' | 'toggleFavorite'
+    profile?: SshHostProfile
+    profileId?: string
+    group?: SshHostGroup
+    groupId?: string
+    parentGroupId?: string | null
+    profileIds?: string[]
+}
+
 export function hostProfiles (): Promise<HostProfilesResult> {
     return invoke<HostProfilesResult>('host_profiles')
 }
@@ -38,6 +48,10 @@ export function unlockHostProfiles (passphrase: string): Promise<HostProfilesRes
 
 export function lockHostProfiles (): Promise<HostProfilesResult> {
     return invoke<HostProfilesResult>('lock_host_profiles')
+}
+
+export function mutateHostProfiles (mutation: HostProfileMutation): Promise<HostProfilesResult> {
+    return invoke<HostProfilesResult>('mutate_host_profiles', { mutation })
 }
 
 export function resolveSshPassword (user: string, host: string, port: number): Promise<string | null> {
