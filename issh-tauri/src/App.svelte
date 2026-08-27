@@ -10,6 +10,7 @@
     import ProfileSelector from './lib/ProfileSelector.svelte'
     import Settings from './lib/Settings.svelte'
     import { getTerminalDecorators } from './lib/plugins/pluginHost'
+    import { findScheme } from './lib/terminalSchemes'
     import {
         closeSession,
         discoverSshHostKey,
@@ -149,6 +150,39 @@
 
     function makeTerminal (): Terminal {
         const light = document.documentElement.dataset.colorScheme === 'light'
+        const schemeName = localStorage.getItem('issh.terminalScheme') ?? ''
+        const scheme = schemeName ? findScheme(schemeName) : null
+        if (scheme) {
+            return new Terminal({
+                allowProposedApi: false,
+                convertEol: false,
+                cursorBlink: true,
+                fontFamily: '"Source Code Pro", Consolas, "Courier New", monospace',
+                fontSize: 13,
+                scrollback: 2_000,
+                theme: {
+                    background: scheme.background,
+                    foreground: scheme.foreground,
+                    cursor: scheme.cursor,
+                    black: scheme.colors[0],
+                    red: scheme.colors[1],
+                    green: scheme.colors[2],
+                    yellow: scheme.colors[3],
+                    blue: scheme.colors[4],
+                    magenta: scheme.colors[5],
+                    cyan: scheme.colors[6],
+                    white: scheme.colors[7],
+                    brightBlack: scheme.colors[8],
+                    brightRed: scheme.colors[9],
+                    brightGreen: scheme.colors[10],
+                    brightYellow: scheme.colors[11],
+                    brightBlue: scheme.colors[12],
+                    brightMagenta: scheme.colors[13],
+                    brightCyan: scheme.colors[14],
+                    brightWhite: scheme.colors[15],
+                },
+            })
+        }
         return new Terminal({
             allowProposedApi: false,
             convertEol: false,
@@ -276,6 +310,37 @@
             showHome = false
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
+        }
+    }
+
+    function handleGlobalHotkeys (event: KeyboardEvent): void {
+        if (localStorage.getItem('issh.globalHotkey') === 'false') return
+        const target = event.target as HTMLElement | null
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return
+        const ctrl = event.ctrlKey || event.metaKey
+        if (!ctrl) return
+        const key = event.key.toLowerCase()
+        if (event.shiftKey && key === 't') {
+            event.preventDefault()
+            void addLocalTab()
+        } else if (event.shiftKey && key === 's') {
+            event.preventDefault()
+            showSend = !showSend
+        } else if (!event.shiftKey && key === 'w') {
+            event.preventDefault()
+            const tab = tabs.find((candidate) => candidate.session.id === activeId)
+            if (tab) void closeTab(tab)
+        } else if (event.key === 'Tab') {
+            event.preventDefault()
+            if (tabs.length === 0) return
+            const index = tabs.findIndex((candidate) => candidate.session.id === activeId)
+            const next = event.shiftKey
+                ? (index - 1 + tabs.length) % tabs.length
+                : (index + 1) % tabs.length
+            activeId = tabs[next]?.session.id ?? activeId
+        } else if (!event.shiftKey && key === ',') {
+            event.preventDefault()
+            showSettings = true
         }
     }
 
@@ -590,6 +655,8 @@
         }
     })
 </script>
+
+<svelte:window onkeydown={handleGlobalHotkeys} />
 
 <div class="app-root">
     <header class="tab-bar">

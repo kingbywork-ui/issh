@@ -140,6 +140,36 @@ async fn runtime_health(manager: State<'_, RuntimeManager>) -> Result<Value, Str
 }
 
 #[tauri::command]
+fn relaunch_elevated(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        let exe = std::env::current_exe()
+            .map_err(|error| format!("无法定位当前程序：{error}"))?;
+        let mut command = std::process::Command::new("powershell");
+        command
+            .args([
+                "-NoProfile",
+                "-Command",
+                "Start-Process",
+                "-FilePath",
+            ])
+            .arg(&exe)
+            .args(["-Verb", "RunAs"])
+            .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+            .spawn()
+            .map_err(|error| format!("提权启动失败：{error}"))?;
+        let _ = app;
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = app;
+        Err("仅 Windows 支持管理员重启".to_string())
+    }
+}
+
+#[tauri::command]
 async fn runtime_request(
     manager: State<'_, RuntimeManager>,
     request: Value,
@@ -271,7 +301,8 @@ pub fn run() {
             plugin_fetch_registry,
             plugin_download,
             plugin_list_installed,
-            plugin_delete
+            plugin_delete,
+            relaunch_elevated
         ])
         .build(tauri::generate_context!())
         .expect("failed to build issh Tauri client");

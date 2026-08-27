@@ -1502,3 +1502,7 @@ button { font: inherit; color: inherit; }
 .market-kind { min-height: 26px; padding: 0 12px; border: 1px solid var(--ops-line); border-radius: 999px; background: transparent; color: var(--ops-fg-muted); cursor: pointer; font-size: 12px; }
 .market-kind.active { border-color: var(--ops-signal-border, var(--ops-line)); color: var(--ops-signal); background: var(--ops-signal-dim, transparent); }
 .market-kind:disabled { opacity: 0.5; cursor: default; }
+
+.hotkey-list { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; }
+.hotkey-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--ops-fg); }
+.hotkey-row kbd { padding: 2px 8px; border: 1px solid var(--ops-line); border-radius: 4px; background: var(--ops-base); color: var(--ops-fg-muted); font-family: var(--ops-font-mono); font-size: 11px; }

@@ -11,6 +11,7 @@
     } from './plugins/pluginHost'
     import type { RegistryEntry } from './plugins/types'
     import { invoke } from '@tauri-apps/api/core'
+    import { terminalColorSchemes } from './terminalSchemes'
 
     let { onclose }: { onclose: () => void } = $props()
 
@@ -46,6 +47,7 @@
     let section = $state<Section>('general')
     let language = $state(localStorage.getItem('issh.language') ?? 'auto')
     let colorScheme = $state(localStorage.getItem('issh.colorScheme') ?? 'dark')
+    let terminalScheme = $state(localStorage.getItem('issh.terminalScheme') ?? '')
     let enableWelcome = $state(localStorage.getItem('issh.enableWelcomeTab') !== 'false')
     let analytics = $state(localStorage.getItem('issh.analytics') !== 'false')
     let globalHotkey = $state(localStorage.getItem('issh.globalHotkey') !== 'false')
@@ -67,6 +69,9 @@
 
     let appVersion = $state('')
     let runtimeVersion = $state('')
+    let isWindows = $state(navigator.userAgent.includes('Windows'))
+    let elevateBusy = $state(false)
+    let elevateError = $state('')
 
     const tabs = $derived(getSettingsTabs())
 
@@ -170,6 +175,18 @@
         } catch { appVersion = '' }
     }
 
+    async function relaunchElevated (): Promise<void> {
+        elevateBusy = true
+        elevateError = ''
+        try {
+            await invoke('relaunch_elevated')
+        } catch (cause) {
+            elevateError = cause instanceof Error ? cause.message : String(cause)
+        } finally {
+            elevateBusy = false
+        }
+    }
+
     function beginInstall (entry: MarketEntry): void {
         installTarget = entry
         installError = ''
@@ -266,6 +283,26 @@
                                 <option value="dark">深色</option>
                                 <option value="light">浅色</option>
                             </select>
+                        </div>
+                        <div class="settings-field">
+                            <div class="settings-field-title">终端配色</div>
+                            <select bind:value={terminalScheme} onchange={() => persist('issh.terminalScheme', terminalScheme)} aria-label="终端配色">
+                                <option value="">跟随主题（默认）</option>
+                                {#each terminalColorSchemes as scheme (scheme.name)}
+                                    <option value={scheme.name}>{scheme.name}</option>
+                                {/each}
+                            </select>
+                        </div>
+                        <div class="settings-field">
+                            <div class="settings-field-title">快捷键</div>
+                            <div class="hotkey-list">
+                                <div class="hotkey-row"><span>新建本地终端</span><kbd>Ctrl+Shift+T</kbd></div>
+                                <div class="hotkey-row"><span>关闭当前标签</span><kbd>Ctrl+W</kbd></div>
+                                <div class="hotkey-row"><span>下一个标签</span><kbd>Ctrl+Tab</kbd></div>
+                                <div class="hotkey-row"><span>上一个标签</span><kbd>Ctrl+Shift+Tab</kbd></div>
+                                <div class="hotkey-row"><span>批量输入</span><kbd>Ctrl+Shift+S</kbd></div>
+                                <div class="hotkey-row"><span>打开设置</span><kbd>Ctrl+,</kbd></div>
+                            </div>
                         </div>
                         <label class="settings-toggle">
                             <input type="checkbox" bind:checked={enableWelcome} onchange={() => persist('issh.enableWelcomeTab', String(enableWelcome))} />
