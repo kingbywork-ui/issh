@@ -1,0 +1,33 @@
+.bridge-settings { display: flex; flex-direction: column; gap: 4px; }
+.bridge-section { padding: 12px 0; border-bottom: 1px solid var(--ops-line); }
+.bridge-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.bridge-toolbar input, .bridge-toolbar select {
+    min-height: 30px;
+    padding: 0 8px;
+    border: 1px solid var(--ops-line);
+    border-radius: var(--ops-radius);
+    background: var(--ops-base);
+    color: var(--ops-fg);
+    font-size: 12px;
+}
+.bridge-toolbar input { flex: 1; min-width: 120px; }
+.bridge-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; }
+.bridge-session-title { flex: 1; font-family: var(--ops-font-mono); font-size: 12px; }
+.bridge-session-kind { color: var(--ops-fg-muted); font-size: 11px; padding: 1px 8px; border: 1px solid var(--ops-line); border-radius: 999px; }
+.bridge-row button, .bridge-agent-actions button {
+    min-height: 26px;
+    padding: 0 10px;
+    border: 1px solid var(--ops-line);
+    border-radius: var(--ops-radius);
+    background: transparent;
+    color: var(--ops-fg-muted);
+    cursor: pointer;
+    font-size: 12px;
+}
+.bridge-agent { padding: 10px 0; border-bottom: 1px dashed var(--ops-line); }
+.bridge-agent-head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.bridge-agent-adapter { padding: 1px 8px; border: 1px solid var(--ops-line); border-radius: 999px; color: var(--ops-fg-muted); font-size: 11px; }
+.bridge-agent-status { color: var(--ops-signal); font-size: 12px; }
+.bridge-agent-time { margin-left: auto; color: var(--ops-fg-muted); font-size: 11px; }
+.bridge-agent-meta { margin: 6px 0; color: var(--ops-fg-muted); font-size: 12px; display: flex; gap: 14px; flex-wrap: wrap; }
+.bridge-agent-actions { display: flex; gap: 8px; }

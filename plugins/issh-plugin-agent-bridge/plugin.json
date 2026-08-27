@@ -1,0 +1,13 @@
+{
+    "id": "issh-plugin-agent-bridge",
+    "name": "Agent 桥接",
+    "version": "0.1.0",
+    "description": "Workspace/Agent 管理：工作区创建、终端会话绑定、agent 注册与授权（对接 isshd workspace.*/agent.* RPC）",
+    "kind": "integration",
+    "minAppVersion": "0.2.0",
+    "entry": "index.js",
+    "permissions": ["workspace:read", "workspace:write", "agent:read", "agent:write", "session:read", "settings:tab"],
+    "author": "kingbywork-ui",
+    "homepage": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge",
+    "repository": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge"
+}
