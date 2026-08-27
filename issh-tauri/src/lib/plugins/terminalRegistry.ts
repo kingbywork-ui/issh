@@ -28,6 +28,10 @@ export function getActiveTerminal (): TerminalRecord | null {
     return [...terminals.values()][0] ?? null
 }
 
+export function getTerminal (sessionId: string): TerminalRecord | null {
+    return terminals.get(sessionId) ?? null
+}
+
 export function readTerminalBuffer (record: TerminalRecord, lines: number): string[] {
     const buffer = record.terminal.buffer.active
     const end = buffer.baseY + buffer.cursorY

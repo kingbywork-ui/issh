@@ -1547,3 +1547,12 @@ button { font: inherit; color: inherit; }
 .sandbox-panel-title.resizing { color: var(--ops-signal); }
 .sandbox-panel-resize-hint { font-size: 10px; color: var(--ops-fg-muted); opacity: 0.7; }
 .sandbox-panel iframe { height: 160px; }
+
+.confirm-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 300; }
+.confirm-dialog { min-width: 320px; max-width: 480px; background: var(--ops-base); border: 1px solid var(--ops-line); border-radius: 8px; padding: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.35); }
+.confirm-title { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+.confirm-message { font-family: inherit; font-size: 12px; white-space: pre-wrap; word-break: break-all; margin: 0 0 14px; color: var(--ops-fg-muted); max-height: 240px; overflow: auto; }
+.confirm-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.confirm-actions button { padding: 6px 18px; border-radius: 6px; border: 1px solid var(--ops-line); cursor: pointer; font-size: 12px; }
+.confirm-actions .primary { background: var(--ops-signal); color: #fff; border-color: var(--ops-signal); }
+.confirm-actions .secondary { background: transparent; color: var(--ops-fg); }

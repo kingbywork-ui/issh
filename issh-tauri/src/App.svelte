@@ -13,6 +13,7 @@
     import { getTerminalDecorators, getSandboxPanels } from './lib/plugins/pluginHost'
     import { registerTerminal, unregisterTerminal, setActiveTerminal } from './lib/plugins/terminalRegistry'
     import { broadcastSandboxEvent, setProfileWriteConfirm } from './lib/plugins/sandboxBridge'
+    import ConfirmDialog from './lib/ConfirmDialog.svelte'
     import { checkPluginUpdates, type PluginUpdateInfo } from './lib/plugins/pluginHost'
     import { findScheme } from './lib/terminalSchemes'
     import {
@@ -358,7 +359,20 @@
         pluginUpdates = await checkPluginUpdates(registryUrl)
     }
 
-    setProfileWriteConfirm(async (message) => window.confirm(message))
+    setProfileWriteConfirm((message) => new Promise<boolean>((resolve) => {
+        confirmMessage = message
+        confirmResolve = resolve
+    }))
+
+    let confirmMessage = $state('')
+    let confirmResolve: ((ok: boolean) => void) | null = null
+
+    function resolveConfirm (ok: boolean): void {
+        confirmMessage = ''
+        const resolve = confirmResolve
+        confirmResolve = null
+        resolve?.(ok)
+    }
 
     function dismissUpdateNotice (): void {
         pluginUpdates = []
@@ -828,6 +842,10 @@
 
     {#if showSettings}
         <Settings onclose={() => { showSettings = false }} />
+    {/if}
+
+    {#if confirmMessage}
+        <ConfirmDialog message={confirmMessage} onresolve={resolveConfirm} />
     {/if}
 
     {#if showConnect}

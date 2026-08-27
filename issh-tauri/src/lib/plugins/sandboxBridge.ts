@@ -1,5 +1,5 @@
 import { getEntry } from './registry'
-import { getActiveTerminal, readTerminalBuffer } from './terminalRegistry'
+import { getActiveTerminal, getTerminal, readTerminalBuffer } from './terminalRegistry'
 
 export const SANDBOX_RPC_CHANNEL = 'issh-plugin-rpc'
 export const SANDBOX_EVENT_CHANNEL = 'issh-plugin-event'
@@ -132,14 +132,18 @@ function dispatchRpc (pluginId: string, request: SandboxRpcRequest): unknown {
     }
     if (request.method === 'terminal.read') {
         const lines = typeof request.params.lines === 'number' ? Math.min(Math.max(1, Math.floor(request.params.lines)), 200) : 20
-        const record = getActiveTerminal()
+        const record = typeof request.params.sessionId === 'string' && request.params.sessionId
+            ? getTerminal(request.params.sessionId)
+            : getActiveTerminal()
         if (!record) throw new Error('当前无活动终端会话')
         return { sessionId: record.sessionId, title: record.title, lines: readTerminalBuffer(record, lines) }
     }
     if (request.method === 'terminal.write') {
         const data = typeof request.params.data === 'string' ? request.params.data : ''
         if (!data) throw new Error('terminal.write 需要 string data')
-        const record = getActiveTerminal()
+        const record = typeof request.params.sessionId === 'string' && request.params.sessionId
+            ? getTerminal(request.params.sessionId)
+            : getActiveTerminal()
         if (!record) throw new Error('当前无活动终端会话')
         record.write(data)
         return null
