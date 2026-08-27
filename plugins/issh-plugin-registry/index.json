@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-08-27T04:56:24.902Z",
+  "updated": "2026-08-27T05:12:20.143Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
@@ -118,16 +118,17 @@
     {
       "id": "issh-plugin-sandbox-demo",
       "name": "沙箱演示插件",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "description": "演示 iframe 沙箱面板：postMessage RPC 存储读写、终端读写、事件接收",
       "kind": "feature",
       "permissions": [
         "panel:register",
-        "terminal:decorate"
+        "terminal:decorate",
+        "profiles:write"
       ],
-      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo/releases/download/v0.2.0/issh-plugin-sandbox-demo-0.2.0.tgz",
-      "sha256": "9a13c6a771782795a538037e9e435e30de4af860dc4cb9c6b00b7619447e0910",
-      "signature": "JzO8S4hLgt/FLzMbuihK5yNoBm4/YdyVkwQ8/Em9JRPZVaQCwFDMIPqh4oiNa4HsMUv2arfp0Ku4/pGJCbCAAQ==",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo/releases/download/v0.3.0/issh-plugin-sandbox-demo-0.3.0.tgz",
+      "sha256": "587535f4ad02a45bb0eab48783d9824d3127702a69a126b6dc2255b8523a9015",
+      "signature": "wENYTtagwdVSNoqvyL2pBQf24fKJ25OS2nfhbbkfw9N1s/4PKendW+fhcPPXDt/qRsEi4L5KpMAI4bpUUw0SAQ==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo",
       "downloads": 0
