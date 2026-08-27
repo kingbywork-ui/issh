@@ -10,6 +10,7 @@ export interface IsshPluginManifest {
     minAppVersion?: string
     entry: string
     permissions?: string[]
+    dependencies?: Array<string | { id: string; minVersion?: string }>
     author?: string
     homepage?: string
     repository?: string

@@ -27,6 +27,7 @@ type Listener = () => void
 const root = new Context()
 
 const plugins = new Map<string, IsshPlugin>()
+const installedMarketplaceIds = new Set<string>()
 const fibers = new Map<string, Fiber>()
 const settingsTabs = new Map<string, SettingsTabDefinition>()
 const homeCards = new Map<string, HomeCardDefinition>()
@@ -139,6 +140,7 @@ interface MarketplacePluginModule {
 
 export async function loadMarketplacePlugin (directory: string, entryFile: string, id: string): Promise<void> {
     if (plugins.has(id)) return
+    installedMarketplaceIds.add(id)
     const url = convertFileSrc(`${directory.replace(/\\/g, '/')}/${entryFile}`)
     const module = await import(/* @vite-ignore */ url) as MarketplacePluginModule
     const plugin = module.default ?? module.plugin
@@ -157,6 +159,11 @@ export async function activatePlugin (id: string): Promise<void> {
     if (!isEnabled(id)) return
     const entry = getEntry(id)
     if (entry && entry.state === 'failed' && !entry.enabled) return
+    const dependencyError = checkDependencies(plugin.manifest)
+    if (dependencyError) {
+        markState(id, 'failed', dependencyError)
+        return
+    }
     const fiber = root.plugin((ctx) => {
         void Promise.resolve(plugin.activate(makePluginContext(plugin.manifest))).catch((cause: unknown) => {
             markState(id, 'failed', cause instanceof Error ? cause.message : String(cause))
@@ -197,6 +204,19 @@ export async function uninstallPlugin (id: string): Promise<void> {
     await deactivatePlugin(id)
     plugins.delete(id)
     unregisterManifest(id)
+    clearPluginStorage(id)
+}
+
+function clearPluginStorage (id: string): void {
+    try {
+        const prefix = `issh.plugin.${id}.`
+        const keys: string[] = []
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (key && key.startsWith(prefix)) keys.push(key)
+        }
+        for (const key of keys) localStorage.removeItem(key)
+    } catch {}
 }
 
 export function listPlugins (): RegistryEntry[] {
@@ -215,6 +235,9 @@ export async function loadInstalledMarketplacePlugins (): Promise<void> {
     try {
         const { invoke } = await import('@tauri-apps/api/core')
         const installed = await invoke<Array<{ id: string; directory: string; entry: string }>>('plugin_list_installed')
+        for (const record of installed) {
+            installedMarketplaceIds.add(record.id)
+        }
         for (const record of installed) {
             if (plugins.has(record.id)) continue
             if (!isEnabled(record.id)) continue
@@ -242,6 +265,26 @@ function compareVersions (a: string, b: string): number {
         if (diff !== 0) return diff
     }
     return 0
+}
+
+function normalizeDependency (dep: string | { id: string; minVersion?: string }): { id: string; minVersion?: string } {
+    return typeof dep === 'string' ? { id: dep } : dep
+}
+
+function checkDependencies (manifest: IsshPluginManifest): string | null {
+    const deps = manifest.dependencies ?? []
+    if (deps.length === 0) return null
+    for (const dep of deps) {
+        const { id, minVersion } = normalizeDependency(dep)
+        const target = plugins.get(id)
+        if (!target) {
+            const installed = installedMarketplaceIds.has(id)
+            if (!installed) return `缺少依赖插件：${id}`
+        } else if (minVersion && compareVersions(target.manifest.version, minVersion) < 0) {
+            return `依赖插件 ${id} 版本过低（需 ≥ ${minVersion}，当前 ${target.manifest.version}）`
+        }
+    }
+    return null
 }
 
 export async function checkPluginUpdates (registryUrl: string): Promise<PluginUpdateInfo[]> {

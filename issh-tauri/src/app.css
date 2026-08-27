@@ -1528,3 +1528,7 @@ button { font: inherit; color: inherit; }
 .update-notice-action { min-height: 24px; padding: 0 10px; border: 1px solid var(--ops-signal-border, var(--ops-line)); border-radius: var(--ops-radius); background: transparent; color: var(--ops-signal); cursor: pointer; font-size: 12px; }
 .update-notice-dismiss { margin-left: auto; background: none; border: none; color: var(--ops-fg-muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 4px; }
 .update-notice-dismiss:hover { color: var(--ops-fg); }
+
+.market-stats { display: flex; gap: 16px; font-size: 12px; color: var(--ops-fg-muted); padding: 2px 0; }
+.market-stats-updates { color: var(--ops-signal); }
+.plugin-dep-warning { font-size: 12px; color: var(--ops-warn, #e6a23c); }

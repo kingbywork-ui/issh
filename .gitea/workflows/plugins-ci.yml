@@ -1,0 +1,61 @@
+name: plugins-ci
+
+on:
+  push:
+    branches: [dev, main]
+    paths:
+      - 'plugins/**'
+      - '.gitea/workflows/plugins-ci.yml'
+  pull_request:
+    paths:
+      - 'plugins/**'
+
+jobs:
+  build-plugins:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install plugin dependencies
+        run: |
+          for dir in plugins/issh-plugin-*/; do
+            if [ -f "$dir/package.json" ]; then
+              echo "Installing $dir"
+              npm install --prefix "$dir" --no-audit --no-fund
+            fi
+          done
+
+      - name: Build and package plugins
+        run: |
+          set -e
+          failed=0
+          for dir in plugins/issh-plugin-*/; do
+            if [ -f "$dir/package.json" ]; then
+              echo "=== Building $dir ==="
+              if ! (npm run build --prefix "$dir" && npm run package --prefix "$dir"); then
+                echo "::error::$dir build failed"
+                failed=1
+              fi
+            fi
+          done
+          exit $failed
+
+      - name: Verify plugin artifacts
+        run: |
+          set -e
+          count=0
+          for f in plugins/issh-plugin-*/*.tgz; do
+            if [ -f "$f" ]; then
+              echo "artifact: $f"
+              count=$((count+1))
+            fi
+          done
+          echo "Total artifacts: $count"
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No plugin artifacts produced"
+            exit 1
+          fi

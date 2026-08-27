@@ -25,6 +25,7 @@
         kind: string
         permissions: string[]
         min_app_version?: string | null
+        dependencies?: Array<string | { id: string; minVersion?: string }> | null
         download_url: string
         sha256: string
         homepage?: string | null
@@ -217,6 +218,40 @@
         return permissionLabels[permission] ?? permission
     }
 
+    function normalizeDep (dep: string | { id: string; minVersion?: string }): { id: string; minVersion?: string } {
+        return typeof dep === 'string' ? { id: dep } : dep
+    }
+
+    function dependencyStatusLabel (entry: MarketEntry): string | null {
+        const deps = entry.dependencies ?? []
+        if (deps.length === 0) return null
+        for (const dep of deps) {
+            const { id, minVersion } = normalizeDep(dep)
+            const installed = installedFromMarket.find((candidate) => candidate.id === id)
+            if (!installed) {
+                return `需先安装依赖：${id}`
+            }
+            if (minVersion && compareVersions(installed.version, minVersion) < 0) {
+                return `依赖 ${id} 需 ≥ v${minVersion}（已装 v${installed.version}）`
+            }
+        }
+        return null
+    }
+
+    const marketStats = $derived.by(() => {
+        const total = marketEntries.length
+        let installedCount = 0
+        let updateCount = 0
+        for (const entry of marketEntries) {
+            const installedVersion = installedVersionOf(entry)
+            if (installedVersion) {
+                installedCount += 1
+                if (compareVersions(entry.version, installedVersion) > 0) updateCount += 1
+            }
+        }
+        return { total, installed: installedCount, updates: updateCount }
+    })
+
     function compareVersions (a: string, b: string): number {
         const pa = a.split('.').map((part) => Number.parseInt(part, 10) || 0)
         const pb = b.split('.').map((part) => Number.parseInt(part, 10) || 0)
@@ -404,6 +439,15 @@
                             <input class="market-url" type="url" bind:value={registryUrl} aria-label="索引地址" />
                             <button class="market-refresh" type="button" disabled={marketLoading} onclick={() => void loadMarket()}>{marketLoading ? '加载中…' : '刷新'}</button>
                         </div>
+                        {#if !marketLoading && marketEntries.length > 0}
+                            <div class="market-stats">
+                                <span>共 {marketStats.total} 个插件</span>
+                                <span>已安装 {marketStats.installed}</span>
+                                {#if marketStats.updates > 0}
+                                    <span class="market-stats-updates">可更新 {marketStats.updates}</span>
+                                {/if}
+                            </div>
+                        {/if}
                         <div class="market-kinds" role="tablist" aria-label="插件分类">
                             {#each [['all', '全部'], ['feature', '功能'], ['appearance', '外观'], ['integration', '集成']] as [kind, label] (kind)}
                                 <button
@@ -430,6 +474,9 @@
                                     <span class="plugin-kind">{kindLabel(detailEntry.kind)}</span>
                                 </div>
                                 <div class="plugin-card-desc">{detailEntry.description}</div>
+                                {#if dependencyStatusLabel(detailEntry)}
+                                    <div class="plugin-dep-warning">⚠ {dependencyStatusLabel(detailEntry)}</div>
+                                {/if}
                                 <div class="plugin-detail-meta">
                                     <div><span class="plugin-detail-label">插件 ID</span><code>{detailEntry.id}</code></div>
                                     {#if detailEntry.min_app_version}
@@ -450,6 +497,14 @@
                                         <div class="plugin-detail-perm">无权限声明</div>
                                     {/each}
                                 </div>
+                                {#if detailEntry.dependencies && detailEntry.dependencies.length > 0}
+                                    <div class="plugin-detail-perms">
+                                        <div class="plugin-detail-label">依赖插件</div>
+                                        {#each detailEntry.dependencies as dep (normalizeDep(dep).id)}
+                                            <div class="plugin-detail-perm">• {normalizeDep(dep).id}{normalizeDep(dep).minVersion ? `（≥ v${normalizeDep(dep).minVersion}）` : ''}</div>
+                                        {/each}
+                                    </div>
+                                {/if}
                                 <div class="plugin-card-actions">
                                     {#if hasUpdate(detailEntry)}
                                         <span class="plugin-update-hint">已装 v{installedVersionOf(detailEntry)}，可更新</span>
@@ -478,6 +533,9 @@
                                     <span class="plugin-kind">{kindLabel(entry.kind)}</span>
                                 </div>
                                 <div class="plugin-card-desc">{entry.description}</div>
+                                {#if dependencyStatusLabel(entry)}
+                                    <div class="plugin-dep-warning">⚠ {dependencyStatusLabel(entry)}</div>
+                                {/if}
                                 <div class="plugin-card-actions">
                                     {#if hasUpdate(entry)}
                                         <span class="plugin-update-hint">已装 v{installedVersionOf(entry)}，可更新</span>
