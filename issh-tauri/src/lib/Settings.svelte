@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { mount, unmount } from 'svelte'
     import { onMount } from 'svelte'
     import {
         disablePlugin,
@@ -6,16 +7,19 @@
         getSettingsTabs,
         listPlugins,
         loadMarketplacePlugin,
+        reloadMarketplacePlugin,
         subscribeUi,
         uninstallPlugin,
     } from './plugins/pluginHost'
     import type { RegistryEntry } from './plugins/types'
     import { invoke } from '@tauri-apps/api/core'
     import { terminalColorSchemes } from './terminalSchemes'
+    import AutoSudoSettings from './AutoSudoSettings.svelte'
+    import VaultSettings from './VaultSettings.svelte'
 
     let { onclose }: { onclose: () => void } = $props()
 
-    type Section = 'general' | 'plugins' | 'market' | 'about'
+    type Section = 'general' | 'vault' | 'auto-sudo' | 'plugins' | 'market' | 'about'
 
     interface MarketEntry {
         id: string
@@ -106,7 +110,7 @@
 
     function marketLocale (): 'zh' | 'en' {
         const setting = localStorage.getItem('issh.language') ?? 'auto'
-        if (setting === 'zh' || setting === 'en') return setting
+        if (setting === 'zh' || setting === 'zh-CN' || setting === 'en') return setting === 'en' ? 'en' : 'zh'
         return navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'
     }
 
@@ -161,6 +165,47 @@
     let elevateError = $state('')
 
     const tabs = $derived(getSettingsTabs())
+
+    // 插件注册的设置页组件是任意框架组件（当前生态为 Svelte 组件对象），
+    // 用 mount/unmount 手动挂载到容器节点（Svelte 5 runes 组件不能直接动态 import 后用 <svelte:component>）
+    let pluginTabSection = $state('')
+    const mountedComponents = new Map<string, { destroy (): void }>()
+
+    function showPluginTab (tabId: string): void {
+        const tab = tabs.find((candidate) => candidate.id === tabId)
+        if (!tab) return
+        pluginTabSection = tabId
+    }
+
+    $effect(() => {
+        const current = tabs
+        const host = pluginTabContainer
+        if (!host) return
+        const activeTab = current.find((candidate) => candidate.id === pluginTabSection)
+        // 清理已卸载插件的组件
+        for (const [id, mounted] of mountedComponents.entries()) {
+            if (!current.some((candidate) => candidate.id === id)) {
+                try { mounted.destroy() } catch { /* 忽略卸载失败 */ }
+                mountedComponents.delete(id)
+            }
+        }
+        // 渲染当前激活的插件设置页
+        for (const child of [...host.children]) child.remove()
+        if (activeTab && activeTab.component) {
+            let mounted = mountedComponents.get(activeTab.id)
+            if (!mounted) {
+                try {
+                    const instance = mount(activeTab.component as Parameters<typeof mount>[0], { target: host })
+                    mounted = { destroy: () => unmount(instance) }
+                    mountedComponents.set(activeTab.id, mounted)
+                } catch (cause) {
+                    console.warn(`[settings] 插件设置页挂载失败：${activeTab.id}`, cause)
+                }
+            }
+        }
+    })
+
+    let pluginTabContainer = $state<HTMLElement | null>(null)
 
     const filteredMarket = $derived(
         marketEntries.filter((entry) => {
@@ -348,7 +393,7 @@
     function compareVersions (a: string, b: string): number {
         const pa = a.split('.').map((part) => Number.parseInt(part, 10) || 0)
         const pb = b.split('.').map((part) => Number.parseInt(part, 10) || 0)
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
             const diff = (pa[i] ?? 0) - (pb[i] ?? 0)
             if (diff !== 0) return diff
         }
@@ -363,6 +408,8 @@
 
     async function confirmInstall (): Promise<void> {
         if (!installTarget) return
+        // appVersion 未加载时先加载，避免 min_app_version 校验误判通过
+        if (!appVersion) await loadAbout()
         if (!meetsAppVersion(installTarget.min_app_version)) {
             installError = `需要 issh ${installTarget.min_app_version} 及以上版本（当前 ${appVersion || '未知'}）`
             return
@@ -371,17 +418,21 @@
         installError = ''
         try {
             const isUpdate = installedFromMarket.some((record) => record.id === installTarget!.id)
-            if (isUpdate) {
-                await uninstallPlugin(installTarget.id)
-            }
+            // 更新流程：磁盘文件被 plugin_download 原子替换后，直接重载插件；
+            // 不预卸载（避免下载失败后旧版本已被停用）
             const installed = await invoke<InstalledRecord>('plugin_download', {
                 id: installTarget.id,
                 url: installTarget.download_url,
                 sha256: installTarget.sha256,
                 signature: installTarget.signature ?? null,
+                version: installTarget.version,
             })
             try {
-                await loadMarketplacePlugin(installed.directory, installed.entry, installed.id)
+                if (isUpdate) {
+                    await reloadMarketplacePlugin(installed.directory, installed.entry, installed.id)
+                } else {
+                    await loadMarketplacePlugin(installed.directory, installed.entry, installed.id)
+                }
             } catch (cause) {
                 console.warn('[market] 插件已下载但热加载失败（重启后生效）：', cause)
             }
@@ -416,11 +467,13 @@
         <div class="settings-body">
             <nav class="settings-nav" aria-label="设置分组">
                 <button class:active={section === 'general'} type="button" onclick={() => { section = 'general' }}>通用</button>
+                <button class:active={section === 'vault'} type="button" onclick={() => { section = 'vault' }}>保险库</button>
+                <button class:active={section === 'auto-sudo'} type="button" onclick={() => { section = 'auto-sudo' }}>sudo 密码</button>
                 <button class:active={section === 'plugins'} type="button" onclick={() => { section = 'plugins' }}>插件</button>
                 <button class:active={section === 'market'} type="button" onclick={() => { section = 'market' }}>插件商城</button>
                 <button class:active={section === 'about'} type="button" onclick={() => { section = 'about' }}>关于</button>
                 {#each tabs as tab (tab.id)}
-                    <div class="settings-nav-plugin">{tab.title}</div>
+                    <button class:active={pluginTabSection === tab.id} class="settings-nav-plugin" type="button" onclick={() => { showPluginTab(tab.id) }}>{tab.title}</button>
                 {/each}
             </nav>
             <div class="settings-content">
@@ -471,6 +524,10 @@
                             <span>全局快捷键唤起</span>
                         </label>
                     </section>
+                {:else if section === 'vault'}
+                    <VaultSettings />
+                {:else if section === 'auto-sudo'}
+                    <AutoSudoSettings />
                 {:else if section === 'plugins'}
                     <section aria-label="插件管理">
                         {#if pluginError}
@@ -656,6 +713,10 @@
                     <section aria-label="关于">
                         <div class="about-row"><span>issh 版本</span><strong>{appVersion || '未知'}</strong></div>
                         <div class="about-row"><span>Runtime 版本</span><strong>{runtimeVersion || '未连接'}</strong></div>
+                    </section>
+                {:else if pluginTabSection && tabs.some((tab) => tab.id === pluginTabSection)}
+                    <section aria-label={tabs.find((tab) => tab.id === pluginTabSection)?.title ?? '插件设置'}>
+                        <div class="plugin-settings-host" bind:this={pluginTabContainer}></div>
                     </section>
                 {/if}
             </div>

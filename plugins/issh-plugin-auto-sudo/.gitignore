@@ -1,5 +1,0 @@
-node_modules/
-dist/
-*.tgz
-*.tgz.sha256
-.vite-temp/

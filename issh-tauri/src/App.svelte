@@ -10,7 +10,8 @@
     import ProfileSelector from './lib/ProfileSelector.svelte'
     import Settings from './lib/Settings.svelte'
     import SandboxPanel from './lib/SandboxPanel.svelte'
-    import { getTerminalDecorators, getSandboxPanels } from './lib/plugins/pluginHost'
+    import { getTerminalDecorators, getSandboxPanels, subscribeUi } from './lib/plugins/pluginHost'
+    import { autoSudoDecorator } from './lib/autoSudo'
     import { registerTerminal, unregisterTerminal, setActiveTerminal } from './lib/plugins/terminalRegistry'
     import { broadcastSandboxEvent, setProfileWriteConfirm } from './lib/plugins/sandboxBridge'
     import ConfirmDialog from './lib/ConfirmDialog.svelte'
@@ -71,7 +72,70 @@
     let showWelcome = $state(false)
     let showSettings = $state(false)
     let pluginUpdates = $state<PluginUpdateInfo[]>([])
+    // 插件注册/注销时刷新沙箱面板列表（$state 快照不会自动跟踪 pluginHost 内部 Map）
     const sandboxPanels = $state(getSandboxPanels('bottom'))
+    subscribeUi(() => {
+        sandboxPanels.length = 0
+        sandboxPanels.push(...getSandboxPanels('bottom'))
+    })
+
+    // 终端配色热更新：scheme 变更时重建所有 xterm 实例代价高，
+    // 通过 storage 事件 + 自定义事件监听，仅更新 theme
+    function handleSchemeChange (): void {
+        const schemeName = localStorage.getItem('issh.terminalScheme') ?? ''
+        const scheme = schemeName ? findScheme(schemeName) : null
+        for (const tab of tabs) {
+            if (!tab.terminal) continue
+            if (scheme) {
+                tab.terminal.options.theme = {
+                    background: scheme.background,
+                    foreground: scheme.foreground,
+                    cursor: scheme.cursor,
+                    black: scheme.colors[0],
+                    red: scheme.colors[1],
+                    green: scheme.colors[2],
+                    yellow: scheme.colors[3],
+                    blue: scheme.colors[4],
+                    magenta: scheme.colors[5],
+                    cyan: scheme.colors[6],
+                    white: scheme.colors[7],
+                    brightBlack: scheme.colors[8],
+                    brightRed: scheme.colors[9],
+                    brightGreen: scheme.colors[10],
+                    brightYellow: scheme.colors[11],
+                    brightBlue: scheme.colors[12],
+                    brightMagenta: scheme.colors[13],
+                    brightCyan: scheme.colors[14],
+                    brightWhite: scheme.colors[15],
+                }
+            } else {
+                const light = document.documentElement.dataset.colorScheme === 'light'
+                tab.terminal.options.theme = {
+                    background: light ? '#f6f8fa' : '#171717',
+                    foreground: light ? '#1f2933' : '#cacaca',
+                    cursor: light ? '#1f2933' : '#bbbbbb',
+                    black: light ? '#1f2933' : '#000000',
+                    red: light ? '#b42318' : '#ff615a',
+                    green: light ? '#18794e' : '#b1e969',
+                    yellow: light ? '#9a6700' : '#ebd99c',
+                    blue: light ? '#0969da' : '#5da9f6',
+                    magenta: light ? '#8250df' : '#e86aff',
+                    cyan: light ? '#0969a8' : '#82fff7',
+                    white: light ? '#ffffff' : '#dedacf',
+                    brightBlack: light ? '#6e7781' : '#313131',
+                    brightRed: light ? '#cf222e' : '#f58c80',
+                    brightGreen: light ? '#1a7f37' : '#ddf88f',
+                    brightYellow: light ? '#7d4e00' : '#eee5b2',
+                    brightBlue: light ? '#0550ae' : '#a5c7ff',
+                    brightMagenta: light ? '#6639ba' : '#ddaaff',
+                    brightCyan: light ? '#075985' : '#b7fff9',
+                    brightWhite: light ? '#ffffff' : '#ffffff',
+                }
+            }
+        }
+    }
+
+    const schemeChangeHandler = (): void => { handleSchemeChange() }
 
     // 连接表单
     let formHost = $state('')
@@ -126,6 +190,11 @@
     function enqueueWrite (sessionId: string, operation: () => Promise<unknown>): void {
         const length = (writeQueueLengths.get(sessionId) ?? 0) + 1
         if (length > MAX_WRITE_QUEUE) {
+            // 超限丢弃时提示一次，避免粘贴风暴静默吞掉全部输入造成“终端无响应”错觉
+            if (!writeQueueWarned.has(sessionId)) {
+                writeQueueWarned.add(sessionId)
+                console.warn(`[session ${sessionId}] 写队列超限（>${MAX_WRITE_QUEUE}），部分输入被丢弃`)
+            }
             return
         }
         writeQueueLengths.set(sessionId, length)
@@ -138,9 +207,12 @@
             .finally(() => {
                 const remaining = (writeQueueLengths.get(sessionId) ?? 1) - 1
                 writeQueueLengths.set(sessionId, Math.max(0, remaining))
+                if (remaining === 0) writeQueueWarned.delete(sessionId)
             })
         writeQueues.set(sessionId, next)
     }
+
+    const writeQueueWarned = new Set<string>()
 
     async function refresh (): Promise<void> {
         loading = true
@@ -252,6 +324,12 @@
         })
     }
 
+    // SFTP sudo 密码仅本次使用，关闭面板/切换 tab 即清理（L15）
+    function closeSftpPanel (): void {
+        showSftp = false
+        sftpSudoPassword = ''
+    }
+
     function terminalWorkingDirectory (tab: TerminalTab): string | null {
         const buffer = tab.terminal?.buffer.active
         if (!buffer) return null
@@ -325,6 +403,8 @@
         if (localStorage.getItem('issh.globalHotkey') === 'false') return
         const target = event.target as HTMLElement | null
         if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return
+        // xterm 终端内按键不拦截（Ctrl+W 等已在 xterm 内处理，避免浏览器关闭标签页）
+        if (target && target.classList.contains('xterm-helper-textarea')) return
         const ctrl = event.ctrlKey || event.metaKey
         if (!ctrl) return
         const key = event.key.toLowerCase()
@@ -519,6 +599,18 @@
             tab.session = session
             tab.sequence = 0
             tab.terminal?.clear()
+            // 重连后 sessionId 变化：重注册 terminalRegistry、重挂 decorators
+            unregisterTerminal(tab.session.id)
+            registerTerminal(session.id, {
+                terminal: tab.terminal!,
+                title: session.title,
+                write: (data) => {
+                    const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data
+                    enqueueWrite(session.id, async () => { await writeSession(session.id, bytes) })
+                },
+            })
+            runDecoratorCleanups(tab)
+            applyTerminalDecorators(tab)
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
         } finally {
@@ -550,8 +642,10 @@
 
     function applyTerminalDecorators (tab: TerminalTab): void {
         if (!tab.terminal) return
-        for (const decorator of getTerminalDecorators()) {
-            const cleanups: Array<() => void> = []
+        runDecoratorCleanups(tab)
+        const cleanups: Array<() => void> = []
+        tab.decoratorCleanups = cleanups
+        for (const decorator of [autoSudoDecorator, ...getTerminalDecorators()]) {
             try {
                 decorator.decorate({
                     sessionId: tab.session.id,
@@ -567,8 +661,14 @@
             } catch (cause) {
                 console.warn(`[decorator ${decorator.id}] decorate 失败：`, cause)
             }
-            tab.decoratorCleanups = cleanups
         }
+    }
+
+    function runDecoratorCleanups (tab: TerminalTab): void {
+        for (const cleanup of tab.decoratorCleanups ?? []) {
+            try { cleanup() } catch { /* decorator 清理失败不阻断 */ }
+        }
+        tab.decoratorCleanups = null
     }
 
     function terminalHostAction (node: HTMLDivElement, tab: TerminalTab): void {
@@ -583,7 +683,11 @@
             tab.sequence = subscription.nextAfterSequence
             for (const event of subscription.events) {
                 tab.terminal?.write(Uint8Array.from(event.data))
-                broadcastSandboxEvent('terminal.data', { sessionId: tab.session.id, data: event.data })
+            }
+            if (subscription.events.length > 0) {
+                // 同一订阅周期内同 sessionId 的数据合并为一次广播，减少沙箱消息风暴
+                const merged = subscription.events.map((event) => event.data).flat()
+                broadcastSandboxEvent('terminal.data', { sessionId: tab.session.id, data: merged })
             }
             // issh 的默认 behaviorOnSessionEnd=auto：远端 shell 自然退出后关闭页签。
             // 先写入本次订阅的最后输出（例如 logout），再释放终端和 session。
@@ -614,10 +718,12 @@
             // 会话可能已关闭
         }
         tab.terminal?.dispose()
+        runDecoratorCleanups(tab)
         unregisterTerminal(tab.session.id)
         tabs = tabs.filter((candidate) => candidate.session.id !== tab.session.id)
         writeQueues.delete(tab.session.id)
         writeQueueLengths.delete(tab.session.id)
+        writeQueueWarned.delete(tab.session.id)
         if (activeId === tab.session.id) {
             const next = tabs[0]
             if (next) {
@@ -691,8 +797,12 @@
             void checkUpdatesOnStartup()
         })()
         pollHandle = setInterval(pollAll, POLL_INTERVAL_MS)
+        window.addEventListener('storage', schemeChangeHandler)
+        window.addEventListener('issh:terminal-scheme-change', schemeChangeHandler)
         return () => {
             if (pollHandle) clearInterval(pollHandle)
+            window.removeEventListener('storage', schemeChangeHandler)
+            window.removeEventListener('issh:terminal-scheme-change', schemeChangeHandler)
             for (const tab of tabs) {
                 tab.terminal?.dispose()
                 void closeSession(tab.session.id)
@@ -767,7 +877,7 @@
         {:else}
             {#if showSftp && activeTab && activeTab.session.kind === 'ssh'}
                 <aside class="app-panel-left" aria-label="SFTP 面板">
-                    <SftpBrowser sessionId={activeTab.session.id} initialPath={sftpInitialPath} sudoMode={sftpSudoMode} sudoPassword={sftpSudoPassword} onclose={() => { showSftp = false; sftpSudoPassword = '' }} />
+                    <SftpBrowser sessionId={activeTab.session.id} initialPath={sftpInitialPath} sudoMode={sftpSudoMode} sudoPassword={sftpSudoPassword} onclose={closeSftpPanel} />
                 </aside>
             {/if}
 

@@ -74,6 +74,11 @@
                 ? openTabs.filter((tab) => selectedIds.has(tab.id))
                 : openTabs.filter((tab) => tab.id === activeId)
         if (receivers.length === 0) return
+        // all 范围广播到多个会话属高风险操作（可能含 rm 等命令），二次确认
+        if (scope === 'all' && receivers.length > 1) {
+            const confirmed = window.confirm(`即将把输入发送到全部 ${receivers.length} 个会话，确定继续？`)
+            if (!confirmed) return
+        }
         sending = true
         error = ''
         const payload = appendNewline && !text.endsWith('\n') ? `${text}\n` : text

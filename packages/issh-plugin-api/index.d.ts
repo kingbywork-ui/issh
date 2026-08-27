@@ -87,6 +87,8 @@ export interface IsshPluginContext {
     registerTerminalDecorator (decorator: TerminalDecoratorDefinition): void
     storage: PluginStorage
     log (level: 'info' | 'warn' | 'error', message: string): void
+    /** 插件安装目录（正斜杠分隔）；sandbox.html 等静态资源位于该目录下 */
+    directory: string
 }
 
 export interface IsshPlugin {
@@ -104,6 +106,8 @@ export interface SandboxRpcRequest {
     id: string
     method: string
     params: Record<string, unknown>
+    /** 面板通道 token；宿主拼在 sandboxUrl hash（#issh-channel=...）中下发，RPC 消息必须携带 */
+    token?: string
 }
 
 export interface SandboxRpcResponse {
@@ -163,6 +167,7 @@ export function createSandboxRpcClient (): {
     call<T = unknown> (method: SandboxRpcMethod, params?: Record<string, unknown>): Promise<T>
 } {
     let rpcId = 0
+    const channelToken = (location.hash.match(/issh-channel=([0-9a-f]+)/) || [])[1] || ''
     const pending = new Map<string, { resolve: (value: unknown) => void; reject: (cause: Error) => void; timer: ReturnType<typeof setTimeout> }>()
     window.addEventListener('message', (event: MessageEvent) => {
         const data = event.data as SandboxRpcResponse | undefined
@@ -183,7 +188,7 @@ export function createSandboxRpcClient (): {
                     reject(new Error(`RPC 超时：${method}`))
                 }, 5000)
                 pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer })
-                window.parent.postMessage({ channel: SANDBOX_RPC_CHANNEL, id, method, params }, '*')
+                window.parent.postMessage({ channel: SANDBOX_RPC_CHANNEL, id, method, params, token: channelToken }, '*')
             })
         },
     }

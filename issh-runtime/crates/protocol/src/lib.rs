@@ -18,6 +18,10 @@ pub struct RpcRequest {
     pub method: String,
     #[serde(default)]
     pub params: Option<Value>,
+    /// 可选的传输层认证 token；由宿主在启动 isshd 时生成并通过
+    /// `--auth-token` 注入。isshd 配置了 token 时要求每个请求携带。
+    #[serde(default)]
+    pub auth: Option<String>,
 }
 
 impl RpcRequest {

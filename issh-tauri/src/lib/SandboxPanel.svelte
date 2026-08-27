@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte'
-    import { registerSandboxOrigin, unregisterSandboxOrigin, installSandboxBridge } from './plugins/sandboxBridge'
+    import { generateChannelToken, installSandboxBridge, registerSandboxChannel, registerSandboxOrigin, unregisterSandboxChannel, unregisterSandboxOrigin } from './plugins/sandboxBridge'
     import type { SandboxPanelDefinition } from './plugins/types'
 
     let { panel, pluginId }: { panel: SandboxPanelDefinition; pluginId: string } = $props()
@@ -9,16 +9,21 @@
     const MAX_HEIGHT = 480
     let height = $state(panel.height ?? 160)
     let resizing = $state(false)
+    // 每面板随机通道 token：沙箱页面从 URL hash 读取并在 RPC 消息中携带
+    const channelToken = generateChannelToken()
+    const sandboxUrl = `${panel.sandboxUrl}#issh-channel=${channelToken}`
 
     const storageKey = `issh.plugin.${pluginId}.panelHeight.${panel.id}`
 
     onMount(() => {
         installSandboxBridge()
         registerSandboxOrigin(pluginId, panel.sandboxOrigin)
+        registerSandboxChannel(pluginId, channelToken)
         const saved = Number.parseInt(localStorage.getItem(storageKey) ?? '', 10)
         if (Number.isFinite(saved) && saved >= MIN_HEIGHT && saved <= MAX_HEIGHT) height = saved
         return () => {
             unregisterSandboxOrigin(pluginId)
+            unregisterSandboxChannel(pluginId)
         }
     })
 
@@ -47,7 +52,7 @@
         <span class="sandbox-panel-resize-hint">{resizing ? '松开保存高度' : '拖拽调整高度'}</span>
     </div>
     <iframe
-        src={panel.sandboxUrl}
+        src={sandboxUrl}
         sandbox="allow-scripts"
         title={panel.title}
         data-sandbox-plugin={pluginId}

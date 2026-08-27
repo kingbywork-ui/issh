@@ -12,14 +12,14 @@ issh 桌面客户端（Tauri 版）的官方插件索引仓库。客户端「设
     "updated": "2026-08-27T00:00:00Z",
     "plugins": [
         {
-            "id": "issh-plugin-vault",
-            "name": "SSH 凭据保险库",
-            "version": "0.1.1",
+            "id": "issh-plugin-llm",
+            "name": "AI 命令补全",
+            "version": "0.2.0",
             "description": "…",
             "kind": "feature",
-            "permissions": ["settings:tab"],
+            "permissions": ["terminal:decorate", "settings:tab"],
             "minAppVersion": "0.2.0",
-            "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-vault/releases/download/v0.1.1/issh-plugin-vault-0.1.1.tgz",
+            "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-llm/releases/download/v0.2.0/issh-plugin-llm-0.2.0.tgz",
             "sha256": "…",
             "signature": "…",
             "homepage": "…",
@@ -62,11 +62,12 @@ node scripts/publish-plugin.mjs <pluginDirName>
 
 | 插件 | 版本 | 分类 | 说明 |
 |---|---|---|---|
-| issh-plugin-vault | 0.1.1 | feature | SSH 凭据保险库 |
 | issh-plugin-agent-bridge | 0.1.1 | feature | Workspace/Agent 管理 |
 | issh-plugin-herdr | 0.1.1 | feature | Herdr 工作区管理 |
 | issh-plugin-linkifier | 0.1.1 | feature | 终端链接识别 |
-| issh-plugin-auto-sudo | 0.1.1 | feature | sudo 密码自动填充 |
-| issh-plugin-llm | 0.1.0 | feature | AI 命令补全 |
+| issh-plugin-llm | 0.2.0 | feature | AI 命令补全 |
 | issh-plugin-config-sync | 0.1.0 | integration | 主机配置同步 |
 | issh-plugin-serial | 0.1.0 | integration | 串口终端 |
+| issh-plugin-sandbox-demo | 0.4.0 | feature | 沙箱面板演示 |
+
+> 已内置进程序、不再作为插件分发：sudo 密码自动填充、保险库（vault）。客户端会拒绝安装同名插件。

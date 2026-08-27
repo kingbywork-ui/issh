@@ -74,7 +74,8 @@ const decorator: TerminalDecoratorDefinition = {
         function readContext (): string[] {
             const buffer = terminal.buffer.active
             const lines: string[] = []
-            const end = buffer.cursorY
+            // cursorY 是视口相对行号，需加 baseY 得到绝对行号
+            const end = buffer.baseY + buffer.cursorY
             const start = Math.max(0, end - 20)
             for (let y = start; y < end; y++) {
                 const line = buffer.getLine(y)
@@ -100,6 +101,11 @@ const decorator: TerminalDecoratorDefinition = {
         }
 
         function showPanel (partial: string): void {
+            // 隐藏 tab（offsetParent 为 null）不显示面板，避免面板挂在看不见的终端上
+            if (!terminal.element || !(terminal.element as HTMLElement).offsetParent) {
+                hidePanel()
+                return
+            }
             if (!panelElement) {
                 panelElement = document.createElement('div')
                 panelElement.className = 'issh-llm-panel'
@@ -135,8 +141,14 @@ const decorator: TerminalDecoratorDefinition = {
                 })
             })
             const rect = (terminal.element as HTMLElement).getBoundingClientRect()
-            panelElement.style.left = `${rect.left + buffer.cursorX * 9}px`
-            panelElement.style.top = `${rect.top + (buffer.cursorY + 1) * 18}px`
+            // 用渲染器实际 cell 尺寸计算像素位置（fontSize/fontFamily 不同时 9/18 硬编码会错位）
+            const dimensions = (terminal as unknown as {
+                _core?: { _renderService?: { dimensions?: { css?: { cell?: { width: number; height: number } } } } }
+            })._core?._renderService?.dimensions?.css?.cell
+            const cellWidth = dimensions?.width ?? 9
+            const cellHeight = dimensions?.height ?? 18
+            panelElement.style.left = `${rect.left + buffer.cursorX * cellWidth}px`
+            panelElement.style.top = `${rect.top + (buffer.cursorY + 1) * cellHeight}px`
         }
 
         function hidePanel (): void {

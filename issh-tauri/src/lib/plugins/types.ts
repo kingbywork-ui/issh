@@ -76,6 +76,8 @@ export interface IsshPluginContext {
     registerTerminalDecorator (decorator: TerminalDecoratorDefinition): void
     storage: PluginStorage
     log (level: 'info' | 'warn' | 'error', message: string): void
+    /** 插件安装目录（正斜杠分隔）；sandbox.html 等静态资源位于该目录下 */
+    directory: string
 }
 
 export interface IsshPlugin {

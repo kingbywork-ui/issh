@@ -4,6 +4,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha512};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use zeroize::Zeroizing;
 
 const VAULT_SECRET_TYPE_PASSWORD: &str = "ssh:password";
 const VAULT_SECRET_TYPE_PASSPHRASE: &str = "ssh:key-passphrase";
@@ -66,7 +67,7 @@ struct UnlockedConfig {
     secrets: Vec<Value>,
     vault: Value,
     root: serde_yaml::Value,
-    passphrase: String,
+    passphrase: Zeroizing<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -176,7 +177,7 @@ impl HostProfileStore {
             secrets,
             vault,
             root: parsed,
-            passphrase: passphrase.to_string(),
+            passphrase: Zeroizing::new(passphrase.to_string()),
         });
         Ok(HostProfilesResult {
             encrypted: true,

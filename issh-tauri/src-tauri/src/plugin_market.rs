@@ -93,6 +93,7 @@ pub fn plugins_root(app_data: &Path) -> PathBuf {
 }
 
 pub async fn fetch_registry(url: &str) -> Result<PluginRegistry, String> {
+    ensure_https_url(url)?;
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(REGISTRY_TIMEOUT_SECS))
         .build()
@@ -188,10 +189,12 @@ pub async fn download_plugin(
     url: &str,
     expected_sha256: &str,
     signature: Option<&str>,
+    version: &str,
 ) -> Result<InstalledPlugin, String> {
     if !is_valid_plugin_id(id) {
         return Err(format!("非法插件 id：{id}"));
     }
+    ensure_https_url(url)?;
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(DOWNLOAD_TIMEOUT_SECS))
         .build()
@@ -228,7 +231,7 @@ pub async fn download_plugin(
         let entry = PluginRegistryEntry {
             id: id.to_string(),
             name: String::new(),
-            version: String::new(),
+            version: version.to_string(),
             description: String::new(),
             kind: String::new(),
             permissions: Vec::new(),
@@ -265,10 +268,26 @@ fn extract_plugin(app_data: &Path, id: &str, bytes: &[u8]) -> Result<InstalledPl
             manifest.id
         ));
     }
-    if target.exists() {
-        std::fs::remove_dir_all(&target).map_err(|error| format!("无法替换旧版本插件：{error}"))?;
+    let entry_path = staging.join(&manifest.entry);
+    if !entry_path.is_file() {
+        let _ = std::fs::remove_dir_all(&staging);
+        return Err(format!("插件入口文件不存在：{}", manifest.entry));
     }
-    std::fs::rename(&staging, &target).map_err(|error| format!("无法完成插件安装：{error}"))?;
+    let backup = root.join(format!(".backup-{id}"));
+    let _ = std::fs::remove_dir_all(&backup);
+    let had_previous = target.exists();
+    if had_previous {
+        std::fs::rename(&target, &backup).map_err(|error| format!("无法备份旧版本插件：{error}"))?;
+    }
+    if let Err(error) = std::fs::rename(&staging, &target) {
+        // 回滚：恢复备份，避免旧版本丢失
+        if had_previous {
+            let _ = std::fs::rename(&backup, &target);
+        }
+        let _ = std::fs::remove_dir_all(&staging);
+        return Err(format!("无法完成插件安装：{error}"));
+    }
+    let _ = std::fs::remove_dir_all(&backup);
     Ok(InstalledPlugin {
         id: manifest.id,
         name: manifest.name,
@@ -366,6 +385,16 @@ fn install_tarball(staging: &Path, bytes: &[u8]) -> Result<PluginManifestRaw, St
     manifest.ok_or_else(|| "插件包缺少 plugin.json".to_string())
 }
 
+/// 插件索引/下载仅允许 https（或本机回环 http，便于本地调试）。
+fn ensure_https_url(url: &str) -> Result<(), String> {
+    let parsed = url::Url::parse(url).map_err(|_| format!("URL 无效：{url}"))?;
+    match parsed.scheme() {
+        "https" => Ok(()),
+        "http" if matches!(parsed.host_str(), Some("127.0.0.1") | Some("localhost") | Some("[::1]")) => Ok(()),
+        _ => Err(format!("仅允许 https 地址：{url}")),
+    }
+}
+
 fn normalize_relative_path(path: &Path) -> Result<PathBuf, String> {
     let mut result = PathBuf::new();
     for component in path.components() {
@@ -436,9 +465,12 @@ pub fn delete_plugin(app_data: &Path, id: &str) -> Result<bool, String> {
 fn is_valid_plugin_id(id: &str) -> bool {
     !id.is_empty()
         && id.len() <= 128
+        && !id.starts_with('.')
+        && !id.ends_with('.')
         && id
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+        && !id.split('.').any(|part| part.is_empty())
 }
 
 #[cfg(test)]
@@ -515,6 +547,21 @@ mod tests {
         assert!(!is_valid_plugin_id("../escape"));
         assert!(!is_valid_plugin_id(""));
         assert!(!is_valid_plugin_id("a/b"));
+        assert!(!is_valid_plugin_id("."));
+        assert!(!is_valid_plugin_id(".."));
+        assert!(!is_valid_plugin_id(".hidden"));
+        assert!(!is_valid_plugin_id("trailing."));
+        assert!(!is_valid_plugin_id("double..dot"));
+    }
+
+    #[test]
+    fn rejects_non_https_urls() {
+        assert!(ensure_https_url("https://example.com/index.json").is_ok());
+        assert!(ensure_https_url("http://127.0.0.1:8080/index.json").is_ok());
+        assert!(ensure_https_url("http://localhost:8080/index.json").is_ok());
+        assert!(ensure_https_url("http://example.com/index.json").is_err());
+        assert!(ensure_https_url("ftp://example.com/index.json").is_err());
+        assert!(ensure_https_url("file:///C:/evil").is_err());
     }
 
     fn unsigned_entry() -> PluginRegistryEntry {

@@ -1,6 +1,5 @@
 <script lang="ts">
     import { onMount } from 'svelte'
-    import vaultCss from './vault.css?inline'
     import {
         vaultDeleteSecret,
         vaultGetSecret,
@@ -10,18 +9,9 @@
         vaultSetEnabled,
         vaultStatus,
         vaultUnlock,
-    } from './vaultRpc'
-
-    interface VaultStatus {
-        enabled: boolean
-        unlocked: boolean
-        secretCount: number
-    }
-
-    interface VaultSecretKey {
-        id: string
-        description: string
-    }
+        type VaultSecretKey,
+        type VaultStatus,
+    } from './runtime'
 
     let status = $state<VaultStatus | null>(null)
     let secrets = $state<VaultSecretKey[]>([])
@@ -47,12 +37,6 @@
     }
 
     onMount(() => {
-        if (!document.getElementById('issh-plugin-vault-style')) {
-            const style = document.createElement('style')
-            style.id = 'issh-plugin-vault-style'
-            style.textContent = vaultCss
-            document.head.appendChild(style)
-        }
         void refresh()
     })
 
@@ -173,7 +157,7 @@
     }
 </script>
 
-<div class="vault-settings">
+<section aria-label="保险库">
     {#if error}
         <div class="settings-error" role="alert">{error}</div>
     {/if}
@@ -183,27 +167,17 @@
     {:else if !status.enabled}
         <div class="settings-field">
             <div class="settings-field-title">保险库未启用</div>
-            <p class="vault-hint">设置 passphrase 后启用加密存储，SSH 主机密码与密钥口令将加密保存。</p>
-            <input
-                type="password"
-                placeholder="passphrase"
-                bind:value={passphrase}
-                aria-label="保险库 passphrase"
-            />
-            <div class="vault-actions">
+            <p class="settings-hint">设置 passphrase 后启用加密存储，SSH 主机密码与密钥口令将加密保存。</p>
+            <input class="settings-input" type="password" placeholder="passphrase" bind:value={passphrase} aria-label="保险库 passphrase" />
+            <div class="settings-actions">
                 <button class="market-install" type="button" disabled={busy} onclick={() => void enable()}>启用保险库</button>
             </div>
         </div>
     {:else if !status.unlocked}
         <div class="settings-field">
             <div class="settings-field-title">保险库已锁定（{status.secretCount} 条机密）</div>
-            <input
-                type="password"
-                placeholder="passphrase"
-                bind:value={passphrase}
-                aria-label="保险库 passphrase"
-            />
-            <div class="vault-actions">
+            <input class="settings-input" type="password" placeholder="passphrase" bind:value={passphrase} aria-label="保险库 passphrase" />
+            <div class="settings-actions">
                 <button class="market-install" type="button" disabled={busy} onclick={() => void unlock()}>解锁</button>
                 <button class="plugin-remove" type="button" disabled={busy} onclick={() => void disable()}>禁用并清除</button>
             </div>
@@ -215,17 +189,17 @@
             <button type="button" disabled={busy} onclick={() => void lock()}>锁定</button>
         </div>
 
-        <div class="vault-add">
+        <div class="settings-field vault-add">
             <div class="settings-field-title">新增机密</div>
-            <input type="text" placeholder="id（如 host:web-01:password）" bind:value={newId} aria-label="机密 id" />
-            <input type="text" placeholder="描述（可选）" bind:value={newDescription} aria-label="机密描述" />
-            <input type="password" placeholder="值" bind:value={newValue} aria-label="机密值" />
-            <div class="vault-actions">
+            <input class="settings-input" type="text" placeholder="id（如 host:web-01:password）" bind:value={newId} aria-label="机密 id" />
+            <input class="settings-input" type="text" placeholder="描述（可选）" bind:value={newDescription} aria-label="机密描述" />
+            <input class="settings-input" type="password" placeholder="值" bind:value={newValue} aria-label="机密值" />
+            <div class="settings-actions">
                 <button class="market-install" type="button" disabled={busy} onclick={() => void saveSecret()}>保存机密</button>
             </div>
         </div>
 
-        <div class="vault-list">
+        <div class="settings-field">
             <div class="settings-field-title">机密列表</div>
             {#if secrets.length === 0}
                 <div class="settings-empty">暂无机密。</div>
@@ -245,4 +219,4 @@
             {/each}
         </div>
     {/if}
-</div>
+</section>

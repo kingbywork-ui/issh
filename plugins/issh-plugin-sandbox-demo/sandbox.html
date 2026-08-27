@@ -44,6 +44,8 @@
 <script>
     const RPC_CHANNEL = 'issh-plugin-rpc'
     const EVENT_CHANNEL = 'issh-plugin-event'
+    // 面板通道 token：宿主拼在 URL hash 中下发，RPC 消息必须携带
+    const CHANNEL_TOKEN = (location.hash.match(/issh-channel=([0-9a-f]+)/) || [])[1] || ''
     let rpcId = 0
     const pending = new Map()
 
@@ -55,7 +57,7 @@
                 reject(new Error('RPC 超时'))
             }, 5000)
             pending.set(id, { resolve, reject, timer })
-            window.parent.postMessage({ channel: RPC_CHANNEL, id, method, params }, '*')
+            window.parent.postMessage({ channel: RPC_CHANNEL, id, method, params, token: CHANNEL_TOKEN }, '*')
         })
     }
 

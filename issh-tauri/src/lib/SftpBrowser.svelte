@@ -117,6 +117,12 @@
             const limit = Math.min(stat.size, PREVIEW_LIMIT)
             const chunk = await sftpRead(sessionId, entry.path, 0, limit)
             const bytes = base64ToBytes(chunk.dataBase64)
+            // 二进制检测：前 8KB 内含 NUL 字节则不按 UTF-8 文本渲染（避免乱码/卡顿）
+            const probe = bytes.subarray(0, Math.min(bytes.length, 8192))
+            if (probe.includes(0)) {
+                previewText = `（二进制文件，${formatSize(stat.size)}，不支持文本预览）`
+                return
+            }
             previewText = new TextDecoder('utf-8', { fatal: false }).decode(bytes)
             if (stat.size > PREVIEW_LIMIT) {
                 previewText += `\n\n…（文件 ${formatSize(stat.size)}，仅预览前 ${formatSize(PREVIEW_LIMIT)}）`
@@ -188,11 +194,13 @@
 
     async function upload (): Promise<void> {
         if (!uploadFile) return
+        if (uploading) return
         const name = uploadPath.trim() || uploadFile.name
         if (!name) return
         const target = joinPath(cwd, name)
         error = ''
         notice = `上传中 ${uploadFile.name} …`
+        uploading = true
         try {
             let offset = 0
             while (offset < uploadFile.size) {
@@ -208,8 +216,13 @@
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
             notice = ''
+        } finally {
+            uploading = false
         }
     }
+
+    // 上传会话守卫：防止双击/连点并发触发两次上传（同目标文件互相截断）
+    let uploading = $state(false)
 
     // isshd 要求先 sftp.open 建立 SFTP 子系统通道，后续 sftp.list 等操作才能找到会话。
     // sessionId 变化（切换 tab）时重新 open；卸载时关闭，避免通道泄漏。
@@ -237,15 +250,16 @@
         }
     })
 
-    // sessionId 变化（切换 SSH tab）时重新打开 SFTP 通道并回到根目录
+    // sessionId 变化（切换 SSH tab）时重新打开 SFTP 通道并回到 initialPath
     $effect(() => {
-        void sessionId
+        const currentSessionId = sessionId
+        const currentInitialPath = initialPath
         void (async () => {
             loading = true
             error = ''
             try {
                 await ensureOpen()
-                cwd = normalizePath(initialPath)
+                cwd = normalizePath(currentInitialPath)
                 pathInput = cwd
                 await refresh()
             } catch (cause) {
@@ -297,7 +311,7 @@
             aria-label="上传目标文件名"
         />
         <input class="sftp-file" type="file" onchange={(event) => void onUploadChange(event)} aria-label="选择本地文件" />
-        <button type="button" onclick={() => void upload()} disabled={!uploadFile || loading}>上传</button>
+        <button type="button" onclick={() => void upload()} disabled={!uploadFile || loading || uploading}>上传</button>
     </div>
 
     {#if error}

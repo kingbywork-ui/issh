@@ -36,6 +36,8 @@ struct Options {
     pipe_name: String,
     database_path: PathBuf,
     vault_path: PathBuf,
+    /// 传输层认证 token；Some 时要求每个 RPC 请求的 auth 字段与之匹配。
+    auth_token: Option<String>,
     once: bool,
 }
 
@@ -48,6 +50,7 @@ struct RuntimeState {
     ssh_connections: Mutex<HashMap<String, SshConnection>>,
     sftp_sessions: Mutex<HashMap<String, Arc<SshSftpSession>>>,
     vault: Mutex<VaultStore>,
+    auth_token: Option<String>,
 }
 
 impl RuntimeState {
@@ -55,6 +58,7 @@ impl RuntimeState {
         started_at_unix_ms: u128,
         database_path: &std::path::Path,
         vault_path: &std::path::Path,
+        auth_token: Option<String>,
     ) -> Result<Self, issh_runtime_workspace::WorkspaceError> {
         let vault = VaultStore::open(vault_path).map_err(|error| {
             issh_runtime_workspace::WorkspaceError::Storage(format!("vault open failed: {error}"))
@@ -68,6 +72,7 @@ impl RuntimeState {
             ssh_connections: Mutex::new(HashMap::new()),
             sftp_sessions: Mutex::new(HashMap::new()),
             vault: Mutex::new(vault),
+            auth_token,
         })
     }
 
@@ -92,6 +97,7 @@ impl RuntimeState {
             ssh_connections: Mutex::new(HashMap::new()),
             sftp_sessions: Mutex::new(HashMap::new()),
             vault: Mutex::new(VaultStore::open(&vault_path).expect("vault store should open")),
+            auth_token: None,
         }
     }
 
@@ -586,6 +592,7 @@ impl Options {
                     .join(DEFAULT_VAULT_FILE)
             });
         let mut once = false;
+        let mut auth_token: Option<String> = None;
         let mut args = env::args().skip(1);
 
         while let Some(arg) = args.next() {
@@ -610,9 +617,15 @@ impl Options {
                         .map(PathBuf::from)
                         .ok_or_else(|| "--vault requires a non-empty value".to_string())?;
                 }
+                "--auth-token" => {
+                    auth_token = args
+                        .next()
+                        .filter(|value| !value.trim().is_empty())
+                        .map(|value| value.trim().to_string());
+                }
                 "--once" => once = true,
                 "--help" | "-h" => {
-                    println!("Usage: isshd [--pipe <name>] [--database <path>] [--vault <path>] [--once]");
+                    println!("Usage: isshd [--pipe <name>] [--database <path>] [--vault <path>] [--auth-token <token>] [--once]");
                     std::process::exit(0);
                 }
                 unknown => return Err(format!("Unknown argument: {unknown}")),
@@ -623,6 +636,7 @@ impl Options {
             pipe_name,
             database_path,
             vault_path,
+            auth_token,
             once,
         })
     }
@@ -651,6 +665,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         started_at_unix_ms,
         &options.database_path,
         &options.vault_path,
+        options.auth_token.clone(),
     )?);
 
     run(options, state).await?;
@@ -754,6 +769,13 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
     let id = request.id.clone();
     if let Err(error) = request.validate() {
         return serialize_error(id, error.code, error.message);
+    }
+
+    if let Some(expected) = state.auth_token.as_deref() {
+        let provided = request.auth.as_deref().unwrap_or("");
+        if provided != expected {
+            return serialize_error(id, INVALID_REQUEST, "Unauthorized: invalid or missing auth token");
+        }
     }
 
     if request
@@ -2156,6 +2178,40 @@ mod tests {
         let response = dispatch(b"not-json", &state()).await;
         let value: Value = serde_json::from_slice(&response).expect("response should be JSON");
         assert_eq!(value["error"]["code"], PARSE_ERROR);
+    }
+
+    #[tokio::test]
+    async fn auth_token_rejects_missing_or_wrong_token() {
+        let mut guarded = state();
+        guarded.auth_token = Some("secret-token".to_string());
+
+        let missing = dispatch(
+            br#"{"jsonrpc":"2.0","id":1,"method":"runtime.health","params":{}}"#,
+            &guarded,
+        )
+        .await;
+        let missing: Value = serde_json::from_slice(&missing).expect("response should be JSON");
+        assert_eq!(missing["error"]["code"], INVALID_REQUEST);
+        assert!(missing["error"]["message"]
+            .as_str()
+            .expect("message should be a string")
+            .contains("auth token"));
+
+        let wrong = dispatch(
+            br#"{"jsonrpc":"2.0","id":2,"method":"runtime.health","params":{},"auth":"nope"}"#,
+            &guarded,
+        )
+        .await;
+        let wrong: Value = serde_json::from_slice(&wrong).expect("response should be JSON");
+        assert_eq!(wrong["error"]["code"], INVALID_REQUEST);
+
+        let ok = dispatch(
+            br#"{"jsonrpc":"2.0","id":3,"method":"runtime.health","params":{},"auth":"secret-token"}"#,
+            &guarded,
+        )
+        .await;
+        let ok: Value = serde_json::from_slice(&ok).expect("response should be JSON");
+        assert_eq!(ok["result"]["protocolVersion"], PROTOCOL_VERSION);
     }
 
     #[tokio::test]

@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-08-27T05:23:12.841Z",
+  "updated": "2026-08-27T09:18:54.925Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
@@ -23,23 +23,6 @@
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge",
       "downloads": 435
-    },
-    {
-      "id": "issh-plugin-auto-sudo",
-      "name": "sudo 密码自动填充",
-      "version": "0.1.1",
-      "description": "检测终端中的 sudo 密码提示（多语言），按 Ctrl+Enter 自动填充已保存的密码",
-      "kind": "feature",
-      "permissions": [
-        "terminal:decorate"
-      ],
-      "minAppVersion": "0.2.0",
-      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-auto-sudo/releases/download/v0.1.1/issh-plugin-auto-sudo-0.1.1.tgz",
-      "sha256": "2d4991acf955f9692836a7fd14cd262623f55e432601a31d2089deb6fbc896b3",
-      "signature": "cH7FFZV6zXEeUuPIWIqejwbPdKGpgRCGCmdQJLbwVvlqRS0M9V+aoJhqbCYvvuI8qMkccQvWXlLiWPLrRZdTAQ==",
-      "homepage": "https://github.com/kingbywork-ui/issh-plugin-auto-sudo",
-      "repository": "https://github.com/kingbywork-ui/issh-plugin-auto-sudo",
-      "downloads": 722
     },
     {
       "id": "issh-plugin-config-sync",
@@ -149,25 +132,6 @@
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-serial",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-serial",
       "downloads": 526
-    },
-    {
-      "id": "issh-plugin-vault",
-      "name": "保险库",
-      "version": "0.1.1",
-      "description": "SSH 凭据保险库：passphrase 管理、锁定/解锁、机密存取，接入主机配置加密存储",
-      "kind": "integration",
-      "permissions": [
-        "vault:read",
-        "vault:write",
-        "settings:tab"
-      ],
-      "minAppVersion": "0.1.5",
-      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-vault/releases/download/v0.1.1/issh-plugin-vault-0.1.1.tgz",
-      "sha256": "7ad3a6a2350a60503a95116b6a23c3cfeb8ee47bae4bff04e5e58a5786719267",
-      "signature": "lHe3yootpE7H486KThAkz7KWVyRUD7Y4izIvXJoZGwUShYppvDJ7uabAz9k5FhrIC2h4I+SwJbOQhDkCSmMsAQ==",
-      "homepage": "https://github.com/kingbywork-ui/issh-plugin-vault",
-      "repository": "https://github.com/kingbywork-ui/issh-plugin-vault",
-      "downloads": 940
     }
   ]
 }

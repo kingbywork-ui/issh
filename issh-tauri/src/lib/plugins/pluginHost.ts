@@ -25,6 +25,9 @@ import type {
 
 type Listener = () => void
 
+// 已内置进程序的功能（原插件形态）：禁止商城同名插件再安装/加载，避免重复注册
+export const SUPERSEDED_PLUGIN_IDS = new Set(['issh-plugin-auto-sudo', 'issh-plugin-vault'])
+
 const root = new Context()
 
 const plugins = new Map<string, IsshPlugin>()
@@ -35,6 +38,7 @@ const homeCards = new Map<string, HomeCardDefinition>()
 const panels = new Map<string, PanelDefinition>()
 const terminalDecorators = new Map<string, TerminalDecoratorDefinition>()
 const sandboxPanels = new Map<string, { pluginId: string; definition: SandboxPanelDefinition }>()
+const pluginDirectories = new Map<string, string>()
 
 const listeners = new Set<Listener>()
 
@@ -92,7 +96,7 @@ function makeStorage (id: string): PluginStorage {
     }
 }
 
-function makePluginContext (manifest: IsshPluginManifest): IsshPluginContext {
+function makePluginContext (manifest: IsshPluginManifest, directory: string): IsshPluginContext {
     const requirePermission = (permission: string, api: string): boolean => {
         const declared = manifest.permissions ?? []
         if (declared.includes(permission)) return true
@@ -133,6 +137,7 @@ function makePluginContext (manifest: IsshPluginManifest): IsshPluginContext {
             else if (level === 'warn') console.warn(line)
             else console.info(line)
         },
+        directory,
     }
 }
 
@@ -150,6 +155,9 @@ interface MarketplacePluginModule {
 }
 
 export async function loadMarketplacePlugin (directory: string, entryFile: string, id: string): Promise<void> {
+    if (SUPERSEDED_PLUGIN_IDS.has(id)) {
+        throw new Error(`插件 ${id} 已内置进程序，无需安装`)
+    }
     if (plugins.has(id)) return
     installedMarketplaceIds.add(id)
     pluginDirectories.set(id, directory.replace(/\\/g, '/'))
@@ -164,8 +172,6 @@ export async function loadMarketplacePlugin (directory: string, entryFile: strin
     await activatePlugin(id)
 }
 
-const pluginDirectories = new Map<string, string>()
-
 export async function activatePlugin (id: string): Promise<void> {
     const plugin = plugins.get(id)
     if (!plugin) throw new Error(`plugin not registered: ${id}`)
@@ -179,9 +185,8 @@ export async function activatePlugin (id: string): Promise<void> {
         return
     }
     const fiber = root.plugin((ctx) => {
-        const directory = pluginDirectories.get(id)
-        if (directory) window.__ISSH_PLUGIN_DIR__ = directory
-        void Promise.resolve(plugin.activate(makePluginContext(plugin.manifest))).catch((cause: unknown) => {
+        const directory = pluginDirectories.get(id) ?? ''
+        void Promise.resolve(plugin.activate(makePluginContext(plugin.manifest, directory))).catch((cause: unknown) => {
             markState(id, 'failed', cause instanceof Error ? cause.message : String(cause))
         })
         return () => {
@@ -224,6 +229,14 @@ export async function uninstallPlugin (id: string): Promise<void> {
     clearPluginStorage(id)
 }
 
+/** 卸载后按新目录重新加载商城插件（用于插件更新流程：磁盘文件已被替换）。 */
+export async function reloadMarketplacePlugin (directory: string, entryFile: string, id: string): Promise<void> {
+    await deactivatePlugin(id)
+    plugins.delete(id)
+    unregisterManifest(id)
+    await loadMarketplacePlugin(directory, entryFile, id)
+}
+
 function clearPluginStorage (id: string): void {
     try {
         const prefix = `issh.plugin.${id}.`
@@ -256,6 +269,7 @@ export async function loadInstalledMarketplacePlugins (): Promise<void> {
             installedMarketplaceIds.add(record.id)
         }
         for (const record of installed) {
+            if (SUPERSEDED_PLUGIN_IDS.has(record.id)) continue
             if (plugins.has(record.id)) continue
             if (!isEnabled(record.id)) continue
             await loadMarketplacePlugin(record.directory, record.entry, record.id).catch((cause: unknown) => {
@@ -332,9 +346,3 @@ function readInstalledVersion (id: string): string {
 }
 
 export { subscribe as subscribeRegistry }
-
-declare global {
-    interface Window {
-        __ISSH_PLUGIN_DIR__?: string
-    }
-}

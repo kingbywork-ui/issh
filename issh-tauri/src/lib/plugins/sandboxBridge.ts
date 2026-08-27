@@ -4,12 +4,15 @@ import { getActiveTerminal, getTerminal, readTerminalBuffer } from './terminalRe
 export const SANDBOX_RPC_CHANNEL = 'issh-plugin-rpc'
 export const SANDBOX_EVENT_CHANNEL = 'issh-plugin-event'
 const RPC_TIMEOUT_MS = 5000
+const MAX_TERMINAL_WRITE_BYTES = 8 * 1024
 
 export interface SandboxRpcRequest {
     channel: typeof SANDBOX_RPC_CHANNEL
     id: string
     method: string
     params: Record<string, unknown>
+    /** 面板通道 token；由宿主在 sandboxUrl hash 中下发，消息必须携带才能被接受 */
+    token?: string
 }
 
 export interface SandboxRpcResponse {
@@ -33,8 +36,26 @@ type PendingEntry = {
 }
 
 const pending = new Map<string, PendingEntry>()
+// pluginId → 通道 token；每个沙箱面板一个随机 token，消息凭 token 归因，
+// 避免共享 asset.localhost origin 下任意插件冒充他人。
 const pluginOrigins = new Map<string, string>()
+const channelTokens = new Map<string, string>()
 let bridgeInstalled = false
+
+/** 生成随机通道 token（拼接在 sandboxUrl hash 中下发给沙箱页面）。 */
+export function generateChannelToken (): string {
+    const bytes = new Uint8Array(16)
+    crypto.getRandomValues(bytes)
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+export function registerSandboxChannel (pluginId: string, token: string): void {
+    channelTokens.set(pluginId, token)
+}
+
+export function unregisterSandboxChannel (pluginId: string): void {
+    channelTokens.delete(pluginId)
+}
 
 const EVENT_THROTTLE_MS = 200
 const throttledEvents = new Map<string, { params: Record<string, unknown>; timer: ReturnType<typeof setTimeout> }>()
@@ -141,10 +162,14 @@ function dispatchRpc (pluginId: string, request: SandboxRpcRequest): unknown {
     if (request.method === 'terminal.write') {
         const data = typeof request.params.data === 'string' ? request.params.data : ''
         if (!data) throw new Error('terminal.write 需要 string data')
+        if (data.length > MAX_TERMINAL_WRITE_BYTES) {
+            throw new Error(`terminal.write 数据过长（上限 ${MAX_TERMINAL_WRITE_BYTES} 字符）`)
+        }
         const record = typeof request.params.sessionId === 'string' && request.params.sessionId
             ? getTerminal(request.params.sessionId)
             : getActiveTerminal()
         if (!record) throw new Error('当前无活动终端会话')
+        console.info(`[sandbox:${pluginId}] terminal.write ${data.length} chars`)
         record.write(data)
         return null
     }
@@ -187,6 +212,9 @@ export function setProfileWriteConfirm (handler: (message: string) => Promise<bo
 
 const PROFILE_WRITE_FIELDS = ['name', 'favorite', 'group'] as const
 
+// profiles.write 确认弹窗期间串行排队，避免并发确认弹窗互相覆盖。
+let profileWriteQueue: Promise<unknown> = Promise.resolve()
+
 async function handleProfilesWrite (pluginId: string, params: Record<string, unknown>): Promise<unknown> {
     const id = typeof params.id === 'string' ? params.id : ''
     if (!id) throw new Error('profiles.write 需要 string id')
@@ -206,16 +234,22 @@ async function handleProfilesWrite (pluginId: string, params: Record<string, unk
     }
     if (changes.length === 0) return { updated: false, changes: [] }
     const message = `插件 ${pluginId} 请求修改主机「${profile.name}」：\n${changes.join('\n')}`
-    const confirmed = await profileWriteConfirm.confirm(message)
-    if (!confirmed) throw new Error('用户拒绝了本次主机配置修改')
-    Object.assign(profile, patch)
-    await mutateHostProfiles({ action: 'updateProfile', profile })
-    return { updated: true, changes }
+    const task = profileWriteQueue.then(async () => {
+        const confirmed = await profileWriteConfirm.confirm(message)
+        if (!confirmed) throw new Error('用户拒绝了本次主机配置修改')
+        Object.assign(profile, patch)
+        await mutateHostProfiles({ action: 'updateProfile', profile })
+        return { updated: true, changes }
+    })
+    // 队列尾部追加，自身失败不阻塞后续请求
+    profileWriteQueue = task.catch(() => {})
+    return task
 }
 
-function findPluginByOrigin (origin: string): string | null {
-    for (const [pluginId, pluginOrigin] of pluginOrigins.entries()) {
-        if (pluginOrigin === origin) return pluginId
+function findPluginByToken (token: string | undefined): string | null {
+    if (!token) return null
+    for (const [pluginId, expected] of channelTokens.entries()) {
+        if (expected === token) return pluginId
     }
     return null
 }
@@ -228,7 +262,8 @@ export function installSandboxBridge (): void {
         const data = event.data as SandboxRpcRequest | undefined
         if (!data || typeof data !== 'object') return
         if (data.channel !== SANDBOX_RPC_CHANNEL) return
-        const pluginId = findPluginByOrigin(event.origin)
+        // 凭通道 token 归因（而非 event.origin：沙箱 iframe 的 origin 为 null/共享 asset.localhost）
+        const pluginId = findPluginByToken(data.token)
         if (!pluginId) return
         const respond = (ok: boolean, payload: unknown, errorMessage?: string) => {
             const response: SandboxRpcResponse = {
@@ -238,7 +273,7 @@ export function installSandboxBridge (): void {
             }
             if (ok) response.result = payload
             else response.error = errorMessage
-            event.source?.postMessage(response, { targetOrigin: event.origin })
+            event.source?.postMessage(response, { targetOrigin: '*' })
         }
         try {
             const result = dispatchRpc(pluginId, data)
@@ -257,8 +292,6 @@ export function installSandboxBridge (): void {
 }
 
 export function sendSandboxEvent (pluginId: string, eventName: string, params: Record<string, unknown>): void {
-    const origin = pluginOrigins.get(pluginId)
-    if (!origin) return
     const frame = findSandboxFrame(pluginId)
     if (!frame || !frame.contentWindow) return
     const message: SandboxEventMessage = {
@@ -266,11 +299,17 @@ export function sendSandboxEvent (pluginId: string, eventName: string, params: R
         event: eventName,
         params,
     }
-    frame.contentWindow.postMessage(message, origin)
+    frame.contentWindow?.postMessage(message, { targetOrigin: '*' })
+}
+
+/** 事件名 → 所需权限；未声明的插件不接收该事件。 */
+const EVENT_PERMISSIONS: Record<string, string> = {
+    'terminal.data': 'terminal:decorate',
 }
 
 export function broadcastSandboxEvent (eventName: string, params: Record<string, unknown>): void {
     if (pluginOrigins.size === 0) return
+    const required = EVENT_PERMISSIONS[eventName]
     const existing = throttledEvents.get(eventName)
     if (existing) {
         existing.params = params
@@ -281,6 +320,7 @@ export function broadcastSandboxEvent (eventName: string, params: Record<string,
         throttledEvents.delete(eventName)
         if (entry) {
             for (const pluginId of pluginOrigins.keys()) {
+                if (required && !requirePermission(pluginId, required)) continue
                 sendSandboxEvent(pluginId, eventName, entry.params)
             }
         }
@@ -292,7 +332,9 @@ export function flushSandboxEvents (): void {
     for (const [eventName, entry] of throttledEvents.entries()) {
         clearTimeout(entry.timer)
         throttledEvents.delete(eventName)
+        const required = EVENT_PERMISSIONS[eventName]
         for (const pluginId of pluginOrigins.keys()) {
+            if (required && !requirePermission(pluginId, required)) continue
             sendSandboxEvent(pluginId, eventName, entry.params)
         }
     }

@@ -17,7 +17,7 @@ export const manifest: IsshPluginManifest = {
 const plugin: IsshPlugin = {
     manifest,
     activate (ctx: IsshPluginContext) {
-        const directory = window.__ISSH_PLUGIN_DIR__ ?? ''
+        const directory = ctx.directory
         const sandboxUrl = convertFileSrc(`${directory.replace(/\\/g, '/')}/sandbox.html`)
         const panel: SandboxPanelDefinition = {
             id: 'demo',
@@ -33,9 +33,3 @@ const plugin: IsshPlugin = {
 }
 
 export default plugin
-
-declare global {
-    interface Window {
-        __ISSH_PLUGIN_DIR__?: string
-    }
-}

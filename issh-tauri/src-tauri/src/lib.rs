@@ -19,6 +19,7 @@ struct RuntimeManager {
     pipe_name: String,
     database_path: PathBuf,
     binary_path: PathBuf,
+    auth_token: String,
     child: Mutex<Option<Child>>,
     startup: AsyncMutex<()>,
     hosts: HostProfileStore,
@@ -36,18 +37,21 @@ impl RuntimeManager {
         let digest = Sha256::digest(user_data.to_string_lossy().as_bytes());
         let instance_key = hex_prefix(&digest, 8);
         let binary_path = resolve_runtime_binary(app)?;
+        let auth_token = generate_auth_token();
         Ok(Self {
             pipe_name: format!(r"\\.\pipe\issh-runtime-{instance_key}"),
             database_path: user_data.join("runtime").join("issh-runtime.sqlite3"),
             binary_path,
+            auth_token,
             child: Mutex::new(None),
             startup: AsyncMutex::new(()),
             hosts: HostProfileStore::new(&user_data),
         })
     }
 
-    async fn request(&self, request: Value) -> Result<Value, String> {
+    async fn request(&self, mut request: Value) -> Result<Value, String> {
         validate_request(&request)?;
+        inject_auth_token(&mut request, &self.auth_token);
         self.ensure_started().await?;
         send_request(&self.pipe_name, &request, request_timeout(&request)).await
     }
@@ -74,6 +78,7 @@ impl RuntimeManager {
         command
             .args(["--pipe", &self.pipe_name, "--database"])
             .arg(&self.database_path)
+            .args(["--auth-token", &self.auth_token])
             .current_dir(self.binary_path.parent().unwrap_or_else(|| Path::new(".")))
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -239,12 +244,21 @@ async fn plugin_download(
     url: String,
     sha256: String,
     signature: Option<String>,
+    version: Option<String>,
 ) -> Result<InstalledPlugin, String> {
     let app_data = app
         .path()
         .app_data_dir()
         .map_err(|error| format!("无法定位应用数据目录：{error}"))?;
-    plugin_market::download_plugin(&app_data, &id, &url, &sha256, signature.as_deref()).await
+    plugin_market::download_plugin(
+        &app_data,
+        &id,
+        &url,
+        &sha256,
+        signature.as_deref(),
+        version.as_deref().unwrap_or(""),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -312,6 +326,20 @@ pub fn run() {
             handle.state::<RuntimeManager>().stop();
         }
     });
+}
+
+fn inject_auth_token(request: &mut Value, token: &str) {
+    if let Value::Object(map) = request {
+        map.insert("auth".to_string(), Value::String(token.to_string()));
+    }
+}
+
+/// 生成 256 位随机 hex token，用于 isshd Named Pipe 传输层认证。
+fn generate_auth_token() -> String {
+    use rand::RngCore;
+    let mut bytes = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn validate_request(request: &Value) -> Result<(), String> {

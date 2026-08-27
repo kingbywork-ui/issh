@@ -20,6 +20,25 @@ const DEFAULTS: LlmConfig = {
 
 const STORAGE_KEY = 'issh-plugin-llm:config'
 
+// 敏感信息脱敏：发送终端上下文到 LLM API 前必须经过
+const REDACT_PATTERNS: Array<{ pattern: RegExp; replacement: string }> = [
+    { pattern: /((?:password|passwd|pwd|token|secret|api[_-]?key|access[_-]?key|private[_-]?key)\s*[=:]\s*)\S+/gi, replacement: '$1***' },
+    { pattern: /Bearer\s+[A-Za-z0-9._~+/=-]{8,}/gi, replacement: 'Bearer ***' },
+    { pattern: /sk-[A-Za-z0-9]{16,}/g, replacement: 'sk-***' },
+    { pattern: /-----BEGIN[A-Z ]*PRIVATE KEY-----[\s\S]*?-----END[A-Z ]*PRIVATE KEY-----/g, replacement: '***PRIVATE KEY***' },
+    { pattern: /(?:\d{1,3}\.){3}\d{1,3}/g, replacement: '[ip]' },
+]
+
+export function redactLines (lines: string[]): string[] {
+    return lines.map((line) => {
+        let result = line
+        for (const { pattern, replacement } of REDACT_PATTERNS) {
+            result = result.replace(pattern, replacement)
+        }
+        return result
+    })
+}
+
 export function loadConfig (): LlmConfig {
     try {
         const raw = localStorage.getItem(STORAGE_KEY)
@@ -44,7 +63,7 @@ export async function fetchAutocomplete (config: LlmConfig, partial: string, con
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), config.timeoutMs)
     try {
-        const context = config.sendContext ? contextLines.slice(-config.maxContextLines).join('\n') : ''
+        const context = config.sendContext ? redactLines(contextLines).slice(-config.maxContextLines).join('\n') : ''
         const response = await fetch(`${config.baseUrl.replace(/\/$/, '')}/chat/completions`, {
             method: 'POST',
             headers: {
