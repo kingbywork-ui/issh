@@ -1,4 +1,5 @@
 import { getEntry } from './registry'
+import { getActiveTerminal, readTerminalBuffer } from './terminalRegistry'
 
 export const SANDBOX_RPC_CHANNEL = 'issh-plugin-rpc'
 export const SANDBOX_EVENT_CHANNEL = 'issh-plugin-event'
@@ -125,7 +126,44 @@ function dispatchRpc (pluginId: string, request: SandboxRpcRequest): unknown {
     if (request.method.startsWith('storage.') || request.method === 'manifest.get') {
         return handleStorageCall(pluginId, request.method, request.params)
     }
+    if (request.method === 'terminal.read') {
+        const lines = typeof request.params.lines === 'number' ? Math.min(Math.max(1, Math.floor(request.params.lines)), 200) : 20
+        const record = getActiveTerminal()
+        if (!record) throw new Error('当前无活动终端会话')
+        return { sessionId: record.sessionId, title: record.title, lines: readTerminalBuffer(record, lines) }
+    }
+    if (request.method === 'terminal.write') {
+        const data = typeof request.params.data === 'string' ? request.params.data : ''
+        if (!data) throw new Error('terminal.write 需要 string data')
+        const record = getActiveTerminal()
+        if (!record) throw new Error('当前无活动终端会话')
+        record.write(data)
+        return null
+    }
+    if (request.method === 'profiles.list') {
+        return handleProfilesList()
+    }
     throw new Error(`method 暂未实现：${request.method}`)
+}
+
+async function handleProfilesList (): Promise<unknown> {
+    const { hostProfiles } = await import('../runtime')
+    const result = await hostProfiles()
+    return {
+        encrypted: result.encrypted,
+        unlocked: result.unlocked,
+        profiles: result.profiles.map((profile) => ({
+            id: profile.id,
+            name: profile.name,
+            host: profile.host,
+            port: profile.port,
+            user: profile.user,
+            favorite: profile.favorite,
+            group: profile.group,
+            tags: profile.tags,
+        })),
+        groups: result.groups.map((group) => ({ id: group.id, name: group.name, parentGroupId: group.parentGroupId })),
+    }
 }
 
 function findPluginByOrigin (origin: string): string | null {
@@ -157,7 +195,14 @@ export function installSandboxBridge (): void {
         }
         try {
             const result = dispatchRpc(pluginId, data)
-            respond(true, result)
+            if (result instanceof Promise) {
+                result.then(
+                    (value) => respond(true, value),
+                    (cause) => respond(false, undefined, cause instanceof Error ? cause.message : String(cause)),
+                )
+            } else {
+                respond(true, result)
+            }
         } catch (cause) {
             respond(false, undefined, cause instanceof Error ? cause.message : String(cause))
         }
@@ -167,12 +212,20 @@ export function installSandboxBridge (): void {
 export function sendSandboxEvent (pluginId: string, eventName: string, params: Record<string, unknown>): void {
     const origin = pluginOrigins.get(pluginId)
     if (!origin) return
+    const frame = findSandboxFrame(pluginId)
+    if (!frame || !frame.contentWindow) return
     const message: SandboxEventMessage = {
         channel: SANDBOX_EVENT_CHANNEL,
         event: eventName,
         params,
     }
-    window.postMessage(message, '*')
+    frame.contentWindow.postMessage(message, origin)
+}
+
+export function broadcastSandboxEvent (eventName: string, params: Record<string, unknown>): void {
+    for (const pluginId of pluginOrigins.keys()) {
+        sendSandboxEvent(pluginId, eventName, params)
+    }
 }
 
 export function rpcTimeoutMs (): number {

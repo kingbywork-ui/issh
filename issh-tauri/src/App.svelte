@@ -11,6 +11,8 @@
     import Settings from './lib/Settings.svelte'
     import SandboxPanel from './lib/SandboxPanel.svelte'
     import { getTerminalDecorators, getSandboxPanels } from './lib/plugins/pluginHost'
+    import { registerTerminal, unregisterTerminal, setActiveTerminal } from './lib/plugins/terminalRegistry'
+    import { broadcastSandboxEvent } from './lib/plugins/sandboxBridge'
     import { checkPluginUpdates, type PluginUpdateInfo } from './lib/plugins/pluginHost'
     import { findScheme } from './lib/terminalSchemes'
     import {
@@ -238,6 +240,7 @@
 
     function activateTab (tab: TerminalTab): void {
         activeId = tab.session.id
+        setActiveTerminal(tab.session.id)
         showHome = false
         showSftp = false
         sftpSudoPassword = ''
@@ -517,6 +520,14 @@
         tab.host = host
         bindTerminal(tab)
         applyTerminalDecorators(tab)
+        registerTerminal(tab.session.id, {
+            terminal,
+            title: tab.session.title,
+            write: (data) => {
+                const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data
+                enqueueWrite(tab.session.id, async () => { await writeSession(tab.session.id, bytes) })
+            },
+        })
         await pollOutput(tab)
         terminal.focus()
     }
@@ -556,6 +567,7 @@
             tab.sequence = subscription.nextAfterSequence
             for (const event of subscription.events) {
                 tab.terminal?.write(Uint8Array.from(event.data))
+                broadcastSandboxEvent('terminal.data', { sessionId: tab.session.id, data: event.data })
             }
             // issh 的默认 behaviorOnSessionEnd=auto：远端 shell 自然退出后关闭页签。
             // 先写入本次订阅的最后输出（例如 logout），再释放终端和 session。
@@ -586,6 +598,7 @@
             // 会话可能已关闭
         }
         tab.terminal?.dispose()
+        unregisterTerminal(tab.session.id)
         tabs = tabs.filter((candidate) => candidate.session.id !== tab.session.id)
         writeQueues.delete(tab.session.id)
         writeQueueLengths.delete(tab.session.id)
