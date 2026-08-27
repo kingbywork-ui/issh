@@ -1,0 +1,18 @@
+{
+    "name": "@issh/plugin-api",
+    "version": "0.1.0",
+    "description": "issh 插件开发类型定义（Tauri 客户端插件协议）",
+    "type": "module",
+    "types": "index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./index.d.ts",
+            "default": "./index.d.ts"
+        }
+    },
+    "files": [
+        "index.d.ts"
+    ],
+    "license": "MIT",
+    "repository": "https://github.com/kingbywork-ui/issh"
+}

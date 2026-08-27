@@ -12,7 +12,7 @@
     import SandboxPanel from './lib/SandboxPanel.svelte'
     import { getTerminalDecorators, getSandboxPanels } from './lib/plugins/pluginHost'
     import { registerTerminal, unregisterTerminal, setActiveTerminal } from './lib/plugins/terminalRegistry'
-    import { broadcastSandboxEvent } from './lib/plugins/sandboxBridge'
+    import { broadcastSandboxEvent, setProfileWriteConfirm } from './lib/plugins/sandboxBridge'
     import { checkPluginUpdates, type PluginUpdateInfo } from './lib/plugins/pluginHost'
     import { findScheme } from './lib/terminalSchemes'
     import {
@@ -357,6 +357,8 @@
         if (!registryUrl) return
         pluginUpdates = await checkPluginUpdates(registryUrl)
     }
+
+    setProfileWriteConfirm(async (message) => window.confirm(message))
 
     function dismissUpdateNotice (): void {
         pluginUpdates = []

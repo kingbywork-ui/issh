@@ -36,6 +36,9 @@ const pending = new Map<string, PendingEntry>()
 const pluginOrigins = new Map<string, string>()
 let bridgeInstalled = false
 
+const EVENT_THROTTLE_MS = 200
+const throttledEvents = new Map<string, { params: Record<string, unknown>; timer: ReturnType<typeof setTimeout> }>()
+
 if (typeof window !== 'undefined') {
     window.addEventListener('message', (event) => {
         const data = event.data as SandboxRpcResponse | undefined
@@ -69,6 +72,7 @@ const METHOD_PERMISSIONS: Record<string, string[]> = {
     'terminal.read': ['terminal:decorate'],
     'terminal.write': ['terminal:decorate'],
     'profiles.list': ['profiles:read'],
+    'profiles.write': ['profiles:write'],
 }
 
 export function registerSandboxOrigin (pluginId: string, origin: string): void {
@@ -143,6 +147,9 @@ function dispatchRpc (pluginId: string, request: SandboxRpcRequest): unknown {
     if (request.method === 'profiles.list') {
         return handleProfilesList()
     }
+    if (request.method === 'profiles.write') {
+        return handleProfilesWrite(pluginId, request.params)
+    }
     throw new Error(`method 暂未实现：${request.method}`)
 }
 
@@ -164,6 +171,42 @@ async function handleProfilesList (): Promise<unknown> {
         })),
         groups: result.groups.map((group) => ({ id: group.id, name: group.name, parentGroupId: group.parentGroupId })),
     }
+}
+
+const profileWriteConfirm: { confirm: (message: string) => Promise<boolean> } = {
+    confirm: async () => true,
+}
+
+export function setProfileWriteConfirm (handler: (message: string) => Promise<boolean>): void {
+    profileWriteConfirm.confirm = handler
+}
+
+const PROFILE_WRITE_FIELDS = ['name', 'favorite', 'group'] as const
+
+async function handleProfilesWrite (pluginId: string, params: Record<string, unknown>): Promise<unknown> {
+    const id = typeof params.id === 'string' ? params.id : ''
+    if (!id) throw new Error('profiles.write 需要 string id')
+    const patch: Record<string, unknown> = {}
+    for (const field of PROFILE_WRITE_FIELDS) {
+        if (field in params) patch[field] = params[field]
+    }
+    if (Object.keys(patch).length === 0) throw new Error('profiles.write 无可更新字段（仅支持 name/favorite/group）')
+    const { hostProfiles, mutateHostProfiles } = await import('../runtime')
+    const result = await hostProfiles()
+    const profile = result.profiles.find((candidate) => candidate.id === id)
+    if (!profile) throw new Error(`主机不存在：${id}`)
+    const changes: string[] = []
+    for (const [field, value] of Object.entries(patch)) {
+        const before = (profile as unknown as Record<string, unknown>)[field]
+        if (before !== value) changes.push(`${field}: ${JSON.stringify(before)} → ${JSON.stringify(value)}`)
+    }
+    if (changes.length === 0) return { updated: false, changes: [] }
+    const message = `插件 ${pluginId} 请求修改主机「${profile.name}」：\n${changes.join('\n')}`
+    const confirmed = await profileWriteConfirm.confirm(message)
+    if (!confirmed) throw new Error('用户拒绝了本次主机配置修改')
+    Object.assign(profile, patch)
+    await mutateHostProfiles({ action: 'updateProfile', profile })
+    return { updated: true, changes }
 }
 
 function findPluginByOrigin (origin: string): string | null {
@@ -223,8 +266,31 @@ export function sendSandboxEvent (pluginId: string, eventName: string, params: R
 }
 
 export function broadcastSandboxEvent (eventName: string, params: Record<string, unknown>): void {
-    for (const pluginId of pluginOrigins.keys()) {
-        sendSandboxEvent(pluginId, eventName, params)
+    if (pluginOrigins.size === 0) return
+    const existing = throttledEvents.get(eventName)
+    if (existing) {
+        existing.params = params
+        return
+    }
+    const timer = setTimeout(() => {
+        const entry = throttledEvents.get(eventName)
+        throttledEvents.delete(eventName)
+        if (entry) {
+            for (const pluginId of pluginOrigins.keys()) {
+                sendSandboxEvent(pluginId, eventName, entry.params)
+            }
+        }
+    }, EVENT_THROTTLE_MS)
+    throttledEvents.set(eventName, { params, timer })
+}
+
+export function flushSandboxEvents (): void {
+    for (const [eventName, entry] of throttledEvents.entries()) {
+        clearTimeout(entry.timer)
+        throttledEvents.delete(eventName)
+        for (const pluginId of pluginOrigins.keys()) {
+            sendSandboxEvent(pluginId, eventName, entry.params)
+        }
     }
 }
 
