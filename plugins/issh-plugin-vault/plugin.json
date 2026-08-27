@@ -1,0 +1,13 @@
+{
+    "id": "issh-plugin-vault",
+    "name": "保险库",
+    "version": "0.1.0",
+    "description": "SSH 凭据保险库：passphrase 管理、锁定/解锁、机密存取，接入主机配置加密存储",
+    "kind": "integration",
+    "minAppVersion": "0.1.5",
+    "entry": "index.js",
+    "permissions": ["vault:read", "vault:write", "settings:tab"],
+    "author": "kingbywork-ui",
+    "homepage": "https://github.com/kingbywork-ui/issh-plugin-vault",
+    "repository": "https://github.com/kingbywork-ui/issh-plugin-vault"
+}
