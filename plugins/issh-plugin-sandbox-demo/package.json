@@ -1,0 +1,17 @@
+{
+    "name": "issh-plugin-sandbox-demo",
+    "version": "0.1.0",
+    "description": "沙箱演示插件（issh Tauri 客户端）",
+    "type": "module",
+    "main": "index.ts",
+    "scripts": {
+        "build": "vite build",
+        "package": "node scripts/package.mjs"
+    },
+    "devDependencies": {
+        "@tauri-apps/api": "^2.0.0",
+        "vite": "^7.0.0"
+    },
+    "license": "MIT",
+    "repository": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo"
+}
