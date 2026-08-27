@@ -31,6 +31,7 @@
         homepage?: string | null
         repository?: string | null
         signature?: string | null
+        downloads?: number | null
     }
 
     interface InstalledRecord {
@@ -45,6 +46,80 @@
     }
 
     const DEFAULT_REGISTRY = 'https://raw.githubusercontent.com/kingbywork-ui/issh-plugin-registry/main/index.json'
+
+    const MARKET_I18N: Record<string, Record<string, string>> = {
+        zh: {
+            'market.title': '插件商城',
+            'market.search': '搜索插件…',
+            'market.searchLabel': '搜索插件',
+            'market.registry': '索引地址',
+            'market.refresh': '刷新',
+            'market.refreshing': '加载中…',
+            'market.stats.total': '共 {n} 个插件',
+            'market.stats.installed': '已安装 {n}',
+            'market.stats.updates': '可更新 {n}',
+            'market.kind.all': '全部',
+            'market.kind.feature': '功能',
+            'market.kind.appearance': '外观',
+            'market.kind.integration': '集成',
+            'market.install': '安装',
+            'market.update': '更新',
+            'market.installed': '已安装',
+            'market.installedAt': '已装 v{v}，可更新',
+            'market.downloads': '下载 {n}',
+            'market.empty': '暂无插件',
+            'market.page.prev': '上一页',
+            'market.page.next': '下一页',
+            'market.page.info': '第 {p} / {total} 页',
+            'kind.feature': '功能',
+            'kind.appearance': '外观',
+            'kind.integration': '集成',
+        },
+        en: {
+            'market.title': 'Plugin Marketplace',
+            'market.search': 'Search plugins…',
+            'market.searchLabel': 'Search plugins',
+            'market.registry': 'Registry URL',
+            'market.refresh': 'Refresh',
+            'market.refreshing': 'Loading…',
+            'market.stats.total': '{n} plugins',
+            'market.stats.installed': '{n} installed',
+            'market.stats.updates': '{n} updatable',
+            'market.kind.all': 'All',
+            'market.kind.feature': 'Feature',
+            'market.kind.appearance': 'Appearance',
+            'market.kind.integration': 'Integration',
+            'market.install': 'Install',
+            'market.update': 'Update',
+            'market.installed': 'Installed',
+            'market.installedAt': 'v{v} installed, updatable',
+            'market.downloads': '{n} downloads',
+            'market.empty': 'No plugins',
+            'market.page.prev': 'Prev',
+            'market.page.next': 'Next',
+            'market.page.info': 'Page {p} / {total}',
+            'kind.feature': 'Feature',
+            'kind.appearance': 'Appearance',
+            'kind.integration': 'Integration',
+        },
+    }
+
+    function marketLocale (): 'zh' | 'en' {
+        const setting = localStorage.getItem('issh.language') ?? 'auto'
+        if (setting === 'zh' || setting === 'en') return setting
+        return navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'
+    }
+
+    function t (key: string, params?: Record<string, string | number>): string {
+        const locale = marketLocale()
+        let text = MARKET_I18N[locale]?.[key] ?? MARKET_I18N.zh[key] ?? key
+        if (params) {
+            for (const [name, value] of Object.entries(params)) {
+                text = text.replaceAll(`{${name}}`, String(value))
+            }
+        }
+        return text
+    }
 
     let section = $state<Section>('general')
     let language = $state(localStorage.getItem('issh.language') ?? 'auto')
@@ -64,6 +139,8 @@
     let marketError = $state('')
     let marketSearch = $state('')
     let marketKind = $state<'all' | 'feature' | 'appearance' | 'integration'>('all')
+    let marketPage = $state(1)
+    const MARKET_PAGE_SIZE = 6
     let detailEntry = $state<MarketEntry | null>(null)
     const permissionLabels: Record<string, string> = {
         'settings:tab': '注册设置页标签（在设置中显示插件配置）',
@@ -101,6 +178,16 @@
             if (entry.kind === 'feature' || entry.kind === 'appearance' || entry.kind === 'integration') counts[entry.kind] += 1
         }
         return counts
+    })
+
+    const marketTotalPages = $derived(Math.max(1, Math.ceil(filteredMarket.length / MARKET_PAGE_SIZE)))
+    const marketCurrentPage = $derived(Math.min(marketPage, marketTotalPages))
+    const pagedMarket = $derived(filteredMarket.slice((marketCurrentPage - 1) * MARKET_PAGE_SIZE, marketCurrentPage * MARKET_PAGE_SIZE))
+
+    $effect(() => {
+        void marketSearch
+        void marketKind
+        marketPage = 1
     })
 
     onMount(() => {
@@ -238,6 +325,13 @@
         return null
     }
 
+    function formatDownloads (count: number | null | undefined): string {
+        if (!count) return '—'
+        if (count >= 10000) return `${(count / 10000).toFixed(1)}w`
+        if (count >= 1000) return `${(count / 1000).toFixed(1)}k`
+        return String(count)
+    }
+
     const marketStats = $derived.by(() => {
         const total = marketEntries.length
         let installedCount = 0
@@ -302,9 +396,9 @@
     }
 
     function kindLabel (kind: string): string {
-        if (kind === 'appearance') return '外观'
-        if (kind === 'integration') return '集成'
-        return '功能'
+        if (kind === 'appearance') return t('kind.appearance')
+        if (kind === 'integration') return t('kind.integration')
+        return t('kind.feature')
     }
 
     function stateLabel (entry: RegistryEntry): string {
@@ -419,6 +513,13 @@
                                 </div>
                             </div>
                         {/each}
+                        {#if marketTotalPages > 1}
+                            <div class="market-pagination">
+                                <button type="button" class="market-page-btn" disabled={marketCurrentPage <= 1} onclick={() => { marketPage = marketCurrentPage - 1 }}>{t('market.page.prev')}</button>
+                                <span class="market-page-info">{t('market.page.info', { p: marketCurrentPage, total: marketTotalPages })}</span>
+                                <button type="button" class="market-page-btn" disabled={marketCurrentPage >= marketTotalPages} onclick={() => { marketPage = marketCurrentPage + 1 }}>{t('market.page.next')}</button>
+                            </div>
+                        {/if}
                         {#if installedFromMarket.length > 0}
                             <h2 class="settings-subtitle">商城安装记录</h2>
                             {#each installedFromMarket as record (record.id)}
@@ -435,21 +536,21 @@
                 {:else if section === 'market'}
                     <section aria-label="插件商城">
                         <div class="market-controls">
-                            <input class="market-search" type="search" placeholder="搜索插件…" bind:value={marketSearch} aria-label="搜索插件" />
-                            <input class="market-url" type="url" bind:value={registryUrl} aria-label="索引地址" />
-                            <button class="market-refresh" type="button" disabled={marketLoading} onclick={() => void loadMarket()}>{marketLoading ? '加载中…' : '刷新'}</button>
+                            <input class="market-search" type="search" placeholder={t('market.search')} bind:value={marketSearch} aria-label={t('market.searchLabel')} />
+                            <input class="market-url" type="url" bind:value={registryUrl} aria-label={t('market.registry')} />
+                            <button class="market-refresh" type="button" disabled={marketLoading} onclick={() => void loadMarket()}>{marketLoading ? t('market.refreshing') : t('market.refresh')}</button>
                         </div>
                         {#if !marketLoading && marketEntries.length > 0}
                             <div class="market-stats">
-                                <span>共 {marketStats.total} 个插件</span>
-                                <span>已安装 {marketStats.installed}</span>
+                                <span>{t('market.stats.total', { n: marketStats.total })}</span>
+                                <span>{t('market.stats.installed', { n: marketStats.installed })}</span>
                                 {#if marketStats.updates > 0}
-                                    <span class="market-stats-updates">可更新 {marketStats.updates}</span>
+                                    <span class="market-stats-updates">{t('market.stats.updates', { n: marketStats.updates })}</span>
                                 {/if}
                             </div>
                         {/if}
-                        <div class="market-kinds" role="tablist" aria-label="插件分类">
-                            {#each [['all', '全部'], ['feature', '功能'], ['appearance', '外观'], ['integration', '集成']] as [kind, label] (kind)}
+                        <div class="market-kinds" role="tablist" aria-label={t('market.title')}>
+                            {#each [['all', t('market.kind.all')], ['feature', t('market.kind.feature')], ['appearance', t('market.kind.appearance')], ['integration', t('market.kind.integration')]] as [kind, label] (kind)}
                                 <button
                                     type="button"
                                     class="market-kind"
@@ -463,7 +564,7 @@
                             <div class="settings-error" role="alert">{marketError}</div>
                         {/if}
                         {#if !marketLoading && filteredMarket.length === 0 && !marketError}
-                            <div class="settings-empty">没有可显示的插件，点击「刷新」拉取索引。</div>
+                            <div class="settings-empty">{t('market.empty')}</div>
                         {/if}
                         {#if detailEntry}
                             <div class="plugin-detail">
@@ -472,6 +573,9 @@
                                     <strong>{detailEntry.name}</strong>
                                     <span class="plugin-version">v{detailEntry.version}</span>
                                     <span class="plugin-kind">{kindLabel(detailEntry.kind)}</span>
+                                    {#if detailEntry.downloads}
+                                        <span class="plugin-downloads">{t('market.downloads', { n: formatDownloads(detailEntry.downloads) })}</span>
+                                    {/if}
                                 </div>
                                 <div class="plugin-card-desc">{detailEntry.description}</div>
                                 {#if dependencyStatusLabel(detailEntry)}
@@ -525,12 +629,15 @@
                                 </div>
                             </div>
                         {:else}
-                        {#each filteredMarket as entry (entry.id)}
+                        {#each pagedMarket as entry (entry.id)}
                             <div class="plugin-card" role="button" tabindex="0" onclick={() => { detailEntry = entry }} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { detailEntry = entry } }}>
                                 <div class="plugin-card-head">
                                     <strong>{entry.name}</strong>
                                     <span class="plugin-version">v{entry.version}</span>
                                     <span class="plugin-kind">{kindLabel(entry.kind)}</span>
+                                    {#if entry.downloads}
+                                        <span class="plugin-downloads">↓ {formatDownloads(entry.downloads)}</span>
+                                    {/if}
                                 </div>
                                 <div class="plugin-card-desc">{entry.description}</div>
                                 {#if dependencyStatusLabel(entry)}
@@ -538,12 +645,12 @@
                                 {/if}
                                 <div class="plugin-card-actions">
                                     {#if hasUpdate(entry)}
-                                        <span class="plugin-update-hint">已装 v{installedVersionOf(entry)}，可更新</span>
-                                        <button class="market-install" type="button" onclick={(event) => { event.stopPropagation(); beginInstall(entry) }}>更新</button>
+                                        <span class="plugin-update-hint">{t('market.installedAt', { v: installedVersionOf(entry) ?? '' })}</span>
+                                        <button class="market-install" type="button" onclick={(event) => { event.stopPropagation(); beginInstall(entry) }}>{t('market.update')}</button>
                                     {:else if installedVersionOf(entry)}
-                                        <span class="plugin-installed-hint">已安装</span>
+                                        <span class="plugin-installed-hint">{t('market.installed')}</span>
                                     {:else}
-                                        <button class="market-install" type="button" onclick={(event) => { event.stopPropagation(); beginInstall(entry) }}>安装</button>
+                                        <button class="market-install" type="button" onclick={(event) => { event.stopPropagation(); beginInstall(entry) }}>{t('market.install')}</button>
                                     {/if}
                                 </div>
                             </div>

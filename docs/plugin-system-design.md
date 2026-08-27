@@ -164,7 +164,55 @@ PluginHost 是 Cordis 的唯一调用边界（RC 版本 API 变化时只改 plug
 7. 验证：svelte-check、vite build、cargo fmt/clippy/test、手动冒烟
 8. 更新 HANDOFF.md
 
-## 6. 路线图
+## 6. 插件沙箱设计（Phase 10+ 规划）
+
+### 6.1 目标
+
+当前插件（marketplace 动态 import）与宿主同源运行，拥有完整 DOM 与 Tauri invoke 能力。沙箱目标：将**不可信第三方插件 UI**隔离到无 Tauri 权限的 iframe 中，宿主通过 postMessage 代理受控能力。
+
+### 6.2 架构
+
+```
+┌─ issh 宿主（主文档）────────────────────────────┐
+│  PluginHost（Cordis）                            │
+│   ├─ 可信插件（monorepo 内置）：直接 import      │
+│   └─ 沙箱插件：为每个插件创建 <iframe sandbox>   │
+│        │ postMessage 双向 RPC                    │
+│        ▼                                          │
+│  SandboxBridge（宿主侧代理）                      │
+│   ├─ 权限检查（manifest.permissions）            │
+│   ├─ storage 代理（issh.plugin.<id>.* 隔离）     │
+│   └─ 受控 invoke 白名单（仅声明过的 command）    │
+└──────────────────────────────────────────────────┘
+```
+
+### 6.3 iframe 沙箱属性
+
+- `sandbox="allow-scripts"`（无 allow-same-origin：插件无法读宿主 DOM/localStorage/Tauri IPC）
+- 插件 UI 资源经 Tauri assetProtocol 加载（scope 限定 `<appData>/plugins/<id>/`）
+- CSP：`frame-src asset: https://asset.localhost`；插件文档内 `default-src 'self'` 禁外联
+
+### 6.4 postMessage 协议
+
+```ts
+// 插件 → 宿主（请求）
+{ channel: 'issh-plugin-rpc', id: '<uuid>', method: 'storage.get', params: { key } }
+// 宿主 → 插件（响应）
+{ channel: 'issh-plugin-rpc', id: '<uuid>', ok: true, result: '...' }
+// 宿主 → 插件（事件，如终端输出推送）
+{ channel: 'issh-plugin-event', event: 'terminal.data', params: {...} }
+```
+
+- method 白名单按 manifest.permissions 映射：`storage.*`（基础）、`terminal:decorate` → `terminal.read/write`、`profiles:read` → `profiles.list`
+- 超时 5s；未知 method 返回错误；宿主侧审计日志（复用 Agent Bridge audit 模式）
+
+### 6.5 迁移策略
+
+1. Phase 10：SandboxBridge + 协议落地，新第三方插件默认走沙箱
+2. Phase 11：存量可信插件（monorepo 8 个）保持直接 import 不迁移；提供 `manifest.sandbox: false` 显式豁免
+3. 终态：商城安装的第三方插件 UI 一律沙箱渲染；可信插件经签名 + 人工审核可豁免
+
+## 7. 路线图
 
 - **Phase 1（本次）**：插件框架 + 设置页 + 商城安装链路 + vault 试点插件
 - **Phase 2**：agent-bridge、herdr 插件迁移；issh-plugin-registry 索引仓库上线；插件独立 GitHub 仓库发布流水线（tag → Release）；版本号 bump 0.2.0

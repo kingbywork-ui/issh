@@ -21,7 +21,8 @@
       "sha256": "814bfe707bf7528ed7215a80717a103e335fd5942f177e4fb58ae9f622fa76a8",
       "signature": "RxUNazPhXChoXh7Hp0g/S51xdzW/p53jYeYgSrSoR4eJHKE9aTp77+qwatRiTaK8A1xYWWantJ0yVr/2TfXWCw==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge",
-      "repository": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge"
+      "repository": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge",
+      "downloads": 435
     },
     {
       "id": "issh-plugin-auto-sudo",
@@ -37,7 +38,8 @@
       "sha256": "2d4991acf955f9692836a7fd14cd262623f55e432601a31d2089deb6fbc896b3",
       "signature": "cH7FFZV6zXEeUuPIWIqejwbPdKGpgRCGCmdQJLbwVvlqRS0M9V+aoJhqbCYvvuI8qMkccQvWXlLiWPLrRZdTAQ==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-auto-sudo",
-      "repository": "https://github.com/kingbywork-ui/issh-plugin-auto-sudo"
+      "repository": "https://github.com/kingbywork-ui/issh-plugin-auto-sudo",
+      "downloads": 722
     },
     {
       "id": "issh-plugin-config-sync",
@@ -55,7 +57,8 @@
       "sha256": "d444d542fc45f693c0dd56f675dbba17ea16072076445248f048099340e799e4",
       "signature": "rXw8oR/MJzvDmcjOmiKs9weJHd6kVIIddMDTL4m1RJrJ7QXU1I77ffaK0wSkkECDaA34e0X3i4VdDqWiLSqBBw==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-config-sync",
-      "repository": "https://github.com/kingbywork-ui/issh-plugin-config-sync"
+      "repository": "https://github.com/kingbywork-ui/issh-plugin-config-sync",
+      "downloads": 458
     },
     {
       "id": "issh-plugin-herdr",
@@ -74,7 +77,8 @@
       "sha256": "1002908e8a9a4f70bdfedb0350c580c333db698eb6bf0a149915dbf34da0e116",
       "signature": "1eGuv2sB6dQfTo6RoLoHhwemRul7jTKT1wM50OMUoI2pX+D9KKHXBPfCFkxv9gR1fq6gdy/MnkS5DKG5FmiMCg==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-herdr",
-      "repository": "https://github.com/kingbywork-ui/issh-plugin-herdr"
+      "repository": "https://github.com/kingbywork-ui/issh-plugin-herdr",
+      "downloads": 633
     },
     {
       "id": "issh-plugin-linkifier",
@@ -90,7 +94,8 @@
       "sha256": "3ba850ae65409e6a867edffef4d321fe66e765e3ea21bf017efab139fb3a7dcf",
       "signature": "gtTfrjvd37j21NbLY3yL2t6wMUygkc4Zvdjk/43bARq5p4U3EdKBo2AtSpDAw1NIi2HF3DsrxP1euRZDW2dECg==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-linkifier",
-      "repository": "https://github.com/kingbywork-ui/issh-plugin-linkifier"
+      "repository": "https://github.com/kingbywork-ui/issh-plugin-linkifier",
+      "downloads": 154
     },
     {
       "id": "issh-plugin-llm",
@@ -107,7 +112,8 @@
       "sha256": "a9736ebda4c635a26695cdb2dfdb3b4fe059f97fc93a4c76d2e5caa0874e6f34",
       "signature": "fX0yGiAnB7wuptlaEj1Cpg9nDrDL5FuIDzF/Ii4aNL6vYkVnHj4m54AQkWnSZUUwajnf+XdaAq2l6BXUaf2gCg==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-llm",
-      "repository": "https://github.com/kingbywork-ui/issh-plugin-llm"
+      "repository": "https://github.com/kingbywork-ui/issh-plugin-llm",
+      "downloads": 940
     },
     {
       "id": "issh-plugin-serial",
@@ -123,7 +129,8 @@
       "sha256": "464583af3bb75690536db88ce4c822646fe6a00fbcdaaa4c5ab97f5b236010d3",
       "signature": "8yRdBj1Toc2VnZ9pRcNqMO6uuUwitrRQR2vb7oADIXn9SVkGttW3+urdd8VMJ6VYhOVvTTUIUYa7PU5NfRQ2BA==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-serial",
-      "repository": "https://github.com/kingbywork-ui/issh-plugin-serial"
+      "repository": "https://github.com/kingbywork-ui/issh-plugin-serial",
+      "downloads": 526
     },
     {
       "id": "issh-plugin-vault",
@@ -141,7 +148,8 @@
       "sha256": "7ad3a6a2350a60503a95116b6a23c3cfeb8ee47bae4bff04e5e58a5786719267",
       "signature": "lHe3yootpE7H486KThAkz7KWVyRUD7Y4izIvXJoZGwUShYppvDJ7uabAz9k5FhrIC2h4I+SwJbOQhDkCSmMsAQ==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-vault",
-      "repository": "https://github.com/kingbywork-ui/issh-plugin-vault"
+      "repository": "https://github.com/kingbywork-ui/issh-plugin-vault",
+      "downloads": 940
     }
   ]
 }

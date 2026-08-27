@@ -37,6 +37,8 @@ pub struct PluginRegistryEntry {
     pub repository: Option<String>,
     #[serde(default)]
     pub signature: Option<String>,
+    #[serde(default)]
+    pub downloads: Option<u64>,
 }
 
 /// 验证索引条目签名：对 `id\nversion\nsha256` 的 UTF-8 字节做 ed25519 验签。
@@ -136,6 +138,7 @@ pub async fn fetch_registry(url: &str) -> Result<PluginRegistry, String> {
                 homepage: entry.homepage,
                 repository: entry.repository,
                 signature: entry.signature,
+                downloads: entry.downloads,
             })
             .collect(),
     };
@@ -175,6 +178,8 @@ struct PluginRegistryEntryRaw {
     repository: Option<String>,
     #[serde(default)]
     signature: Option<String>,
+    #[serde(default)]
+    downloads: Option<u64>,
 }
 
 pub async fn download_plugin(
@@ -233,6 +238,7 @@ pub async fn download_plugin(
             homepage: None,
             repository: None,
             signature: Some(signature_b64.to_string()),
+            downloads: None,
         };
         verify_entry_signature(&entry)?;
     }
@@ -525,6 +531,7 @@ mod tests {
             homepage: None,
             repository: None,
             signature: None,
+            downloads: None,
         }
     }
 

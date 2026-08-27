@@ -119,6 +119,8 @@ const entryRecord = {
     repository: manifest.repository ?? `https://github.com/${GITHUB_ORG}/${id}`,
 }
 const existing = index.plugins.findIndex((plugin) => plugin.id === id)
+const previousDownloads = existing >= 0 ? Number(index.plugins[existing].downloads) || 0 : 0
+entryRecord.downloads = previousDownloads
 if (existing >= 0) index.plugins[existing] = entryRecord
 else index.plugins.push(entryRecord)
 index.plugins.sort((a, b) => a.id.localeCompare(b.id))
