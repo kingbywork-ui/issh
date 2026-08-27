@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-08-27T04:06:14.724Z",
+  "updated": "2026-08-27T04:16:03.461Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
@@ -95,7 +95,7 @@
     {
       "id": "issh-plugin-llm",
       "name": "AI 命令补全",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "description": "LLM 驱动的 shell 命令补全：输入时防抖请求 LLM API，Ctrl+Y 接受候选",
       "kind": "feature",
       "permissions": [
@@ -103,9 +103,9 @@
         "settings:tab"
       ],
       "minAppVersion": "0.2.0",
-      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-llm/releases/download/v0.1.0/issh-plugin-llm-0.1.0.tgz",
-      "sha256": "c75599ab87c1b2561beb01de028e1c9a16b67632fcb719611c4de9eec85acdb9",
-      "signature": "WMFNTuQvpW/TgeqqWVbtEaIdrjoaaFWAIrgWhtl7UQFAfS5eBIXoxbA3Z58RuN1vW50nDBRbSxqzd9IbfHvmCQ==",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-llm/releases/download/v0.2.0/issh-plugin-llm-0.2.0.tgz",
+      "sha256": "a9736ebda4c635a26695cdb2dfdb3b4fe059f97fc93a4c76d2e5caa0874e6f34",
+      "signature": "fX0yGiAnB7wuptlaEj1Cpg9nDrDL5FuIDzF/Ii4aNL6vYkVnHj4m54AQkWnSZUUwajnf+XdaAq2l6BXUaf2gCg==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-llm",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-llm"
     },
