@@ -1347,3 +1347,153 @@ button { font: inherit; color: inherit; }
         transition-duration: 0.01ms !important;
     }
 }
+
+/* ===== 设置页 ===== */
+
+.settings-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: flex;
+    align-items: stretch;
+    justify-content: flex-end;
+    background: rgba(4, 8, 12, 0.55);
+}
+
+.settings-panel {
+    display: flex;
+    flex-direction: column;
+    width: min(720px, 92vw);
+    border-left: 1px solid var(--ops-line);
+    background: var(--ops-base);
+    box-shadow: -16px 0 40px rgba(0, 0, 0, 0.45);
+}
+
+.settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--ops-line);
+}
+
+.settings-header h1 { margin: 0; font-size: 16px; font-weight: 700; }
+
+.settings-body { display: flex; flex: 1; min-height: 0; }
+
+.settings-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 168px;
+    padding: 10px 8px;
+    border-right: 1px solid var(--ops-line);
+    overflow: auto;
+}
+
+.settings-nav button {
+    padding: 8px 10px;
+    border: 0;
+    border-radius: var(--ops-radius);
+    background: transparent;
+    color: var(--ops-fg-muted);
+    text-align: left;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.settings-nav button.active { background: var(--ops-signal-dim); color: var(--ops-signal); font-weight: 600; }
+.settings-nav button:hover:not(.active) { background: var(--ops-signal-hover); color: var(--ops-fg); }
+.settings-nav-plugin { padding: 8px 10px; color: var(--ops-fg-muted); font-size: 12px; border-top: 1px solid var(--ops-line); margin-top: 8px; }
+
+.settings-content { flex: 1; min-width: 0; overflow: auto; padding: 18px 20px; }
+
+.settings-field { padding: 12px 0; border-bottom: 1px solid var(--ops-line); }
+.settings-field-title { margin-bottom: 8px; font-size: 13px; font-weight: 600; }
+.settings-field select {
+    min-height: 34px;
+    min-width: 220px;
+    padding: 0 10px;
+    border: 1px solid var(--ops-line);
+    border-radius: var(--ops-radius);
+    background: var(--ops-base);
+    color: var(--ops-fg);
+}
+
+.settings-toggle { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--ops-line); cursor: pointer; font-size: 13px; }
+.settings-toggle input { width: 16px; height: 16px; accent-color: var(--ops-signal); }
+
+.settings-error {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border: 1px solid rgba(239, 95, 103, 0.4);
+    border-radius: var(--ops-radius);
+    background: var(--ops-danger-dim);
+    color: var(--ops-danger);
+    font-size: 13px;
+}
+
+.settings-empty { padding: 24px 0; color: var(--ops-fg-muted); font-size: 13px; }
+.settings-subtitle { margin: 20px 0 8px; font-size: 13px; color: var(--ops-fg-muted); }
+
+.plugin-card { padding: 14px 0; border-bottom: 1px solid var(--ops-line); }
+.plugin-card.disabled .plugin-card-head strong { color: var(--ops-fg-muted); }
+.plugin-card-head { display: flex; align-items: center; gap: 8px; }
+.plugin-card-head strong { font-size: 14px; }
+.plugin-version { color: var(--ops-fg-muted); font-size: 12px; font-family: var(--ops-font-mono); }
+.plugin-kind { padding: 1px 8px; border: 1px solid var(--ops-line); border-radius: 999px; color: var(--ops-fg-muted); font-size: 11px; }
+.plugin-state { margin-left: auto; color: var(--ops-fg-muted); font-size: 12px; }
+.plugin-state.active { color: var(--ops-signal); }
+.plugin-state.failed { color: var(--ops-danger); }
+.plugin-card-desc { margin: 6px 0; color: var(--ops-fg-muted); font-size: 13px; }
+.plugin-error { margin: 6px 0; color: var(--ops-danger); font-size: 12px; }
+.plugin-card-actions { display: flex; align-items: center; gap: 14px; }
+.plugin-card-actions .settings-toggle { border-bottom: 0; padding: 6px 0; }
+.plugin-source { color: var(--ops-fg-muted); font-size: 12px; }
+.plugin-remove {
+    min-height: 28px;
+    padding: 0 12px;
+    border: 1px solid rgba(239, 95, 103, 0.4);
+    border-radius: var(--ops-radius);
+    background: transparent;
+    color: var(--ops-danger);
+    cursor: pointer;
+    font-size: 12px;
+}
+.plugin-remove:hover { background: var(--ops-danger-dim); }
+
+.market-controls { display: flex; gap: 8px; margin-bottom: 14px; }
+.market-search { flex: 1; min-height: 32px; padding: 0 10px; border: 1px solid var(--ops-line); border-radius: var(--ops-radius); background: var(--ops-base); color: var(--ops-fg); font-size: 13px; }
+.market-url { width: 220px; min-height: 32px; padding: 0 10px; border: 1px solid var(--ops-line); border-radius: var(--ops-radius); background: var(--ops-base); color: var(--ops-fg-muted); font-size: 11px; }
+.market-refresh { min-height: 32px; padding: 0 14px; border: 1px solid var(--ops-signal-border); border-radius: var(--ops-radius); background: var(--ops-signal-dim); color: var(--ops-signal); cursor: pointer; font-size: 13px; }
+.market-install {
+    min-height: 28px;
+    padding: 0 14px;
+    border: 1px solid var(--ops-signal-border);
+    border-radius: var(--ops-radius);
+    background: var(--ops-signal);
+    color: #081217;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 12px;
+}
+.market-install:disabled { opacity: 0.5; cursor: default; }
+
+.install-dialog {
+    width: min(460px, 92vw);
+    margin: auto;
+    padding: 20px;
+    border: 1px solid var(--ops-line);
+    border-radius: var(--ops-radius-lg);
+    background: var(--ops-panel);
+}
+.install-dialog h2 { margin: 0 0 8px; font-size: 15px; }
+.install-desc { margin: 0 0 12px; color: var(--ops-fg-muted); font-size: 13px; }
+.install-permissions { padding: 10px 12px; border: 1px solid var(--ops-line); border-radius: var(--ops-radius); margin-bottom: 14px; }
+.install-permissions-title { margin-bottom: 8px; font-size: 12px; color: var(--ops-fg-muted); }
+.install-permission { padding: 3px 0; font-family: var(--ops-font-mono); font-size: 12px; color: var(--ops-risk); }
+.install-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.install-actions button { min-height: 30px; padding: 0 14px; border: 1px solid var(--ops-line); border-radius: var(--ops-radius); background: transparent; color: var(--ops-fg-muted); cursor: pointer; font-size: 13px; }
+
+.about-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--ops-line); font-size: 13px; }
+.about-row span { color: var(--ops-fg-muted); }

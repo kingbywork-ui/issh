@@ -22,7 +22,14 @@ if (!pluginDirName || !pluginDirName.startsWith('issh-plugin-')) {
 
 function run (command, argv, options = {}) {
     console.log(`$ ${command} ${argv.join(' ')}`)
-    return execFileSync(command, argv, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'inherit'], ...options }).trim()
+    const isCmd = command.endsWith('.cmd') || command.endsWith('.bat')
+    return execFileSync(isCmd ? command : command, argv, {
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'inherit'],
+        shell: isCmd,
+        ...(isCmd ? { windowsVerbatimArguments: false } : {}),
+        ...options,
+    }).trim()
 }
 
 function sha256Hex (buffer) {

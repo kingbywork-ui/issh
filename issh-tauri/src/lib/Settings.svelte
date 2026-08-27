@@ -1,0 +1,386 @@
+<script lang="ts">
+    import { onMount } from 'svelte'
+    import {
+        disablePlugin,
+        enablePlugin,
+        getSettingsTabs,
+        listPlugins,
+        loadMarketplacePlugin,
+        subscribeUi,
+        uninstallPlugin,
+    } from './plugins/pluginHost'
+    import type { RegistryEntry } from './plugins/types'
+    import { invoke } from '@tauri-apps/api/core'
+
+    let { onclose }: { onclose: () => void } = $props()
+
+    type Section = 'general' | 'plugins' | 'market' | 'about'
+
+    interface MarketEntry {
+        id: string
+        name: string
+        version: string
+        description: string
+        kind: string
+        permissions: string[]
+        min_app_version?: string | null
+        download_url: string
+        sha256: string
+        homepage?: string | null
+        repository?: string | null
+    }
+
+    interface InstalledRecord {
+        id: string
+        name: string
+        version: string
+        description: string
+        kind: string
+        permissions: string[]
+        entry: string
+        directory: string
+    }
+
+    const DEFAULT_REGISTRY = 'https://raw.githubusercontent.com/kingbywork-ui/issh-plugin-registry/main/index.json'
+
+    let section = $state<Section>('general')
+    let language = $state(localStorage.getItem('issh.language') ?? 'auto')
+    let colorScheme = $state(localStorage.getItem('issh.colorScheme') ?? 'dark')
+    let enableWelcome = $state(localStorage.getItem('issh.enableWelcomeTab') !== 'false')
+    let analytics = $state(localStorage.getItem('issh.analytics') !== 'false')
+    let globalHotkey = $state(localStorage.getItem('issh.globalHotkey') !== 'false')
+
+    let plugins = $state<RegistryEntry[]>([])
+    let pluginBusy = $state('')
+    let pluginError = $state('')
+
+    let registryUrl = $state(localStorage.getItem('issh.plugins.registryUrl') ?? DEFAULT_REGISTRY)
+    let marketEntries = $state<MarketEntry[]>([])
+    let marketLoading = $state(false)
+    let marketError = $state('')
+    let marketSearch = $state('')
+    let installTarget = $state<MarketEntry | null>(null)
+    let installBusy = $state(false)
+    let installError = $state('')
+    let installedFromMarket = $state<InstalledRecord[]>([])
+
+    let appVersion = $state('')
+    let runtimeVersion = $state('')
+
+    const tabs = $derived(getSettingsTabs())
+
+    const filteredMarket = $derived(
+        marketSearch.trim()
+            ? marketEntries.filter((entry) => {
+                const keyword = marketSearch.trim().toLowerCase()
+                return entry.name.toLowerCase().includes(keyword) || entry.id.toLowerCase().includes(keyword) || entry.description.toLowerCase().includes(keyword)
+            })
+            : marketEntries,
+    )
+
+    onMount(() => {
+        plugins = listPlugins()
+        const unsubscribe = subscribeUi(() => { plugins = listPlugins() })
+        void loadInstalled()
+        void loadAbout()
+        return unsubscribe
+    })
+
+    function persist (key: string, value: string): void {
+        try { localStorage.setItem(key, value) } catch {}
+    }
+
+    function applyColorScheme (): void {
+        document.documentElement.dataset.colorScheme = colorScheme
+        document.documentElement.style.colorScheme = colorScheme === 'auto' ? 'light dark' : colorScheme
+        persist('issh.colorScheme', colorScheme)
+    }
+
+    async function togglePlugin (entry: RegistryEntry, enabled: boolean): Promise<void> {
+        pluginBusy = entry.manifest.id
+        pluginError = ''
+        try {
+            if (enabled) await enablePlugin(entry.manifest.id)
+            else await disablePlugin(entry.manifest.id)
+        } catch (cause) {
+            pluginError = cause instanceof Error ? cause.message : String(cause)
+        } finally {
+            pluginBusy = ''
+            plugins = listPlugins()
+        }
+    }
+
+    async function removePlugin (entry: RegistryEntry): Promise<void> {
+        if (entry.source === 'builtin') return
+        if (!window.confirm(`确定卸载插件「${entry.manifest.name}」？`)) return
+        pluginBusy = entry.manifest.id
+        pluginError = ''
+        try {
+            await uninstallPlugin(entry.manifest.id)
+            if (entry.source === 'marketplace') await invoke('plugin_delete', { id: entry.manifest.id })
+        } catch (cause) {
+            pluginError = cause instanceof Error ? cause.message : String(cause)
+        } finally {
+            pluginBusy = ''
+            plugins = listPlugins()
+            void loadInstalled()
+        }
+    }
+
+    async function loadMarket (): Promise<void> {
+        marketLoading = true
+        marketError = ''
+        try {
+            const registry = await invoke<{ plugins: MarketEntry[] }>('plugin_fetch_registry', { url: registryUrl })
+            marketEntries = registry.plugins ?? []
+            persist('issh.plugins.registryUrl', registryUrl)
+        } catch (cause) {
+            marketError = cause instanceof Error ? cause.message : String(cause)
+            marketEntries = []
+        } finally {
+            marketLoading = false
+        }
+    }
+
+    async function loadInstalled (): Promise<void> {
+        try {
+            installedFromMarket = await invoke<InstalledRecord[]>('plugin_list_installed')
+        } catch {
+            installedFromMarket = []
+        }
+    }
+
+    async function loadAbout (): Promise<void> {
+        try {
+            const health = await invoke<{ runtimeVersion: string }>('runtime_health')
+            runtimeVersion = health.runtimeVersion
+        } catch { runtimeVersion = '' }
+        try {
+            const { getVersion } = await import('@tauri-apps/api/app')
+            appVersion = await getVersion()
+        } catch { appVersion = '' }
+    }
+
+    function beginInstall (entry: MarketEntry): void {
+        installTarget = entry
+        installError = ''
+    }
+
+    function compareVersions (a: string, b: string): number {
+        const pa = a.split('.').map((part) => Number.parseInt(part, 10) || 0)
+        const pb = b.split('.').map((part) => Number.parseInt(part, 10) || 0)
+        for (let i = 0; i < 3; i++) {
+            const diff = (pa[i] ?? 0) - (pb[i] ?? 0)
+            if (diff !== 0) return diff
+        }
+        return 0
+    }
+
+    function meetsAppVersion (minAppVersion?: string | null): boolean {
+        if (!minAppVersion) return true
+        if (!appVersion) return true
+        return compareVersions(appVersion, minAppVersion) >= 0
+    }
+
+    async function confirmInstall (): Promise<void> {
+        if (!installTarget) return
+        if (!meetsAppVersion(installTarget.min_app_version)) {
+            installError = `需要 issh ${installTarget.min_app_version} 及以上版本（当前 ${appVersion || '未知'}）`
+            return
+        }
+        installBusy = true
+        installError = ''
+        try {
+            const installed = await invoke<InstalledRecord>('plugin_download', {
+                id: installTarget.id,
+                url: installTarget.download_url,
+                sha256: installTarget.sha256,
+            })
+            try {
+                await loadMarketplacePlugin(installed.directory, installed.entry, installed.id)
+            } catch (cause) {
+                console.warn('[market] 插件已下载但热加载失败（重启后生效）：', cause)
+            }
+            installTarget = null
+            await loadInstalled()
+        } catch (cause) {
+            installError = cause instanceof Error ? cause.message : String(cause)
+        } finally {
+            installBusy = false
+        }
+    }
+
+    function kindLabel (kind: string): string {
+        if (kind === 'appearance') return '外观'
+        if (kind === 'integration') return '集成'
+        return '功能'
+    }
+
+    function stateLabel (entry: RegistryEntry): string {
+        if (entry.state === 'active') return '运行中'
+        if (entry.state === 'failed') return '异常'
+        return '已停用'
+    }
+</script>
+
+<div class="settings-backdrop" role="presentation" onclick={onclose} onkeydown={(event) => { if (event.key === 'Escape') onclose() }}>
+    <div class="settings-panel" role="dialog" aria-label="设置" onclick={(event) => { event.stopPropagation() }} onkeydown={(event) => { event.stopPropagation() }}>
+        <header class="settings-header">
+            <h1>设置</h1>
+            <button class="icon-button" type="button" onclick={onclose} aria-label="关闭设置">✕</button>
+        </header>
+        <div class="settings-body">
+            <nav class="settings-nav" aria-label="设置分组">
+                <button class:active={section === 'general'} type="button" onclick={() => { section = 'general' }}>通用</button>
+                <button class:active={section === 'plugins'} type="button" onclick={() => { section = 'plugins' }}>插件</button>
+                <button class:active={section === 'market'} type="button" onclick={() => { section = 'market' }}>插件商城</button>
+                <button class:active={section === 'about'} type="button" onclick={() => { section = 'about' }}>关于</button>
+                {#each tabs as tab (tab.id)}
+                    <div class="settings-nav-plugin">{tab.title}</div>
+                {/each}
+            </nav>
+            <div class="settings-content">
+                {#if section === 'general'}
+                    <section aria-label="通用设置">
+                        <div class="settings-field">
+                            <div class="settings-field-title">语言</div>
+                            <select bind:value={language} onchange={() => persist('issh.language', language)} aria-label="语言">
+                                <option value="auto">自动</option>
+                                <option value="zh-CN">简体中文</option>
+                                <option value="en">English</option>
+                            </select>
+                        </div>
+                        <div class="settings-field">
+                            <div class="settings-field-title">颜色方案</div>
+                            <select bind:value={colorScheme} onchange={() => applyColorScheme()} aria-label="颜色方案">
+                                <option value="auto">自动</option>
+                                <option value="dark">深色</option>
+                                <option value="light">浅色</option>
+                            </select>
+                        </div>
+                        <label class="settings-toggle">
+                            <input type="checkbox" bind:checked={enableWelcome} onchange={() => persist('issh.enableWelcomeTab', String(enableWelcome))} />
+                            <span>启动时显示欢迎页</span>
+                        </label>
+                        <label class="settings-toggle">
+                            <input type="checkbox" bind:checked={analytics} onchange={() => persist('issh.analytics', String(analytics))} />
+                            <span>匿名使用统计</span>
+                        </label>
+                        <label class="settings-toggle">
+                            <input type="checkbox" bind:checked={globalHotkey} onchange={() => persist('issh.globalHotkey', String(globalHotkey))} />
+                            <span>全局快捷键唤起</span>
+                        </label>
+                    </section>
+                {:else if section === 'plugins'}
+                    <section aria-label="插件管理">
+                        {#if pluginError}
+                            <div class="settings-error" role="alert">{pluginError}</div>
+                        {/if}
+                        {#if plugins.length === 0}
+                            <div class="settings-empty">尚未安装任何插件，可前往「插件商城」浏览。</div>
+                        {/if}
+                        {#each plugins as entry (entry.manifest.id)}
+                            <div class="plugin-card" class:disabled={!entry.enabled}>
+                                <div class="plugin-card-head">
+                                    <strong>{entry.manifest.name}</strong>
+                                    <span class="plugin-version">v{entry.manifest.version}</span>
+                                    <span class="plugin-state" class:active={entry.state === 'active'} class:failed={entry.state === 'failed'}>{stateLabel(entry)}</span>
+                                </div>
+                                <div class="plugin-card-desc">{entry.manifest.description}</div>
+                                {#if entry.error}
+                                    <div class="plugin-error">{entry.error}</div>
+                                {/if}
+                                <div class="plugin-card-actions">
+                                    <label class="settings-toggle">
+                                        <input
+                                            type="checkbox"
+                                            checked={entry.enabled}
+                                            disabled={pluginBusy === entry.manifest.id}
+                                            onchange={(event) => void togglePlugin(entry, (event.currentTarget as HTMLInputElement).checked)}
+                                        />
+                                        <span>启用</span>
+                                    </label>
+                                    {#if entry.source === 'marketplace'}
+                                        <button class="plugin-remove" type="button" disabled={pluginBusy === entry.manifest.id} onclick={() => void removePlugin(entry)}>卸载</button>
+                                    {:else}
+                                        <span class="plugin-source">内置</span>
+                                    {/if}
+                                </div>
+                            </div>
+                        {/each}
+                        {#if installedFromMarket.length > 0}
+                            <h2 class="settings-subtitle">商城安装记录</h2>
+                            {#each installedFromMarket as record (record.id)}
+                                <div class="plugin-card">
+                                    <div class="plugin-card-head">
+                                        <strong>{record.name}</strong>
+                                        <span class="plugin-version">v{record.version}</span>
+                                    </div>
+                                    <div class="plugin-card-desc">{record.description}</div>
+                                </div>
+                            {/each}
+                        {/if}
+                    </section>
+                {:else if section === 'market'}
+                    <section aria-label="插件商城">
+                        <div class="market-controls">
+                            <input class="market-search" type="search" placeholder="搜索插件…" bind:value={marketSearch} aria-label="搜索插件" />
+                            <input class="market-url" type="url" bind:value={registryUrl} aria-label="索引地址" />
+                            <button class="market-refresh" type="button" disabled={marketLoading} onclick={() => void loadMarket()}>{marketLoading ? '加载中…' : '刷新'}</button>
+                        </div>
+                        {#if marketError}
+                            <div class="settings-error" role="alert">{marketError}</div>
+                        {/if}
+                        {#if !marketLoading && filteredMarket.length === 0 && !marketError}
+                            <div class="settings-empty">没有可显示的插件，点击「刷新」拉取索引。</div>
+                        {/if}
+                        {#each filteredMarket as entry (entry.id)}
+                            <div class="plugin-card">
+                                <div class="plugin-card-head">
+                                    <strong>{entry.name}</strong>
+                                    <span class="plugin-version">v{entry.version}</span>
+                                    <span class="plugin-kind">{kindLabel(entry.kind)}</span>
+                                </div>
+                                <div class="plugin-card-desc">{entry.description}</div>
+                                <div class="plugin-card-actions">
+                                    <button class="market-install" type="button" onclick={() => beginInstall(entry)}>安装</button>
+                                </div>
+                            </div>
+                        {/each}
+                    </section>
+                {:else if section === 'about'}
+                    <section aria-label="关于">
+                        <div class="about-row"><span>issh 版本</span><strong>{appVersion || '未知'}</strong></div>
+                        <div class="about-row"><span>Runtime 版本</span><strong>{runtimeVersion || '未连接'}</strong></div>
+                    </section>
+                {/if}
+            </div>
+        </div>
+
+        {#if installTarget}
+            <div class="modal-backdrop" role="presentation" onclick={() => { if (!installBusy) installTarget = null }} onkeydown={(event) => { if (event.key === 'Escape' && !installBusy) installTarget = null }}>
+                <div class="install-dialog" role="dialog" aria-label="安装确认" onclick={(event) => { event.stopPropagation() }} onkeydown={(event) => { event.stopPropagation() }}>
+                    <h2>安装 {installTarget.name} v{installTarget.version}</h2>
+                    <p class="install-desc">{installTarget.description}</p>
+                    <div class="install-permissions">
+                        <div class="install-permissions-title">该插件声明以下权限：</div>
+                        {#if installTarget.permissions.length === 0}
+                            <div class="install-permission">无特殊权限</div>
+                        {:else}
+                            {#each installTarget.permissions as permission (permission)}
+                                <div class="install-permission">{permission}</div>
+                            {/each}
+                        {/if}
+                    </div>
+                    {#if installError}
+                        <div class="settings-error" role="alert">{installError}</div>
+                    {/if}
+                    <div class="install-actions">
+                        <button type="button" disabled={installBusy} onclick={() => { installTarget = null }}>取消</button>
+                        <button class="market-install" type="button" disabled={installBusy} onclick={() => void confirmInstall()}>{installBusy ? '安装中…' : '确认安装'}</button>
+                    </div>
+                </div>
+            </div>
+        {/if}
+    </div>
+</div>

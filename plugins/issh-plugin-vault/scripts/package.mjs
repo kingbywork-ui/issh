@@ -23,7 +23,7 @@ async function walk (dir, prefix) {
 await walk(dist, '')
 collected.sort()
 
-const tarball = `issh-plugin-vault-${manifest.version}.tgz`
+const tarball = `${manifest.id}-${manifest.version}.tgz`
 const tarballPath = join(root, tarball)
 
 const tar = spawnSync('tar', ['-czf', tarballPath, '-C', dist, ...collected], {

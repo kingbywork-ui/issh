@@ -1,6 +1,8 @@
 mod host_profiles;
+mod plugin_market;
 
 use host_profiles::{HostProfileMutation, HostProfileStore, HostProfilesResult};
+use plugin_market::{InstalledPlugin, PluginRegistry};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -195,6 +197,43 @@ fn resolve_key_passphrase(
         .resolve_key_passphrase(&user, &host, port, key_path.as_deref())
 }
 
+#[tauri::command]
+async fn plugin_fetch_registry(url: String) -> Result<PluginRegistry, String> {
+    plugin_market::fetch_registry(&url).await
+}
+
+#[tauri::command]
+async fn plugin_download(
+    app: tauri::AppHandle,
+    id: String,
+    url: String,
+    sha256: String,
+) -> Result<InstalledPlugin, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("无法定位应用数据目录：{error}"))?;
+    plugin_market::download_plugin(&app_data, &id, &url, &sha256).await
+}
+
+#[tauri::command]
+fn plugin_list_installed(app: tauri::AppHandle) -> Result<Vec<InstalledPlugin>, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("无法定位应用数据目录：{error}"))?;
+    plugin_market::list_installed(&app_data)
+}
+
+#[tauri::command]
+fn plugin_delete(app: tauri::AppHandle, id: String) -> Result<bool, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("无法定位应用数据目录：{error}"))?;
+    plugin_market::delete_plugin(&app_data, &id)
+}
+
 pub fn run() {
     let app = tauri::Builder::default()
         .setup(|app| {
@@ -227,7 +266,11 @@ pub fn run() {
             lock_host_profiles,
             mutate_host_profiles,
             resolve_ssh_password,
-            resolve_key_passphrase
+            resolve_key_passphrase,
+            plugin_fetch_registry,
+            plugin_download,
+            plugin_list_installed,
+            plugin_delete
         ])
         .build(tauri::generate_context!())
         .expect("failed to build issh Tauri client");

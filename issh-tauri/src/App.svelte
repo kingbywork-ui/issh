@@ -8,6 +8,7 @@
     import SftpBrowser from './lib/SftpBrowser.svelte'
     import BatchInputPanel from './lib/BatchInputPanel.svelte'
     import ProfileSelector from './lib/ProfileSelector.svelte'
+    import Settings from './lib/Settings.svelte'
     import {
         closeSession,
         discoverSshHostKey,
@@ -60,6 +61,7 @@
     let showConnect = $state(false)
     let showSelector = $state(false)
     let showWelcome = $state(false)
+    let showSettings = $state(false)
 
     // 连接表单
     let formHost = $state('')
@@ -600,6 +602,13 @@
         {:else}
             <span class="runtime-badge offline" title="Runtime 未连接">●</span>
         {/if}
+        <button
+            class="btn-tab-bar"
+            type="button"
+            onclick={() => { showSettings = true }}
+            title="设置"
+            aria-label="设置"
+        >⚙</button>
     </header>
 
     <div class="app-workspace" class:left-open={showSftp && !!activeTab} class:bottom-open={showSend}>
@@ -675,6 +684,10 @@
             onnewssh={openNewSshForm}
             onclose={() => { showSelector = false }}
         />
+    {/if}
+
+    {#if showSettings}
+        <Settings onclose={() => { showSettings = false }} />
     {/if}
 
     {#if showConnect}
