@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-08-27T03:18:57.710Z",
+  "updated": "2026-08-27T03:22:17.941Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
@@ -36,6 +36,24 @@
       "sha256": "d94d4a800babfacc04d27f515e3c64ab04cf9bd83b4a004ea21ceb7a3ae1534f",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-auto-sudo",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-auto-sudo"
+    },
+    {
+      "id": "issh-plugin-config-sync",
+      "name": "配置同步",
+      "version": "0.1.0",
+      "description": "主机配置导出/导入 JSON + GitHub Gist 云同步",
+      "kind": "integration",
+      "permissions": [
+        "settings:tab",
+        "profiles:read",
+        "profiles:write"
+      ],
+      "minAppVersion": "0.2.0",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-config-sync/releases/download/v0.1.0/issh-plugin-config-sync-0.1.0.tgz",
+      "sha256": "d444d542fc45f693c0dd56f675dbba17ea16072076445248f048099340e799e4",
+      "signature": "rXw8oR/MJzvDmcjOmiKs9weJHd6kVIIddMDTL4m1RJrJ7QXU1I77ffaK0wSkkECDaA34e0X3i4VdDqWiLSqBBw==",
+      "homepage": "https://github.com/kingbywork-ui/issh-plugin-config-sync",
+      "repository": "https://github.com/kingbywork-ui/issh-plugin-config-sync"
     },
     {
       "id": "issh-plugin-herdr",
