@@ -17,7 +17,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.151"
 serde_yaml = "0.9"
 sha2 = "0.11.0"
-tauri = { version = "2.11.5", features = [] }
+tauri = { version = "2.11.5", features = ["protocol-asset"] }
 tokio = { version = "1.53.1", features = ["io-util", "net", "sync", "time"] }
 issh-runtime-vault = { path = "../../issh-runtime/crates/vault" }
 base64 = "0.22"
