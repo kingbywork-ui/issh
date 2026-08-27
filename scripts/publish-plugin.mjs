@@ -7,6 +7,8 @@ import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { readFile, writeFile, copyFile, readdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
+import { homedir } from 'node:os'
+import { createPrivateKey, sign as edSign } from 'node:crypto'
 
 const GITHUB_ORG = 'kingbywork-ui'
 const REGISTRY_REPO_URL = `git@github.com:${GITHUB_ORG}/issh-plugin-registry.git`
@@ -54,6 +56,23 @@ const sha256 = sha256Hex(tarballBytes)
 console.log(`tgz：${tarballName}（${tarballBytes.length} bytes）`)
 console.log(`sha256：${sha256}`)
 
+// 签名（ed25519，私钥在 ~/.psacowork/issh-plugin-signing.key）
+const keyPath = join(homedir(), '.psacowork', 'issh-plugin-signing.key')
+let signature = null
+try {
+    const keyFile = JSON.parse(await readFile(keyPath, 'utf-8'))
+    const privateKey = createPrivateKey({
+        key: Buffer.from(keyFile.privateKey, 'base64'),
+        format: 'der',
+        type: 'pkcs8',
+    })
+    const message = Buffer.from(`${id}\n${version}\n${sha256}`, 'utf-8')
+    signature = edSign(null, message, privateKey).toString('base64')
+    console.log(`signature：${signature.slice(0, 16)}…`)
+} catch (cause) {
+    console.warn(`签名跳过（${cause instanceof Error ? cause.message : String(cause)}）`)
+}
+
 // 2. subtree split + push 独立仓库
 if (!registryOnly) {
     const repoUrl = `git@github.com:${GITHUB_ORG}/${id}.git`
@@ -95,6 +114,7 @@ const entryRecord = {
     minAppVersion: manifest.minAppVersion ?? undefined,
     downloadUrl,
     sha256,
+    signature,
     homepage: manifest.homepage ?? `https://github.com/${GITHUB_ORG}/${id}`,
     repository: manifest.repository ?? `https://github.com/${GITHUB_ORG}/${id}`,
 }

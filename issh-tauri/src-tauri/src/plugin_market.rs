@@ -1,3 +1,5 @@
+use base64::Engine as _;
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::io::Read;
@@ -8,6 +10,9 @@ const MAX_TOTAL_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_ENTRIES: usize = 512;
 const REGISTRY_TIMEOUT_SECS: u64 = 20;
 const DOWNLOAD_TIMEOUT_SECS: u64 = 120;
+
+/// issh 官方插件签名公钥（ed25519 SPKI base64）。索引条目带 signature 时强制验签。
+const SIGNING_PUBLIC_KEY: &str = "MCowBQYDK2VwAyEAC3mDW1rXlnlqWTx9u9aqnIS6nsY69tIDot4heKZYvyA=";
 
 #[derive(Debug, Serialize)]
 pub struct PluginRegistryEntry {
@@ -30,6 +35,35 @@ pub struct PluginRegistryEntry {
     pub homepage: Option<String>,
     #[serde(default)]
     pub repository: Option<String>,
+    #[serde(default)]
+    pub signature: Option<String>,
+}
+
+/// 验证索引条目签名：对 `id\nversion\nsha256` 的 UTF-8 字节做 ed25519 验签。
+/// 签名 base64 编码。返回 Ok(()) 表示通过或条目未签名。
+pub fn verify_entry_signature(entry: &PluginRegistryEntry) -> Result<(), String> {
+    let Some(signature_b64) = entry.signature.as_deref() else {
+        return Ok(());
+    };
+    let signature_bytes = base64::engine::general_purpose::STANDARD
+        .decode(signature_b64)
+        .map_err(|error| format!("插件签名解码失败：{error}"))?;
+    let signature = Signature::from_slice(&signature_bytes)
+        .map_err(|_| "插件签名格式无效".to_string())?;
+    let public_key_bytes = base64::engine::general_purpose::STANDARD
+        .decode(SIGNING_PUBLIC_KEY)
+        .map_err(|error| format!("内置公钥无效：{error}"))?;
+    let verifying_key = VerifyingKey::from_bytes(
+        public_key_bytes
+            .get(public_key_bytes.len().saturating_sub(32)..)
+            .and_then(|slice| slice.try_into().ok())
+            .ok_or_else(|| "内置公钥长度无效".to_string())?,
+    )
+    .map_err(|_| "内置公钥无效".to_string())?;
+    let message = format!("{}\n{}\n{}", entry.id, entry.version, entry.sha256);
+    verifying_key
+        .verify(message.as_bytes(), &signature)
+        .map_err(|_| "插件签名校验失败，可能被篡改".to_string())
 }
 
 #[derive(Debug, Serialize)]
@@ -83,7 +117,7 @@ pub async fn fetch_registry(url: &str) -> Result<PluginRegistry, String> {
     if registry.schema != 1 {
         return Err(format!("不支持的插件索引版本：{}", registry.schema));
     }
-    Ok(PluginRegistry {
+    let registry = PluginRegistry {
         schema: registry.schema,
         updated: registry.updated,
         plugins: registry
@@ -101,9 +135,14 @@ pub async fn fetch_registry(url: &str) -> Result<PluginRegistry, String> {
                 sha256: entry.sha256,
                 homepage: entry.homepage,
                 repository: entry.repository,
+                signature: entry.signature,
             })
             .collect(),
-    })
+    };
+    for entry in &registry.plugins {
+        verify_entry_signature(entry)?;
+    }
+    Ok(registry)
 }
 
 #[derive(Debug, Deserialize)]
@@ -134,6 +173,8 @@ struct PluginRegistryEntryRaw {
     homepage: Option<String>,
     #[serde(default)]
     repository: Option<String>,
+    #[serde(default)]
+    signature: Option<String>,
 }
 
 pub async fn download_plugin(
@@ -141,6 +182,7 @@ pub async fn download_plugin(
     id: &str,
     url: &str,
     expected_sha256: &str,
+    signature: Option<&str>,
 ) -> Result<InstalledPlugin, String> {
     if !is_valid_plugin_id(id) {
         return Err(format!("非法插件 id：{id}"));
@@ -176,6 +218,23 @@ pub async fn download_plugin(
         return Err(format!(
             "插件包校验失败：期望 sha256 {expected}，实际 {actual}"
         ));
+    }
+    if let Some(signature_b64) = signature {
+        let entry = PluginRegistryEntry {
+            id: id.to_string(),
+            name: String::new(),
+            version: String::new(),
+            description: String::new(),
+            kind: String::new(),
+            permissions: Vec::new(),
+            min_app_version: None,
+            download_url: String::new(),
+            sha256: actual.clone(),
+            homepage: None,
+            repository: None,
+            signature: Some(signature_b64.to_string()),
+        };
+        verify_entry_signature(&entry)?;
     }
     extract_plugin(app_data, id, &bytes)
 }
@@ -450,5 +509,44 @@ mod tests {
         assert!(!is_valid_plugin_id("../escape"));
         assert!(!is_valid_plugin_id(""));
         assert!(!is_valid_plugin_id("a/b"));
+    }
+
+    fn unsigned_entry() -> PluginRegistryEntry {
+        PluginRegistryEntry {
+            id: "issh-plugin-x".to_string(),
+            name: "x".to_string(),
+            version: "0.1.0".to_string(),
+            description: String::new(),
+            kind: "feature".to_string(),
+            permissions: Vec::new(),
+            min_app_version: None,
+            download_url: String::new(),
+            sha256: "abc".to_string(),
+            homepage: None,
+            repository: None,
+            signature: None,
+        }
+    }
+
+    #[test]
+    fn unsigned_entry_passes_verification() {
+        assert!(verify_entry_signature(&unsigned_entry()).is_ok());
+    }
+
+    #[test]
+    fn tampered_signature_is_rejected() {
+        let mut entry = unsigned_entry();
+        // 64 字节全零签名（格式合法但必然验签失败）
+        let bogus = [0u8; 64];
+        entry.signature = Some(base64::engine::general_purpose::STANDARD.encode(bogus));
+        let result = verify_entry_signature(&entry);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn malformed_signature_is_rejected() {
+        let mut entry = unsigned_entry();
+        entry.signature = Some("!!!not-base64!!!".to_string());
+        assert!(verify_entry_signature(&entry).is_err());
     }
 }

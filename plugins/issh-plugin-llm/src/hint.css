@@ -1,0 +1,13 @@
+.issh-llm-hint {
+    position: fixed;
+    z-index: 9999;
+    background: var(--ops-base, #1e2430);
+    color: var(--ops-fg, #dce3f0);
+    border: 1px solid var(--ops-line, #39415a);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-family: var(--ops-font-mono, monospace);
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}

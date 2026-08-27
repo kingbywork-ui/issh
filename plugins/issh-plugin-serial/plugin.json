@@ -1,0 +1,13 @@
+{
+    "id": "issh-plugin-serial",
+    "name": "串口终端",
+    "version": "0.1.0",
+    "description": "Web Serial API 串口连接：选择串口/波特率，收发数据（底部面板）",
+    "kind": "integration",
+    "minAppVersion": "0.2.0",
+    "entry": "index.js",
+    "permissions": ["panel:register"],
+    "author": "kingbywork-ui",
+    "homepage": "https://github.com/kingbywork-ui/issh-plugin-serial",
+    "repository": "https://github.com/kingbywork-ui/issh-plugin-serial"
+}

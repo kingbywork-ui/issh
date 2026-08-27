@@ -1,0 +1,13 @@
+{
+    "id": "issh-plugin-llm",
+    "name": "AI 命令补全",
+    "version": "0.1.0",
+    "description": "LLM 驱动的 shell 命令补全：输入时防抖请求 LLM API，Ctrl+Y 接受候选",
+    "kind": "feature",
+    "minAppVersion": "0.2.0",
+    "entry": "index.js",
+    "permissions": ["terminal:decorate", "settings:tab"],
+    "author": "kingbywork-ui",
+    "homepage": "https://github.com/kingbywork-ui/issh-plugin-llm",
+    "repository": "https://github.com/kingbywork-ui/issh-plugin-llm"
+}

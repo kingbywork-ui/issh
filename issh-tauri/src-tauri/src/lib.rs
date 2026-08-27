@@ -208,12 +208,13 @@ async fn plugin_download(
     id: String,
     url: String,
     sha256: String,
+    signature: Option<String>,
 ) -> Result<InstalledPlugin, String> {
     let app_data = app
         .path()
         .app_data_dir()
         .map_err(|error| format!("无法定位应用数据目录：{error}"))?;
-    plugin_market::download_plugin(&app_data, &id, &url, &sha256).await
+    plugin_market::download_plugin(&app_data, &id, &url, &sha256, signature.as_deref()).await
 }
 
 #[tauri::command]

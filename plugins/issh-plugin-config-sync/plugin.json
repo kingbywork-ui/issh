@@ -1,0 +1,13 @@
+{
+    "id": "issh-plugin-config-sync",
+    "name": "配置同步",
+    "version": "0.1.0",
+    "description": "主机配置导出/导入 JSON + GitHub Gist 云同步",
+    "kind": "integration",
+    "minAppVersion": "0.2.0",
+    "entry": "index.js",
+    "permissions": ["settings:tab", "profiles:read", "profiles:write"],
+    "author": "kingbywork-ui",
+    "homepage": "https://github.com/kingbywork-ui/issh-plugin-config-sync",
+    "repository": "https://github.com/kingbywork-ui/issh-plugin-config-sync"
+}

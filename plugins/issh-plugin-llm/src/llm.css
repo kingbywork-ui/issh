@@ -1,0 +1,15 @@
+.llm-settings { display: flex; flex-direction: column; gap: 4px; }
+.llm-section { padding: 12px 0; border-bottom: 1px solid var(--ops-line); }
+.llm-saved { color: var(--ops-signal); font-size: 12px; padding: 6px 0; }
+.settings-field { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; font-size: 13px; }
+.settings-field input[type="text"], .settings-field input[type="password"], .settings-field input[type="number"] {
+    min-height: 30px;
+    padding: 0 8px;
+    border: 1px solid var(--ops-line);
+    border-radius: var(--ops-radius);
+    background: var(--ops-base);
+    color: var(--ops-fg);
+    font-size: 12px;
+}
+.settings-check { flex-direction: row; align-items: center; gap: 8px; }
+.settings-field-title { font-size: 12px; font-weight: 600; color: var(--ops-fg-muted); text-transform: uppercase; letter-spacing: 0.04em; }

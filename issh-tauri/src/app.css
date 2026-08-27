@@ -1497,3 +1497,8 @@ button { font: inherit; color: inherit; }
 
 .about-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--ops-line); font-size: 13px; }
 .about-row span { color: var(--ops-fg-muted); }
+
+.market-kinds { display: flex; gap: 6px; padding: 8px 0; flex-wrap: wrap; }
+.market-kind { min-height: 26px; padding: 0 12px; border: 1px solid var(--ops-line); border-radius: 999px; background: transparent; color: var(--ops-fg-muted); cursor: pointer; font-size: 12px; }
+.market-kind.active { border-color: var(--ops-signal-border, var(--ops-line)); color: var(--ops-signal); background: var(--ops-signal-dim, transparent); }
+.market-kind:disabled { opacity: 0.5; cursor: default; }

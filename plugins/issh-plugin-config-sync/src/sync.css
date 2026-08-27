@@ -1,0 +1,41 @@
+.sync-settings { display: flex; flex-direction: column; gap: 4px; }
+.sync-section { padding: 12px 0; border-bottom: 1px solid var(--ops-line); }
+.sync-stats { display: flex; gap: 14px; color: var(--ops-fg-muted); font-size: 12px; padding: 6px 0; }
+.sync-encrypted { color: var(--ops-warn, #d9a441); }
+.sync-toolbar { display: flex; gap: 8px; margin-top: 8px; }
+.sync-toolbar button {
+    min-height: 30px;
+    padding: 0 14px;
+    border: 1px solid var(--ops-line);
+    border-radius: var(--ops-radius);
+    background: transparent;
+    color: var(--ops-fg);
+    cursor: pointer;
+    font-size: 12px;
+}
+.sync-toolbar button:disabled { opacity: 0.5; cursor: default; }
+.sync-settings textarea {
+    width: 100%;
+    min-height: 90px;
+    padding: 8px;
+    border: 1px solid var(--ops-line);
+    border-radius: var(--ops-radius);
+    background: var(--ops-base);
+    color: var(--ops-fg);
+    font-family: var(--ops-font-mono);
+    font-size: 12px;
+    resize: vertical;
+    box-sizing: border-box;
+}
+.settings-field { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; font-size: 13px; }
+.settings-field input {
+    min-height: 30px;
+    padding: 0 8px;
+    border: 1px solid var(--ops-line);
+    border-radius: var(--ops-radius);
+    background: var(--ops-base);
+    color: var(--ops-fg);
+    font-size: 12px;
+}
+.settings-field-title { font-size: 12px; font-weight: 600; color: var(--ops-fg-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.settings-message { padding: 8px 10px; border: 1px solid var(--ops-line); border-radius: var(--ops-radius); color: var(--ops-fg-muted); font-size: 12px; }

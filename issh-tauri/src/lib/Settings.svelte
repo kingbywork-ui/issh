@@ -59,6 +59,7 @@
     let marketLoading = $state(false)
     let marketError = $state('')
     let marketSearch = $state('')
+    let marketKind = $state<'all' | 'feature' | 'appearance' | 'integration'>('all')
     let installTarget = $state<MarketEntry | null>(null)
     let installBusy = $state(false)
     let installError = $state('')
@@ -70,13 +71,21 @@
     const tabs = $derived(getSettingsTabs())
 
     const filteredMarket = $derived(
-        marketSearch.trim()
-            ? marketEntries.filter((entry) => {
-                const keyword = marketSearch.trim().toLowerCase()
-                return entry.name.toLowerCase().includes(keyword) || entry.id.toLowerCase().includes(keyword) || entry.description.toLowerCase().includes(keyword)
-            })
-            : marketEntries,
+        marketEntries.filter((entry) => {
+            if (marketKind !== 'all' && entry.kind !== marketKind) return false
+            const keyword = marketSearch.trim().toLowerCase()
+            if (!keyword) return true
+            return entry.name.toLowerCase().includes(keyword) || entry.id.toLowerCase().includes(keyword) || entry.description.toLowerCase().includes(keyword)
+        }),
     )
+
+    const kindCounts = $derived.by(() => {
+        const counts = { all: marketEntries.length, feature: 0, appearance: 0, integration: 0 }
+        for (const entry of marketEntries) {
+            if (entry.kind === 'feature' || entry.kind === 'appearance' || entry.kind === 'integration') counts[entry.kind] += 1
+        }
+        return counts
+    })
 
     onMount(() => {
         plugins = listPlugins()
@@ -327,6 +336,17 @@
                             <input class="market-search" type="search" placeholder="搜索插件…" bind:value={marketSearch} aria-label="搜索插件" />
                             <input class="market-url" type="url" bind:value={registryUrl} aria-label="索引地址" />
                             <button class="market-refresh" type="button" disabled={marketLoading} onclick={() => void loadMarket()}>{marketLoading ? '加载中…' : '刷新'}</button>
+                        </div>
+                        <div class="market-kinds" role="tablist" aria-label="插件分类">
+                            {#each [['all', '全部'], ['feature', '功能'], ['appearance', '外观'], ['integration', '集成']] as [kind, label] (kind)}
+                                <button
+                                    type="button"
+                                    class="market-kind"
+                                    class:active={marketKind === kind}
+                                    aria-pressed={marketKind === kind}
+                                    onclick={() => { marketKind = kind as typeof marketKind }}
+                                >{label}（{kindCounts[kind as keyof typeof kindCounts]}）</button>
+                            {/each}
                         </div>
                         {#if marketError}
                             <div class="settings-error" role="alert">{marketError}</div>
