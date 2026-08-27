@@ -1,14 +1,38 @@
 {
   "schema": 1,
-  "updated": "2026-08-27T09:50:00Z",
+  "updated": "2026-08-27T02:26:21.674Z",
   "plugins": [
+    {
+      "id": "issh-plugin-agent-bridge",
+      "name": "Agent 桥接",
+      "version": "0.1.0",
+      "description": "Workspace/Agent 管理：工作区创建、终端会话绑定、agent 注册与授权（对接 isshd workspace.*/agent.* RPC）",
+      "kind": "integration",
+      "permissions": [
+        "workspace:read",
+        "workspace:write",
+        "agent:read",
+        "agent:write",
+        "session:read",
+        "settings:tab"
+      ],
+      "minAppVersion": "0.2.0",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge/releases/download/v0.1.0/issh-plugin-agent-bridge-0.1.0.tgz",
+      "sha256": "a397a214b71b384be13c8767364590e1fbac712ae0a21be6c478b6b2a2e53600",
+      "homepage": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge",
+      "repository": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge"
+    },
     {
       "id": "issh-plugin-vault",
       "name": "保险库",
       "version": "0.1.0",
       "description": "SSH 凭据保险库：passphrase 管理、锁定/解锁、机密存取，接入主机配置加密存储",
       "kind": "integration",
-      "permissions": ["vault:read", "vault:write", "settings:tab"],
+      "permissions": [
+        "vault:read",
+        "vault:write",
+        "settings:tab"
+      ],
       "minAppVersion": "0.1.5",
       "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-vault/releases/download/v0.1.0/issh-plugin-vault-0.1.0.tgz",
       "sha256": "d2a40480eb757a8fcf9fee5b9200ee8760512e895b208434d17f31ba114c3c9f",
