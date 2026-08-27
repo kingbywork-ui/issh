@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-08-27T04:16:03.461Z",
+  "updated": "2026-08-27T04:44:02.300Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
@@ -114,6 +114,22 @@
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-llm",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-llm",
       "downloads": 940
+    },
+    {
+      "id": "issh-plugin-sandbox-demo",
+      "name": "沙箱演示插件",
+      "version": "0.1.0",
+      "description": "演示 iframe 沙箱面板：postMessage RPC 存储读写、事件接收",
+      "kind": "feature",
+      "permissions": [
+        "panel:register"
+      ],
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo/releases/download/v0.1.0/issh-plugin-sandbox-demo-0.1.0.tgz",
+      "sha256": "c66daa628c3a220f3addb27a7ef2a668a754aa9fbc09f77a202d204242e9babe",
+      "signature": "GAbrhr/Of+8KSvz8cLrcuG3toSj8jk0c3rFBwF5Bdcc/lApqsgeWEIPb4gqC+sGjsn1F5w4mNjS6hdwVKu+QBg==",
+      "homepage": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo",
+      "repository": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo",
+      "downloads": 0
     },
     {
       "id": "issh-plugin-serial",
