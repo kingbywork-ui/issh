@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-08-27T03:22:17.941Z",
+  "updated": "2026-08-27T03:23:36.737Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
@@ -104,6 +104,22 @@
       "signature": "WMFNTuQvpW/TgeqqWVbtEaIdrjoaaFWAIrgWhtl7UQFAfS5eBIXoxbA3Z58RuN1vW50nDBRbSxqzd9IbfHvmCQ==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-llm",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-llm"
+    },
+    {
+      "id": "issh-plugin-serial",
+      "name": "串口终端",
+      "version": "0.1.0",
+      "description": "Web Serial API 串口连接：选择串口/波特率，收发数据（底部面板）",
+      "kind": "integration",
+      "permissions": [
+        "panel:register"
+      ],
+      "minAppVersion": "0.2.0",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-serial/releases/download/v0.1.0/issh-plugin-serial-0.1.0.tgz",
+      "sha256": "464583af3bb75690536db88ce4c822646fe6a00fbcdaaa4c5ab97f5b236010d3",
+      "signature": "8yRdBj1Toc2VnZ9pRcNqMO6uuUwitrRQR2vb7oADIXn9SVkGttW3+urdd8VMJ6VYhOVvTTUIUYa7PU5NfRQ2BA==",
+      "homepage": "https://github.com/kingbywork-ui/issh-plugin-serial",
+      "repository": "https://github.com/kingbywork-ui/issh-plugin-serial"
     },
     {
       "id": "issh-plugin-vault",
