@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-08-27T04:03:19.518Z",
+  "updated": "2026-08-27T04:04:42.161Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
@@ -78,15 +78,16 @@
     {
       "id": "issh-plugin-linkifier",
       "name": "链接识别",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "终端输出中的 URL / IP / 文件路径识别，Ctrl+点击 在浏览器打开或复制",
       "kind": "feature",
       "permissions": [
         "terminal:decorate"
       ],
       "minAppVersion": "0.2.0",
-      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-linkifier/releases/download/v0.1.0/issh-plugin-linkifier-0.1.0.tgz",
-      "sha256": "b9bf22351bbc40ddbe0d2bd25253d2c224d9721378936d4c7bed66b6358e2159",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-linkifier/releases/download/v0.1.1/issh-plugin-linkifier-0.1.1.tgz",
+      "sha256": "3ba850ae65409e6a867edffef4d321fe66e765e3ea21bf017efab139fb3a7dcf",
+      "signature": "gtTfrjvd37j21NbLY3yL2t6wMUygkc4Zvdjk/43bARq5p4U3EdKBo2AtSpDAw1NIi2HF3DsrxP1euRZDW2dECg==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-linkifier",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-linkifier"
     },
