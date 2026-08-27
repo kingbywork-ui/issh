@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-08-27T02:27:33.475Z",
+  "updated": "2026-08-27T02:50:52.395Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
@@ -39,6 +39,21 @@
       "sha256": "ea73d4e92b2396c8fb789fe3d4e965b64c205c4b3df7d661ff8d7c4832847d16",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-herdr",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-herdr"
+    },
+    {
+      "id": "issh-plugin-linkifier",
+      "name": "链接识别",
+      "version": "0.1.0",
+      "description": "终端输出中的 URL / IP / 文件路径识别，Ctrl+点击 在浏览器打开或复制",
+      "kind": "feature",
+      "permissions": [
+        "terminal:decorate"
+      ],
+      "minAppVersion": "0.2.0",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-linkifier/releases/download/v0.1.0/issh-plugin-linkifier-0.1.0.tgz",
+      "sha256": "b9bf22351bbc40ddbe0d2bd25253d2c224d9721378936d4c7bed66b6358e2159",
+      "homepage": "https://github.com/kingbywork-ui/issh-plugin-linkifier",
+      "repository": "https://github.com/kingbywork-ui/issh-plugin-linkifier"
     },
     {
       "id": "issh-plugin-vault",
