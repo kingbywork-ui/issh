@@ -58,11 +58,12 @@ impl RuntimeManager {
 
     async fn ensure_started(&self) -> Result<(), String> {
         let _startup = self.startup.lock().await;
-        let health_request = json!({
+        let mut health_request = json!({
             "jsonrpc": "2.0",
             "id": "tauri-startup-health",
             "method": "runtime.health"
         });
+        inject_auth_token(&mut health_request, &self.auth_token);
         if let Ok(health) =
             send_request(&self.pipe_name, &health_request, Duration::from_millis(500)).await
         {
