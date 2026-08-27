@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-08-27T04:04:42.161Z",
+  "updated": "2026-08-27T04:06:14.724Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
@@ -26,15 +26,16 @@
     {
       "id": "issh-plugin-auto-sudo",
       "name": "sudo 密码自动填充",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "检测终端中的 sudo 密码提示（多语言），按 Ctrl+Enter 自动填充已保存的密码",
       "kind": "feature",
       "permissions": [
         "terminal:decorate"
       ],
       "minAppVersion": "0.2.0",
-      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-auto-sudo/releases/download/v0.1.0/issh-plugin-auto-sudo-0.1.0.tgz",
-      "sha256": "d94d4a800babfacc04d27f515e3c64ab04cf9bd83b4a004ea21ceb7a3ae1534f",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-auto-sudo/releases/download/v0.1.1/issh-plugin-auto-sudo-0.1.1.tgz",
+      "sha256": "2d4991acf955f9692836a7fd14cd262623f55e432601a31d2089deb6fbc896b3",
+      "signature": "cH7FFZV6zXEeUuPIWIqejwbPdKGpgRCGCmdQJLbwVvlqRS0M9V+aoJhqbCYvvuI8qMkccQvWXlLiWPLrRZdTAQ==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-auto-sudo",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-auto-sudo"
     },
