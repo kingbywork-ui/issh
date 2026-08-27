@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "updated": "2026-08-27T09:50:00Z",
+  "plugins": [
+    {
+      "id": "issh-plugin-vault",
+      "name": "保险库",
+      "version": "0.1.0",
+      "description": "SSH 凭据保险库：passphrase 管理、锁定/解锁、机密存取，接入主机配置加密存储",
+      "kind": "integration",
+      "permissions": ["vault:read", "vault:write", "settings:tab"],
+      "minAppVersion": "0.1.5",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-vault/releases/download/v0.1.0/issh-plugin-vault-0.1.0.tgz",
+      "sha256": "d2a40480eb757a8fcf9fee5b9200ee8760512e895b208434d17f31ba114c3c9f",
+      "homepage": "https://github.com/kingbywork-ui/issh-plugin-vault",
+      "repository": "https://github.com/kingbywork-ui/issh-plugin-vault"
+    }
+  ]
+}
