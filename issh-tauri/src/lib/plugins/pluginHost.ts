@@ -18,6 +18,7 @@ import type {
     PanelDefinition,
     PluginStorage,
     RegistryEntry,
+    SandboxPanelDefinition,
     SettingsTabDefinition,
     TerminalDecoratorDefinition,
 } from './types'
@@ -33,6 +34,7 @@ const settingsTabs = new Map<string, SettingsTabDefinition>()
 const homeCards = new Map<string, HomeCardDefinition>()
 const panels = new Map<string, PanelDefinition>()
 const terminalDecorators = new Map<string, TerminalDecoratorDefinition>()
+const sandboxPanels = new Map<string, { pluginId: string; definition: SandboxPanelDefinition }>()
 
 const listeners = new Set<Listener>()
 
@@ -55,6 +57,10 @@ export function getHomeCards (): HomeCardDefinition[] {
 
 export function getPanels (placement: PanelDefinition['placement']): PanelDefinition[] {
     return [...panels.values()].filter((panel) => panel.placement === placement)
+}
+
+export function getSandboxPanels (placement: 'left' | 'bottom'): Array<{ pluginId: string; panel: SandboxPanelDefinition }> {
+    return [...sandboxPanels.values()].filter((entry) => entry.definition.placement === placement).map((entry) => ({ pluginId: entry.pluginId, panel: entry.definition }))
 }
 
 export function getTerminalDecorators (): TerminalDecoratorDefinition[] {
@@ -108,6 +114,11 @@ function makePluginContext (manifest: IsshPluginManifest): IsshPluginContext {
         registerPanel (panel) {
             if (!requirePermission('panel:register', 'registerPanel')) return
             panels.set(`${manifest.id}:${panel.id}`, panel)
+            notify()
+        },
+        registerSandboxPanel (panel) {
+            if (!requirePermission('panel:register', 'registerSandboxPanel')) return
+            sandboxPanels.set(`${manifest.id}:${panel.id}`, { pluginId: manifest.id, definition: panel })
             notify()
         },
         registerTerminalDecorator (decorator) {
@@ -172,6 +183,7 @@ export async function activatePlugin (id: string): Promise<void> {
             for (const key of [...settingsTabs.keys()]) if (key.startsWith(`${id}:`)) settingsTabs.delete(key)
             for (const key of [...homeCards.keys()]) if (key.startsWith(`${id}:`)) homeCards.delete(key)
             for (const key of [...panels.keys()]) if (key.startsWith(`${id}:`)) panels.delete(key)
+            for (const key of [...sandboxPanels.keys()]) if (key.startsWith(`${id}:`)) sandboxPanels.delete(key)
             for (const key of [...terminalDecorators.keys()]) if (key.startsWith(`${id}:`)) terminalDecorators.delete(key)
             notify()
         }

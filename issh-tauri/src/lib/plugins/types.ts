@@ -37,6 +37,15 @@ export interface PanelDefinition {
     component: Component<Record<string, unknown>>
 }
 
+export interface SandboxPanelDefinition {
+    id: string
+    title: string
+    placement: 'left' | 'bottom'
+    sandboxUrl: string
+    sandboxOrigin: string
+    height?: number
+}
+
 export interface TerminalDecoratorDefinition {
     id: string
     decorate (options: TerminalDecoratorOptions): void | Promise<void>
@@ -63,6 +72,7 @@ export interface IsshPluginContext {
     registerSettingsTab (tab: SettingsTabDefinition): void
     registerHomeCard (card: HomeCardDefinition): void
     registerPanel (panel: PanelDefinition): void
+    registerSandboxPanel (panel: SandboxPanelDefinition): void
     registerTerminalDecorator (decorator: TerminalDecoratorDefinition): void
     storage: PluginStorage
     log (level: 'info' | 'warn' | 'error', message: string): void

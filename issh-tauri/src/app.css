@@ -1538,3 +1538,7 @@ button { font: inherit; color: inherit; }
 .market-page-btn { min-height: 26px; padding: 0 12px; border: 1px solid var(--ops-line); border-radius: var(--ops-radius); background: transparent; color: var(--ops-fg); cursor: pointer; font-size: 12px; }
 .market-page-btn:disabled { opacity: 0.4; cursor: default; }
 .market-page-info { color: var(--ops-fg-muted); font-size: 12px; }
+
+.sandbox-panel { display: flex; flex-direction: column; border-top: 1px solid var(--ops-line); background: var(--ops-base); }
+.sandbox-panel-title { font-size: 11px; color: var(--ops-fg-muted); padding: 4px 12px; border-bottom: 1px solid var(--ops-line); }
+.sandbox-panel iframe { width: 100%; height: 160px; border: none; background: transparent; }

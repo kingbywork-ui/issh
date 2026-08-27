@@ -9,7 +9,8 @@
     import BatchInputPanel from './lib/BatchInputPanel.svelte'
     import ProfileSelector from './lib/ProfileSelector.svelte'
     import Settings from './lib/Settings.svelte'
-    import { getTerminalDecorators } from './lib/plugins/pluginHost'
+    import SandboxPanel from './lib/SandboxPanel.svelte'
+    import { getTerminalDecorators, getSandboxPanels } from './lib/plugins/pluginHost'
     import { checkPluginUpdates, type PluginUpdateInfo } from './lib/plugins/pluginHost'
     import { findScheme } from './lib/terminalSchemes'
     import {
@@ -67,6 +68,7 @@
     let showWelcome = $state(false)
     let showSettings = $state(false)
     let pluginUpdates = $state<PluginUpdateInfo[]>([])
+    const sandboxPanels = $state(getSandboxPanels('bottom'))
 
     // 连接表单
     let formHost = $state('')
@@ -778,6 +780,14 @@
                     {/each}
                 </div>
             </div>
+
+            {#if sandboxPanels.length > 0}
+                <div class="app-sandbox-panels">
+                    {#each sandboxPanels as { pluginId, panel } (pluginId + ':' + panel.id)}
+                        <SandboxPanel {pluginId} {panel} />
+                    {/each}
+                </div>
+            {/if}
 
             {#if showSend}
                 <div class="app-panel-bottom">

@@ -15,7 +15,7 @@
         "enable": true,
         "scope": ["$APPDATA/plugins/**"]
       },
-      "csp": "default-src 'self'; script-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost https: http://asset.localhost; img-src 'self' asset: http://asset.localhost data:"
+      "csp": "default-src 'self'; script-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost https: http://asset.localhost; img-src 'self' asset: http://asset.localhost data:; frame-src asset: http://asset.localhost"
     },
     "windows": [
       {
