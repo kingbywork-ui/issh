@@ -4,7 +4,7 @@ import type { IsshPlugin, IsshPluginContext, IsshPluginManifest } from './src/ty
 export const manifest: IsshPluginManifest = {
     id: 'issh-plugin-vault',
     name: '保险库',
-    version: '0.1.0',
+    version: '0.1.1',
     description: 'SSH 凭据保险库：passphrase 管理、锁定/解锁、机密存取，接入主机配置加密存储',
     kind: 'integration',
     entry: 'index.js',

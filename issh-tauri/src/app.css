@@ -1506,3 +1506,6 @@ button { font: inherit; color: inherit; }
 .hotkey-list { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; }
 .hotkey-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--ops-fg); }
 .hotkey-row kbd { padding: 2px 8px; border: 1px solid var(--ops-line); border-radius: 4px; background: var(--ops-base); color: var(--ops-fg-muted); font-family: var(--ops-font-mono); font-size: 11px; }
+
+.plugin-update-hint { color: var(--ops-signal); font-size: 12px; }
+.plugin-installed-hint { color: var(--ops-fg-muted); font-size: 12px; }

@@ -4,7 +4,7 @@ import type { IsshPlugin, IsshPluginContext, IsshPluginManifest } from './src/ty
 export const manifest: IsshPluginManifest = {
     id: 'issh-plugin-herdr',
     name: 'Herdr 工作区',
-    version: '0.1.0',
+    version: '0.1.1',
     description: 'Herdr/Workspace 管理：工作区创建、终端会话绑定（对接 isshd workspace.* RPC）',
     kind: 'integration',
     entry: 'index.js',

@@ -3,7 +3,7 @@ import type { IsshPlugin, IsshPluginContext, IsshPluginManifest, TerminalDecorat
 export const manifest: IsshPluginManifest = {
     id: 'issh-plugin-auto-sudo',
     name: 'sudo 密码自动填充',
-    version: '0.1.0',
+    version: '0.1.1',
     description: '检测终端中的 sudo 密码提示（多语言），按 Ctrl+Enter 自动填充已保存的密码',
     kind: 'feature',
     entry: 'index.js',

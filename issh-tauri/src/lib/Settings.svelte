@@ -29,6 +29,7 @@
         sha256: string
         homepage?: string | null
         repository?: string | null
+        signature?: string | null
     }
 
     interface InstalledRecord {
@@ -192,6 +193,17 @@
         installError = ''
     }
 
+    function installedVersionOf (entry: MarketEntry): string | null {
+        const record = installedFromMarket.find((candidate) => candidate.id === entry.id)
+        return record?.version ?? null
+    }
+
+    function hasUpdate (entry: MarketEntry): boolean {
+        const installedVersion = installedVersionOf(entry)
+        if (!installedVersion) return false
+        return compareVersions(entry.version, installedVersion) > 0
+    }
+
     function compareVersions (a: string, b: string): number {
         const pa = a.split('.').map((part) => Number.parseInt(part, 10) || 0)
         const pb = b.split('.').map((part) => Number.parseInt(part, 10) || 0)
@@ -217,10 +229,15 @@
         installBusy = true
         installError = ''
         try {
+            const isUpdate = installedFromMarket.some((record) => record.id === installTarget!.id)
+            if (isUpdate) {
+                await uninstallPlugin(installTarget.id)
+            }
             const installed = await invoke<InstalledRecord>('plugin_download', {
                 id: installTarget.id,
                 url: installTarget.download_url,
                 sha256: installTarget.sha256,
+                signature: installTarget.signature ?? null,
             })
             try {
                 await loadMarketplacePlugin(installed.directory, installed.entry, installed.id)
@@ -400,7 +417,14 @@
                                 </div>
                                 <div class="plugin-card-desc">{entry.description}</div>
                                 <div class="plugin-card-actions">
-                                    <button class="market-install" type="button" onclick={() => beginInstall(entry)}>安装</button>
+                                    {#if hasUpdate(entry)}
+                                        <span class="plugin-update-hint">已装 v{installedVersionOf(entry)}，可更新</span>
+                                        <button class="market-install" type="button" onclick={() => beginInstall(entry)}>更新</button>
+                                    {:else if installedVersionOf(entry)}
+                                        <span class="plugin-installed-hint">已安装</span>
+                                    {:else}
+                                        <button class="market-install" type="button" onclick={() => beginInstall(entry)}>安装</button>
+                                    {/if}
                                 </div>
                             </div>
                         {/each}

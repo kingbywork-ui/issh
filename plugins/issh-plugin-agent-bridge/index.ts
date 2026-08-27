@@ -4,7 +4,7 @@ import type { IsshPlugin, IsshPluginContext, IsshPluginManifest } from './src/ty
 export const manifest: IsshPluginManifest = {
     id: 'issh-plugin-agent-bridge',
     name: 'Agent 桥接',
-    version: '0.1.0',
+    version: '0.1.1',
     description: 'Workspace/Agent 管理：工作区创建、终端会话绑定、agent 注册与授权（对接 isshd workspace.*/agent.* RPC）',
     kind: 'integration',
     entry: 'index.js',
