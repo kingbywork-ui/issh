@@ -35,6 +35,10 @@
         <span id="termStatus"></span>
     </div>
     <div class="row">
+        <button id="toggleFav">切换首个主机收藏</button>
+        <span id="profStatus"></span>
+    </div>
+    <div class="row">
         <span>终端事件：</span><span id="termData">（未收到）</span>
     </div>
 <script>
@@ -126,6 +130,23 @@
             document.getElementById('termStatus').textContent = '已写入 echo hello-from-sandbox'
         } catch (cause) {
             document.getElementById('termStatus').textContent = '写入失败：' + cause.message
+        }
+    })
+
+    document.getElementById('toggleFav').addEventListener('click', async () => {
+        try {
+            const list = await rpc('profiles.list', {})
+            const first = list && list.profiles && list.profiles[0]
+            if (!first) {
+                document.getElementById('profStatus').textContent = '无主机可操作'
+                return
+            }
+            const result = await rpc('profiles.write', { id: first.id, favorite: !first.favorite })
+            document.getElementById('profStatus').textContent = result && result.updated
+                ? '已更新（宿主确认后）'
+                : '无变更'
+        } catch (cause) {
+            document.getElementById('profStatus').textContent = '失败：' + cause.message
         }
     })
 </script>
