@@ -2,10 +2,14 @@
     "id": "issh-plugin-sandbox-demo",
     "name": "沙箱演示插件",
     "description": "演示 iframe 沙箱面板：postMessage RPC 存储读写、终端读写、事件接收",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "kind": "feature",
     "entry": "index.js",
-    "permissions": ["panel:register", "terminal:decorate", "profiles:write"],
+    "permissions": [
+        "panel:register",
+        "terminal:decorate",
+        "profiles:write"
+    ],
     "author": "kingbywork-ui",
     "homepage": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo",
     "repository": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo"

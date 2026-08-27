@@ -4,7 +4,7 @@ import type { IsshPlugin, IsshPluginContext, IsshPluginManifest, SandboxPanelDef
 export const manifest: IsshPluginManifest = {
     id: 'issh-plugin-sandbox-demo',
     name: '沙箱演示插件',
-    version: '0.3.0',
+    version: '0.4.0',
     description: '演示 iframe 沙箱面板：postMessage RPC 存储读写、终端读写、事件接收',
     kind: 'feature',
     entry: 'index.js',
