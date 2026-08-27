@@ -126,7 +126,6 @@
     let colorScheme = $state(localStorage.getItem('issh.colorScheme') ?? 'dark')
     let terminalScheme = $state(localStorage.getItem('issh.terminalScheme') ?? '')
     let enableWelcome = $state(localStorage.getItem('issh.enableWelcomeTab') !== 'false')
-    let analytics = $state(localStorage.getItem('issh.analytics') !== 'false')
     let globalHotkey = $state(localStorage.getItem('issh.globalHotkey') !== 'false')
 
     let plugins = $state<RegistryEntry[]>([])
@@ -466,10 +465,6 @@
                         <label class="settings-toggle">
                             <input type="checkbox" bind:checked={enableWelcome} onchange={() => persist('issh.enableWelcomeTab', String(enableWelcome))} />
                             <span>启动时显示欢迎页</span>
-                        </label>
-                        <label class="settings-toggle">
-                            <input type="checkbox" bind:checked={analytics} onchange={() => persist('issh.analytics', String(analytics))} />
-                            <span>匿名使用统计</span>
                         </label>
                         <label class="settings-toggle">
                             <input type="checkbox" bind:checked={globalHotkey} onchange={() => persist('issh.globalHotkey', String(globalHotkey))} />

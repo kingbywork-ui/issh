@@ -25,7 +25,6 @@
     "fuzzy-search": "^3.2.1",
     "js-yaml": "4.3.0",
     "messageformat": "^2.3.0",
-    "mixpanel": "^0.17.0",
     "ngx-translate-messageformat-compiler": "^4.11.0",
     "readable-stream": "4.4.0",
     "uuid": "11.1.1"

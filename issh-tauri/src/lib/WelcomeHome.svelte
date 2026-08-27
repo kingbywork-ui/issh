@@ -5,7 +5,6 @@
     const welcomeKey = 'issh.enableWelcomeTab'
     let language = $state(localStorage.getItem('issh.language') ?? 'auto')
     let colorScheme = $state(localStorage.getItem('issh.colorScheme') ?? 'dark')
-    let analytics = $state(localStorage.getItem('issh.analytics') !== 'false')
     let globalHotkey = $state(localStorage.getItem('issh.globalHotkey') !== 'false')
 
     function applyColorScheme (): void {
@@ -35,7 +34,6 @@
         persist(welcomeKey, 'false')
         persist('issh.language', language)
         persist('issh.colorScheme', colorScheme)
-        persist('issh.analytics', String(analytics))
         persist('issh.globalHotkey', String(globalHotkey))
         onclose()
     }
@@ -65,7 +63,6 @@
             </div>
         </div>
 
-        <label class="welcome-toggle"><span><strong>启用匿名统计</strong><small>帮助统计 issh 的安装数量</small></span><input type="checkbox" bind:checked={analytics} onchange={() => persist('issh.analytics', String(analytics))} /></label>
         <label class="welcome-toggle"><span><strong>启用全局快捷键（Ctrl-Space）</strong><small>切换 issh 窗口显示状态</small></span><input type="checkbox" bind:checked={globalHotkey} onchange={() => persist('issh.globalHotkey', String(globalHotkey))} /></label>
 
         <button class="welcome-close" type="button" onclick={closeAndDisable}>关闭并不再显示</button>
