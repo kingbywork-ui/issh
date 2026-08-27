@@ -99,3 +99,4 @@ smoke_helpers.py
 # User manual temp/build
 .tmp-*
 docs/user-manual/
+issh-runtime.sqlite3*
