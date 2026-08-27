@@ -10,6 +10,7 @@
         reloadMarketplacePlugin,
         subscribeUi,
         uninstallPlugin,
+        SUPERSEDED_PLUGIN_IDS,
     } from './plugins/pluginHost'
     import type { RegistryEntry } from './plugins/types'
     import { invoke } from '@tauri-apps/api/core'
@@ -288,7 +289,7 @@
         marketError = ''
         try {
             const registry = await invoke<{ plugins: MarketEntry[] }>('plugin_fetch_registry', { url: registryUrl })
-            marketEntries = registry.plugins ?? []
+            marketEntries = (registry.plugins ?? []).filter((entry) => !SUPERSEDED_PLUGIN_IDS.has(entry.id))
             persist('issh.plugins.registryUrl', registryUrl)
         } catch (cause) {
             marketError = cause instanceof Error ? cause.message : String(cause)

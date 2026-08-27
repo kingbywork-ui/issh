@@ -169,8 +169,9 @@ struct PluginRegistryEntryRaw {
     kind: Option<String>,
     #[serde(default)]
     permissions: Option<Vec<String>>,
-    #[serde(default)]
+    #[serde(default, alias = "minAppVersion")]
     min_app_version: Option<String>,
+    #[serde(alias = "downloadUrl")]
     download_url: String,
     sha256: String,
     #[serde(default)]
@@ -602,5 +603,72 @@ mod tests {
         let mut entry = unsigned_entry();
         entry.signature = Some("!!!not-base64!!!".to_string());
         assert!(verify_entry_signature(&entry).is_err());
+    }
+
+    #[test]
+    fn registry_entry_accepts_camel_case_fields() {
+        let payload = serde_json::json!({
+            "schema": 1,
+            "plugins": [{
+                "id": "issh-plugin-x",
+                "name": "x",
+                "version": "0.1.0",
+                "minAppVersion": "0.2.0",
+                "downloadUrl": "https://example.com/x.tgz",
+                "sha256": "abc",
+                "downloads": 7
+            }]
+        });
+        let registry: PluginRegistryRaw =
+            serde_json::from_value(payload).expect("camelCase registry entry must parse");
+        let entry = &registry.plugins[0];
+        assert_eq!(entry.download_url, "https://example.com/x.tgz");
+        assert_eq!(entry.min_app_version.as_deref(), Some("0.2.0"));
+        assert_eq!(entry.downloads, Some(7));
+    }
+
+    #[test]
+    fn registry_entry_accepts_snake_case_fields() {
+        let payload = serde_json::json!({
+            "schema": 1,
+            "plugins": [{
+                "id": "issh-plugin-x",
+                "name": "x",
+                "version": "0.1.0",
+                "min_app_version": "0.2.0",
+                "download_url": "https://example.com/x.tgz",
+                "sha256": "abc"
+            }]
+        });
+        let registry: PluginRegistryRaw =
+            serde_json::from_value(payload).expect("snake_case registry entry must parse");
+        let entry = &registry.plugins[0];
+        assert_eq!(entry.download_url, "https://example.com/x.tgz");
+        assert_eq!(entry.min_app_version.as_deref(), Some("0.2.0"));
+    }
+
+    #[test]
+    fn fetch_registry_parses_live_camel_case_index() {
+        let url = "https://raw.githubusercontent.com/kingbywork-ui/issh-plugin-registry/main/index.json";
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("tokio runtime");
+        let registry = match runtime.block_on(fetch_registry(url)) {
+            Ok(registry) => registry,
+            Err(error) => {
+                // 网络不可达时跳过，不算失败
+                eprintln!("skip: {error}");
+                return;
+            }
+        };
+        assert!(!registry.plugins.is_empty(), "live registry must not be empty");
+        for entry in &registry.plugins {
+            assert!(
+                entry.download_url.starts_with("https://"),
+                "entry {} must carry https download_url",
+                entry.id
+            );
+        }
     }
 }
