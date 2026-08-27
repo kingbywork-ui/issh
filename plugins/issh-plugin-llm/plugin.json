@@ -1,7 +1,7 @@
 {
     "id": "issh-plugin-llm",
     "name": "AI 命令补全",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "LLM 驱动的 shell 命令补全：输入时防抖请求 LLM API，Ctrl+Y 接受候选",
     "kind": "feature",
     "minAppVersion": "0.2.0",

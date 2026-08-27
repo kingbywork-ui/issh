@@ -1,0 +1,47 @@
+.issh-llm-panel {
+    position: fixed;
+    z-index: 9999;
+    min-width: 280px;
+    max-width: 520px;
+    background: var(--ops-base, #1e2430);
+    color: var(--ops-fg, #dce3f0);
+    border: 1px solid var(--ops-line, #39415a);
+    border-radius: 8px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+    font-family: var(--ops-font-mono, monospace);
+    font-size: 12px;
+    overflow: hidden;
+}
+.issh-llm-header {
+    padding: 6px 12px;
+    font-size: 11px;
+    color: var(--ops-fg-muted, #8b93a7);
+    border-bottom: 1px solid var(--ops-line, #39415a);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.issh-llm-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 5px 12px;
+    cursor: pointer;
+}
+.issh-llm-row:hover { background: rgba(255, 255, 255, 0.04); }
+.issh-llm-row.active { background: rgba(64, 156, 255, 0.14); }
+.issh-llm-command {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.issh-llm-confidence { color: var(--ops-fg-muted, #8b93a7); font-size: 11px; }
+.issh-llm-loading { padding: 5px 12px; color: var(--ops-fg-muted, #8b93a7); font-size: 11px; }
+.issh-llm-footer {
+    padding: 4px 12px;
+    font-size: 10px;
+    color: var(--ops-fg-muted, #8b93a7);
+    border-top: 1px solid var(--ops-line, #39415a);
+}

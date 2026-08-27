@@ -1,6 +1,6 @@
 {
     "name": "issh-plugin-llm",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "AI 命令补全插件（issh Tauri 客户端）",
     "type": "module",
     "main": "index.ts",

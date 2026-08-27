@@ -10,6 +10,7 @@
     import ProfileSelector from './lib/ProfileSelector.svelte'
     import Settings from './lib/Settings.svelte'
     import { getTerminalDecorators } from './lib/plugins/pluginHost'
+    import { checkPluginUpdates, type PluginUpdateInfo } from './lib/plugins/pluginHost'
     import { findScheme } from './lib/terminalSchemes'
     import {
         closeSession,
@@ -65,6 +66,7 @@
     let showSelector = $state(false)
     let showWelcome = $state(false)
     let showSettings = $state(false)
+    let pluginUpdates = $state<PluginUpdateInfo[]>([])
 
     // 连接表单
     let formHost = $state('')
@@ -342,6 +344,17 @@
             event.preventDefault()
             showSettings = true
         }
+    }
+
+    async function checkUpdatesOnStartup (): Promise<void> {
+        if (localStorage.getItem('issh.plugins.autoUpdateCheck') === 'false') return
+        const registryUrl = localStorage.getItem('issh.plugins.registryUrl')
+        if (!registryUrl) return
+        pluginUpdates = await checkPluginUpdates(registryUrl)
+    }
+
+    function dismissUpdateNotice (): void {
+        pluginUpdates = []
     }
 
     // Electron 存的私钥路径可能是 file:// URI（file://c:\... 或 file:///c:/...），
@@ -644,6 +657,7 @@
         void (async () => {
             await refresh()
             await loadVaultSecrets()
+            void checkUpdatesOnStartup()
         })()
         pollHandle = setInterval(pollAll, POLL_INTERVAL_MS)
         return () => {
@@ -659,6 +673,13 @@
 <svelte:window onkeydown={handleGlobalHotkeys} />
 
 <div class="app-root">
+    {#if pluginUpdates.length > 0}
+        <div class="plugin-update-notice" role="status">
+            <span>插件更新可用：{pluginUpdates.map((update) => `${update.name} v${update.latestVersion}`).join('、')}</span>
+            <button class="update-notice-action" type="button" onclick={() => { showSettings = true }}>查看</button>
+            <button class="update-notice-dismiss" type="button" onclick={dismissUpdateNotice} aria-label="关闭更新提示">×</button>
+        </div>
+    {/if}
     <header class="tab-bar">
         <button
             class="btn-tab-bar profile-button"

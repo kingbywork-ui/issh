@@ -1,13 +1,13 @@
 import LlmSettingsTab from './src/LlmSettingsTab.svelte'
-import hintCss from './src/hint.css?inline'
+import panelCss from './src/panel.css?inline'
 import type { IsshPlugin, IsshPluginContext, IsshPluginManifest, TerminalDecoratorDefinition } from './src/types'
 import { fetchAutocomplete, loadConfig, type AutocompleteSuggestion } from './src/llmApi'
 
 export const manifest: IsshPluginManifest = {
     id: 'issh-plugin-llm',
     name: 'AI 命令补全',
-    version: '0.1.0',
-    description: 'LLM 驱动的 shell 命令补全：输入时防抖请求 LLM API，Ctrl+Y 接受候选',
+    version: '0.2.0',
+    description: 'LLM 驱动的 shell 命令补全：输入时防抖请求 LLM API，候选列表面板，Ctrl+Y 接受',
     kind: 'feature',
     entry: 'index.js',
     permissions: ['terminal:decorate', 'settings:tab'],
@@ -19,19 +19,20 @@ export const manifest: IsshPluginManifest = {
 interface SuggestionState {
     suggestions: AutocompleteSuggestion[]
     index: number
+    loading: boolean
 }
 
 const decorator: TerminalDecoratorDefinition = {
     id: 'llm-autocomplete',
     async decorate (options) {
         const { terminal } = options
-        if (!document.getElementById('issh-plugin-llm-hint-style')) {
+        if (!document.getElementById('issh-plugin-llm-panel-style')) {
             const style = document.createElement('style')
-            style.id = 'issh-plugin-llm-hint-style'
-            style.textContent = hintCss
+            style.id = 'issh-plugin-llm-panel-style'
+            style.textContent = panelCss
             document.head.appendChild(style)
         }
-        const state: SuggestionState = { suggestions: [], index: 0 }
+        const state: SuggestionState = { suggestions: [], index: 0, loading: false }
         let debounceTimer: ReturnType<typeof setTimeout> | null = null
         let requestGeneration = 0
 
@@ -56,6 +57,11 @@ const decorator: TerminalDecoratorDefinition = {
                 render()
                 return false
             }
+            if (event.key === 'Escape' && state.suggestions.length > 0) {
+                state.suggestions = []
+                render()
+                return false
+            }
             return true
         })
 
@@ -77,6 +83,8 @@ const decorator: TerminalDecoratorDefinition = {
             return lines
         }
 
+        let panelElement: HTMLDivElement | null = null
+
         function render (): void {
             const buffer = terminal.buffer.active
             const line = buffer.getLine(buffer.cursorY)
@@ -84,37 +92,70 @@ const decorator: TerminalDecoratorDefinition = {
             const text = line.translateToString(true)
             const cursorX = buffer.cursorX
             const partial = text.slice(0, cursorX).trim()
-            if (state.suggestions.length === 0 || !partial) {
-                hideHint()
+            if (state.suggestions.length === 0 && !state.loading) {
+                hidePanel()
                 return
             }
-            showHint(state.suggestions[state.index]?.command ?? '', state.index + 1, state.suggestions.length)
+            showPanel(partial)
         }
 
-        let hintElement: HTMLDivElement | null = null
-        function showHint (command: string, index: number, total: number): void {
-            if (!hintElement) {
-                hintElement = document.createElement('div')
-                hintElement.className = 'issh-llm-hint'
-                document.body.appendChild(hintElement)
+        function showPanel (partial: string): void {
+            if (!panelElement) {
+                panelElement = document.createElement('div')
+                panelElement.className = 'issh-llm-panel'
+                document.body.appendChild(panelElement)
             }
-            hintElement.textContent = `${command}（${index}/${total}，Ctrl+Y 接受 Ctrl+N/U 切换）`
+            const rows = state.suggestions.map((suggestion, index) => `
+                <div class="issh-llm-row${index === state.index ? ' active' : ''}" data-index="${index}">
+                    <span class="issh-llm-command"></span>
+                    <span class="issh-llm-confidence">${Math.round(suggestion.confidence * 100)}%</span>
+                </div>
+            `).join('')
+            const loadingRow = state.loading ? '<div class="issh-llm-loading">AI 补全请求中…</div>' : ''
+            panelElement.innerHTML = `
+                <div class="issh-llm-header">AI 补全${partial ? ` · ${escapeHtml(partial)}` : ''}</div>
+                ${rows}
+                ${loadingRow}
+                <div class="issh-llm-footer">Ctrl+Y 接受 · Ctrl+N/U 切换 · Esc 关闭</div>
+            `
+            const commandCells = panelElement.querySelectorAll('.issh-llm-command')
+            state.suggestions.forEach((suggestion, index) => {
+                const cell = commandCells[index]
+                if (cell) cell.textContent = suggestion.command
+            })
+            panelElement.querySelectorAll('.issh-llm-row').forEach((row) => {
+                row.addEventListener('click', () => {
+                    const index = Number.parseInt((row as HTMLElement).dataset.index ?? '0', 10)
+                    const suggestion = state.suggestions[index]
+                    if (suggestion) {
+                        options.write(suggestion.command)
+                        state.suggestions = []
+                        render()
+                    }
+                })
+            })
             const rect = (terminal.element as HTMLElement).getBoundingClientRect()
-            hintElement.style.left = `${rect.left + bufferX(terminal) * 9}px`
-            hintElement.style.top = `${rect.top + (bufferY(terminal) + 1) * 18}px`
+            panelElement.style.left = `${rect.left + buffer.cursorX * 9}px`
+            panelElement.style.top = `${rect.top + (buffer.cursorY + 1) * 18}px`
         }
-        function hideHint (): void {
-            hintElement?.remove()
-            hintElement = null
+
+        function hidePanel (): void {
+            panelElement?.remove()
+            panelElement = null
         }
-        function bufferX (t: { buffer: { active: { cursorX: number } } }): number { return t.buffer.active.cursorX }
-        function bufferY (t: { buffer: { active: { cursorY: number } } }): number { return t.buffer.active.cursorY }
+
+        function escapeHtml (text: string): string {
+            const div = document.createElement('div')
+            div.textContent = text
+            return div.innerHTML
+        }
 
         const dataListener = terminal.onData((data) => {
             if (debounceTimer) clearTimeout(debounceTimer)
             if (/[\r\n]/.test(data)) {
                 state.suggestions = []
-                hideHint()
+                state.loading = false
+                hidePanel()
                 return
             }
             const config = loadConfig()
@@ -125,14 +166,18 @@ const decorator: TerminalDecoratorDefinition = {
                 const partial = readCurrentLine()
                 if (partial.length < 2) {
                     state.suggestions = []
-                    hideHint()
+                    state.loading = false
+                    hidePanel()
                     return
                 }
                 const context = readContext()
+                state.loading = true
+                render()
                 void fetchAutocomplete(config, partial, context).then((suggestions) => {
                     if (generation !== requestGeneration) return
                     state.suggestions = suggestions.filter((item) => item.command !== partial)
                     state.index = 0
+                    state.loading = false
                     render()
                 })
             }, config.debounceMs)
@@ -142,7 +187,7 @@ const decorator: TerminalDecoratorDefinition = {
             if (debounceTimer) clearTimeout(debounceTimer)
             keyHandler?.()
             dataListener.dispose()
-            hideHint()
+            hidePanel()
         })
     },
 }

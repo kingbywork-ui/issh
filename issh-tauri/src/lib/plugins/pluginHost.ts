@@ -227,4 +227,48 @@ export async function loadInstalledMarketplacePlugins (): Promise<void> {
     }
 }
 
+export interface PluginUpdateInfo {
+    id: string
+    name: string
+    installedVersion: string
+    latestVersion: string
+}
+
+function compareVersions (a: string, b: string): number {
+    const pa = a.split('.').map((n) => Number.parseInt(n, 10) || 0)
+    const pb = b.split('.').map((n) => Number.parseInt(n, 10) || 0)
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const diff = (pa[i] ?? 0) - (pb[i] ?? 0)
+        if (diff !== 0) return diff
+    }
+    return 0
+}
+
+export async function checkPluginUpdates (registryUrl: string): Promise<PluginUpdateInfo[]> {
+    try {
+        const { invoke } = await import('@tauri-apps/api/core')
+        const installed = await invoke<Array<{ id: string; directory: string; entry: string; version?: string }>>('plugin_list_installed')
+        if (installed.length === 0) return []
+        const registry = await invoke<{ plugins: Array<{ id: string; name: string; version: string }> }>('plugin_fetch_registry', { url: registryUrl })
+        const updates: PluginUpdateInfo[] = []
+        for (const record of installed) {
+            const entry = registry.plugins.find((candidate) => candidate.id === record.id)
+            if (!entry) continue
+            const installedVersion = record.version ?? readInstalledVersion(record.id)
+            if (installedVersion && compareVersions(entry.version, installedVersion) > 0) {
+                updates.push({ id: entry.id, name: entry.name, installedVersion, latestVersion: entry.version })
+            }
+        }
+        return updates
+    } catch (cause) {
+        console.warn('[plugins] 检查插件更新失败：', cause)
+        return []
+    }
+}
+
+function readInstalledVersion (id: string): string {
+    const manifest = plugins.get(id)?.manifest
+    return manifest?.version ?? ''
+}
+
 export { subscribe as subscribeRegistry }

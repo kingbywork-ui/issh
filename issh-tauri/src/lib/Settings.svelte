@@ -63,6 +63,15 @@
     let marketError = $state('')
     let marketSearch = $state('')
     let marketKind = $state<'all' | 'feature' | 'appearance' | 'integration'>('all')
+    let detailEntry = $state<MarketEntry | null>(null)
+    const permissionLabels: Record<string, string> = {
+        'settings:tab': '注册设置页标签（在设置中显示插件配置）',
+        'home:card': '注册首页卡片（在欢迎页显示信息卡片）',
+        'panel:register': '注册面板（在主界面显示侧边/底部面板）',
+        'terminal:decorate': '装饰终端（读取终端内容、拦截按键与写入）',
+        'profiles:read': '读取主机配置（含主机名、用户名、端口）',
+        'profiles:write': '修改主机配置（创建/更新/删除主机与分组）',
+    }
     let installTarget = $state<MarketEntry | null>(null)
     let installBusy = $state(false)
     let installError = $state('')
@@ -202,6 +211,10 @@
         const installedVersion = installedVersionOf(entry)
         if (!installedVersion) return false
         return compareVersions(entry.version, installedVersion) > 0
+    }
+
+    function permissionLabel (permission: string): string {
+        return permissionLabels[permission] ?? permission
     }
 
     function compareVersions (a: string, b: string): number {
@@ -408,8 +421,57 @@
                         {#if !marketLoading && filteredMarket.length === 0 && !marketError}
                             <div class="settings-empty">没有可显示的插件，点击「刷新」拉取索引。</div>
                         {/if}
+                        {#if detailEntry}
+                            <div class="plugin-detail">
+                                <button class="market-back" type="button" onclick={() => { detailEntry = null }}>← 返回列表</button>
+                                <div class="plugin-card-head">
+                                    <strong>{detailEntry.name}</strong>
+                                    <span class="plugin-version">v{detailEntry.version}</span>
+                                    <span class="plugin-kind">{kindLabel(detailEntry.kind)}</span>
+                                </div>
+                                <div class="plugin-card-desc">{detailEntry.description}</div>
+                                <div class="plugin-detail-meta">
+                                    <div><span class="plugin-detail-label">插件 ID</span><code>{detailEntry.id}</code></div>
+                                    {#if detailEntry.min_app_version}
+                                        <div><span class="plugin-detail-label">最低客户端版本</span><code>v{detailEntry.min_app_version}</code></div>
+                                    {/if}
+                                    {#if detailEntry.sha256}
+                                        <div><span class="plugin-detail-label">包哈希</span><code class="plugin-detail-hash">{detailEntry.sha256.slice(0, 16)}…</code></div>
+                                    {/if}
+                                    {#if detailEntry.signature}
+                                        <div><span class="plugin-detail-label">签名</span><span class="plugin-signed">已签名（ed25519）</span></div>
+                                    {/if}
+                                </div>
+                                <div class="plugin-detail-perms">
+                                    <div class="plugin-detail-label">权限说明</div>
+                                    {#each detailEntry.permissions as permission (permission)}
+                                        <div class="plugin-detail-perm">• {permissionLabel(permission)}</div>
+                                    {:else}
+                                        <div class="plugin-detail-perm">无权限声明</div>
+                                    {/each}
+                                </div>
+                                <div class="plugin-card-actions">
+                                    {#if hasUpdate(detailEntry)}
+                                        <span class="plugin-update-hint">已装 v{installedVersionOf(detailEntry)}，可更新</span>
+                                        <button class="market-install" type="button" onclick={() => { if (detailEntry) beginInstall(detailEntry) }}>更新</button>
+                                    {:else if installedVersionOf(detailEntry)}
+                                        <span class="plugin-installed-hint">已安装</span>
+                                    {:else}
+                                        <button class="market-install" type="button" onclick={() => { if (detailEntry) beginInstall(detailEntry) }}>安装</button>
+                                    {/if}
+                                </div>
+                                <div class="plugin-detail-links">
+                                    {#if detailEntry.homepage}
+                                        <a href={detailEntry.homepage} target="_blank" rel="noreferrer">主页</a>
+                                    {/if}
+                                    {#if detailEntry.repository}
+                                        <a href={detailEntry.repository} target="_blank" rel="noreferrer">源码仓库</a>
+                                    {/if}
+                                </div>
+                            </div>
+                        {:else}
                         {#each filteredMarket as entry (entry.id)}
-                            <div class="plugin-card">
+                            <div class="plugin-card" role="button" tabindex="0" onclick={() => { detailEntry = entry }} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { detailEntry = entry } }}>
                                 <div class="plugin-card-head">
                                     <strong>{entry.name}</strong>
                                     <span class="plugin-version">v{entry.version}</span>
@@ -419,15 +481,16 @@
                                 <div class="plugin-card-actions">
                                     {#if hasUpdate(entry)}
                                         <span class="plugin-update-hint">已装 v{installedVersionOf(entry)}，可更新</span>
-                                        <button class="market-install" type="button" onclick={() => beginInstall(entry)}>更新</button>
+                                        <button class="market-install" type="button" onclick={(event) => { event.stopPropagation(); beginInstall(entry) }}>更新</button>
                                     {:else if installedVersionOf(entry)}
                                         <span class="plugin-installed-hint">已安装</span>
                                     {:else}
-                                        <button class="market-install" type="button" onclick={() => beginInstall(entry)}>安装</button>
+                                        <button class="market-install" type="button" onclick={(event) => { event.stopPropagation(); beginInstall(entry) }}>安装</button>
                                     {/if}
                                 </div>
                             </div>
                         {/each}
+                        {/if}
                     </section>
                 {:else if section === 'about'}
                     <section aria-label="关于">
