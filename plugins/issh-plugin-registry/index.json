@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-08-27T04:01:52.456Z",
+  "updated": "2026-08-27T04:03:19.518Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
@@ -59,7 +59,7 @@
     {
       "id": "issh-plugin-herdr",
       "name": "Herdr 工作区",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "Herdr/Workspace 管理：工作区创建、终端会话绑定（对接 isshd workspace.* RPC）",
       "kind": "integration",
       "permissions": [
@@ -69,8 +69,9 @@
         "settings:tab"
       ],
       "minAppVersion": "0.2.0",
-      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-herdr/releases/download/v0.1.0/issh-plugin-herdr-0.1.0.tgz",
-      "sha256": "ea73d4e92b2396c8fb789fe3d4e965b64c205c4b3df7d661ff8d7c4832847d16",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-herdr/releases/download/v0.1.1/issh-plugin-herdr-0.1.1.tgz",
+      "sha256": "1002908e8a9a4f70bdfedb0350c580c333db698eb6bf0a149915dbf34da0e116",
+      "signature": "1eGuv2sB6dQfTo6RoLoHhwemRul7jTKT1wM50OMUoI2pX+D9KKHXBPfCFkxv9gR1fq6gdy/MnkS5DKG5FmiMCg==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-herdr",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-herdr"
     },
