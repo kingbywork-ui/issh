@@ -1,4 +1,5 @@
 import type { Component } from 'svelte'
+import type { Terminal } from '@xterm/xterm'
 
 export interface IsshPluginManifest {
     id: string
@@ -44,6 +45,9 @@ export interface TerminalDecoratorOptions {
     sessionId: string
     kind: 'local' | 'ssh'
     title: string
+    terminal: Terminal
+    write (data: Uint8Array | string): void
+    dispose (callback: () => void): void
 }
 
 export interface PluginStorage {

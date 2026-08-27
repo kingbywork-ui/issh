@@ -9,6 +9,7 @@
     import BatchInputPanel from './lib/BatchInputPanel.svelte'
     import ProfileSelector from './lib/ProfileSelector.svelte'
     import Settings from './lib/Settings.svelte'
+    import { getTerminalDecorators } from './lib/plugins/pluginHost'
     import {
         closeSession,
         discoverSshHostKey,
@@ -44,6 +45,7 @@
         host: HTMLDivElement | null
         sequence: number
         ssh: SshTabInfo | null
+        decoratorCleanups: Array<() => void> | null
     }
 
     let health: RuntimeHealth | null = $state(null)
@@ -268,7 +270,7 @@
     async function addLocalTab (): Promise<void> {
         try {
             const session = await openLocalSession()
-            const tab: TerminalTab = { session, terminal: null, fitAddon: null, host: null, sequence: 0, ssh: null }
+            const tab: TerminalTab = { session, terminal: null, fitAddon: null, host: null, sequence: 0, ssh: null, decoratorCleanups: null }
             tabs.push(tab)
             activeId = session.id
             showHome = false
@@ -372,6 +374,7 @@
                     profile: params.profile,
                     keyPath: params.keyPath,
                 },
+                decoratorCleanups: null,
             }
             tabs.push(tab)
             activeId = session.id
@@ -433,8 +436,32 @@
         tab.fitAddon = fitAddon
         tab.host = host
         bindTerminal(tab)
+        applyTerminalDecorators(tab)
         await pollOutput(tab)
         terminal.focus()
+    }
+
+    function applyTerminalDecorators (tab: TerminalTab): void {
+        if (!tab.terminal) return
+        for (const decorator of getTerminalDecorators()) {
+            const cleanups: Array<() => void> = []
+            try {
+                decorator.decorate({
+                    sessionId: tab.session.id,
+                    kind: tab.session.kind === 'ssh' ? 'ssh' : 'local',
+                    title: tab.session.title,
+                    terminal: tab.terminal,
+                    write: (data) => {
+                        const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data
+                        enqueueWrite(tab.session.id, async () => { await writeSession(tab.session.id, bytes) })
+                    },
+                    dispose: (callback) => { cleanups.push(callback) },
+                })
+            } catch (cause) {
+                console.warn(`[decorator ${decorator.id}] decorate 失败：`, cause)
+            }
+            tab.decoratorCleanups = cleanups
+        }
     }
 
     function terminalHostAction (node: HTMLDivElement, tab: TerminalTab): void {

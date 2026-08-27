@@ -86,21 +86,31 @@ function makeStorage (id: string): PluginStorage {
 }
 
 function makePluginContext (manifest: IsshPluginManifest): IsshPluginContext {
+    const requirePermission = (permission: string, api: string): boolean => {
+        const declared = manifest.permissions ?? []
+        if (declared.includes(permission)) return true
+        console.warn(`[plugin ${manifest.id}] 未声明权限 ${permission}，拒绝 ${api}`)
+        return false
+    }
     return {
         manifest,
         registerSettingsTab (tab) {
+            if (!requirePermission('settings:tab', 'registerSettingsTab')) return
             settingsTabs.set(`${manifest.id}:${tab.id}`, tab)
             notify()
         },
         registerHomeCard (card) {
+            if (!requirePermission('home:card', 'registerHomeCard')) return
             homeCards.set(`${manifest.id}:${card.id}`, card)
             notify()
         },
         registerPanel (panel) {
+            if (!requirePermission('panel:register', 'registerPanel')) return
             panels.set(`${manifest.id}:${panel.id}`, panel)
             notify()
         },
         registerTerminalDecorator (decorator) {
+            if (!requirePermission('terminal:decorate', 'registerTerminalDecorator')) return
             terminalDecorators.set(`${manifest.id}:${decorator.id}`, decorator)
             notify()
         },
