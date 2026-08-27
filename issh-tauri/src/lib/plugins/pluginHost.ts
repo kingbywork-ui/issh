@@ -152,6 +152,7 @@ interface MarketplacePluginModule {
 export async function loadMarketplacePlugin (directory: string, entryFile: string, id: string): Promise<void> {
     if (plugins.has(id)) return
     installedMarketplaceIds.add(id)
+    pluginDirectories.set(id, directory.replace(/\\/g, '/'))
     const url = convertFileSrc(`${directory.replace(/\\/g, '/')}/${entryFile}`)
     const module = await import(/* @vite-ignore */ url) as MarketplacePluginModule
     const plugin = module.default ?? module.plugin
@@ -162,6 +163,8 @@ export async function loadMarketplacePlugin (directory: string, entryFile: strin
     registerPlugin(plugin, 'marketplace')
     await activatePlugin(id)
 }
+
+const pluginDirectories = new Map<string, string>()
 
 export async function activatePlugin (id: string): Promise<void> {
     const plugin = plugins.get(id)
@@ -176,6 +179,8 @@ export async function activatePlugin (id: string): Promise<void> {
         return
     }
     const fiber = root.plugin((ctx) => {
+        const directory = pluginDirectories.get(id)
+        if (directory) window.__ISSH_PLUGIN_DIR__ = directory
         void Promise.resolve(plugin.activate(makePluginContext(plugin.manifest))).catch((cause: unknown) => {
             markState(id, 'failed', cause instanceof Error ? cause.message : String(cause))
         })
@@ -327,3 +332,9 @@ function readInstalledVersion (id: string): string {
 }
 
 export { subscribe as subscribeRegistry }
+
+declare global {
+    interface Window {
+        __ISSH_PLUGIN_DIR__?: string
+    }
+}
