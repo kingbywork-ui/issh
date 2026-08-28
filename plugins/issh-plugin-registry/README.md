@@ -18,7 +18,7 @@ issh 桌面客户端（Tauri 版）的官方插件索引仓库。客户端「设
             "description": "…",
             "kind": "feature",
             "permissions": ["terminal:decorate", "settings:tab"],
-            "minAppVersion": "0.2.0",
+            "minAppVersion": "0.1.6",
             "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-llm/releases/download/v0.2.0/issh-plugin-llm-0.2.0.tgz",
             "sha256": "…",
             "signature": "…",
