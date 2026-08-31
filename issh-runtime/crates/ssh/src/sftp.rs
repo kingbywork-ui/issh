@@ -8,6 +8,17 @@ pub const MAX_SFTP_FILE_BYTES: usize = 64 * 1024 * 1024;
 pub const MAX_SFTP_DIR_ENTRIES: usize = 4096;
 pub const SFTP_SUBSYSTEM_NAME: &str = "sftp";
 
+/// Build a stable absolute POSIX path for a directory entry.
+/// Some SFTP servers/libraries return `DirEntry::path()` relative to the
+/// read directory, while the runtime API requires absolute paths.
+fn entry_path(parent: &str, name: &str) -> String {
+    if parent == "/" {
+        format!("/{name}")
+    } else {
+        format!("{}/{}", parent.trim_end_matches('/'), name)
+    }
+}
+
 #[derive(Debug)]
 pub enum SftpError {
     InvalidPath,
@@ -128,11 +139,8 @@ impl SshSftpSession {
             .await
             .map_err(|error| SftpError::Transfer(error.to_string()))?;
         let total_size = metadata.size.unwrap_or(0);
-        if total_size > MAX_SFTP_FILE_BYTES as u64 {
-            return Err(SftpError::FileTooLarge {
-                limit: MAX_SFTP_FILE_BYTES,
-            });
-        }
+        // 分块读取不设总大小上限：单次读取量受 length/MAX_SFTP_CHUNK_BYTES 约束，
+        // 支持任意大小文件的分段下载
         if offset >= total_size {
             return Ok(SftpReadChunk {
                 offset,
@@ -257,9 +265,10 @@ impl SshSftpSession {
             }
             let metadata = entry.metadata();
             let file_type = metadata.file_type();
+            let name = entry.file_name();
             entries.push(SftpEntry {
-                name: entry.file_name(),
-                path: entry.path(),
+                path: entry_path(path, &name),
+                name,
                 is_dir: file_type.is_dir(),
                 is_file: file_type.is_file(),
                 is_symlink: file_type.is_symlink(),
@@ -320,6 +329,28 @@ impl SshSftpSession {
             .await
             .map_err(|error| SftpError::Transfer(error.to_string()))
     }
+
+    /// 解析 symlink 目标路径（对齐 issh 分支 sftpPanel 的链接跟随）
+    pub async fn read_link(&self, path: &str) -> Result<String, SftpError> {
+        validate_path(path)?;
+        self.session
+            .read_link(path)
+            .await
+            .map_err(|error| SftpError::Transfer(error.to_string()))
+    }
+
+    /// 修改文件/目录权限（八进制模式，如 0o755）
+    pub async fn set_mode(&self, path: &str, mode: u32) -> Result<(), SftpError> {
+        validate_path(path)?;
+        let metadata = russh_sftp::protocol::FileAttributes {
+            permissions: Some(mode),
+            ..Default::default()
+        };
+        self.session
+            .set_metadata(path, metadata)
+            .await
+            .map_err(|error| SftpError::Transfer(error.to_string()))
+    }
 }
 
 pub(crate) fn validate_path(path: &str) -> Result<(), SftpError> {
@@ -342,5 +373,12 @@ mod tests {
         assert!(validate_path("./home").is_err());
         let long_path = format!("/{}", "a".repeat(MAX_SFTP_PATH_BYTES));
         assert!(validate_path(&long_path).is_err());
+    }
+
+    #[test]
+    fn builds_absolute_entry_paths() {
+        assert_eq!(entry_path("/", "home"), "/home");
+        assert_eq!(entry_path("/home", "user"), "/home/user");
+        assert_eq!(entry_path("/home/", "user"), "/home/user");
     }
 }

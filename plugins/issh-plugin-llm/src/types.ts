@@ -26,12 +26,33 @@ export interface PluginStorage {
     keys (): string[]
 }
 
+export interface TerminalDecoratorProfileInfo {
+    name: string
+    loginScript: string | null
+}
+
+export interface TerminalDecoratorOptions {
+    sessionId: string
+    kind: 'local' | 'ssh'
+    title: string
+    terminal: unknown
+    /** SSH 会话关联的主机 profile 摘要（本地会话为 null） */
+    profile: TerminalDecoratorProfileInfo | null
+    write (data: Uint8Array | string): void
+    dispose (callback: () => void): void
+}
+
+export interface TerminalDecoratorDefinition {
+    id: string
+    decorate (options: TerminalDecoratorOptions): void | Promise<void>
+}
+
 export interface IsshPluginContext {
     manifest: IsshPluginManifest
     registerSettingsTab (tab: SettingsTabDefinition): void
     registerHomeCard (card: { id: string; title: string; order?: number; component: unknown }): void
     registerPanel (panel: { id: string; title: string; placement: 'left' | 'bottom'; component: unknown }): void
-    registerTerminalDecorator (decorator: { id: string; decorate (options: { sessionId: string; kind: 'local' | 'ssh'; title: string }): void | Promise<void> }): void
+    registerTerminalDecorator (decorator: TerminalDecoratorDefinition): void
     storage: PluginStorage
     log (level: 'info' | 'warn' | 'error', message: string): void
 }

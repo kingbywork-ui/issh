@@ -13,6 +13,7 @@ export interface SshHostProfile {
     remark: string | null
     favorite: boolean
     tags: string[]
+    loginScript: string | null
 }
 
 export interface SshHostGroup {
@@ -52,6 +53,64 @@ export function lockHostProfiles (): Promise<HostProfilesResult> {
 
 export function mutateHostProfiles (mutation: HostProfileMutation): Promise<HostProfilesResult> {
     return invoke<HostProfilesResult>('mutate_host_profiles', { mutation })
+}
+
+export interface HostCredential {
+    user: string
+    host: string
+    port: number
+    password: string | null
+    keyPassphrase: string | null
+    passphraseByKey: boolean
+}
+
+export interface GenericCredential {
+    kind: string
+    user: string
+    port: number
+    value: string | null
+    keyPath: string | null
+}
+
+export interface HostCredentialsResult {
+    encrypted: boolean
+    unlocked: boolean
+    profiles: SshHostProfile[]
+    groups: SshHostGroup[]
+    credentials: HostCredential[]
+    generic: GenericCredential[]
+}
+
+export interface CredentialMutation {
+    user: string
+    host: string
+    port: number
+    password?: string
+    keyPassphrase?: string
+}
+
+export function hostCredentials (): Promise<HostCredentialsResult> {
+    return invoke<HostCredentialsResult>('host_credentials')
+}
+
+export function saveHostCredential (mutation: CredentialMutation): Promise<HostCredentialsResult> {
+    return invoke<HostCredentialsResult>('save_host_credential', { mutation })
+}
+
+export function deleteHostCredential (user: string, host: string, port: number): Promise<HostCredentialsResult> {
+    return invoke<HostCredentialsResult>('delete_host_credential', { user, host, port })
+}
+
+export function enableHostVault (passphrase: string): Promise<HostCredentialsResult> {
+    return invoke<HostCredentialsResult>('enable_host_vault', { passphrase })
+}
+
+export function disableHostVault (): Promise<HostCredentialsResult> {
+    return invoke<HostCredentialsResult>('disable_host_vault')
+}
+
+export function changeHostPassphrase (oldPassphrase: string, newPassphrase: string): Promise<HostCredentialsResult> {
+    return invoke<HostCredentialsResult>('change_host_passphrase', { oldPassphrase, newPassphrase })
 }
 
 export function resolveSshPassword (user: string, host: string, port: number): Promise<string | null> {
@@ -348,14 +407,37 @@ export function sftpRename (sessionId: string, oldPath: string, newPath: string)
     return runtimeRequest('sftp.rename', { sessionId, oldPath, newPath })
 }
 
+export function sftpReadlink (sessionId: string, path: string): Promise<{ target: string }> {
+    return runtimeRequest<{ target: string }>('sftp.readlink', { sessionId, path })
+}
+
+export function sftpChmod (sessionId: string, path: string, mode: number): Promise<{ changed: boolean }> {
+    return runtimeRequest<{ changed: boolean }>('sftp.chmod', { sessionId, path, mode })
+}
+
 export function sftpClose (sessionId: string): Promise<unknown> {
     return runtimeRequest('sftp.close', { sessionId })
 }
 
+export function sshExecReadonly (
+    sessionId: string,
+    command: string,
+    timeoutMs = 10000,
+    maxOutputBytes = 1024 * 1024,
+): Promise<{ output: string }> {
+    return runtimeRequest<{ output: string }>('ssh.execReadonly', {
+        sessionId,
+        command,
+        timeoutMs,
+        maxOutputBytes,
+    })
+}
+
 export function bytesToBase64 (bytes: Uint8Array): string {
     let binary = ''
-    for (let index = 0; index < bytes.length; index += 1) {
-        binary += String.fromCharCode(bytes[index])
+    const CHUNK = 0x8000
+    for (let index = 0; index < bytes.length; index += CHUNK) {
+        binary += String.fromCharCode(...bytes.subarray(index, index + CHUNK))
     }
     return btoa(binary)
 }
@@ -367,4 +449,26 @@ export function base64ToBytes (base64: string): Uint8Array {
         bytes[index] = binary.charCodeAt(index)
     }
     return bytes
+}
+
+// ---------- 本地文件系统（下载写盘 / 对话框，Tauri 壳提供） ----------
+
+export function pickSavePath (title: string, defaultFileName: string): Promise<string | null> {
+    return invoke<string | null>('pick_save_path', { title, defaultFileName })
+}
+
+export function pickDirectory (title: string): Promise<string | null> {
+    return invoke<string | null>('pick_directory', { title })
+}
+
+export function writeLocalChunk (path: string, dataBase64: string, append: boolean): Promise<number> {
+    return invoke<number>('write_local_chunk', { path, dataBase64, append })
+}
+
+export function deleteLocalFile (path: string): Promise<void> {
+    return invoke<void>('delete_local_file', { path })
+}
+
+export function createLocalDir (path: string): Promise<void> {
+    return invoke<void>('create_local_dir', { path })
 }

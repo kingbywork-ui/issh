@@ -17,7 +17,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.151"
 serde_yaml = "0.9"
 sha2 = "0.11.0"
-tauri = { version = "2.11.5", features = ["protocol-asset"] }
+tauri = { version = "2.11.5", features = ["protocol-asset", "tray-icon"] }
+tauri-plugin-single-instance = "2"
+tauri-plugin-deep-link = "2"
 tokio = { version = "1.53.1", features = ["io-util", "net", "sync", "time"] }
 issh-runtime-vault = { path = "../../issh-runtime/crates/vault" }
 base64 = "0.22"
@@ -28,6 +30,7 @@ ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
 rand = "0.8"
 url = "2"
 zeroize = "1"
+rfd = "0.15"
 
 [profile.release]
 codegen-units = 1

@@ -51,11 +51,18 @@ export interface TerminalDecoratorDefinition {
     decorate (options: TerminalDecoratorOptions): void | Promise<void>
 }
 
+export interface TerminalDecoratorProfileInfo {
+    name: string
+    loginScript: string | null
+}
+
 export interface TerminalDecoratorOptions {
     sessionId: string
     kind: 'local' | 'ssh'
     title: string
     terminal: Terminal
+    /** SSH 会话关联的主机 profile 摘要（本地会话为 null） */
+    profile: TerminalDecoratorProfileInfo | null
     write (data: Uint8Array | string): void
     dispose (callback: () => void): void
 }

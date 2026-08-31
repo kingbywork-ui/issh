@@ -37,10 +37,30 @@
             <span>模型</span>
             <input type="text" bind:value={config.model} onchange={persist} placeholder="gpt-4o-mini" />
         </label>
+        <label class="settings-field">
+            <span>补全专用模型（留空用主模型）</span>
+            <input type="text" bind:value={config.autocompleteModel} onchange={persist} placeholder="与主模型一致" />
+        </label>
+        <label class="settings-field settings-check">
+            <input type="checkbox" bind:checked={config.autocompleteDisableThinking} onchange={persist} />
+            <span>补全请求关闭推理思考（deepseek-r1 等）</span>
+        </label>
     </div>
 
     <div class="llm-section">
         <div class="settings-field-title">补全行为</div>
+        <label class="settings-field settings-check">
+            <input type="checkbox" bind:checked={config.aiAutocompleteEnabled} onchange={persist} />
+            <span>AI 命令补全</span>
+        </label>
+        <label class="settings-field settings-check">
+            <input type="checkbox" bind:checked={config.predictionEnabled} onchange={persist} />
+            <span>下一条命令预测预取</span>
+        </label>
+        <label class="settings-field settings-check">
+            <input type="checkbox" bind:checked={config.editorAutocompleteEnabled} onchange={persist} />
+            <span>编辑器内文本补全（vim/nano，默认关闭）</span>
+        </label>
         <label class="settings-field">
             <span>防抖延迟（ms）</span>
             <input type="number" min="200" max="3000" step="100" bind:value={config.debounceMs} onchange={persist} />
@@ -56,6 +76,30 @@
         <label class="settings-field settings-check">
             <input type="checkbox" bind:checked={config.sendContext} onchange={persist} />
             <span>发送终端上下文（脱敏后）</span>
+        </label>
+        <label class="settings-field settings-check">
+            <input type="checkbox" bind:checked={config.historyAutocompleteEnabled} onchange={persist} />
+            <span>历史命令补全</span>
+        </label>
+        <label class="settings-field settings-check">
+            <input type="checkbox" bind:checked={config.scriptAutocompleteEnabled} onchange={persist} />
+            <span>登录脚本补全（Beta）</span>
+        </label>
+        <label class="settings-field">
+            <span>历史候选上限</span>
+            <input type="number" min="1" max="20" step="1" bind:value={config.historyAutocompleteLimit} onchange={persist} />
+        </label>
+        <label class="settings-field">
+            <span>最小触发长度</span>
+            <input type="number" min="1" max="10" step="1" bind:value={config.minTriggerLength} onchange={persist} />
+        </label>
+        <label class="settings-field settings-check">
+            <input type="checkbox" bind:checked={config.triggerWithoutSpaceEnabled} onchange={persist} />
+            <span>无空格触发</span>
+        </label>
+        <label class="settings-field settings-check">
+            <input type="checkbox" bind:checked={config.executeOnConfirm} onchange={persist} />
+            <span>接受补全后立即执行</span>
         </label>
     </div>
 

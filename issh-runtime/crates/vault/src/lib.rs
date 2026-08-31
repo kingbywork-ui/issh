@@ -119,14 +119,23 @@ fn encrypt_raw_plaintext(plaintext: &[u8], passphrase: &str) -> StoredVault {
     }
 }
 
+fn decode_contents(stored: &StoredVault) -> Result<Vec<u8>, VaultError> {
+    let compact: String = stored
+        .contents
+        .chars()
+        .filter(|character| !character.is_ascii_whitespace())
+        .collect();
+    base64::engine::general_purpose::STANDARD
+        .decode(compact.as_bytes())
+        .map_err(|error| VaultError::Malformed(format!("contents: {error}")))
+}
+
 fn decrypt_vault(stored: &StoredVault, passphrase: &str) -> Result<Vault, VaultError> {
     let salt = hex::decode(&stored.key_salt)
         .map_err(|error| VaultError::Malformed(format!("keySalt: {error}")))?;
     let iv =
         hex::decode(&stored.iv).map_err(|error| VaultError::Malformed(format!("iv: {error}")))?;
-    let encrypted = base64::engine::general_purpose::STANDARD
-        .decode(&stored.contents)
-        .map_err(|error| VaultError::Malformed(format!("contents: {error}")))?;
+    let encrypted = decode_contents(stored)?;
 
     let plaintext = match stored.version {
         1 => {
@@ -196,9 +205,7 @@ pub fn decrypt_stored_to_json(stored: &StoredVault, passphrase: &str) -> Result<
         .map_err(|error| VaultError::Malformed(format!("keySalt: {error}")))?;
     let iv =
         hex::decode(&stored.iv).map_err(|error| VaultError::Malformed(format!("iv: {error}")))?;
-    let encrypted = base64::engine::general_purpose::STANDARD
-        .decode(&stored.contents)
-        .map_err(|error| VaultError::Malformed(format!("contents: {error}")))?;
+    let encrypted = decode_contents(stored)?;
 
     let plaintext = match stored.version {
         1 => {
@@ -541,6 +548,28 @@ mod tests {
             decrypt_stored_to_json(&stored, "correct horse").expect("decrypt should succeed");
         assert_eq!(roundtrip, plaintext);
         assert!(decrypt_stored_to_json(&stored, "wrong").is_err());
+    }
+
+    #[test]
+    fn contents_whitespace_tolerated() {
+        let vault = sample_vault();
+        let stored = encrypt_vault(&vault, "correct horse");
+        let mut folded = String::new();
+        for (index, chunk) in stored.contents.as_bytes().chunks(57).enumerate() {
+            if index > 0 {
+                folded.push_str(" \r\n");
+            }
+            folded.push_str(std::str::from_utf8(chunk).expect("base64 is UTF-8"));
+        }
+        let mut folded_stored = stored.clone();
+        folded_stored.contents = folded;
+
+        let decrypted =
+            decrypt_vault(&folded_stored, "correct horse").expect("decrypt should succeed");
+        assert_eq!(decrypted, vault);
+        let raw = decrypt_stored_to_json(&folded_stored, "correct horse")
+            .expect("raw decrypt should succeed");
+        assert!(raw.contains("hunter2"));
     }
 
     #[test]

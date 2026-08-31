@@ -32,6 +32,13 @@
       }
     ]
   },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["ssh"]
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": [
@@ -50,6 +57,7 @@
       },
       "nsis": {
         "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
         "languages": [
           "SimpChinese",
           "English"

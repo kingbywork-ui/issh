@@ -354,7 +354,7 @@ fn default_ssh_session_title() -> String {
     "SSH 终端".to_string()
 }
 
-const SFTP_CHUNK_BYTES: usize = 32 * 1024;
+const SFTP_CHUNK_BYTES: usize = 1024 * 1024;
 const SFTP_MAX_LIST_PAGE: usize = 512;
 const SFTP_RPC_TIMEOUT_MS: u64 = 30_000;
 
@@ -471,6 +471,15 @@ struct SftpRenameParams {
     new_path: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SftpChmodParams {
+    session_id: String,
+    path: String,
+    /// 八进制权限位，如 0o755 = 493
+    mode: u32,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SftpStatResult {
@@ -540,6 +549,25 @@ struct SshDiscoverHostKeyResult {
     host: String,
     port: u16,
     fingerprint: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SshExecReadonlyParams {
+    session_id: String,
+    command: String,
+    #[serde(default = "default_exec_timeout_ms")]
+    timeout_ms: u64,
+    #[serde(default = "default_exec_max_output_bytes")]
+    max_output_bytes: usize,
+}
+
+fn default_exec_timeout_ms() -> u64 {
+    10_000
+}
+
+fn default_exec_max_output_bytes() -> usize {
+    1024 * 1024
 }
 
 fn default_local_session_title() -> String {
@@ -899,6 +927,17 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
             };
             with_sessions(state, id, |sessions| sessions.snapshot(&params.session_id))
         }
+        "ssh.execReadonly" => {
+            let params = match parse_params::<SshExecReadonlyParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            match ssh_exec_readonly(state, params).await {
+                Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+                    .expect("ssh execReadonly response serialization cannot fail"),
+                Err(error) => serialize_error(id, error.code, error.message),
+            }
+        }
         "session.write" => {
             let params = match parse_params::<SessionWriteParams>(request.params) {
                 Ok(params) => params,
@@ -1036,6 +1075,28 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
             match sftp_rename(state, params).await {
                 Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
                     .expect("sftp rename response serialization cannot fail"),
+                Err(error) => serialize_error(id, error.code, error.message),
+            }
+        }
+        "sftp.readlink" => {
+            let params = match parse_params::<SftpPathParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            match sftp_readlink(state, params).await {
+                Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+                    .expect("sftp readlink response serialization cannot fail"),
+                Err(error) => serialize_error(id, error.code, error.message),
+            }
+        }
+        "sftp.chmod" => {
+            let params = match parse_params::<SftpChmodParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            match sftp_chmod(state, params).await {
+                Ok(result) => serde_json::to_vec(&RpcResponse::new(id, result))
+                    .expect("sftp chmod response serialization cannot fail"),
                 Err(error) => serialize_error(id, error.code, error.message),
             }
         }
@@ -2010,8 +2071,28 @@ async fn sftp_rename(state: &RuntimeState, params: SftpRenameParams) -> Result<V
     Ok(serde_json::json!({ "renamed": true }))
 }
 
-async fn sftp_close(state: &RuntimeState, session_id: &str) -> Result<Value, RpcError> {
-    let sftp = {
+async fn sftp_readlink(state: &RuntimeState, params: SftpPathParams) -> Result<Value, RpcError> {
+    let path = params.path.clone();
+    let session_id = params.session_id.clone();
+    let target = with_sftp_session(state, &session_id, move |sftp| async move {
+        sftp.read_link(&path).await
+    })
+    .await?;
+    Ok(serde_json::json!({ "target": target }))
+}
+
+async fn sftp_chmod(state: &RuntimeState, params: SftpChmodParams) -> Result<Value, RpcError> {
+    let path = params.path.clone();
+    let mode = params.mode;
+    let session_id = params.session_id.clone();
+    with_sftp_session(state, &session_id, move |sftp| async move {
+        sftp.set_mode(&path, mode).await
+    })
+    .await?;
+    Ok(serde_json::json!({ "changed": true }))
+}
+
+async fn sftp_close(state: &RuntimeState, session_id: &str) -> Result<Value, RpcError> {    let sftp = {
         let sessions = state.sftp_sessions.lock();
         let Ok(mut sessions) = sessions else {
             return Err(RpcError::new(-32603, "SFTP state is unavailable"));
@@ -2034,6 +2115,43 @@ async fn sftp_close(state: &RuntimeState, session_id: &str) -> Result<Value, Rpc
             format!("SFTP close timed out after {SFTP_RPC_TIMEOUT_MS}ms"),
         )),
     }
+}
+
+/// 在已连接的 SSH 会话上执行只读命令（历史拉取等），复用连接不新建通道开销外的 TCP。
+/// 超时/输出上限由调用方控制，防止阻塞 RPC 管道。
+async fn ssh_exec_readonly(
+    state: &RuntimeState,
+    params: SshExecReadonlyParams,
+) -> Result<Value, RpcError> {
+    let connection = {
+        let connections = state.ssh_connections.lock();
+        let Ok(connections) = connections else {
+            return Err(RpcError::new(-32603, "SSH state is unavailable"));
+        };
+        match connections.get(&params.session_id) {
+            Some(connection) => connection.clone(),
+            None => {
+                return Err(RpcError::new(
+                    INVALID_PARAMS,
+                    format!("SSH session not found: {}", params.session_id),
+                ))
+            }
+        }
+    };
+    let output = tokio::time::timeout(
+        Duration::from_millis(params.timeout_ms.saturating_add(2_000)),
+        connection.run_readonly_command(
+            &params.command,
+            params.timeout_ms,
+            params.max_output_bytes,
+        ),
+    )
+    .await
+    .map_err(|_| RpcError::new(-32002, "ssh execReadonly timed out"))?
+    .map_err(|error: issh_runtime_ssh::SshError| {
+        RpcError::new(-32001, error.to_string())
+    })?;
+    Ok(serde_json::json!({ "output": output }))
 }
 
 fn base64_encode(data: &[u8]) -> String {

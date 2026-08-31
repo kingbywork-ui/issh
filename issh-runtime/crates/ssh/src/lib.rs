@@ -19,6 +19,7 @@ pub const MAX_SSH_USER_BYTES: usize = 128;
 pub const MAX_SSH_PASSWORD_BYTES: usize = 4096;
 pub const MAX_SSH_FINGERPRINT_BYTES: usize = 128;
 pub const MAX_SSH_CHANNEL_BUFFER_MESSAGES: usize = 256;
+pub const MAX_SSH_COMMAND_BYTES: usize = 8192;
 pub const SSH_INTERACTIVE_TERM: &str = "xterm-256color";
 pub const SSH_DISCOVERY_TIMEOUT_MS: u64 = 15_000;
 
@@ -258,8 +259,7 @@ impl SshConnection {
         })
     }
 
-    pub async fn open_sftp(&self) -> Result<SshSftpSession, SshError> {
-        let channel = self
+    pub async fn open_sftp(&self) -> Result<SshSftpSession, SshError> {        let channel = self
             .handle
             .lock()
             .await
@@ -276,8 +276,7 @@ impl SshConnection {
         Ok(SshSftpSession::from_session(session))
     }
 
-    pub async fn open_sudo_sftp(&self, password: &str) -> Result<SshSftpSession, SshError> {
-        if password.is_empty() || password.len() > MAX_SSH_PASSWORD_BYTES {
+    pub async fn open_sudo_sftp(&self, password: &str) -> Result<SshSftpSession, SshError> {        if password.is_empty() || password.len() > MAX_SSH_PASSWORD_BYTES {
             return Err(SshError::Channel("sudo password is required".to_string()));
         }
         let channel = self
@@ -301,6 +300,66 @@ impl SshConnection {
             .await
             .map_err(|error| SshError::Channel(error.to_string()))?;
         Ok(SshSftpSession::from_session(session))
+    }
+
+    /// 执行单条只读命令并收集合并输出（对齐 issh 分支 runReadonlyCommand：
+    /// 历史命令拉取等场景，无 PTY、带超时、输出上限保护）
+    pub async fn run_readonly_command(
+        &self,
+        command: &str,
+        timeout_ms: u64,
+        max_output_bytes: usize,
+    ) -> Result<String, SshError> {
+        if command.is_empty() || command.len() > MAX_SSH_COMMAND_BYTES {
+            return Err(SshError::Channel("invalid command length".to_string()));
+        }
+        let channel = self
+            .handle
+            .lock()
+            .await
+            .channel_open_session()
+            .await
+            .map_err(|error| SshError::Channel(error.to_string()))?;
+        channel
+            .exec(true, command)
+            .await
+            .map_err(|error| SshError::Channel(error.to_string()))?;
+
+        let deadline = tokio::time::Instant::now() + Duration::from_millis(timeout_ms);
+        let mut output: Vec<u8> = Vec::new();
+        let (mut read_half, write_half) = channel.split();
+        drop(write_half);
+        loop {
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if remaining.is_zero() {
+                return Err(SshError::Channel(format!(
+                    "command timed out after {timeout_ms}ms"
+                )));
+            }
+            match tokio::time::timeout(remaining, read_half.wait()).await {
+                Err(_) => {
+                    return Err(SshError::Channel(format!(
+                        "command timed out after {timeout_ms}ms"
+                    )));
+                }
+                Ok(None) => break,
+                Ok(Some(ChannelMsg::Data { data }))
+                | Ok(Some(ChannelMsg::ExtendedData { data, .. })) => {
+                    if output.len() + data.len() > max_output_bytes {
+                        return Err(SshError::Channel(
+                            "command output exceeded limit".to_string(),
+                        ));
+                    }
+                    output.extend_from_slice(&data);
+                }
+                Ok(Some(ChannelMsg::ExitStatus { .. }))
+                | Ok(Some(ChannelMsg::Eof))
+                | Ok(Some(ChannelMsg::Close)) => break,
+                Ok(Some(_)) => {}
+            }
+        }
+        String::from_utf8(output)
+            .map_err(|error| SshError::Channel(format!("command output is not UTF-8: {error}")))
     }
 
     pub async fn disconnect(self) -> Result<(), SshError> {

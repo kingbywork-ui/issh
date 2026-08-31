@@ -1,13 +1,14 @@
 import LlmSettingsTab from './src/LlmSettingsTab.svelte'
 import panelCss from './src/panel.css?inline'
 import type { IsshPlugin, IsshPluginContext, IsshPluginManifest, TerminalDecoratorDefinition } from './src/types'
-import { fetchAutocomplete, loadConfig, type AutocompleteSuggestion } from './src/llmApi'
+import { fetchAutocomplete, fetchEditorAutocomplete, fetchPrediction, loadConfig, type AutocompleteSuggestion } from './src/llmApi'
+import { HistoryCommandService } from './src/historyCommand'
 
 export const manifest: IsshPluginManifest = {
     id: 'issh-plugin-llm',
     name: 'AI 命令补全',
     version: '0.2.0',
-    description: 'LLM 驱动的 shell 命令补全：输入时防抖请求 LLM API，候选列表面板，Ctrl+Y 接受',
+    description: 'LLM 驱动的 shell 命令补全：本地/远程历史 + AI live 候选统一面板，Ctrl+Y 接受',
     kind: 'feature',
     entry: 'index.js',
     permissions: ['terminal:decorate', 'settings:tab'],
@@ -22,26 +23,54 @@ interface SuggestionState {
     loading: boolean
 }
 
+const historyService = new HistoryCommandService()
+
 const decorator: TerminalDecoratorDefinition = {
     id: 'llm-autocomplete',
     async decorate (options) {
         const { terminal } = options
+        const tabKey = options.sessionId
+        // SSH 会话关联的登录脚本命令（Login Script 候选来源，Beta）
+        const loginScriptCommands: string[] = options.profile?.loginScript
+            ? options.profile.loginScript.split(/&&|\r?\n/)
+                .map((part) => part.trim())
+                .filter((part) => part.length > 0)
+            : []
         if (!document.getElementById('issh-plugin-llm-panel-style')) {
             const style = document.createElement('style')
             style.id = 'issh-plugin-llm-panel-style'
             style.textContent = panelCss
             document.head.appendChild(style)
         }
+        void historyService.bootstrap(
+            { kind: options.kind, sessionId: options.sessionId },
+            tabKey,
+        )
         const state: SuggestionState = { suggestions: [], index: 0, loading: false }
         let debounceTimer: ReturnType<typeof setTimeout> | null = null
         let requestGeneration = 0
+        let completedCommandCount = 0
+        let prefetchedSuggestions: AutocompleteSuggestion[] = []
+        let predictionGeneration = 0
+        // 对齐 issh 分支 autocompletePanelOffsetX/Y 默认值
+        const PANEL_OFFSET_X = 32
+        const PANEL_OFFSET_Y = 52
 
         const keyHandler = terminal.attachCustomKeyEventHandler((event) => {
             if (event.type !== 'keydown') return true
+            if (event.ctrlKey && event.shiftKey && (event.code === 'Space' || event.key === ' ')) {
+                // Ctrl+Shift+Space 手动触发：跳过防抖立即拉取候选
+                if (debounceTimer) clearTimeout(debounceTimer)
+                runSuggestionFetch()
+                return false
+            }
             if (event.ctrlKey && event.key.toLowerCase() === 'y' && state.suggestions.length > 0) {
                 const suggestion = state.suggestions[state.index]
                 if (suggestion) {
                     options.write(suggestion.command)
+                    if (loadConfig().executeOnConfirm) {
+                        options.write('\r')
+                    }
                     state.suggestions = []
                     render()
                 }
@@ -82,6 +111,22 @@ const decorator: TerminalDecoratorDefinition = {
                 if (line) lines.push(line.translateToString(true))
             }
             return lines
+        }
+
+        // 下一条命令预测：命令提交后用上一条命令 + 终端上下文预取，缓存到当前 tab
+        function startPrediction (submitted: string): void {
+            const config = loadConfig()
+            if (!config.apiKey || !config.predictionEnabled) return
+            prefetchedSuggestions = []
+            predictionGeneration += 1
+            const generation = predictionGeneration
+            const context = readContext()
+            void fetchPrediction(config, submitted, context).then((suggestions) => {
+                if (generation !== predictionGeneration) return
+                prefetchedSuggestions = suggestions
+            }).catch(() => {
+                prefetchedSuggestions = []
+            })
         }
 
         let panelElement: HTMLDivElement | null = null
@@ -135,6 +180,9 @@ const decorator: TerminalDecoratorDefinition = {
                     const suggestion = state.suggestions[index]
                     if (suggestion) {
                         options.write(suggestion.command)
+                        if (loadConfig().executeOnConfirm) {
+                            options.write('\r')
+                        }
                         state.suggestions = []
                         render()
                     }
@@ -147,8 +195,17 @@ const decorator: TerminalDecoratorDefinition = {
             })._core?._renderService?.dimensions?.css?.cell
             const cellWidth = dimensions?.width ?? 9
             const cellHeight = dimensions?.height ?? 18
-            panelElement.style.left = `${rect.left + buffer.cursorX * cellWidth}px`
-            panelElement.style.top = `${rect.top + (buffer.cursorY + 1) * cellHeight}px`
+            // 对齐 issh 分支：光标右下偏移 (32, 52)，避免遮挡当前输入
+            let left = rect.left + buffer.cursorX * cellWidth + PANEL_OFFSET_X
+            let top = rect.top + (buffer.cursorY + 1) * cellHeight + PANEL_OFFSET_Y
+            // 视口边界限制
+            panelElement.style.left = `${left}px`
+            panelElement.style.top = `${top}px`
+            const panelRect = panelElement.getBoundingClientRect()
+            left = Math.min(left, Math.max(8, window.innerWidth - panelRect.width - 8))
+            top = Math.min(top, Math.max(8, window.innerHeight - panelRect.height - 8))
+            panelElement.style.left = `${left}px`
+            panelElement.style.top = `${top}px`
         }
 
         function hidePanel (): void {
@@ -164,41 +221,118 @@ const decorator: TerminalDecoratorDefinition = {
 
         const dataListener = terminal.onData((data) => {
             if (debounceTimer) clearTimeout(debounceTimer)
-            if (/[\r\n]/.test(data)) {
+            if (/\r|\n|\r/.test(data)) {
+                const submitted = readCurrentLine()
+                if (submitted.trim()) {
+                    historyService.addCommand(tabKey, submitted)
+                    completedCommandCount += 1
+                    startPrediction(submitted)
+                }
                 state.suggestions = []
                 state.loading = false
                 hidePanel()
                 return
             }
             const config = loadConfig()
-            if (!config.apiKey) return
+            if (!config.apiKey || !config.aiAutocompleteEnabled) return
             debounceTimer = setTimeout(() => {
-                requestGeneration += 1
-                const generation = requestGeneration
-                const partial = readCurrentLine()
-                if (partial.length < 2) {
-                    state.suggestions = []
-                    state.loading = false
+                runSuggestionFetch()
+            }, config.debounceMs)
+        })
+
+        function runSuggestionFetch (): void {
+            requestGeneration += 1
+            const generation = requestGeneration
+            const config = loadConfig()
+            const partial = readCurrentLine()
+            // 编辑器模式：vim/nano 等 alternate screen 中，默认关闭；开启后走文本补全分支
+            const inAlternateScreen = terminal.buffer.active.type === 'alternate'
+            if (inAlternateScreen) {
+                if (!config.editorAutocompleteEnabled || !config.apiKey) {
                     hidePanel()
                     return
                 }
-                const context = readContext()
                 state.loading = true
                 render()
-                void fetchAutocomplete(config, partial, context).then((suggestions) => {
+                void fetchEditorAutocomplete(config, partial, readContext()).then((suggestions) => {
                     if (generation !== requestGeneration) return
-                    state.suggestions = suggestions.filter((item) => item.command !== partial)
+                    state.suggestions = suggestions.filter(item => item.command !== partial)
                     state.index = 0
                     state.loading = false
                     render()
                 })
-            }, config.debounceMs)
-        })
+                return
+            }
+            if (partial.length < config.minTriggerLength) {
+                state.suggestions = []
+                state.loading = false
+                hidePanel()
+                return
+            }
+            const context = readContext()
+            const historyCommands = config.historyAutocompleteEnabled
+                ? historyService.search(tabKey, partial, config.historyAutocompleteLimit)
+                : []
+            // 登录脚本候选：前缀匹配当前输入，排在历史之后（Beta）
+            const scriptCommands = config.scriptAutocompleteEnabled
+                ? loginScriptCommands.filter(command => command.startsWith(partial) && command !== partial)
+                : []
+            const historySuggestions: AutocompleteSuggestion[] = [
+                ...historyCommands.map(command => ({ command, confidence: 1 })),
+                ...scriptCommands.map(command => ({ command, confidence: 0.9 })),
+            ]
+            // 首条命令 gate：session 未提交过命令时不请求 AI live，只出历史候选
+            // AI 关闭/未配置/未输入空格（无空格触发关闭时）同样只出历史候选
+            const aiLive = !!config.apiKey && config.aiAutocompleteEnabled
+                && (config.triggerWithoutSpaceEnabled || /\s/.test(partial))
+            if (!aiLive || completedCommandCount === 0) {
+                state.suggestions = historySuggestions.filter(item => item.command !== partial)
+                state.index = 0
+                state.loading = false
+                render()
+                return
+            }
+            // 预取缓存匹配当前输入时直接使用，跳过 live AI 请求
+            const prefetchMatches = prefetchedSuggestions.filter(item =>
+                item.command.startsWith(partial) && item.command !== partial,
+            )
+            if (prefetchMatches.length > 0) {
+                const merged = [...historySuggestions]
+                for (const item of prefetchMatches) {
+                    if (!merged.some(existing => existing.command === item.command)) {
+                        merged.push(item)
+                    }
+                    if (merged.length >= 8) break
+                }
+                state.suggestions = merged.filter(item => item.command !== partial)
+                state.index = 0
+                state.loading = false
+                render()
+                return
+            }
+            state.loading = true
+            render()
+            void fetchAutocomplete(config, partial, context).then((suggestions) => {
+                if (generation !== requestGeneration) return
+                const merged = [...historySuggestions]
+                for (const item of suggestions) {
+                    if (!merged.some(existing => existing.command === item.command)) {
+                        merged.push(item)
+                    }
+                    if (merged.length >= 8) break
+                }
+                state.suggestions = merged.filter((item) => item.command !== partial)
+                state.index = 0
+                state.loading = false
+                render()
+            })
+        }
 
         options.dispose(() => {
             if (debounceTimer) clearTimeout(debounceTimer)
             keyHandler?.()
             dataListener.dispose()
+            historyService.disposeTab(tabKey)
             hidePanel()
         })
     },

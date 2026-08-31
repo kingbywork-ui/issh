@@ -7,12 +7,15 @@
 
     const MIN_HEIGHT = 80
     const MAX_HEIGHT = 480
+    // svelte-ignore state_referenced_locally
     let height = $state(panel.height ?? 160)
     let resizing = $state(false)
     // 每面板随机通道 token：沙箱页面从 URL hash 读取并在 RPC 消息中携带
     const channelToken = generateChannelToken()
+    // svelte-ignore state_referenced_locally
     const sandboxUrl = `${panel.sandboxUrl}#issh-channel=${channelToken}`
 
+    // svelte-ignore state_referenced_locally
     const storageKey = `issh.plugin.${pluginId}.panelHeight.${panel.id}`
 
     onMount(() => {
@@ -47,7 +50,7 @@
 </script>
 
 <div class="sandbox-panel" data-sandbox-plugin={pluginId}>
-    <div class="sandbox-panel-title" class:resizing onmousedown={onResizeStart} role="separator" aria-orientation="horizontal" tabindex="0">
+    <div class="sandbox-panel-title" class:resizing onmousedown={onResizeStart} role="slider" aria-label="调整面板高度" aria-orientation="vertical" aria-valuenow={height} aria-valuemin={MIN_HEIGHT} aria-valuemax={MAX_HEIGHT} tabindex="0">
         <span>{panel.title}</span>
         <span class="sandbox-panel-resize-hint">{resizing ? '松开保存高度' : '拖拽调整高度'}</span>
     </div>

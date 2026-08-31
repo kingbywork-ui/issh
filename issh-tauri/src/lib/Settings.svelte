@@ -460,7 +460,7 @@
 </script>
 
 <div class="settings-backdrop" role="presentation" onclick={onclose} onkeydown={(event) => { if (event.key === 'Escape') onclose() }}>
-    <div class="settings-panel" role="dialog" aria-label="设置" onclick={(event) => { event.stopPropagation() }} onkeydown={(event) => { event.stopPropagation() }}>
+    <div class="settings-panel" role="dialog" aria-label="设置" tabindex="-1" onclick={(event) => { event.stopPropagation() }} onkeydown={(event) => { event.stopPropagation() }}>
         <header class="settings-header">
             <h1>设置</h1>
             <button class="icon-button" type="button" onclick={onclose} aria-label="关闭设置">✕</button>
@@ -725,7 +725,7 @@
 
         {#if installTarget}
             <div class="modal-backdrop" role="presentation" onclick={() => { if (!installBusy) installTarget = null }} onkeydown={(event) => { if (event.key === 'Escape' && !installBusy) installTarget = null }}>
-                <div class="install-dialog" role="dialog" aria-label="安装确认" onclick={(event) => { event.stopPropagation() }} onkeydown={(event) => { event.stopPropagation() }}>
+                <div class="install-dialog" role="dialog" aria-label="安装确认" tabindex="-1" onclick={(event) => { event.stopPropagation() }} onkeydown={(event) => { event.stopPropagation() }}>
                     <h2>安装 {installTarget.name} v{installTarget.version}</h2>
                     <p class="install-desc">{installTarget.description}</p>
                     <div class="install-permissions">

@@ -754,7 +754,7 @@ button { font: inherit; color: inherit; }
 
 .vault-locked button,
 .vault-unlock-form button {
-    min-height: 34px;
+    min-height: 40px;
     padding: 0 18px;
     border: 1px solid var(--ops-signal-border);
     border-radius: var(--ops-radius);
@@ -771,7 +771,7 @@ button { font: inherit; color: inherit; }
 }
 
 .vault-unlock-form input {
-    min-height: 34px;
+    min-height: 40px;
     width: 240px;
     padding: 0 10px;
     border: 1px solid var(--ops-line);
@@ -938,6 +938,12 @@ button { font: inherit; color: inherit; }
 
 .sftp-error { margin: 0; color: var(--ops-danger); font-size: 12px; }
 .sftp-notice { margin: 0; color: var(--ops-signal); font-size: 12px; }
+.sftp-transfer { display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; border: 1px solid var(--ops-line); border-radius: var(--ops-radius); background: var(--ops-panel); font-size: 12px; }
+.sftp-transfer-head { display: flex; align-items: center; gap: 10px; color: var(--ops-fg-muted); }
+.sftp-transfer-head span:first-child { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sftp-transfer-head button { min-height: 22px; padding: 0 8px; font-size: 11px; }
+.sftp-transfer-bar { width: 100%; height: 6px; }
+.sftp-input.filter { flex: 1 1 140px; min-width: 120px; }
 .sftp-disconnected { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px solid rgba(242, 116, 104, 0.45); background: rgba(242, 116, 104, 0.08); color: var(--ops-danger); font-size: 12px; }
 .sftp-parent-row { display: flex; gap: 10px; width: 100%; min-height: 38px; align-items: center; padding: 0 14px; border: 0; border-bottom: 1px solid rgba(36, 48, 65, 0.6); background: transparent; color: var(--ops-fg-muted); text-align: left; cursor: pointer; }
 .sftp-parent-row:hover { background: var(--ops-signal-hover); color: var(--ops-fg); }
@@ -1477,7 +1483,52 @@ button { font: inherit; color: inherit; }
 }
 .vault-add { padding-top: 12px; }
 .vault-secret { padding: 8px 0; border-bottom: 1px dashed var(--ops-line); }
-.vault-secret-head { display: flex; align-items: center; gap: 8px; }
+.vault-secret.indented { padding-left: 26px; }
+.vault-secret-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.vault-secret-spacer { flex: 1; }
+.vault-account { font-family: var(--ops-font-mono); font-size: 13px; }
+.vault-group-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 0 4px;
+    font-size: 13px;
+}
+.vault-group-name { font-weight: 600; }
+.vault-group-count {
+    color: var(--ops-fg-muted);
+    font-size: 12px;
+    font-family: var(--ops-font-mono);
+}
+.vault-edit-form { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.vault-edit-form label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--ops-fg-muted);
+}
+.vault-edit-form input {
+    flex: 1;
+    min-height: 28px;
+    padding: 0 8px;
+    border: 1px solid var(--ops-line);
+    border-radius: var(--ops-radius);
+    background: var(--ops-base);
+    color: var(--ops-fg);
+    font-size: 12px;
+    font-family: var(--ops-font-mono);
+}
+.tree-toggle {
+    width: 18px;
+    min-height: 18px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--ops-fg-muted);
+    cursor: pointer;
+    font-size: 11px;
+}
 .vault-secret-id { font-family: var(--ops-font-mono); font-size: 12px; }
 .vault-secret-desc { color: var(--ops-fg-muted); font-size: 12px; flex: 1; }
 .vault-secret-value {

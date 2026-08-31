@@ -2,6 +2,7 @@ use issh_runtime_vault::{decrypt_stored_to_json, encrypt_json_to_stored, StoredV
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha512};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use zeroize::Zeroizing;
@@ -35,6 +36,9 @@ pub struct SshHostProfile {
     pub favorite: bool,
     #[serde(default)]
     pub tags: Vec<String>,
+    /// 登录后自动执行的脚本命令（多行以 && 连接），供 LLM 登录脚本补全（Beta）
+    #[serde(default)]
+    pub login_script: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,6 +57,52 @@ pub struct HostProfilesResult {
     pub unlocked: bool,
     pub profiles: Vec<SshHostProfile>,
     pub groups: Vec<SshHostGroup>,
+}
+
+/// 单台主机在保险库中的凭据视图（密码 + 私钥口令，均可为空）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostCredential {
+    pub user: String,
+    pub host: String,
+    pub port: u16,
+    pub password: Option<String>,
+    pub key_passphrase: Option<String>,
+    /// 私钥口令是按私钥文件内容 hash 匹配的（非按连接匹配）
+    pub passphrase_by_key: bool,
+}
+
+/// 通用凭据（不绑定具体主机）：host-less 默认密码 / 私钥 hash 口令。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenericCredential {
+    pub kind: String,
+    pub user: String,
+    pub port: u16,
+    pub value: Option<String>,
+    pub key_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostCredentialsResult {
+    pub encrypted: bool,
+    pub unlocked: bool,
+    pub profiles: Vec<SshHostProfile>,
+    pub groups: Vec<SshHostGroup>,
+    pub credentials: Vec<HostCredential>,
+    pub generic: Vec<GenericCredential>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CredentialMutation {
+    pub user: String,
+    pub host: String,
+    pub port: u16,
+    /// None = 不改动；Some(value) = 保存（空字符串表示清除）
+    pub password: Option<String>,
+    pub key_passphrase: Option<String>,
 }
 
 pub struct HostProfileStore {
@@ -262,6 +312,362 @@ impl HostProfileStore {
         ))
     }
 
+    /// 列出所有主机凭据（密码 + 私钥口令）与通用凭据，用于保险库页展示。
+    pub fn list_credentials(&self) -> Result<HostCredentialsResult, String> {
+        let result = self.read()?;
+        let secrets = self.unlocked_secrets()?;
+        let mut credentials: Vec<HostCredential> = Vec::new();
+        let mut generic: Vec<GenericCredential> = Vec::new();
+        let mut consumed: HashSet<String> = HashSet::new();
+        // 多个 profile 可能指向同一 (user, host, port)（如 .ssh/config 导入 + 手动创建），
+        // 凭据按三元组唯一；重复输出会让前端 keyed each 因 duplicate key 崩溃。
+        let mut emitted: HashSet<String> = HashSet::new();
+
+        for profile in &result.profiles {
+            let password = find_connection_secret(
+                &secrets,
+                VAULT_SECRET_TYPE_PASSWORD,
+                &profile.user,
+                &profile.host,
+                profile.port,
+            );
+            if password.is_some() {
+                consumed.insert(format!(
+                    "{VAULT_SECRET_TYPE_PASSWORD}|{}|{}|{}",
+                    profile.user, profile.host, profile.port
+                ));
+            }
+            let mut passphrase_by_key = false;
+            let mut key_passphrase = find_connection_secret(
+                &secrets,
+                VAULT_SECRET_TYPE_PASSPHRASE,
+                &profile.user,
+                &profile.host,
+                profile.port,
+            );
+            if key_passphrase.is_none() {
+                if let Some(key) = profile.private_keys.first() {
+                    let expanded = expand_key_path(key, &profile.user, &profile.host);
+                    if let Some(hash) = key_content_hash(&expanded) {
+                        if let Some(value) =
+                            find_secret_by_hash(&secrets, VAULT_SECRET_TYPE_PASSPHRASE, &hash)
+                        {
+                            key_passphrase = Some(value);
+                            passphrase_by_key = true;
+                        }
+                    }
+                }
+            } else {
+                consumed.insert(format!(
+                    "{VAULT_SECRET_TYPE_PASSPHRASE}|{}|{}|{}",
+                    profile.user, profile.host, profile.port
+                ));
+            }
+            if password.is_some() || key_passphrase.is_some() {
+                let credential_key = format!(
+                    "{}|{}|{}",
+                    profile.user, profile.host, profile.port
+                );
+                if !emitted.insert(credential_key) {
+                    continue;
+                }
+                credentials.push(HostCredential {
+                    user: profile.user.clone(),
+                    host: profile.host.clone(),
+                    port: profile.port,
+                    password,
+                    key_passphrase,
+                    passphrase_by_key,
+                });
+            }
+        }
+
+        for secret in &secrets {
+            let key = match secret.get("key") {
+                Some(key) => key,
+                None => continue,
+            };
+            let kind = secret.get("type").and_then(Value::as_str).unwrap_or("");
+            let value = secret.get("value").and_then(Value::as_str).map(str::to_string);
+            if kind == VAULT_SECRET_TYPE_PASSWORD {
+                let user = key.get("user").and_then(Value::as_str).unwrap_or("");
+                let host = key.get("host").and_then(Value::as_str);
+                let port = key.get("port").and_then(Value::as_u64).unwrap_or(22) as u16;
+                if host.is_none() && !consumed.contains(&format!("{kind}|{user}||{port}")) {
+                    generic.push(GenericCredential {
+                        kind: "password".into(),
+                        user: user.to_string(),
+                        port,
+                        value,
+                        key_path: None,
+                    });
+                }
+            } else if kind == VAULT_SECRET_TYPE_PASSPHRASE {
+                let user = key.get("user").and_then(Value::as_str).unwrap_or("");
+                let host = key.get("host").and_then(Value::as_str);
+                let port = key.get("port").and_then(Value::as_u64).unwrap_or(22) as u16;
+                let hash = key.get("hash").and_then(Value::as_str);
+                if let Some(hash) = hash {
+                    generic.push(GenericCredential {
+                        kind: "keyPassphrase".into(),
+                        user: user.to_string(),
+                        port,
+                        value,
+                        key_path: Some(format!("sha256:{hash}")),
+                    });
+                } else if host.is_none()
+                    && !consumed.contains(&format!("{kind}|{user}||{port}"))
+                {
+                    generic.push(GenericCredential {
+                        kind: "keyPassphrase".into(),
+                        user: user.to_string(),
+                        port,
+                        value,
+                        key_path: None,
+                    });
+                }
+            }
+        }
+
+        Ok(HostCredentialsResult {
+            encrypted: result.encrypted,
+            unlocked: result.unlocked,
+            profiles: result.profiles,
+            groups: result.groups,
+            credentials,
+            generic,
+        })
+    }
+
+    /// 保存（或清除）单台主机的密码/私钥口令。
+    pub fn save_credential(&self, mutation: CredentialMutation) -> Result<HostCredentialsResult, String> {
+        let user = mutation.user.trim();
+        let host = mutation.host.trim();
+        if user.is_empty() || host.is_empty() {
+            return Err("用户名与主机不能为空".to_string());
+        }
+        let port = if mutation.port == 0 { 22 } else { mutation.port };
+        self.mutate_secret(|secrets| {
+            apply_credential_mutation(secrets, user, host, port, &mutation);
+        })?;
+        self.list_credentials()
+    }
+
+    /// 删除单台主机的密码与私钥口令。
+    pub fn delete_credential(&self, user: &str, host: &str, port: u16) -> Result<HostCredentialsResult, String> {
+        let user = user.trim();
+        let host = host.trim();
+        if user.is_empty() || host.is_empty() {
+            return Err("用户名与主机不能为空".to_string());
+        }
+        self.mutate_secret(|secrets| {
+            secrets.retain(|secret| {
+                let kind = secret.get("type").and_then(Value::as_str).unwrap_or("");
+                let key = secret.get("key");
+                let matches = matches!(kind, VAULT_SECRET_TYPE_PASSWORD | VAULT_SECRET_TYPE_PASSPHRASE)
+                    && key
+                        .map(|key| {
+                            key.get("user").and_then(Value::as_str) == Some(user)
+                                && key.get("host").and_then(Value::as_str) == Some(host)
+                                && key.get("port").and_then(Value::as_u64) == Some(port as u64)
+                        })
+                        .unwrap_or(false);
+                !matches
+            });
+        })?;
+        self.list_credentials()
+    }
+
+    /// 设置主口令启用保险库：把明文形态的 profiles/groups/secrets 打包加密进 vault 段。
+    pub fn enable_vault(&self, passphrase: &str) -> Result<HostCredentialsResult, String> {
+        if passphrase.is_empty() {
+            return Err("主口令不能为空".to_string());
+        }
+        let raw = std::fs::read_to_string(&self.config_path).ok();
+        let parsed: serde_yaml::Value = match raw {
+            Some(raw) => serde_yaml::from_str(&raw).map_err(|e| format!("config.yaml 解析失败：{e}"))?,
+            None => serde_yaml::Value::Mapping(serde_yaml::Mapping::new()),
+        };
+        if parsed
+            .get("encrypted")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false)
+        {
+            return Err("保险库已启用".to_string());
+        }
+        let profiles = profiles_from_config(&parsed);
+        let groups = groups_from_config(&parsed);
+        let secrets = parsed
+            .get("secrets")
+            .and_then(|value| value.as_sequence())
+            .cloned()
+            .map(|sequence| sequence.into_iter().map(|item| serde_json::to_value(&item).unwrap_or(Value::Null)).collect())
+            .unwrap_or_default();
+        // vault 内 config 用 Electron 形态（options.host 等），与 unlock() 的 profiles_from_json 对齐
+        let mut vault_config = Value::Object(serde_json::Map::new());
+        write_model_to_json(&mut vault_config, &profiles, &groups);
+        let vault = serde_json::json!({
+            "config": vault_config,
+            "secrets": secrets,
+        });
+        let plaintext = serde_json::to_string(&vault).map_err(|e| format!("Vault 序列化失败：{e}"))?;
+        let stored = encrypt_json_to_stored(&plaintext, passphrase);
+        let mut root = parsed;
+        if let serde_yaml::Value::Mapping(map) = &mut root {
+            map.remove(serde_yaml::Value::String("profiles".into()));
+            map.remove(serde_yaml::Value::String("groups".into()));
+            map.remove(serde_yaml::Value::String("secrets".into()));
+            map.insert(serde_yaml::Value::String("encrypted".into()), serde_yaml::Value::Bool(true));
+            map.insert(
+                serde_yaml::Value::String("vault".into()),
+                serde_yaml::to_value(stored).map_err(|e| format!("Vault 序列化失败：{e}"))?,
+            );
+        }
+        persist_yaml(&self.config_path, &root)?;
+        let mut guard = self
+            .unlocked
+            .lock()
+            .map_err(|_| "主机配置状态不可用".to_string())?;
+        *guard = Some(UnlockedConfig {
+            profiles,
+            groups,
+            secrets,
+            vault,
+            root,
+            passphrase: Zeroizing::new(passphrase.to_string()),
+        });
+        drop(guard);
+        self.list_credentials()
+    }
+
+    /// 禁用并清除保险库：删除 vault 段与加密标志（含其中的全部主机配置与凭据），与 issh 分支 Delete 行为一致。
+    pub fn disable_vault(&self) -> Result<HostCredentialsResult, String> {
+        let raw = std::fs::read_to_string(&self.config_path)
+            .map_err(|error| format!("无法读取 config.yaml：{error}"))?;
+        let mut parsed: serde_yaml::Value =
+            serde_yaml::from_str(&raw).map_err(|error| format!("config.yaml 解析失败：{error}"))?;
+        let encrypted = parsed
+            .get("encrypted")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        if !encrypted {
+            return Err("保险库未启用".to_string());
+        }
+        if let serde_yaml::Value::Mapping(map) = &mut parsed {
+            map.remove(serde_yaml::Value::String("encrypted".into()));
+            map.remove(serde_yaml::Value::String("vault".into()));
+        }
+        persist_yaml(&self.config_path, &parsed)?;
+        self.lock();
+        self.list_credentials()
+    }
+
+    /// 修改主口令：验证旧口令后用新口令重新加密当前 vault 内容并持久化。
+    pub fn change_passphrase(&self, old: &str, new: &str) -> Result<HostCredentialsResult, String> {
+        if new.is_empty() {
+            return Err("新主口令不能为空".to_string());
+        }
+        let mut guard = self
+            .unlocked
+            .lock()
+            .map_err(|_| "主机配置状态不可用".to_string())?;
+        let unlocked = guard.as_mut().ok_or_else(|| "请先解锁保险库".to_string())?;
+        if unlocked.passphrase.as_str() != old {
+            return Err("旧主口令不正确".to_string());
+        }
+        let plaintext = serde_json::to_string(&unlocked.vault).map_err(|e| format!("Vault 序列化失败：{e}"))?;
+        let stored = encrypt_json_to_stored(&plaintext, new);
+        if let serde_yaml::Value::Mapping(map) = &mut unlocked.root {
+            map.insert(
+                serde_yaml::Value::String("vault".into()),
+                serde_yaml::to_value(stored).map_err(|e| format!("Vault 序列化失败：{e}"))?,
+            );
+        }
+        persist_yaml(&self.config_path, &unlocked.root)?;
+        unlocked.passphrase = Zeroizing::new(new.to_string());
+        drop(guard);
+        self.list_credentials()
+    }
+
+    /// 在加密/明文两种存储形态下统一修改 secrets 数组并持久化。
+    fn mutate_secret(
+        &self,
+        apply: impl FnOnce(&mut Vec<Value>),
+    ) -> Result<(), String> {
+        let raw = std::fs::read_to_string(&self.config_path).ok();
+        let encrypted = raw
+            .as_deref()
+            .and_then(|value| serde_yaml::from_str::<serde_yaml::Value>(value).ok())
+            .and_then(|value| value.get("encrypted").and_then(|v| v.as_bool()))
+            .unwrap_or(false);
+
+        if encrypted {
+            let mut guard = self.unlocked.lock().map_err(|_| "主机配置状态不可用".to_string())?;
+            let unlocked = guard.as_mut().ok_or_else(|| "请先解锁主机配置".to_string())?;
+            let mut secrets = unlocked
+                .vault
+                .get("secrets")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            apply(&mut secrets);
+            if let Some(vault_root) = unlocked.vault.as_object_mut() {
+                vault_root.insert("secrets".into(), Value::Array(secrets));
+            }
+            let plaintext = serde_json::to_string(&unlocked.vault).map_err(|e| format!("Vault 序列化失败：{e}"))?;
+            let stored = encrypt_json_to_stored(&plaintext, &unlocked.passphrase);
+            if let serde_yaml::Value::Mapping(map) = &mut unlocked.root {
+                map.insert(serde_yaml::Value::String("vault".into()), serde_yaml::to_value(stored).map_err(|e| format!("Vault 序列化失败：{e}"))?);
+            }
+            persist_yaml(&self.config_path, &unlocked.root)?;
+            return Ok(());
+        }
+
+        let mut parsed = raw
+            .ok_or_else(|| "无法读取 config.yaml".to_string())
+            .and_then(|value| serde_yaml::from_str::<serde_yaml::Value>(&value).map_err(|e| format!("config.yaml 解析失败：{e}")))?;
+        // 明文形态：secrets 直接位于 config.yaml 顶层
+        let mut secrets = parsed
+            .get("secrets")
+            .and_then(|value| value.as_sequence())
+            .cloned()
+            .map(|sequence| sequence.into_iter().map(|item| serde_json::to_value(&item).unwrap_or(Value::Null)).collect())
+            .unwrap_or_default();
+        apply(&mut secrets);
+        if let serde_yaml::Value::Mapping(map) = &mut parsed {
+            map.insert(
+                serde_yaml::Value::String("secrets".into()),
+                serde_yaml::to_value(&secrets).map_err(|e| format!("secrets 序列化失败：{e}"))?,
+            );
+        }
+        persist_yaml(&self.config_path, &parsed)?;
+        Ok(())
+    }
+
+    /// 当前解锁状态下 vault 的 secrets 数组（未加密/未解锁时返回空）。
+    fn unlocked_secrets(&self) -> Result<Vec<Value>, String> {
+        let guard = self.unlocked.lock().map_err(|_| "主机配置状态不可用".to_string())?;
+        if let Some(unlocked) = guard.as_ref() {
+            return Ok(unlocked
+                .vault
+                .get("secrets")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default());
+        }
+        // 未加密形态：secrets 位于 config.yaml 顶层
+        let raw = std::fs::read_to_string(&self.config_path)
+            .map_err(|e| format!("无法读取 config.yaml：{e}"))?;
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&raw)
+            .map_err(|e| format!("config.yaml 解析失败：{e}"))?;
+        Ok(parsed
+            .get("secrets")
+            .and_then(|value| value.as_sequence())
+            .cloned()
+            .map(|sequence| sequence.into_iter().map(|item| serde_json::to_value(&item).unwrap_or(Value::Null)).collect())
+            .unwrap_or_default())
+    }
+
     pub fn mutate(&self, mutation: HostProfileMutation) -> Result<HostProfilesResult, String> {
         let action = mutation.action.trim();
         if action.is_empty() {
@@ -424,6 +830,7 @@ fn write_model_to_json(config: &mut Value, profiles: &[SshHostProfile], groups: 
             "environment": profile.environment,
             "remark": profile.remark,
             "tags": profile.tags,
+            "loginScript": profile.login_script,
             "options": {
                 "host": profile.host,
                 "port": profile.port,
@@ -563,6 +970,10 @@ fn profile_from_json(entry: &Value) -> Option<SshHostProfile> {
                     .collect()
             })
             .unwrap_or_default(),
+        login_script: entry
+            .get("loginScript")
+            .and_then(Value::as_str)
+            .map(str::to_string),
     })
 }
 
@@ -673,6 +1084,75 @@ fn hex_encode(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
+/// 计算私钥文件内容的 sha512 hash（Electron 密钥口令匹配键）；读不到返回 None。
+fn key_content_hash(path: &str) -> Option<String> {
+    let contents = std::fs::read_to_string(path).ok()?;
+    Some(hex_encode(&Sha512::digest(contents.as_bytes())))
+}
+
+/// 应用单台主机的凭据变更：Some("") 清除，Some(v) 保存，None 不动。
+fn apply_credential_mutation(
+    secrets: &mut Vec<Value>,
+    user: &str,
+    host: &str,
+    port: u16,
+    mutation: &CredentialMutation,
+) {
+    let upsert = |secrets: &mut Vec<Value>, secret_type: &str, value: &str| {
+        let entry = serde_json::json!({
+            "type": secret_type,
+            "key": {
+                "user": user,
+                "host": host,
+                "port": port,
+            },
+            "value": value,
+        });
+        let position = secrets.iter().position(|secret| {
+            secret.get("type").and_then(Value::as_str) == Some(secret_type)
+                && secret
+                    .get("key")
+                    .map(|key| {
+                        key.get("user").and_then(Value::as_str) == Some(user)
+                            && key.get("host").and_then(Value::as_str) == Some(host)
+                            && key.get("port").and_then(Value::as_u64) == Some(port as u64)
+                    })
+                    .unwrap_or(false)
+        });
+        match position {
+            Some(index) => secrets[index] = entry,
+            None => secrets.push(entry),
+        }
+    };
+    let remove = |secrets: &mut Vec<Value>, secret_type: &str| {
+        secrets.retain(|secret| {
+            !(secret.get("type").and_then(Value::as_str) == Some(secret_type)
+                && secret
+                    .get("key")
+                    .map(|key| {
+                        key.get("user").and_then(Value::as_str) == Some(user)
+                            && key.get("host").and_then(Value::as_str) == Some(host)
+                            && key.get("port").and_then(Value::as_u64) == Some(port as u64)
+                    })
+                    .unwrap_or(false))
+        });
+    };
+    if let Some(password) = &mutation.password {
+        if password.is_empty() {
+            remove(secrets, VAULT_SECRET_TYPE_PASSWORD);
+        } else {
+            upsert(secrets, VAULT_SECRET_TYPE_PASSWORD, password);
+        }
+    }
+    if let Some(passphrase) = &mutation.key_passphrase {
+        if passphrase.is_empty() {
+            remove(secrets, VAULT_SECRET_TYPE_PASSPHRASE);
+        } else {
+            upsert(secrets, VAULT_SECRET_TYPE_PASSPHRASE, passphrase);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -770,6 +1250,87 @@ mod tests {
     }
 
     #[test]
+    fn credential_mutation_upserts_and_removes() {
+        let mut secrets = vec![serde_json::json!({
+            "type": VAULT_SECRET_TYPE_PASSWORD,
+            "key": { "user": "root", "host": "10.0.0.1", "port": 22 },
+            "value": "old-pass",
+        })];
+        // 更新已有密码 + 新增口令
+        apply_credential_mutation(
+            &mut secrets,
+            "root",
+            "10.0.0.1",
+            22,
+            &CredentialMutation {
+                user: "root".into(),
+                host: "10.0.0.1".into(),
+                port: 22,
+                password: Some("new-pass".into()),
+                key_passphrase: Some("phrase".into()),
+            },
+        );
+        assert_eq!(
+            find_connection_secret(&secrets, VAULT_SECRET_TYPE_PASSWORD, "root", "10.0.0.1", 22),
+            Some("new-pass".to_string())
+        );
+        assert_eq!(
+            find_connection_secret(&secrets, VAULT_SECRET_TYPE_PASSPHRASE, "root", "10.0.0.1", 22),
+            Some("phrase".to_string())
+        );
+        assert_eq!(secrets.len(), 2);
+        // 清除两项凭据
+        apply_credential_mutation(
+            &mut secrets,
+            "root",
+            "10.0.0.1",
+            22,
+            &CredentialMutation {
+                user: "root".into(),
+                host: "10.0.0.1".into(),
+                port: 22,
+                password: Some(String::new()),
+                key_passphrase: Some(String::new()),
+            },
+        );
+        assert!(secrets.is_empty());
+    }
+
+    #[test]
+    fn credential_mutation_keeps_other_hosts() {
+        let mut secrets = vec![
+            serde_json::json!({
+                "type": VAULT_SECRET_TYPE_PASSWORD,
+                "key": { "user": "root", "host": "10.0.0.1", "port": 22 },
+                "value": "a",
+            }),
+            serde_json::json!({
+                "type": VAULT_SECRET_TYPE_PASSWORD,
+                "key": { "user": "root", "host": "10.0.0.2", "port": 22 },
+                "value": "b",
+            }),
+        ];
+        apply_credential_mutation(
+            &mut secrets,
+            "root",
+            "10.0.0.1",
+            22,
+            &CredentialMutation {
+                user: "root".into(),
+                host: "10.0.0.1".into(),
+                port: 22,
+                password: Some(String::new()),
+                key_passphrase: None,
+            },
+        );
+        assert_eq!(secrets.len(), 1);
+        assert_eq!(
+            find_connection_secret(&secrets, VAULT_SECRET_TYPE_PASSWORD, "root", "10.0.0.2", 22),
+            Some("b".to_string())
+        );
+    }
+
+    #[test]
     fn expands_key_path_templates() {
         assert_eq!(
             expand_key_path("C:/keys/%h/user_%r_key", "root", "10.0.0.1"),
@@ -799,5 +1360,137 @@ mod tests {
             expand_key_path("C:\\Users\\me\\.ssh\\id_rsa", "root", "10.0.0.1"),
             "C:\\Users\\me\\.ssh\\id_rsa"
         );
+    }
+
+    fn temp_store(tag: &str) -> (HostProfileStore, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!(
+            "issh-vault-test-{}-{tag}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        (
+            HostProfileStore::new(&dir),
+            dir.join("config.yaml"),
+        )
+    }
+
+    fn sample_config() -> String {
+        // 明文形态 config.yaml：profiles/groups/secrets 顶层并存
+        [
+            "profiles:",
+            "  - id: p1",
+            "    name: web",
+            "    group: g1",
+            "    user: root",
+            "    host: 10.0.0.1",
+            "    port: 22",
+            "groups:",
+            "  - id: g1",
+            "    name: Prod",
+            "secrets:",
+            "  - type: ssh:password",
+            "    key:",
+            "      user: root",
+            "      host: 10.0.0.1",
+            "      port: 22",
+            "    value: old-pass",
+        ]
+        .join("\n")
+    }
+
+    #[test]
+    fn enable_vault_encrypts_then_unlock_recovers_data() {
+        let (store, path) = temp_store("enable");
+        std::fs::write(&path, sample_config()).expect("write config");
+
+        let result = store.enable_vault("master-pass").expect("enable should succeed");
+        assert!(result.encrypted && result.unlocked);
+        assert_eq!(result.profiles.len(), 1);
+        assert_eq!(result.groups.len(), 1);
+
+        // 明文段已移除，加密标志已写入
+        let raw = std::fs::read_to_string(&path).expect("read config");
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&raw).expect("parse config");
+        assert!(parsed.get("encrypted").and_then(|v| v.as_bool()).unwrap_or(false));
+        assert!(parsed.get("vault").is_some());
+        assert!(parsed.get("profiles").is_none());
+        assert!(parsed.get("secrets").is_none());
+
+        // 模拟重启：锁上后用主口令重新解锁，数据应完整恢复
+        store.lock();
+        assert!(!store.read().expect("read locked").unlocked);
+        let unlocked = store.unlock("master-pass").expect("unlock should succeed");
+        assert_eq!(unlocked.profiles.len(), 1);
+        assert_eq!(unlocked.profiles[0].host, "10.0.0.1");
+        assert_eq!(unlocked.profiles[0].user, "root");
+        assert_eq!(unlocked.groups[0].name, "Prod");
+        assert_eq!(
+            store.resolve_ssh_password("root", "10.0.0.1", 22).expect("resolve"),
+            Some("old-pass".to_string())
+        );
+
+        // 错误口令被拒绝
+        store.lock();
+        assert!(store.unlock("wrong-pass").is_err());
+
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn change_passphrase_reencrypts_and_rejects_wrong_old() {
+        let (store, path) = temp_store("change");
+        std::fs::write(&path, sample_config()).expect("write config");
+        store.enable_vault("old-pass").expect("enable");
+
+        // 旧口令错误 → 拒绝且数据不变
+        assert!(store.change_passphrase("bad-old", "new-pass").is_err());
+        assert_eq!(
+            store.resolve_ssh_password("root", "10.0.0.1", 22).expect("resolve"),
+            Some("old-pass".to_string())
+        );
+
+        // 正确旧口令 → 重加密成功，旧口令失效、新口令可用
+        let result = store.change_passphrase("old-pass", "new-pass").expect("change");
+        assert!(result.unlocked);
+        assert_eq!(
+            store.resolve_ssh_password("root", "10.0.0.1", 22).expect("resolve"),
+            Some("old-pass".to_string())
+        );
+
+        store.lock();
+        assert!(store.unlock("old-pass").is_err(), "old passphrase must stop working");
+        let unlocked = store.unlock("new-pass").expect("new passphrase works");
+        assert_eq!(unlocked.profiles.len(), 1);
+        assert_eq!(
+            store.resolve_ssh_password("root", "10.0.0.1", 22).expect("resolve"),
+            Some("old-pass".to_string())
+        );
+
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn disable_vault_erases_everything() {
+        let (store, path) = temp_store("disable");
+        std::fs::write(&path, sample_config()).expect("write config");
+        store.enable_vault("master-pass").expect("enable");
+
+        let result = store.disable_vault().expect("disable");
+        assert!(!result.encrypted);
+        assert!(result.profiles.is_empty(), "profiles must be erased with the vault");
+        assert!(result.groups.is_empty());
+
+        let raw = std::fs::read_to_string(&path).expect("read config");
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&raw).expect("parse config");
+        assert!(parsed.get("encrypted").is_none());
+        assert!(parsed.get("vault").is_none());
+        assert!(parsed.get("profiles").is_none());
+        assert!(parsed.get("secrets").is_none());
+
+        // 未启用时再次禁用报错
+        assert!(store.disable_vault().is_err());
+
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 }

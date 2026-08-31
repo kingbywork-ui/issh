@@ -1,7 +1,9 @@
 mod host_profiles;
 mod plugin_market;
 
-use host_profiles::{HostProfileMutation, HostProfileStore, HostProfilesResult};
+use host_profiles::{
+    CredentialMutation, HostProfileMutation, HostProfileStore, HostProfilesResult,
+};
 use plugin_market::{InstalledPlugin, PluginRegistry};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -64,10 +66,15 @@ impl RuntimeManager {
             "method": "runtime.health"
         });
         inject_auth_token(&mut health_request, &self.auth_token);
-        if let Ok(health) =
-            send_request(&self.pipe_name, &health_request, Duration::from_millis(500)).await
-        {
-            return assert_compatible(&health);
+        // pipe 可达但握手失败（如升级重装后残留旧 isshd、auth token 已轮换返回
+        // Unauthorized 错误响应）：杀掉占用本 pipe 的残留进程后继续走 spawn 流程，
+        // 而不是把「Runtime 健康响应缺少 result」直接抛给用户。
+        match send_request(&self.pipe_name, &health_request, Duration::from_millis(500)).await {
+            Ok(health) => match assert_compatible(&health) {
+                Ok(()) => return Ok(()),
+                Err(_) => self.terminate_stale_runtime(),
+            },
+            Err(_) => {}
         }
 
         if let Some(parent) = self.database_path.parent() {
@@ -131,6 +138,40 @@ impl RuntimeManager {
                 let _ = child.wait();
             }
         }
+    }
+
+    fn terminate_stale_runtime(&self) {
+        // 清理占用本实例 pipe 的残留 isshd：升级重装后旧进程可能仍存活，但持有
+        // 已轮换的 auth token，会让健康检查永远失败。按进程名 + pipe 名精确匹配，
+        // 避免误杀其它实例或无关进程。
+        let process_name = self
+            .binary_path
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_else(|| "isshd.exe".to_string());
+        let marker = self.pipe_name.trim_start_matches(r"\\.\pipe\");
+        if marker.is_empty() {
+            return;
+        }
+        let script = format!(
+            "Get-CimInstance Win32_Process -Filter \"Name = '{process_name}'\" | \
+             Where-Object {{ $_.CommandLine -like '*{marker}*' }} | \
+             ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}"
+        );
+        let mut command = Command::new("powershell");
+        command
+            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x0800_0000);
+        }
+        let _ = command.output();
+        // 等待内核释放 pipe 句柄，避免新 isshd 绑定失败。
+        std::thread::sleep(Duration::from_millis(250));
     }
 }
 
@@ -211,6 +252,51 @@ fn mutate_host_profiles(
 }
 
 #[tauri::command]
+fn host_credentials(manager: State<'_, RuntimeManager>) -> Result<host_profiles::HostCredentialsResult, String> {
+    manager.hosts.list_credentials()
+}
+
+#[tauri::command]
+fn save_host_credential(
+    manager: State<'_, RuntimeManager>,
+    mutation: CredentialMutation,
+) -> Result<host_profiles::HostCredentialsResult, String> {
+    manager.hosts.save_credential(mutation)
+}
+
+#[tauri::command]
+fn delete_host_credential(
+    manager: State<'_, RuntimeManager>,
+    user: String,
+    host: String,
+    port: u16,
+) -> Result<host_profiles::HostCredentialsResult, String> {
+    manager.hosts.delete_credential(&user, &host, port)
+}
+
+#[tauri::command]
+fn enable_host_vault(
+    manager: State<'_, RuntimeManager>,
+    passphrase: String,
+) -> Result<host_profiles::HostCredentialsResult, String> {
+    manager.hosts.enable_vault(&passphrase)
+}
+
+#[tauri::command]
+fn disable_host_vault(manager: State<'_, RuntimeManager>) -> Result<host_profiles::HostCredentialsResult, String> {
+    manager.hosts.disable_vault()
+}
+
+#[tauri::command]
+fn change_host_passphrase(
+    manager: State<'_, RuntimeManager>,
+    old_passphrase: String,
+    new_passphrase: String,
+) -> Result<host_profiles::HostCredentialsResult, String> {
+    manager.hosts.change_passphrase(&old_passphrase, &new_passphrase)
+}
+
+#[tauri::command]
 fn resolve_ssh_password(
     manager: State<'_, RuntimeManager>,
     user: String,
@@ -280,10 +366,147 @@ fn plugin_delete(app: tauri::AppHandle, id: String) -> Result<bool, String> {
     plugin_market::delete_plugin(&app_data, &id)
 }
 
+#[tauri::command]
+fn pick_save_path(title: String, default_file_name: String) -> Result<Option<String>, String> {
+    Ok(rfd::FileDialog::new()
+        .set_title(&title)
+        .set_file_name(&default_file_name)
+        .save_file()
+        .map(|p| p.to_string_lossy().into_owned()))
+}
+
+#[tauri::command]
+fn pick_directory(title: String) -> Result<Option<String>, String> {
+    Ok(rfd::FileDialog::new()
+        .set_title(&title)
+        .pick_folder()
+        .map(|p| p.to_string_lossy().into_owned()))
+}
+
+#[tauri::command]
+fn write_local_chunk(path: String, data_base64: String, append: bool) -> Result<u64, String> {
+    use base64::Engine;
+    use std::io::Write;
+    let data = base64::engine::general_purpose::STANDARD
+        .decode(&data_base64)
+        .map_err(|error| format!("base64 解码失败：{error}"))?;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(append)
+        .write(true)
+        .truncate(!append)
+        .open(&path)
+        .map_err(|error| format!("无法打开本地文件 {path}：{error}"))?;
+    file.write_all(&data)
+        .map_err(|error| format!("写入本地文件失败：{error}"))?;
+    Ok(data.len() as u64)
+}
+
+#[tauri::command]
+fn delete_local_file(path: String) -> Result<(), String> {
+    if Path::new(&path).exists() {
+        std::fs::remove_file(&path).map_err(|error| format!("删除本地文件失败：{error}"))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn create_local_dir(path: String) -> Result<(), String> {
+    std::fs::create_dir_all(&path).map_err(|error| format!("创建本地目录失败：{error}"))
+}
+
+/// 插件读取本地 shell 历史文件（~/.bash_history、PSReadLine 等）。
+/// 只读 + 大小上限，防止插件侧误用变成任意大文件读取。
+#[tauri::command]
+fn read_local_text_file(path: String, max_bytes: Option<u64>) -> Result<Option<String>, String> {
+    const DEFAULT_MAX: u64 = 1024 * 1024;
+    const HARD_MAX: u64 = 4 * 1024 * 1024;
+    let limit = max_bytes.unwrap_or(DEFAULT_MAX).min(HARD_MAX);
+    let metadata = match std::fs::metadata(&path) {
+        Ok(metadata) => metadata,
+        // 文件不存在（如尚未生成过的 shell 历史文件）按缺失处理
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("无法读取文件信息 {path}：{error}")),
+    };
+    if !metadata.is_file() {
+        return Ok(None);
+    }
+    if metadata.len() > limit {
+        return Err(format!("文件超过大小上限（{limit} 字节）：{path}"));
+    }
+    match std::fs::read_to_string(&path) {
+        Ok(content) => Ok(Some(content)),
+        // 非 UTF-8 历史文件（如 GBK 编码的 PSReadLine 旧文件）按缺失处理
+        Err(error) if error.kind() == std::io::ErrorKind::InvalidData => Ok(None),
+        Err(error) => Err(format!("读取本地文件失败 {path}：{error}")),
+    }
+}
+
+/// 插件获取用户目录路径，用于定位 shell 历史文件（~/.bash_history、PSReadLine 等）。
+#[tauri::command]
+fn user_paths() -> Result<Value, String> {
+    let home = std::env::var_os("USERPROFILE")
+        .or_else(|| std::env::var_os("HOME"))
+        .map(|value| value.to_string_lossy().into_owned());
+    let app_data = std::env::var_os("APPDATA")
+        .or_else(|| {
+            std::env::var_os("HOME").map(|home| {
+                PathBuf::from(home)
+                    .join(".config")
+                    .into_os_string()
+            })
+        })
+        .map(|value| value.to_string_lossy().into_owned());
+    Ok(json!({ "home": home, "appData": app_data }))
+}
+
 pub fn run() {
+    use tauri::Emitter;
+    use tauri_plugin_deep_link::DeepLinkExt;
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // 二次启动：聚焦已有主窗口（对齐 Electron requestSingleInstanceLock），
+            // 并转发 ssh:// 深链参数（Windows 上深链二次触发会带 URL 参数）
+            if let Some(url) = args.iter().find(|arg| arg.starts_with("ssh://")) {
+                let _ = app.emit("issh://deep-link", url.clone());
+            }
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
             app.manage(RuntimeManager::new(app.handle())?);
+            setup_tray(app.handle())?;
+            // 深链：启动时（含冷启动带 ssh:// 参数）与运行期事件都转发给前端
+            {
+                let handle = app.handle().clone();
+                let launch_handle = handle.clone();
+                app.deep_link().on_open_url(move |event| {
+                    for url in event.urls() {
+                        let _ = handle.emit("issh://deep-link", url.to_string());
+                    }
+                });
+                std::thread::spawn(move || {
+                    if let Ok(Some(urls)) = launch_handle.deep_link().get_current() {
+                        for url in urls {
+                            let _ = launch_handle.emit("issh://deep-link", url.to_string());
+                        }
+                    }
+                });
+            }
+            // 关闭窗口 = 最小化到托盘（对齐 Electron close → tray 行为）
+            if let Some(window) = app.get_webview_window("main") {
+                let handle = window.clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = handle.hide();
+                    }
+                });
+            }
             if app.get_webview_window("main").is_none() {
                 WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                     .title("issh")
@@ -308,6 +531,12 @@ pub fn run() {
             runtime_health,
             runtime_request,
             host_profiles,
+            host_credentials,
+            save_host_credential,
+            delete_host_credential,
+            enable_host_vault,
+            disable_host_vault,
+            change_host_passphrase,
             unlock_host_profiles,
             lock_host_profiles,
             mutate_host_profiles,
@@ -317,6 +546,13 @@ pub fn run() {
             plugin_download,
             plugin_list_installed,
             plugin_delete,
+            pick_save_path,
+            pick_directory,
+            write_local_chunk,
+            delete_local_file,
+            create_local_dir,
+            read_local_text_file,
+            user_paths,
             relaunch_elevated
         ])
         .build(tauri::generate_context!())
@@ -327,6 +563,42 @@ pub fn run() {
             handle.state::<RuntimeManager>().stop();
         }
     });
+}
+
+/// 系统托盘：显示主窗口 / 退出。关闭窗口时最小化到托盘而非退出进程。
+fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    use tauri::menu::{Menu, MenuItem};
+    use tauri::tray::TrayIconBuilder;
+
+    let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show, &quit])?;
+
+    let icon = app
+        .default_window_icon()
+        .cloned()
+        .ok_or("无法加载托盘图标：应用无默认图标")?;
+
+    TrayIconBuilder::with_id("issh-tray")
+        .icon(icon)
+        .tooltip("issh")
+        .menu(&menu)
+        .show_menu_on_left_click(true)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "show" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.unminimize();
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+            "quit" => {
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .build(app)?;
+    Ok(())
 }
 
 fn inject_auth_token(request: &mut Value, token: &str) {

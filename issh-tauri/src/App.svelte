@@ -3,6 +3,7 @@
     import { FitAddon } from '@xterm/addon-fit'
     import { Terminal } from '@xterm/xterm'
     import '@xterm/xterm/css/xterm.css'
+    import { listen } from '@tauri-apps/api/event'
     import HostManager from './lib/HostManager.svelte'
     import WelcomeHome from './lib/WelcomeHome.svelte'
     import SftpBrowser from './lib/SftpBrowser.svelte'
@@ -69,6 +70,7 @@
     let showSend = $state(false)
     let showConnect = $state(false)
     let showSelector = $state(false)
+    let vaultLocked = $state(false)
     let showWelcome = $state(false)
     let showSettings = $state(false)
     let pluginUpdates = $state<PluginUpdateInfo[]>([])
@@ -512,6 +514,13 @@
         const fingerprint = await discoverSshHostKey(params.host, params.port)
         pendingFingerprint = fingerprint.fingerprint
         pendingParams = params
+        const trustKey = `issh.trustedHostKey.${params.host}:${params.port}`
+        const trustedFingerprint = localStorage.getItem(trustKey)
+        if (trustedFingerprint === fingerprint.fingerprint) {
+            // 指纹未变化时复用已确认的信任记录，不再重复弹窗。
+            await confirmFingerprint()
+            return
+        }
         pendingConnect = true
         showConnect = true
     }
@@ -521,6 +530,8 @@
         connectError = ''
         connecting = true
         const params = pendingParams
+        // 先快照指纹：下方清空 pendingFingerprint 后 tab 仍需记录它供 Reconnect 使用
+        const fingerprint = pendingFingerprint
         try {
             const session = await openSshSession({
                 title: params.title?.trim() || `${params.user}@${params.host}`,
@@ -530,7 +541,7 @@
                 ...(params.password || formPassword ? { password: params.password || formPassword } : {}),
                 ...(params.keyPath ? { privateKeyPath: params.keyPath } : {}),
                 ...(params.keyPassphrase || formKeyPassphrase ? { privateKeyPassphrase: params.keyPassphrase || formKeyPassphrase } : {}),
-                expectedHostKey: pendingFingerprint,
+                expectedHostKey: fingerprint,
                 ...(params.vaultSecretId ? { vaultSecretId: params.vaultSecretId } : {}),
             })
             pendingConnect = false
@@ -549,12 +560,13 @@
                     host: params.host,
                     port: params.port,
                     user: params.user,
-                    hostKeyFingerprint: pendingFingerprint,
+                    hostKeyFingerprint: fingerprint,
                     profile: params.profile,
                     keyPath: params.keyPath,
                 },
                 decoratorCleanups: null,
             }
+            localStorage.setItem(`issh.trustedHostKey.${params.host}:${params.port}`, fingerprint)
             tabs.push(tab)
             activeId = session.id
             showHome = false
@@ -652,6 +664,9 @@
                     kind: tab.session.kind === 'ssh' ? 'ssh' : 'local',
                     title: tab.session.title,
                     terminal: tab.terminal,
+                    profile: tab.ssh?.profile
+                        ? { name: tab.ssh.profile.name, loginScript: tab.ssh.profile.loginScript }
+                        : null,
                     write: (data) => {
                         const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data
                         enqueueWrite(tab.session.id, async () => { await writeSession(tab.session.id, bytes) })
@@ -784,6 +799,32 @@
         void loadVaultSecrets()
     }
 
+    // ssh:// 深链：解析 ssh://user@host:port 或 ssh://user@host 并发起连接
+    // （对齐 Electron 分支的 ssh:// 协议处理）
+    function handleDeepLinkUrl (raw: string): void {
+        let url: URL
+        try {
+            url = new URL(raw)
+        } catch {
+            return
+        }
+        if (url.protocol !== 'ssh:') return
+        const user = decodeURIComponent(url.username || '')
+        const host = url.hostname
+        if (!host) return
+        const port = Number(url.port) || 22
+        void connectWithParams({
+            host,
+            port,
+            user,
+            password: '',
+            keyPath: '',
+            keyPassphrase: '',
+            vaultSecretId: '',
+            profile: null,
+        }).catch(() => {})
+    }
+
     onMount(() => {
         try {
             const scheme = localStorage.getItem('issh.colorScheme') ?? 'dark'
@@ -799,8 +840,14 @@
         pollHandle = setInterval(pollAll, POLL_INTERVAL_MS)
         window.addEventListener('storage', schemeChangeHandler)
         window.addEventListener('issh:terminal-scheme-change', schemeChangeHandler)
+        // 深链监听：Rust 侧启动参数/运行期事件统一 emit 到此
+        let deepLinkUnlisten: (() => void) | null = null
+        void listen<string>('issh://deep-link', (event) => { handleDeepLinkUrl(event.payload) })
+            .then((unlisten) => { deepLinkUnlisten = unlisten })
+            .catch(() => {})
         return () => {
             if (pollHandle) clearInterval(pollHandle)
+            deepLinkUnlisten?.()
             window.removeEventListener('storage', schemeChangeHandler)
             window.removeEventListener('issh:terminal-scheme-change', schemeChangeHandler)
             for (const tab of tabs) {
@@ -822,13 +869,15 @@
         </div>
     {/if}
     <header class="tab-bar">
-        <button
-            class="btn-tab-bar profile-button"
-            type="button"
-            onclick={() => { showSelector = true }}
-            title="Profiles & connections"
-            aria-label="Profiles & connections"
-        >▦</button>
+        {#if !vaultLocked}
+            <button
+                class="btn-tab-bar profile-button"
+                type="button"
+                onclick={() => { showSelector = true }}
+                title="Profiles & connections"
+                aria-label="Profiles & connections"
+            >▦</button>
+        {/if}
         <div class="tabs">
             {#each tabs as tab, index (tab.session.id)}
                 <button
@@ -858,13 +907,15 @@
         {:else}
             <span class="runtime-badge offline" title="Runtime 未连接">●</span>
         {/if}
-        <button
-            class="btn-tab-bar"
-            type="button"
-            onclick={() => { showSettings = true }}
-            title="设置"
-            aria-label="设置"
-        >⚙</button>
+        {#if !vaultLocked}
+            <button
+                class="btn-tab-bar"
+                type="button"
+                onclick={() => { showSettings = true }}
+                title="设置"
+                aria-label="设置"
+            >⚙</button>
+        {/if}
     </header>
 
     <div class="app-workspace" class:left-open={showSftp && !!activeTab} class:bottom-open={showSend}>
@@ -872,7 +923,7 @@
             {#if showWelcome}
                 <WelcomeHome onclose={() => { showWelcome = false }} />
             {:else}
-                <HostManager onconnect={(profile) => void connectHost(profile)} onopenlocal={() => void addLocalTab()} />
+                <HostManager onconnect={(profile) => void connectHost(profile)} onopenlocal={() => void addLocalTab()} onvaultstate={(locked) => { vaultLocked = locked }} />
             {/if}
         {:else}
             {#if showSftp && activeTab && activeTab.session.kind === 'ssh'}
