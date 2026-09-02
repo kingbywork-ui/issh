@@ -1,8 +1,27 @@
+import type { Terminal } from '@xterm/xterm'
+import { lockHostProfiles, resolveSudoPassword, unlockHostProfiles } from './runtime'
 import type { TerminalDecoratorDefinition } from './plugins/types'
 
-// 历史 key 前缀沿用插件时代格式（issh-plugin-auto-sudo:user:），保证升级内置后已保存密码不丢失
-const STORAGE_PREFIX = 'issh-plugin-auto-sudo:user:'
 const ENABLED_KEY = 'issh.autoSudo.enabled'
+const SUDO_PROMPT_MARKER = '[sudo'
+const SUDO_AUTH_FAILURE = /(?:sorry, try again|authentication failure|incorrect password)/i
+const LEGACY_PREFIX = 'issh-plugin-auto-sudo:user:'
+
+export function clearLegacySudoPasswords (): number {
+    let removed = 0
+    try {
+        const keys: string[] = []
+        for (let index = 0; index < localStorage.length; index += 1) {
+            const key = localStorage.key(index)
+            if (key?.startsWith(LEGACY_PREFIX)) keys.push(key)
+        }
+        for (const key of keys) {
+            localStorage.removeItem(key)
+            removed += 1
+        }
+    } catch {}
+    return removed
+}
 
 export function isAutoSudoEnabled (): boolean {
     try { return localStorage.getItem(ENABLED_KEY) !== 'false' } catch { return true }
@@ -12,24 +31,6 @@ export function setAutoSudoEnabled (enabled: boolean): void {
     try { localStorage.setItem(ENABLED_KEY, String(enabled)) } catch {}
 }
 
-export function listSavedSudoUsers (): Array<{ user: string }> {
-    const users: Array<{ user: string }> = []
-    try {
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i)
-            if (key && key.startsWith(STORAGE_PREFIX)) {
-                users.push({ user: key.slice(STORAGE_PREFIX.length) })
-            }
-        }
-    } catch {}
-    return users.sort((a, b) => a.user.localeCompare(b.user))
-}
-
-export function deleteSavedSudoUser (user: string): void {
-    try { localStorage.removeItem(`${STORAGE_PREFIX}${user}`) } catch {}
-}
-
-const SUDO_PROMPT_MARKER = '[sudo'
 // 多语言 sudo 密码提示（捕获组为用户名；sudo-rs 无用户名）
 const SUDO_PROMPT_PATTERNS: RegExp[] = [
     /^\[sudo\] password for ([^:]+):\s*$/im,
@@ -63,48 +64,113 @@ function matchSudoPrompt (text: string): string | null {
     return null
 }
 
-// 内置功能：检测终端 sudo 密码提示（多语言），Ctrl+Enter 填充已保存密码
+function showTerminalStatus (terminal: Terminal, message: string): void {
+    terminal.write(`\x1b[s\x1b[999;999H\x1b[8;5;2m[issh] ${message}\x1b[0m\x1b[u`)
+}
+
+// 仅 SSH：提示出现后从已解锁的 Vault 取当前连接的独立 sudo 凭据。
 export const autoSudoDecorator: TerminalDecoratorDefinition = {
     id: 'auto-sudo',
     decorate (options) {
-        const { terminal } = options
+        if (options.kind !== 'ssh' || !options.profile) return
+        const { terminal, profile } = options
         let pendingPassword: string | null = null
+        let lookupGeneration = 0
+        let expiryTimer: ReturnType<typeof setTimeout> | null = null
+        const clearPending = (): void => {
+            pendingPassword = null
+            options.setAction?.(null)
+            if (expiryTimer !== null) clearTimeout(expiryTimer)
+            expiryTimer = null
+        }
+        const fillPending = (): void => {
+            if (pendingPassword === null) return
+            options.write(`${pendingPassword}\r`)
+            clearPending()
+        }
+        const unlockAndFill = async (user: string, generation: number): Promise<void> => {
+            const passphrase = await options.requestVaultPassphrase?.()
+            if (!passphrase || generation !== lookupGeneration) return
+            let password: string | null = null
+            try {
+                await unlockHostProfiles(passphrase)
+                password = await resolveSudoPassword(user, profile.host, profile.port)
+            } catch {
+                if (generation === lookupGeneration) {
+                    showTerminalStatus(terminal, '主口令不正确或保险库无法解锁，请点击按钮重试')
+                }
+                return
+            } finally {
+                await lockHostProfiles().catch(() => {})
+            }
+            if (generation !== lookupGeneration) return
+            if (password === null) {
+                clearPending()
+                showTerminalStatus(terminal, '未找到此主机的 sudo 密码，请到 设置 > sudo 密码 添加')
+                return
+            }
+            options.write(`${password}\r`)
+            clearPending()
+        }
 
-        // xterm 的 attachCustomKeyEventHandler 为单槽位替换式（无注销 API）；
-        // tab 重建时先 runDecoratorCleanups 再整体重新 decorate，handler 被替换，无泄漏
         terminal.attachCustomKeyEventHandler((event) => {
-            if (event.type !== 'keydown') return true
-            if (!isAutoSudoEnabled()) return true
+            if (event.type !== 'keydown' || !isAutoSudoEnabled()) return true
             if (event.ctrlKey && event.key === 'Enter' && pendingPassword !== null) {
-                options.write(`${pendingPassword}\r`)
-                pendingPassword = null
+                fillPending()
                 return false
             }
+            if (pendingPassword !== null && event.key.length > 0) clearPending()
             return true
         })
 
         const dataListener = terminal.onWriteParsed(() => {
-            if (!isAutoSudoEnabled()) {
-                pendingPassword = null
-                return
-            }
             const buffer = terminal.buffer.active
             const line = buffer.getLine(buffer.cursorY)
             if (!line) return
             const text = line.translateToString(true)
-            const user = matchSudoPrompt(text)
-            if (user !== null) {
-                // 密码按用户名持久化（跨会话可用）；sessionId 不参与 key，避免会话关闭即失效
-                let saved: string | null = null
-                try { saved = localStorage.getItem(`${STORAGE_PREFIX}${user}`) } catch {}
-                pendingPassword = saved
-                if (saved !== null) {
-                    terminal.write('\x1b[s\x1b[999;999H\x1b[8;5;2m[issh] Ctrl+Enter 填充已存密码\x1b[0m\x1b[u')
-                }
+            if (SUDO_AUTH_FAILURE.test(text)) {
+                lookupGeneration += 1
+                clearPending()
+                showTerminalStatus(terminal, 'sudo 认证失败，请在 设置 > sudo 密码 更新后重试')
+                return
             }
+            if (!isAutoSudoEnabled()) {
+                clearPending()
+                return
+            }
+            const promptUser = matchSudoPrompt(text)
+            if (promptUser === null) return
+
+            const user = promptUser || profile.user
+            if (!user) return
+            clearPending()
+            const generation = ++lookupGeneration
+            void resolveSudoPassword(user, profile.host, profile.port).then((password) => {
+                if (generation !== lookupGeneration || password === null) {
+                    if (generation === lookupGeneration && password === null) {
+                        showTerminalStatus(terminal, '未找到此主机的 sudo 密码，请到 设置 > sudo 密码 添加')
+                    }
+                    return
+                }
+                pendingPassword = password
+                expiryTimer = setTimeout(clearPending, 10000)
+                options.setAction?.({ label: '填充 sudo 密码', invoke: fillPending })
+                showTerminalStatus(terminal, '点击“填充 sudo 密码”或按 Ctrl+Enter，任意输入取消')
+            }).catch(() => {
+                if (generation === lookupGeneration) {
+                    expiryTimer = setTimeout(clearPending, 30000)
+                    options.setAction?.({
+                        label: '解锁并填充 sudo 密码',
+                        invoke: () => { void unlockAndFill(user, generation) },
+                    })
+                    showTerminalStatus(terminal, '点击“解锁并填充 sudo 密码”后输入保险库主口令')
+                }
+            })
         })
 
         options.dispose(() => {
+            lookupGeneration += 1
+            clearPending()
             dataListener.dispose()
         })
     },

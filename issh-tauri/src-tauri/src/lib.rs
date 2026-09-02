@@ -1,3 +1,4 @@
+mod clipboard;
 mod host_profiles;
 mod plugin_market;
 
@@ -307,6 +308,26 @@ fn resolve_ssh_password(
 }
 
 #[tauri::command]
+fn clipboard_write_text(text: String) -> Result<(), String> {
+    clipboard::write_text(&text)
+}
+
+#[tauri::command]
+fn clipboard_read_text() -> Result<String, String> {
+    clipboard::read_text()
+}
+
+#[tauri::command]
+fn resolve_sudo_password(
+    manager: State<'_, RuntimeManager>,
+    user: String,
+    host: String,
+    port: u16,
+) -> Result<Option<String>, String> {
+    manager.hosts.resolve_sudo_password(&user, &host, port)
+}
+
+#[tauri::command]
 fn resolve_key_passphrase(
     manager: State<'_, RuntimeManager>,
     user: String,
@@ -528,6 +549,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            clipboard_write_text,
+            clipboard_read_text,
             runtime_health,
             runtime_request,
             host_profiles,
@@ -541,6 +564,7 @@ pub fn run() {
             lock_host_profiles,
             mutate_host_profiles,
             resolve_ssh_password,
+            resolve_sudo_password,
             resolve_key_passphrase,
             plugin_fetch_registry,
             plugin_download,

@@ -31,8 +31,10 @@ export class CopyPasteContextMenu extends TabContextMenuItemProvider {
                     label: this.translate.instant('Copy'),
                     click: (): void => {
                         setTimeout(() => {
-                            tab.frontend?.copySelection()
-                            this.notifications.notice(this.translate.instant('Copied'))
+                            if (tab.frontend?.getSelection()) {
+                                tab.frontend.copySelection()
+                                this.notifications.notice(this.translate.instant('Copied'))
+                            }
                         })
                     },
                 },

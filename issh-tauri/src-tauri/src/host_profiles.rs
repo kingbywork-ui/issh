@@ -9,6 +9,7 @@ use zeroize::Zeroizing;
 
 const VAULT_SECRET_TYPE_PASSWORD: &str = "ssh:password";
 const VAULT_SECRET_TYPE_PASSPHRASE: &str = "ssh:key-passphrase";
+const VAULT_SECRET_TYPE_SUDO_PASSWORD: &str = "ssh:sudo-password";
 
 /// A host entry mirrored from the issh (Electron) config.yaml / cache files.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,6 +40,38 @@ pub struct SshHostProfile {
     /// 登录后自动执行的脚本命令（多行以 && 连接），供 LLM 登录脚本补全（Beta）
     #[serde(default)]
     pub login_script: Option<String>,
+    #[serde(default)]
+    pub x11: bool,
+    #[serde(default)]
+    pub agent_forward: bool,
+    #[serde(default)]
+    pub jump_host: Option<String>,
+    #[serde(default)]
+    pub proxy_command: Option<String>,
+    #[serde(default)]
+    pub forwarded_ports: Vec<ForwardedPortConfig>,
+    #[serde(default)]
+    pub socks_proxy_host: Option<String>,
+    #[serde(default)]
+    pub socks_proxy_port: Option<u16>,
+    #[serde(default)]
+    pub http_proxy_host: Option<String>,
+    #[serde(default)]
+    pub http_proxy_port: Option<u16>,
+    #[serde(default)]
+    pub reuse_session: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForwardedPortConfig {
+    pub r#type: String,
+    pub host: String,
+    pub port: u16,
+    pub target_address: String,
+    pub target_port: u16,
+    #[serde(default)]
+    pub description: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,7 +92,7 @@ pub struct HostProfilesResult {
     pub groups: Vec<SshHostGroup>,
 }
 
-/// 单台主机在保险库中的凭据视图（密码 + 私钥口令，均可为空）。
+/// 单台主机在保险库中的凭据视图（登录密码、sudo 密码和私钥口令，均可为空）。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HostCredential {
@@ -67,6 +100,7 @@ pub struct HostCredential {
     pub host: String,
     pub port: u16,
     pub password: Option<String>,
+    pub sudo_password: Option<String>,
     pub key_passphrase: Option<String>,
     /// 私钥口令是按私钥文件内容 hash 匹配的（非按连接匹配）
     pub passphrase_by_key: bool,
@@ -102,6 +136,8 @@ pub struct CredentialMutation {
     pub port: u16,
     /// None = 不改动；Some(value) = 保存（空字符串表示清除）
     pub password: Option<String>,
+    /// sudo 凭据始终要求主机 Vault 已启用且已解锁。
+    pub sudo_password: Option<String>,
     pub key_passphrase: Option<String>,
 }
 
@@ -276,6 +312,36 @@ impl HostProfileStore {
         ))
     }
 
+    /// Resolves a sudo password only for the exact SSH connection. Unlike the
+    /// login-password lookup, sudo credentials never fall back to a host-less
+    /// value, preventing credentials from leaking across hosts with one user.
+    pub fn resolve_sudo_password(
+        &self,
+        user: &str,
+        host: &str,
+        port: u16,
+    ) -> Result<Option<String>, String> {
+        let port = if port == 0 { 22 } else { port };
+        let guard = self
+            .unlocked
+            .lock()
+            .map_err(|_| "主机配置状态不可用".to_string())?;
+        let Some(unlocked) = guard.as_ref() else {
+            let state = self.read()?;
+            if state.encrypted {
+                return Err("保险库未解锁".to_string());
+            }
+            return Err("请先启用保险库以保存 sudo 密码".to_string());
+        };
+        Ok(find_exact_connection_secret(
+            &unlocked.secrets,
+            VAULT_SECRET_TYPE_SUDO_PASSWORD,
+            user,
+            host,
+            port,
+        ))
+    }
+
     pub fn resolve_key_passphrase(
         &self,
         user: &str,
@@ -337,6 +403,19 @@ impl HostProfileStore {
                     profile.user, profile.host, profile.port
                 ));
             }
+            let sudo_password = find_exact_connection_secret(
+                &secrets,
+                VAULT_SECRET_TYPE_SUDO_PASSWORD,
+                &profile.user,
+                &profile.host,
+                profile.port,
+            );
+            if sudo_password.is_some() {
+                consumed.insert(format!(
+                    "{VAULT_SECRET_TYPE_SUDO_PASSWORD}|{}|{}|{}",
+                    profile.user, profile.host, profile.port
+                ));
+            }
             let mut passphrase_by_key = false;
             let mut key_passphrase = find_connection_secret(
                 &secrets,
@@ -363,7 +442,7 @@ impl HostProfileStore {
                     profile.user, profile.host, profile.port
                 ));
             }
-            if password.is_some() || key_passphrase.is_some() {
+            if password.is_some() || sudo_password.is_some() || key_passphrase.is_some() {
                 let credential_key = format!(
                     "{}|{}|{}",
                     profile.user, profile.host, profile.port
@@ -376,6 +455,7 @@ impl HostProfileStore {
                     host: profile.host.clone(),
                     port: profile.port,
                     password,
+                    sudo_password,
                     key_passphrase,
                     passphrase_by_key,
                 });
@@ -447,13 +527,22 @@ impl HostProfileStore {
             return Err("用户名与主机不能为空".to_string());
         }
         let port = if mutation.port == 0 { 22 } else { mutation.port };
+        if mutation.sudo_password.is_some() {
+            let state = self.read()?;
+            if !state.encrypted {
+                return Err("保存 sudo 密码前请先在保险库中启用主口令".to_string());
+            }
+            if !state.unlocked {
+                return Err("保存 sudo 密码前请先解锁保险库".to_string());
+            }
+        }
         self.mutate_secret(|secrets| {
             apply_credential_mutation(secrets, user, host, port, &mutation);
         })?;
         self.list_credentials()
     }
 
-    /// 删除单台主机的密码与私钥口令。
+    /// 删除单台主机的登录密码、sudo 密码与私钥口令。
     pub fn delete_credential(&self, user: &str, host: &str, port: u16) -> Result<HostCredentialsResult, String> {
         let user = user.trim();
         let host = host.trim();
@@ -464,7 +553,12 @@ impl HostProfileStore {
             secrets.retain(|secret| {
                 let kind = secret.get("type").and_then(Value::as_str).unwrap_or("");
                 let key = secret.get("key");
-                let matches = matches!(kind, VAULT_SECRET_TYPE_PASSWORD | VAULT_SECRET_TYPE_PASSPHRASE)
+                let matches = matches!(
+                    kind,
+                    VAULT_SECRET_TYPE_PASSWORD
+                        | VAULT_SECRET_TYPE_PASSPHRASE
+                        | VAULT_SECRET_TYPE_SUDO_PASSWORD
+                )
                     && key
                         .map(|key| {
                             key.get("user").and_then(Value::as_str) == Some(user)
@@ -837,6 +931,16 @@ fn write_model_to_json(config: &mut Value, profiles: &[SshHostProfile], groups: 
                 "user": profile.user,
                 "auth": profile.auth,
                 "privateKeys": profile.private_keys,
+                "x11": profile.x11,
+                "agentForward": profile.agent_forward,
+                "jumpHost": profile.jump_host,
+                "proxyCommand": profile.proxy_command,
+                "forwardedPorts": profile.forwarded_ports,
+                "socksProxyHost": profile.socks_proxy_host,
+                "socksProxyPort": profile.socks_proxy_port,
+                "httpProxyHost": profile.http_proxy_host,
+                "httpProxyPort": profile.http_proxy_port,
+                "reuseSession": profile.reuse_session,
             },
         })).collect::<Vec<_>>();
         map.insert("profiles".into(), Value::Array(entries));
@@ -974,6 +1078,20 @@ fn profile_from_json(entry: &Value) -> Option<SshHostProfile> {
             .get("loginScript")
             .and_then(Value::as_str)
             .map(str::to_string),
+        x11: options.get("x11").and_then(Value::as_bool).unwrap_or(false),
+        agent_forward: options.get("agentForward").and_then(Value::as_bool).unwrap_or(false),
+        jump_host: options.get("jumpHost").and_then(Value::as_str).map(str::to_string),
+        proxy_command: options.get("proxyCommand").and_then(Value::as_str).map(str::to_string),
+        forwarded_ports: options
+            .get("forwardedPorts")
+            .cloned()
+            .and_then(|value| serde_json::from_value(value).ok())
+            .unwrap_or_default(),
+        socks_proxy_host: options.get("socksProxyHost").and_then(Value::as_str).map(str::to_string),
+        socks_proxy_port: options.get("socksProxyPort").and_then(Value::as_u64).and_then(|value| u16::try_from(value).ok()),
+        http_proxy_host: options.get("httpProxyHost").and_then(Value::as_str).map(str::to_string),
+        http_proxy_port: options.get("httpProxyPort").and_then(Value::as_u64).and_then(|value| u16::try_from(value).ok()),
+        reuse_session: options.get("reuseSession").and_then(Value::as_bool).unwrap_or(false),
     })
 }
 
@@ -1043,6 +1161,30 @@ fn find_connection_secret(
         }
     }
     None
+}
+
+fn find_exact_connection_secret(
+    secrets: &[Value],
+    secret_type: &str,
+    user: &str,
+    host: &str,
+    port: u16,
+) -> Option<String> {
+    secrets
+        .iter()
+        .find(|secret| {
+            secret.get("type").and_then(Value::as_str) == Some(secret_type)
+                && secret
+                    .get("key")
+                    .map(|key| {
+                        key.get("user").and_then(Value::as_str) == Some(user)
+                            && key.get("host").and_then(Value::as_str) == Some(host)
+                            && key.get("port").and_then(Value::as_u64) == Some(port as u64)
+                    })
+                    .unwrap_or(false)
+        })
+        .and_then(|secret| secret.get("value").and_then(Value::as_str))
+        .map(str::to_string)
 }
 
 /// Electron 存密钥口令用 key = { hash: sha512(key contents) }。
@@ -1142,6 +1284,13 @@ fn apply_credential_mutation(
             remove(secrets, VAULT_SECRET_TYPE_PASSWORD);
         } else {
             upsert(secrets, VAULT_SECRET_TYPE_PASSWORD, password);
+        }
+    }
+    if let Some(sudo_password) = &mutation.sudo_password {
+        if sudo_password.is_empty() {
+            remove(secrets, VAULT_SECRET_TYPE_SUDO_PASSWORD);
+        } else {
+            upsert(secrets, VAULT_SECRET_TYPE_SUDO_PASSWORD, sudo_password);
         }
     }
     if let Some(passphrase) = &mutation.key_passphrase {
@@ -1267,6 +1416,7 @@ mod tests {
                 host: "10.0.0.1".into(),
                 port: 22,
                 password: Some("new-pass".into()),
+                sudo_password: Some("sudo-pass".into()),
                 key_passphrase: Some("phrase".into()),
             },
         );
@@ -1278,8 +1428,18 @@ mod tests {
             find_connection_secret(&secrets, VAULT_SECRET_TYPE_PASSPHRASE, "root", "10.0.0.1", 22),
             Some("phrase".to_string())
         );
-        assert_eq!(secrets.len(), 2);
-        // 清除两项凭据
+        assert_eq!(
+            find_exact_connection_secret(
+                &secrets,
+                VAULT_SECRET_TYPE_SUDO_PASSWORD,
+                "root",
+                "10.0.0.1",
+                22,
+            ),
+            Some("sudo-pass".to_string())
+        );
+        assert_eq!(secrets.len(), 3);
+        // 清除三项凭据
         apply_credential_mutation(
             &mut secrets,
             "root",
@@ -1290,6 +1450,7 @@ mod tests {
                 host: "10.0.0.1".into(),
                 port: 22,
                 password: Some(String::new()),
+                sudo_password: Some(String::new()),
                 key_passphrase: Some(String::new()),
             },
         );
@@ -1320,6 +1481,7 @@ mod tests {
                 host: "10.0.0.1".into(),
                 port: 22,
                 password: Some(String::new()),
+                sudo_password: None,
                 key_passphrase: None,
             },
         );
@@ -1327,6 +1489,25 @@ mod tests {
         assert_eq!(
             find_connection_secret(&secrets, VAULT_SECRET_TYPE_PASSWORD, "root", "10.0.0.2", 22),
             Some("b".to_string())
+        );
+    }
+
+    #[test]
+    fn sudo_password_never_falls_back_to_another_host() {
+        let secrets = vec![serde_json::json!({
+            "type": VAULT_SECRET_TYPE_SUDO_PASSWORD,
+            "key": { "user": "root", "host": "10.0.0.1", "port": 22 },
+            "value": "sudo-pass",
+        })];
+        assert_eq!(
+            find_exact_connection_secret(
+                &secrets,
+                VAULT_SECRET_TYPE_SUDO_PASSWORD,
+                "root",
+                "10.0.0.2",
+                22,
+            ),
+            None
         );
     }
 

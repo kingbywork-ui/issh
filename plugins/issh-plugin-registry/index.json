@@ -8,6 +8,7 @@
       "version": "0.1.1",
       "description": "Workspace/Agent 管理：工作区创建、终端会话绑定、agent 注册与授权（对接 isshd workspace.*/agent.* RPC）",
       "kind": "integration",
+      "audience": "user",
       "permissions": [
         "workspace:read",
         "workspace:write",
@@ -30,6 +31,7 @@
       "version": "0.1.0",
       "description": "主机配置导出/导入 JSON + GitHub Gist 云同步",
       "kind": "integration",
+      "audience": "user",
       "permissions": [
         "settings:tab",
         "profiles:read",
@@ -49,6 +51,7 @@
       "version": "0.1.1",
       "description": "Herdr/Workspace 管理：工作区创建、终端会话绑定（对接 isshd workspace.* RPC）",
       "kind": "integration",
+      "audience": "user",
       "permissions": [
         "workspace:read",
         "workspace:write",
@@ -69,6 +72,7 @@
       "version": "0.1.1",
       "description": "终端输出中的 URL / IP / 文件路径识别，Ctrl+点击 在浏览器打开或复制",
       "kind": "feature",
+      "audience": "user",
       "permissions": [
         "terminal:decorate"
       ],
@@ -86,6 +90,7 @@
       "version": "0.2.0",
       "description": "LLM 驱动的 shell 命令补全：输入时防抖请求 LLM API，Ctrl+Y 接受候选",
       "kind": "feature",
+      "audience": "user",
       "permissions": [
         "terminal:decorate",
         "settings:tab"
@@ -104,6 +109,7 @@
       "version": "0.4.0",
       "description": "演示 iframe 沙箱面板：postMessage RPC 存储读写、终端读写、事件接收",
       "kind": "feature",
+      "audience": "developer",
       "permissions": [
         "panel:register",
         "terminal:decorate",
@@ -122,6 +128,7 @@
       "version": "0.1.0",
       "description": "Web Serial API 串口连接：选择串口/波特率，收发数据（底部面板）",
       "kind": "integration",
+      "audience": "user",
       "permissions": [
         "panel:register"
       ],

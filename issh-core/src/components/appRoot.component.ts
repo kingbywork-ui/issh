@@ -268,6 +268,7 @@ export class AppRootComponent implements AfterViewInit, AfterViewChecked {
         const onUp = () => {
             document.removeEventListener('mousemove', onMove)
             document.removeEventListener('mouseup', onUp)
+            window.removeEventListener('blur', onUp)
             document.body.style.cursor = ''
             document.body.style.userSelect = ''
             this.bottomResizing = false
@@ -280,6 +281,7 @@ export class AppRootComponent implements AfterViewInit, AfterViewChecked {
 
         document.addEventListener('mousemove', onMove)
         document.addEventListener('mouseup', onUp)
+        window.addEventListener('blur', onUp)
     }
 
     @HostListener('dragover')

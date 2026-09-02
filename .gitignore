@@ -60,6 +60,7 @@ __pycache__/
 .workbuddy/
 
 # Temp artifacts
+*.bak
 *.log
 smoke_launch.log
 smoke_test_report.json

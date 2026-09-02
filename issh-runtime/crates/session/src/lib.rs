@@ -56,6 +56,7 @@ pub struct SessionWriteResult {
 pub struct LocalSessionSpec {
     pub title: String,
     pub cwd: Option<PathBuf>,
+    pub shell: Option<String>,
     pub columns: u16,
     pub rows: u16,
 }
@@ -337,12 +338,33 @@ impl SessionStore {
             .map_err(|error| SessionError::Pty(error.to_string()))?;
         #[cfg(windows)]
         let mut command = {
-            let mut command = CommandBuilder::new("cmd.exe");
-            command.arg("/d");
+            let shell = match spec.shell.as_deref() {
+                Some("powershell") => "powershell.exe",
+                Some("pwsh") => "pwsh.exe",
+                Some("wsl") => "wsl.exe",
+                Some("git-bash") => {
+                    let candidates = [
+                        "C:\\Program Files\\Git\\bin\\bash.exe",
+                        "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
+                    ];
+                    candidates.into_iter().find(|path| std::path::Path::new(path).is_file()).unwrap_or("bash.exe")
+                }
+                _ => "cmd.exe",
+            };
+            let mut command = CommandBuilder::new(shell);
+            if shell == "cmd.exe" { command.arg("/d"); }
             command
         };
         #[cfg(not(windows))]
-        let mut command = CommandBuilder::new_default_prog();
+        let mut command = {
+            let shell = match spec.shell.as_deref() {
+                Some("bash") | Some("git-bash") => "bash",
+                Some("zsh") => "zsh",
+                Some("fish") => "fish",
+                _ => "sh",
+            };
+            CommandBuilder::new(shell)
+        };
         if let Some(cwd) = &spec.cwd {
             command.cwd(cwd);
         }
@@ -940,6 +962,7 @@ mod tests {
             .open_local(LocalSessionSpec {
                 title: "local".to_string(),
                 cwd: None,
+                shell: None,
                 columns: 80,
                 rows: 24,
             })

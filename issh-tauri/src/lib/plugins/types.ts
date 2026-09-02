@@ -53,6 +53,9 @@ export interface TerminalDecoratorDefinition {
 
 export interface TerminalDecoratorProfileInfo {
     name: string
+    host: string
+    port: number
+    user: string
     loginScript: string | null
 }
 
@@ -64,6 +67,10 @@ export interface TerminalDecoratorOptions {
     /** SSH 会话关联的主机 profile 摘要（本地会话为 null） */
     profile: TerminalDecoratorProfileInfo | null
     write (data: Uint8Array | string): void
+    /** 为当前终端暴露一个可选的上下文操作（例如填充 sudo 密码）。 */
+    setAction? (action: { label: string, invoke: () => void } | null): void
+    /** 需要临时读取已锁 Vault 中的终端凭据时，请求用户输入主口令。 */
+    requestVaultPassphrase? (): Promise<string | null>
     dispose (callback: () => void): void
 }
 

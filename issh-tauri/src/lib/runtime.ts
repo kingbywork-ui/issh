@@ -1,5 +1,13 @@
 import { invoke } from '@tauri-apps/api/core'
 
+export function clipboardWriteText (text: string): Promise<void> {
+    return invoke<void>('clipboard_write_text', { text })
+}
+
+export function clipboardReadText (): Promise<string> {
+    return invoke<string>('clipboard_read_text')
+}
+
 export interface SshHostProfile {
     id: string
     name: string
@@ -14,6 +22,28 @@ export interface SshHostProfile {
     favorite: boolean
     tags: string[]
     loginScript: string | null
+    x11?: boolean
+    x11Display?: string | null
+    agentForward?: boolean
+    keyboardInteractive?: boolean
+    jumpHost?: string | null
+    proxyCommand?: string | null
+    forwardedPorts?: ForwardedPortConfig[]
+    socksProxyHost?: string | null
+    socksProxyPort?: number | null
+    httpProxyHost?: string | null
+    httpProxyPort?: number | null
+    reuseSession?: boolean
+    jump?: OpenSshSessionOptions
+}
+
+export interface ForwardedPortConfig {
+    type: 'Local' | 'Remote' | 'Dynamic'
+    host: string
+    port: number
+    targetAddress: string
+    targetPort: number
+    description: string
 }
 
 export interface SshHostGroup {
@@ -60,6 +90,7 @@ export interface HostCredential {
     host: string
     port: number
     password: string | null
+    sudoPassword: string | null
     keyPassphrase: string | null
     passphraseByKey: boolean
 }
@@ -86,6 +117,7 @@ export interface CredentialMutation {
     host: string
     port: number
     password?: string
+    sudoPassword?: string
     keyPassphrase?: string
 }
 
@@ -115,6 +147,10 @@ export function changeHostPassphrase (oldPassphrase: string, newPassphrase: stri
 
 export function resolveSshPassword (user: string, host: string, port: number): Promise<string | null> {
     return invoke<string | null>('resolve_ssh_password', { user, host, port })
+}
+
+export function resolveSudoPassword (user: string, host: string, port: number): Promise<string | null> {
+    return invoke<string | null>('resolve_sudo_password', { user, host, port })
 }
 
 export function resolveKeyPassphrase (user: string, host: string, port: number, keyPath?: string): Promise<string | null> {
@@ -196,11 +232,13 @@ export async function runtimeRequest<T> (method: string, params?: unknown): Prom
     return response.result
 }
 
-export function openLocalSession (columns = 120, rows = 36): Promise<RuntimeSessionSnapshot> {
+export function openLocalSession (columns = 120, rows = 36, shell = localStorage.getItem('issh.localShell') ?? 'cmd', cwd?: string): Promise<RuntimeSessionSnapshot> {
     return runtimeRequest<RuntimeSessionSnapshot>('session.openLocal', {
         title: '本地终端',
+        shell,
         columns,
         rows,
+        ...(cwd ? { cwd } : {}),
     })
 }
 
@@ -254,10 +292,60 @@ export interface OpenSshSessionOptions {
     privateKeyPassphrase?: string
     expectedHostKey: string
     vaultSecretId?: string
+    agentForward?: boolean
+    x11?: boolean
+    jumpHost?: string | null
+    proxyCommand?: string | null
+    forwardedPorts?: ForwardedPortConfig[]
+    socksProxyHost?: string | null
+    socksProxyPort?: number | null
+    httpProxyHost?: string | null
+    httpProxyPort?: number | null
+    reuseSession?: boolean
 }
 
 export function openSshSession (options: OpenSshSessionOptions): Promise<RuntimeSessionSnapshot> {
     return runtimeRequest<RuntimeSessionSnapshot>('session.openSsh', options)
+}
+
+export interface LocalForwardResult {
+    sessionId: string
+    bindHost: string
+    bindPort: number
+    targetAddress: string
+    targetPort: number
+}
+
+export function startLocalForward (sessionId: string, forward: ForwardedPortConfig): Promise<LocalForwardResult> {
+    return runtimeRequest<LocalForwardResult>('ssh.forwardLocal', {
+        sessionId,
+        bindHost: forward.host,
+        bindPort: forward.port,
+        targetAddress: forward.targetAddress,
+        targetPort: forward.targetPort,
+    })
+}
+
+export function startDynamicForward (sessionId: string, forward: ForwardedPortConfig): Promise<LocalForwardResult> {
+    return runtimeRequest<LocalForwardResult>('ssh.forwardDynamic', {
+        sessionId,
+        bindHost: forward.host,
+        bindPort: forward.port,
+    })
+}
+
+export function startRemoteForward (sessionId: string, forward: ForwardedPortConfig): Promise<LocalForwardResult> {
+    return runtimeRequest<LocalForwardResult>('ssh.forwardRemote', {
+        sessionId,
+        bindHost: forward.host,
+        bindPort: forward.port,
+        targetAddress: forward.targetAddress,
+        targetPort: forward.targetPort,
+    })
+}
+
+export function stopLocalForward (sessionId: string, bindPort: number, kind: 'Local' | 'Dynamic' = 'Local'): Promise<{ stopped: boolean }> {
+    return runtimeRequest<{ stopped: boolean }>('ssh.stopForward', { sessionId, bindPort, kind })
 }
 
 export interface VaultStatus {

@@ -246,9 +246,11 @@ export class BaseTerminalTabComponent<P extends BaseTerminalProfile> extends Bas
                     }
                     break
                 case 'copy':
-                    this.frontend?.copySelection()
-                    this.frontend?.clearSelection()
-                    this.notifications.notice(this.translate.instant('Copied'))
+                    if (this.frontend?.getSelection()) {
+                        this.frontend.copySelection()
+                        this.frontend.clearSelection()
+                        this.notifications.notice(this.translate.instant('Copied'))
+                    }
                     break
                 case 'paste':
                     this.forEachFocusedTerminalPane(tab => tab.paste())

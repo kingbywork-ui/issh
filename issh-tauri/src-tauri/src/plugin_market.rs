@@ -98,12 +98,35 @@ pub async fn fetch_registry(url: &str) -> Result<PluginRegistry, String> {
         .timeout(std::time::Duration::from_secs(REGISTRY_TIMEOUT_SECS))
         .build()
         .map_err(|error| format!("无法创建网络客户端：{error}"))?;
+    let mut last_error = String::new();
+    for candidate in registry_candidates(url) {
+        match fetch_registry_from(&client, &candidate).await {
+            Ok(registry) => return Ok(registry),
+            Err(error) => last_error = format!("{candidate}: {error}"),
+        }
+    }
+    Err(format!("无法访问插件索引：{last_error}"))
+}
+
+fn registry_candidates(url: &str) -> Vec<String> {
+    let mut candidates = vec![url.to_string()];
+    const RAW_PREFIX: &str = "https://raw.githubusercontent.com/";
+    if let Some(path) = url.strip_prefix(RAW_PREFIX) {
+        let mut parts = path.splitn(4, '/');
+        if let (Some(owner), Some(repo), Some(reference), Some(file)) = (parts.next(), parts.next(), parts.next(), parts.next()) {
+            candidates.push(format!("https://cdn.jsdelivr.net/gh/{owner}/{repo}@{reference}/{file}"));
+        }
+    }
+    candidates
+}
+
+async fn fetch_registry_from(client: &reqwest::Client, url: &str) -> Result<PluginRegistry, String> {
     let response = client
         .get(url)
         .header("User-Agent", "issh-plugin-market/0.1")
         .send()
         .await
-        .map_err(|error| format!("无法访问插件索引：{error}"))?;
+        .map_err(|error| error.to_string())?;
     let status = response.status();
     if !status.is_success() {
         return Err(format!("插件索引返回 {status}"));
@@ -563,6 +586,13 @@ mod tests {
         assert!(ensure_https_url("http://example.com/index.json").is_err());
         assert!(ensure_https_url("ftp://example.com/index.json").is_err());
         assert!(ensure_https_url("file:///C:/evil").is_err());
+    }
+
+    #[test]
+    fn adds_jsdelivr_fallback_for_github_raw_registry() {
+        let candidates = registry_candidates("https://raw.githubusercontent.com/owner/repo/main/index.json");
+        assert_eq!(candidates[1], "https://cdn.jsdelivr.net/gh/owner/repo@main/index.json");
+        assert_eq!(registry_candidates("https://example.com/index.json").len(), 1);
     }
 
     fn unsigned_entry() -> PluginRegistryEntry {

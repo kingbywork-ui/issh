@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount } from 'svelte'
+    import { onDestroy, onMount } from 'svelte'
     import {
         changeHostPassphrase,
         deleteHostCredential,
@@ -7,6 +7,7 @@
         enableHostVault,
         hostCredentials,
         lockHostProfiles,
+        mutateHostProfiles,
         saveHostCredential,
         unlockHostProfiles,
         type GenericCredential,
@@ -14,6 +15,7 @@
         type SshHostGroup,
         type SshHostProfile,
     } from './runtime'
+    import HostProfileEditor from './HostProfileEditor.svelte'
 
     interface Section {
         encrypted: boolean
@@ -26,8 +28,13 @@
 
     interface GroupNode extends SshHostGroup {
         children: GroupNode[]
-        credentials: HostCredential[]
+        entries: HostEntry[]
         count: number
+    }
+
+    interface HostEntry {
+        profile: SshHostProfile
+        credential: HostCredential | null
     }
 
     let section = $state<Section | null>(null)
@@ -40,16 +47,38 @@
     let error = $state('')
     let notice = $state('')
     let revealed = $state<Record<string, boolean>>({})
-    let editing = $state<Record<string, { password: string, keyPassphrase: string }>>({})
+    let editing = $state<Record<string, { password: string, sudoPassword: string, keyPassphrase: string }>>({})
     let collapsed = $state<Set<string>>(new Set())
     let genericRevealed = $state<Record<number, boolean>>({})
+    let editingProfile = $state<SshHostProfile | null>(null)
 
-    function credentialKey (credential: HostCredential): string {
-        return `${credential.user}|${credential.host}|${credential.port}`
+    onDestroy(() => {
+        // Leaving the Vault page must not leave decrypted credentials resident.
+        void lockHostProfiles().catch(() => {})
+    })
+
+    function entryKey (entry: HostEntry): string {
+        return entry.profile.id
     }
 
-    function findCredential (user: string, host: string, port: number): HostCredential | undefined {
-        return section?.credentials.find((item) => item.user === user && item.host === host && item.port === port)
+    function findCredential (profile: SshHostProfile): HostCredential | null {
+        return section?.credentials.find((item) => item.user === profile.user && item.host === profile.host && item.port === profile.port) ?? null
+    }
+
+    function hostEntry (profile: SshHostProfile): HostEntry {
+        return { profile, credential: findCredential(profile) }
+    }
+
+    function editableCredential (entry: HostEntry): HostCredential {
+        return entry.credential ?? {
+            user: entry.profile.user,
+            host: entry.profile.host,
+            port: entry.profile.port,
+            password: null,
+            sudoPassword: null,
+            keyPassphrase: null,
+            passphraseByKey: false,
+        }
     }
 
     async function refresh (): Promise<void> {
@@ -61,6 +90,7 @@
             if (!result.unlocked) {
                 revealed = {}
                 editing = {}
+                editingProfile = null
                 showChangeForm = false
                 oldPassphrase = ''
                 newPassphrase = ''
@@ -161,10 +191,10 @@
         void lockHostProfiles().then(() => refresh())
     }
 
-    // 分组树：按 parentGroupId 建层级，凭据挂到所属分组节点；未分组凭据单独收集
+    // 分组树以完整主机配置为准，凭据仅作为每台主机的附属信息。
     const groupTree = $derived.by(() => {
-        if (!section) return { roots: [] as GroupNode[], ungrouped: [] as HostCredential[] }
-        const map = new Map(section.groups.map((group) => [group.id, { ...group, children: [], credentials: [], count: 0 } as GroupNode]))
+        if (!section) return { roots: [] as GroupNode[], ungrouped: [] as HostEntry[] }
+        const map = new Map(section.groups.map((group) => [group.id, { ...group, children: [], entries: [], count: 0 } as GroupNode]))
         const roots: GroupNode[] = []
         for (const group of section.groups) {
             const node = map.get(group.id)!
@@ -172,60 +202,56 @@
             if (parent && parent !== node) parent.children.push(node)
             else roots.push(node)
         }
-        const ungrouped: HostCredential[] = []
-        const grouped = new Set<string>()
-        for (const credential of section.credentials) {
-            const profile = section.profiles.find(
-                (item) => item.user === credential.user && item.host === credential.host && item.port === credential.port,
-            )
-            if (profile && profile.group && map.has(profile.group)) {
-                map.get(profile.group)!.credentials.push(credential)
-                grouped.add(credentialKey(credential))
+        const ungrouped: HostEntry[] = []
+        for (const profile of section.profiles) {
+            const entry = hostEntry(profile)
+            if (profile.group && map.has(profile.group)) {
+                map.get(profile.group)!.entries.push(entry)
             } else {
-                ungrouped.push(credential)
+                ungrouped.push(entry)
             }
         }
         const count = (node: GroupNode): number => {
-            node.count = node.credentials.length + node.children.reduce((sum, child) => sum + count(child), 0)
+            node.count = node.entries.length + node.children.reduce((sum, child) => sum + count(child), 0)
             return node.count
         }
         roots.forEach(count)
         return { roots, ungrouped }
     })
 
-    // 与主机列表页一致的排序：分组名 → 主机名
-    function sortCredentials (credentials: HostCredential[]): HostCredential[] {
-        const nameOf = (credential: HostCredential): string => {
-            const profile = section?.profiles.find(
-                (item) => item.user === credential.user && item.host === credential.host && item.port === credential.port,
-            )
-            return profile?.name ?? credential.host
-        }
-        return [...credentials].sort((a, b) => nameOf(a).localeCompare(nameOf(b)))
+    // 保险库内使用稳定排序，避免凭据状态变化后主机行跳动。
+    function sortEntries (entries: HostEntry[]): HostEntry[] {
+        return [...entries].sort((a, b) => a.profile.name.localeCompare(b.profile.name) || a.profile.host.localeCompare(b.profile.host))
     }
 
-    function toggleReveal (credential: HostCredential): void {
-        const key = credentialKey(credential)
+    function toggleReveal (entry: HostEntry): void {
+        const key = entryKey(entry)
         revealed = { ...revealed, [key]: !revealed[key] }
     }
 
-    function startEdit (credential: HostCredential): void {
-        const key = credentialKey(credential)
+    function startEdit (entry: HostEntry): void {
+        const credential = editableCredential(entry)
+        const key = entryKey(entry)
         editing = {
             ...editing,
-            [key]: { password: credential.password ?? '', keyPassphrase: credential.keyPassphrase ?? '' },
+            [key]: {
+                password: credential.password ?? '',
+                sudoPassword: credential.sudoPassword ?? '',
+                keyPassphrase: credential.keyPassphrase ?? '',
+            },
         }
     }
 
-    function cancelEdit (credential: HostCredential): void {
-        const key = credentialKey(credential)
+    function cancelEdit (entry: HostEntry): void {
+        const key = entryKey(entry)
         const next = { ...editing }
         delete next[key]
         editing = next
     }
 
-    async function saveEdit (credential: HostCredential): Promise<void> {
-        const key = credentialKey(credential)
+    async function saveEdit (entry: HostEntry): Promise<void> {
+        const credential = editableCredential(entry)
+        const key = entryKey(entry)
         const draft = editing[key]
         if (!draft) return
         busy = true
@@ -236,10 +262,11 @@
                 host: credential.host,
                 port: credential.port,
                 password: draft.password,
+                sudoPassword: draft.sudoPassword,
                 keyPassphrase: draft.keyPassphrase,
             })
             section = result
-            cancelEdit(credential)
+            cancelEdit(entry)
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
         } finally {
@@ -247,7 +274,24 @@
         }
     }
 
-    async function removeCredential (credential: HostCredential): Promise<void> {
+    async function saveProfile (profile: SshHostProfile): Promise<void> {
+        busy = true
+        error = ''
+        try {
+            await mutateHostProfiles({ action: 'updateProfile', profile })
+            await refresh()
+            editingProfile = null
+            notice = '主机配置已更新'
+        } catch (cause) {
+            error = cause instanceof Error ? cause.message : String(cause)
+        } finally {
+            busy = false
+        }
+    }
+
+    async function removeCredential (entry: HostEntry): Promise<void> {
+        const credential = entry.credential
+        if (!credential) return
         const label = `${credential.user}@${credential.host}:${credential.port}`
         if (!window.confirm(`删除「${label}」的密码与私钥口令？`)) return
         busy = true
@@ -323,7 +367,7 @@
     {:else}
         <div class="vault-status-line">
             <strong>已解锁</strong>
-            <span>{section.credentials.length} 台主机凭据 · {section.generic.length} 条通用凭据</span>
+            <span>{section.profiles.length} 台主机 · {section.credentials.length} 组已保存连接凭据 · {section.generic.length} 条通用凭据</span>
             <span class="vault-secret-spacer"></span>
             <button type="button" disabled={busy} onclick={() => { showChangeForm = !showChangeForm }}>{showChangeForm ? '取消改口令' : '修改主口令'}</button>
             <button type="button" disabled={busy} onclick={lockNow}>锁定</button>
@@ -346,55 +390,62 @@
             <div class="settings-hint vault-notice">{notice}</div>
         {/if}
 
-        {#if section.credentials.length === 0 && section.generic.length === 0}
-            <div class="settings-empty">保险库中暂无主机账号密码。连接主机时勾选保存密码，或在此手动编辑。</div>
+        {#if section.profiles.length === 0 && section.generic.length === 0}
+            <div class="settings-empty">保险库中暂无主机配置或凭据。</div>
         {/if}
 
-        {#snippet credentialRow(credential: HostCredential, indent: boolean)}
-            {@const key = credentialKey(credential)}
+        {#snippet credentialRow(entry: HostEntry, indent: boolean)}
+            {@const profile = entry.profile}
+            {@const key = entryKey(entry)}
             <div class="vault-secret" class:indented={indent}>
                 <div class="vault-secret-head">
-                    <span class="vault-account">{credential.user}@{credential.host}:{credential.port}</span>
-                    {#if credential.password !== null}<span class="host-badge recent">密码</span>{/if}
-                    {#if credential.keyPassphrase !== null}<span class="host-badge favorite">口令</span>{/if}
-                    {#if credential.passphraseByKey}<span class="vault-secret-desc">按私钥匹配</span>{/if}
+                    <span class="vault-account">{profile.name}</span>
+                    <span class="vault-secret-desc">{profile.user}@{profile.host}:{profile.port}</span>
+                    {#if entry.credential?.password !== null && entry.credential?.password !== undefined}<span class="host-badge recent">密码</span>{/if}
+                    {#if entry.credential?.sudoPassword !== null && entry.credential?.sudoPassword !== undefined}<span class="host-badge favorite">sudo</span>{/if}
+                    {#if entry.credential?.keyPassphrase !== null && entry.credential?.keyPassphrase !== undefined}<span class="host-badge favorite">口令</span>{/if}
+                    {#if entry.credential?.passphraseByKey}<span class="vault-secret-desc">按私钥匹配</span>{/if}
+                    {#if !entry.credential}<span class="vault-secret-desc">未保存凭据</span>{/if}
                     <span class="vault-secret-spacer"></span>
                     {#if editing[key]}
-                        <button type="button" disabled={busy} onclick={() => void saveEdit(credential)}>保存</button>
-                        <button type="button" disabled={busy} onclick={() => cancelEdit(credential)}>取消</button>
+                        <button type="button" disabled={busy} onclick={() => void saveEdit(entry)}>保存</button>
+                        <button type="button" disabled={busy} onclick={() => cancelEdit(entry)}>取消</button>
                     {:else}
-                        <button type="button" disabled={busy} onclick={() => toggleReveal(credential)}>{revealed[key] ? '隐藏' : '查看'}</button>
-                        <button type="button" disabled={busy} onclick={() => startEdit(credential)}>编辑</button>
-                        <button class="plugin-remove" type="button" disabled={busy} onclick={() => void removeCredential(credential)}>删除</button>
+                        {#if entry.credential}<button type="button" disabled={busy} onclick={() => toggleReveal(entry)}>{revealed[key] ? '隐藏' : '查看'}</button>{/if}
+                        <button type="button" disabled={busy} onclick={() => { editingProfile = { ...profile, tags: [...profile.tags], privateKeys: [...profile.privateKeys] } }}>编辑主机</button>
+                        <button type="button" disabled={busy} onclick={() => startEdit(entry)}>编辑凭据</button>
+                        {#if entry.credential}<button class="plugin-remove" type="button" disabled={busy} onclick={() => void removeCredential(entry)}>删除</button>{/if}
                     {/if}
                 </div>
-                {#if revealed[key] && !editing[key]}
+                {#if revealed[key] && !editing[key] && entry.credential}
                     <div class="vault-secret-value">
-                        {#if credential.password !== null}<div>密码：{credential.password}</div>{/if}
-                        {#if credential.keyPassphrase !== null}<div>私钥口令：{credential.keyPassphrase}</div>{/if}
+                        {#if entry.credential.password !== null}<div>密码：{entry.credential.password}</div>{/if}
+                        {#if entry.credential.sudoPassword !== null}<div>sudo 密码：{entry.credential.sudoPassword}</div>{/if}
+                        {#if entry.credential.keyPassphrase !== null}<div>私钥口令：{entry.credential.keyPassphrase}</div>{/if}
                     </div>
                 {/if}
                 {#if editing[key]}
                     <div class="vault-edit-form">
                         <label>密码<input type="text" bind:value={editing[key].password} placeholder="留空表示清除" /></label>
+                        <label>sudo 密码<input type="text" bind:value={editing[key].sudoPassword} placeholder="留空表示清除" /></label>
                         <label>私钥口令<input type="text" bind:value={editing[key].keyPassphrase} placeholder="留空表示清除" /></label>
                     </div>
                 {/if}
             </div>
         {/snippet}
 
-        {#if section.credentials.length > 0}
+        {#if section.profiles.length > 0}
             <div class="settings-field">
-                <div class="settings-field-title">主机账号密码（按分组）</div>
+                <div class="settings-field-title">主机配置与凭据（按分组）</div>
                 {#snippet renderGroup(node: GroupNode, level: number)}
                     <div class="vault-group-row" style:padding-left={`${level * 18}px`}>
-                        <button class="tree-toggle" type="button" onclick={() => toggleGroup(node.id)}>{node.children.length || node.credentials.length ? (collapsed.has(node.id) ? '▸' : '▾') : '·'}</button>
+                        <button class="tree-toggle" type="button" onclick={() => toggleGroup(node.id)}>{node.children.length || node.entries.length ? (collapsed.has(node.id) ? '▸' : '▾') : '·'}</button>
                         <span class="vault-group-name">▣ {node.name}</span>
                         <span class="vault-group-count">{node.count}</span>
                     </div>
                     {#if !collapsed.has(node.id)}
-                        {#each sortCredentials(node.credentials) as credential, credential_index (credential_index)}
-                            {@render credentialRow(credential, true)}
+                        {#each sortEntries(node.entries) as entry (entry.profile.id)}
+                            {@render credentialRow(entry, true)}
                         {/each}
                         {#each node.children as child (child.id)}
                             {@render renderGroup(child, level + 1)}
@@ -406,8 +457,8 @@
                 {/each}
                 {#if groupTree.ungrouped.length > 0}
                     <div class="vault-group-row"><span class="vault-group-name">▣ 未分组</span><span class="vault-group-count">{groupTree.ungrouped.length}</span></div>
-                    {#each sortCredentials(groupTree.ungrouped) as credential, credential_index (credential_index)}
-                        {@render credentialRow(credential, true)}
+                    {#each sortEntries(groupTree.ungrouped) as entry (entry.profile.id)}
+                        {@render credentialRow(entry, true)}
                     {/each}
                 {/if}
             </div>
@@ -432,3 +483,6 @@
         {/if}
     {/if}
 </section>
+{#if editingProfile}
+    <HostProfileEditor profile={editingProfile} groups={section?.groups ?? []} onconnect={saveProfile} oncancel={() => { editingProfile = null }} />
+{/if}

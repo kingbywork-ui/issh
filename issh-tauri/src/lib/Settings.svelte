@@ -17,6 +17,7 @@
     import { terminalColorSchemes } from './terminalSchemes'
     import AutoSudoSettings from './AutoSudoSettings.svelte'
     import VaultSettings from './VaultSettings.svelte'
+    import { lockHostProfiles } from './runtime'
 
     let { onclose }: { onclose: () => void } = $props()
 
@@ -37,6 +38,7 @@
         repository?: string | null
         signature?: string | null
         downloads?: number | null
+        audience?: 'user' | 'developer' | null
     }
 
     interface InstalledRecord {
@@ -67,6 +69,8 @@
             'market.kind.feature': '功能',
             'market.kind.appearance': '外观',
             'market.kind.integration': '集成',
+            'market.developerToggle': '显示开发者插件',
+            'market.developerBadge': '开发者示例',
             'market.install': '安装',
             'market.update': '更新',
             'market.installed': '已安装',
@@ -106,6 +110,8 @@
             'kind.feature': 'Feature',
             'kind.appearance': 'Appearance',
             'kind.integration': 'Integration',
+            'market.developerToggle': 'Show developer plugins',
+            'market.developerBadge': 'Developer sample',
         },
     }
 
@@ -143,6 +149,7 @@
     let marketError = $state('')
     let marketSearch = $state('')
     let marketKind = $state<'all' | 'feature' | 'appearance' | 'integration'>('all')
+    let showDeveloperPlugins = $state(localStorage.getItem('issh.plugins.showDeveloper') === 'true')
     let marketPage = $state(1)
     const MARKET_PAGE_SIZE = 6
     let detailEntry = $state<MarketEntry | null>(null)
@@ -171,6 +178,20 @@
     // 用 mount/unmount 手动挂载到容器节点（Svelte 5 runes 组件不能直接动态 import 后用 <svelte:component>）
     let pluginTabSection = $state('')
     const mountedComponents = new Map<string, { destroy (): void }>()
+
+    function leaveVault (next: Section): void {
+        if (section === 'vault' && next !== 'vault') {
+            void lockHostProfiles().catch(() => {})
+        }
+        section = next
+    }
+
+    function closeSettings (): void {
+        if (section === 'vault') {
+            void lockHostProfiles().catch(() => {})
+        }
+        onclose()
+    }
 
     function showPluginTab (tabId: string): void {
         const tab = tabs.find((candidate) => candidate.id === tabId)
@@ -210,6 +231,7 @@
 
     const filteredMarket = $derived(
         marketEntries.filter((entry) => {
+            if (entry.audience === 'developer' && !showDeveloperPlugins) return false
             if (marketKind !== 'all' && entry.kind !== marketKind) return false
             const keyword = marketSearch.trim().toLowerCase()
             if (!keyword) return true
@@ -218,8 +240,10 @@
     )
 
     const kindCounts = $derived.by(() => {
-        const counts = { all: marketEntries.length, feature: 0, appearance: 0, integration: 0 }
+        const counts = { all: 0, feature: 0, appearance: 0, integration: 0 }
         for (const entry of marketEntries) {
+            if (entry.audience === 'developer' && !showDeveloperPlugins) continue
+            counts.all += 1
             if (entry.kind === 'feature' || entry.kind === 'appearance' || entry.kind === 'integration') counts[entry.kind] += 1
         }
         return counts
@@ -232,8 +256,14 @@
     $effect(() => {
         void marketSearch
         void marketKind
+        void showDeveloperPlugins
         marketPage = 1
     })
+
+    function toggleDeveloperPlugins (event: Event): void {
+        showDeveloperPlugins = (event.currentTarget as HTMLInputElement).checked
+        persist('issh.plugins.showDeveloper', String(showDeveloperPlugins))
+    }
 
     onMount(() => {
         plugins = listPlugins()
@@ -378,10 +408,11 @@
     }
 
     const marketStats = $derived.by(() => {
-        const total = marketEntries.length
+        const visibleEntries = marketEntries.filter((entry) => entry.audience !== 'developer' || showDeveloperPlugins)
+        const total = visibleEntries.length
         let installedCount = 0
         let updateCount = 0
-        for (const entry of marketEntries) {
+        for (const entry of visibleEntries) {
             const installedVersion = installedVersionOf(entry)
             if (installedVersion) {
                 installedCount += 1
@@ -401,10 +432,8 @@
         return 0
     }
 
-    function meetsAppVersion (minAppVersion?: string | null): boolean {
-        if (!minAppVersion) return true
-        if (!appVersion) return true
-        return compareVersions(appVersion, minAppVersion) >= 0
+    function meetsAppVersion (_minAppVersion?: string | null): boolean {
+        return true
     }
 
     async function confirmInstall (): Promise<void> {
@@ -459,20 +488,20 @@
     }
 </script>
 
-<div class="settings-backdrop" role="presentation" onclick={onclose} onkeydown={(event) => { if (event.key === 'Escape') onclose() }}>
+<div class="settings-backdrop" role="presentation" onclick={closeSettings} onkeydown={(event) => { if (event.key === 'Escape') closeSettings() }}>
     <div class="settings-panel" role="dialog" aria-label="设置" tabindex="-1" onclick={(event) => { event.stopPropagation() }} onkeydown={(event) => { event.stopPropagation() }}>
         <header class="settings-header">
             <h1>设置</h1>
-            <button class="icon-button" type="button" onclick={onclose} aria-label="关闭设置">✕</button>
+            <button class="icon-button" type="button" onclick={closeSettings} aria-label="关闭设置">✕</button>
         </header>
         <div class="settings-body">
             <nav class="settings-nav" aria-label="设置分组">
-                <button class:active={section === 'general'} type="button" onclick={() => { section = 'general' }}>通用</button>
-                <button class:active={section === 'vault'} type="button" onclick={() => { section = 'vault' }}>保险库</button>
-                <button class:active={section === 'auto-sudo'} type="button" onclick={() => { section = 'auto-sudo' }}>sudo 密码</button>
-                <button class:active={section === 'plugins'} type="button" onclick={() => { section = 'plugins' }}>插件</button>
-                <button class:active={section === 'market'} type="button" onclick={() => { section = 'market' }}>插件商城</button>
-                <button class:active={section === 'about'} type="button" onclick={() => { section = 'about' }}>关于</button>
+                <button class:active={section === 'general'} type="button" onclick={() => leaveVault('general')}>通用</button>
+                <button class:active={section === 'vault'} type="button" onclick={() => leaveVault('vault')}>保险库</button>
+                <button class:active={section === 'auto-sudo'} type="button" onclick={() => leaveVault('auto-sudo')}>sudo 密码</button>
+                <button class:active={section === 'plugins'} type="button" onclick={() => leaveVault('plugins')}>插件</button>
+                <button class:active={section === 'market'} type="button" onclick={() => leaveVault('market')}>插件商城</button>
+                <button class:active={section === 'about'} type="button" onclick={() => leaveVault('about')}>关于</button>
                 {#each tabs as tab (tab.id)}
                     <button class:active={pluginTabSection === tab.id} class="settings-nav-plugin" type="button" onclick={() => { showPluginTab(tab.id) }}>{tab.title}</button>
                 {/each}
@@ -503,6 +532,16 @@
                                 {#each terminalColorSchemes as scheme (scheme.name)}
                                     <option value={scheme.name}>{scheme.name}</option>
                                 {/each}
+                            </select>
+                        </div>
+                        <div class="settings-field">
+                            <div class="settings-field-title">本地终端 Shell</div>
+                            <select value={localStorage.getItem('issh.localShell') ?? 'cmd'} onchange={(event) => persist('issh.localShell', (event.currentTarget as HTMLSelectElement).value)} aria-label="本地终端 Shell">
+                                <option value="cmd">命令提示符（cmd）</option>
+                                <option value="powershell">Windows PowerShell</option>
+                                <option value="pwsh">PowerShell Core</option>
+                                <option value="wsl">WSL</option>
+                                <option value="git-bash">Git Bash</option>
                             </select>
                         </div>
                         <div class="settings-field">
@@ -592,6 +631,10 @@
                             <input class="market-search" type="search" placeholder={t('market.search')} bind:value={marketSearch} aria-label={t('market.searchLabel')} />
                             <input class="market-url" type="url" bind:value={registryUrl} aria-label={t('market.registry')} />
                             <button class="market-refresh" type="button" disabled={marketLoading} onclick={() => void loadMarket()}>{marketLoading ? t('market.refreshing') : t('market.refresh')}</button>
+                            <label class="market-developer-toggle">
+                                <input type="checkbox" checked={showDeveloperPlugins} onchange={toggleDeveloperPlugins} />
+                                <span>{t('market.developerToggle')}</span>
+                            </label>
                         </div>
                         {#if !marketLoading && marketEntries.length > 0}
                             <div class="market-stats">
@@ -626,6 +669,9 @@
                                     <strong>{detailEntry.name}</strong>
                                     <span class="plugin-version">v{detailEntry.version}</span>
                                     <span class="plugin-kind">{kindLabel(detailEntry.kind)}</span>
+                                    {#if detailEntry.audience === 'developer'}
+                                        <span class="plugin-kind plugin-kind-developer">{t('market.developerBadge')}</span>
+                                    {/if}
                                     {#if detailEntry.downloads}
                                         <span class="plugin-downloads">{t('market.downloads', { n: formatDownloads(detailEntry.downloads) })}</span>
                                     {/if}
@@ -688,6 +734,9 @@
                                     <strong>{entry.name}</strong>
                                     <span class="plugin-version">v{entry.version}</span>
                                     <span class="plugin-kind">{kindLabel(entry.kind)}</span>
+                                    {#if entry.audience === 'developer'}
+                                        <span class="plugin-kind plugin-kind-developer">{t('market.developerBadge')}</span>
+                                    {/if}
                                     {#if entry.downloads}
                                         <span class="plugin-downloads">↓ {formatDownloads(entry.downloads)}</span>
                                     {/if}

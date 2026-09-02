@@ -2,10 +2,15 @@ use russh::client;
 use russh::keys::{load_secret_key, PrivateKeyWithHashAlg, PublicKey};
 use russh::{ChannelMsg, ChannelWriteHalf, Error as RusshError};
 use std::fmt;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc;
+use tokio::{io::{copy, copy_bidirectional, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DuplexStream}, net::TcpStream, process::Command, sync::mpsc};
+#[cfg(unix)]
+use tokio::net::UnixStream;
+use std::process::Stdio;
 
 mod sftp;
 
@@ -23,7 +28,7 @@ pub const MAX_SSH_COMMAND_BYTES: usize = 8192;
 pub const SSH_INTERACTIVE_TERM: &str = "xterm-256color";
 pub const SSH_DISCOVERY_TIMEOUT_MS: u64 = 15_000;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct SshConnectionSpec {
     pub host: String,
     pub port: u16,
@@ -32,6 +37,15 @@ pub struct SshConnectionSpec {
     pub private_key_path: Option<PathBuf>,
     pub private_key_passphrase: Option<String>,
     pub expected_host_key: String,
+    pub http_proxy_host: Option<String>,
+    pub http_proxy_port: Option<u16>,
+    pub socks_proxy_host: Option<String>,
+    pub socks_proxy_port: Option<u16>,
+    pub keyboard_interactive: bool,
+    pub proxy_command: Option<String>,
+    pub x11: bool,
+    pub x11_display: Option<String>,
+    pub jump_connection: Option<Arc<SshConnection>>,
 }
 
 #[derive(Debug)]
@@ -99,6 +113,17 @@ pub struct SshOutputChunk {
 struct HostKeyHandler {
     expected_host_key: String,
     discovered: Option<Arc<std::sync::Mutex<Option<String>>>>,
+    remote_forward_tx: mpsc::UnboundedSender<RemoteForwardChannel>,
+    x11_tx: mpsc::UnboundedSender<X11Channel>,
+}
+
+struct RemoteForwardChannel {
+    channel: russh::Channel<client::Msg>,
+    connected_port: u32,
+}
+
+struct X11Channel {
+    channel: russh::Channel<client::Msg>,
 }
 
 impl client::Handler for HostKeyHandler {
@@ -120,19 +145,63 @@ impl client::Handler for HostKeyHandler {
         }
         Ok(fingerprint == self.expected_host_key)
     }
+
+    fn server_channel_open_forwarded_tcpip(
+        &mut self,
+        channel: russh::Channel<client::Msg>,
+        _connected_address: &str,
+        connected_port: u32,
+        _originator_address: &str,
+        _originator_port: u32,
+        reply: client::ChannelOpenHandle,
+        _session: &mut client::Session,
+    ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send {
+        let sender = self.remote_forward_tx.clone();
+        async move {
+            reply.accept().await;
+            let _ = sender.send(RemoteForwardChannel { channel, connected_port });
+            Ok(())
+        }
+    }
+
+    fn server_channel_open_x11(
+        &mut self,
+        channel: russh::Channel<client::Msg>,
+        _originator_address: &str,
+        _originator_port: u32,
+        reply: client::ChannelOpenHandle,
+        _session: &mut client::Session,
+    ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send {
+        let sender = self.x11_tx.clone();
+        async move {
+            reply.accept().await;
+            let _ = sender.send(X11Channel { channel });
+            Ok(())
+        }
+    }
 }
 
 #[derive(Clone)]
 pub struct SshConnection {
     handle: Arc<tokio::sync::Mutex<client::Handle<HostKeyHandler>>>,
+    remote_forward_targets: Arc<tokio::sync::Mutex<std::collections::HashMap<u32, (String, u16)>>>,
+    remote_forward_bind_hosts: Arc<tokio::sync::Mutex<std::collections::HashMap<u32, String>>>,
+    #[allow(dead_code)]
+    jump_parent: Option<Arc<SshConnection>>,
 }
 
 impl SshConnection {
     pub async fn connect(spec: SshConnectionSpec) -> Result<Self, SshError> {
         validate_spec(&spec)?;
+        let (remote_forward_tx, mut remote_forward_rx) = mpsc::unbounded_channel();
+        let (x11_tx, mut x11_rx) = mpsc::unbounded_channel();
+        let x11_display = spec.x11_display.clone();
+        let jump_parent = spec.jump_connection.clone();
         let handler = HostKeyHandler {
             expected_host_key: spec.expected_host_key.trim().to_string(),
             discovered: None,
+            remote_forward_tx,
+            x11_tx,
         };
         let config = client::Config {
             // 空闲不回收连接：交互式终端会话可能长时间无输出（如 vim、挂起命令）。
@@ -142,8 +211,9 @@ impl SshConnection {
             keepalive_max: 3,
             ..Default::default()
         };
+        let stream = open_transport_stream(&spec).await?;
         let mut handle =
-            client::connect(Arc::new(config), (spec.host.as_str(), spec.port), handler)
+            client::connect_stream(Arc::new(config), stream, handler)
                 .await
                 .map_err(|error| match error {
                     RusshError::UnknownKey => SshError::HostKeyRejected(spec.expected_host_key),
@@ -169,19 +239,61 @@ impl SshConnection {
             authenticated = result.success();
         }
         if !authenticated {
-            if let Some(password) = spec.password {
+            if let Some(password) = spec.password.clone() {
                 let result = handle
-                    .authenticate_password(spec.username, password)
+                    .authenticate_password(spec.username.clone(), password)
                     .await
                     .map_err(|error| SshError::Transport(error.to_string()))?;
                 authenticated = result.success();
             }
         }
+        if !authenticated && spec.keyboard_interactive {
+            let response = handle
+                .authenticate_keyboard_interactive_start(spec.username.clone(), None::<String>)
+                .await
+                .map_err(|error| SshError::Transport(error.to_string()))?;
+            if let client::KeyboardInteractiveAuthResponse::InfoRequest { prompts, .. } = response {
+                let responses = prompts.into_iter().map(|_| spec.password.clone().unwrap_or_default()).collect();
+                authenticated = matches!(handle
+                    .authenticate_keyboard_interactive_respond(responses)
+                    .await
+                    .map_err(|error| SshError::Transport(error.to_string()))?, client::KeyboardInteractiveAuthResponse::Success);
+            } else if matches!(response, client::KeyboardInteractiveAuthResponse::Success) {
+                authenticated = true;
+            }
+        }
         if !authenticated {
             return Err(SshError::AuthenticationFailed);
         }
+        let remote_forward_targets = Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::<u32, (String, u16)>::new()));
+        let remote_forward_bind_hosts = Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::<u32, String>::new()));
+        let targets = Arc::clone(&remote_forward_targets);
+        tokio::spawn(async move {
+            while let Some(forward) = remote_forward_rx.recv().await {
+                let target = targets.lock().await.get(&forward.connected_port).cloned();
+                let Some((host, port)) = target else { continue };
+                tokio::spawn(async move {
+                    let Ok(mut local) = TcpStream::connect((host.as_str(), port)).await else { return };
+                    let mut channel = forward.channel.into_stream();
+                    let _ = copy_bidirectional(&mut local, &mut channel).await;
+                });
+            }
+        });
+        tokio::spawn(async move {
+            while let Some(incoming) = x11_rx.recv().await {
+                let display = x11_display.clone();
+                tokio::spawn(async move {
+                    let Ok(mut local) = connect_x11_display(display.as_deref()).await else { return };
+                    let mut channel = incoming.channel.into_stream();
+                    let _ = copy_bidirectional(&mut local, &mut channel).await;
+                });
+            }
+        });
         Ok(Self {
             handle: Arc::new(tokio::sync::Mutex::new(handle)),
+            remote_forward_targets,
+            remote_forward_bind_hosts,
+            jump_parent,
         })
     }
 
@@ -189,6 +301,8 @@ impl SshConnection {
         &self,
         columns: u16,
         rows: u16,
+        agent_forward: bool,
+        x11: bool,
     ) -> Result<SshInteractiveChannel, SshError> {
         validate_dimensions(columns, rows)?;
         let channel = self
@@ -198,6 +312,19 @@ impl SshConnection {
             .channel_open_session()
             .await
             .map_err(|error| SshError::Channel(error.to_string()))?;
+        if agent_forward {
+            channel
+                .agent_forward(true)
+                .await
+                .map_err(|error| SshError::Channel(error.to_string()))?;
+        }
+        if x11 {
+            let cookie = format!("{:032x}", rand::random::<u128>());
+            channel
+                .request_x11(true, false, "MIT-MAGIC-COOKIE-1", cookie, 0)
+                .await
+                .map_err(|error| SshError::Channel(error.to_string()))?;
+        }
         channel
             .request_pty(
                 true,
@@ -257,6 +384,79 @@ impl SshConnection {
             writer,
             output: output_rx,
         })
+    }
+
+    /// Opens a direct-tcpip channel for a local port-forward connection.
+    pub async fn open_direct_tcpip(
+        &self,
+        target_address: &str,
+        target_port: u16,
+        originator_address: &str,
+        originator_port: u16,
+    ) -> Result<russh::ChannelStream<client::Msg>, SshError> {
+        if target_address.trim().is_empty() || target_address.len() > MAX_SSH_HOST_BYTES {
+            return Err(SshError::InvalidHost);
+        }
+        if target_port == 0 || originator_port == 0 {
+            return Err(SshError::InvalidPort);
+        }
+        let channel = self
+            .handle
+            .lock()
+            .await
+            .channel_open_direct_tcpip(
+                target_address,
+                target_port as u32,
+                originator_address,
+                originator_port as u32,
+            )
+            .await
+            .map_err(|error| SshError::Channel(error.to_string()))?;
+        Ok(channel.into_stream())
+    }
+
+    pub async fn start_remote_forward(
+        &self,
+        bind_host: &str,
+        bind_port: u16,
+        target_address: &str,
+        target_port: u16,
+    ) -> Result<u16, SshError> {
+        if bind_host.trim().is_empty() || target_address.trim().is_empty() {
+            return Err(SshError::InvalidHost);
+        }
+        if target_port == 0 {
+            return Err(SshError::InvalidPort);
+        }
+        let actual_port = self
+            .handle
+            .lock()
+            .await
+            .tcpip_forward(bind_host, bind_port as u32)
+            .await
+            .map_err(|error| SshError::Channel(error.to_string()))? as u16;
+        self.remote_forward_targets
+            .lock()
+            .await
+            .insert(actual_port as u32, (target_address.to_string(), target_port));
+        self.remote_forward_bind_hosts.lock().await.insert(actual_port as u32, bind_host.to_string());
+        Ok(actual_port)
+    }
+
+    pub async fn stop_remote_forward(&self, bind_port: u16) -> Result<(), SshError> {
+        let bind_host = self.remote_forward_bind_hosts
+            .lock()
+            .await
+            .remove(&(bind_port as u32))
+            .ok_or(SshError::InvalidPort)?;
+        self.handle
+            .lock()
+            .await
+            .cancel_tcpip_forward(bind_host, bind_port as u32)
+            .await
+            .map_err(|error| SshError::Channel(error.to_string()))?;
+        self.remote_forward_targets.lock().await.remove(&(bind_port as u32));
+        Ok(())
     }
 
     pub async fn open_sftp(&self) -> Result<SshSftpSession, SshError> {        let channel = self
@@ -380,9 +580,13 @@ impl SshConnection {
             return Err(SshError::InvalidPort);
         }
         let discovered = Arc::new(std::sync::Mutex::new(None::<String>));
+        let (remote_forward_tx, _remote_forward_rx) = mpsc::unbounded_channel();
+        let (x11_tx, _x11_rx) = mpsc::unbounded_channel();
         let handler = HostKeyHandler {
             expected_host_key: String::new(),
             discovered: Some(Arc::clone(&discovered)),
+            remote_forward_tx,
+            x11_tx,
         };
         let config = client::Config {
             inactivity_timeout: Some(Duration::from_secs(60)),
@@ -410,6 +614,176 @@ impl SshConnection {
             .await;
         Ok(fingerprint)
     }
+}
+
+enum X11Stream {
+    Tcp(TcpStream),
+    #[cfg(unix)]
+    Unix(UnixStream),
+}
+
+impl AsyncRead for X11Stream {
+    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut tokio::io::ReadBuf<'_>) -> Poll<std::io::Result<()>> {
+        match &mut *self {
+            Self::Tcp(stream) => Pin::new(stream).poll_read(cx, buf),
+            #[cfg(unix)] Self::Unix(stream) => Pin::new(stream).poll_read(cx, buf),
+        }
+    }
+}
+
+impl AsyncWrite for X11Stream {
+    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, data: &[u8]) -> Poll<std::io::Result<usize>> {
+        match &mut *self {
+            Self::Tcp(stream) => Pin::new(stream).poll_write(cx, data),
+            #[cfg(unix)] Self::Unix(stream) => Pin::new(stream).poll_write(cx, data),
+        }
+    }
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        match &mut *self {
+            Self::Tcp(stream) => Pin::new(stream).poll_flush(cx),
+            #[cfg(unix)] Self::Unix(stream) => Pin::new(stream).poll_flush(cx),
+        }
+    }
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        match &mut *self {
+            Self::Tcp(stream) => Pin::new(stream).poll_shutdown(cx),
+            #[cfg(unix)] Self::Unix(stream) => Pin::new(stream).poll_shutdown(cx),
+        }
+    }
+}
+
+async fn connect_x11_display(spec: Option<&str>) -> Result<X11Stream, SshError> {
+    let value = spec.map(str::trim).filter(|value| !value.is_empty()).map(str::to_string)
+        .or_else(|| std::env::var("DISPLAY").ok()).unwrap_or_else(|| "localhost:0".to_string());
+    if value.starts_with('/') {
+        #[cfg(unix)]
+        {
+            return UnixStream::connect(&value).await.map(X11Stream::Unix)
+                .map_err(|error| SshError::Transport(format!("X11 display connection failed: {error}")));
+        }
+        #[cfg(not(unix))]
+        {
+            return Err(SshError::Transport("Unix X11 display sockets are unsupported on this platform".to_string()));
+        }
+    }
+    let (host, display) = value.rsplit_once(':').unwrap_or(("localhost", value.as_str()));
+    let host = if host.is_empty() { "localhost" } else { host };
+    let display = display.split('.').next().unwrap_or(display).parse::<u16>()
+        .map_err(|_| SshError::Transport("invalid X11 display number".to_string()))?;
+    let port = if display < 100 { display.saturating_add(6000) } else { display };
+    TcpStream::connect((host, port)).await.map(X11Stream::Tcp)
+        .map_err(|error| SshError::Transport(format!("X11 display connection failed: {error}")))
+}
+
+enum TransportStream { Tcp(TcpStream), Proxy(DuplexStream), Channel(russh::ChannelStream<client::Msg>) }
+
+impl AsyncRead for TransportStream {
+    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut tokio::io::ReadBuf<'_>) -> Poll<std::io::Result<()>> {
+        match &mut *self { Self::Tcp(stream) => Pin::new(stream).poll_read(cx, buf), Self::Proxy(stream) => Pin::new(stream).poll_read(cx, buf), Self::Channel(stream) => Pin::new(stream).poll_read(cx, buf) }
+    }
+}
+impl AsyncWrite for TransportStream {
+    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, data: &[u8]) -> Poll<std::io::Result<usize>> {
+        match &mut *self { Self::Tcp(stream) => Pin::new(stream).poll_write(cx, data), Self::Proxy(stream) => Pin::new(stream).poll_write(cx, data), Self::Channel(stream) => Pin::new(stream).poll_write(cx, data) }
+    }
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        match &mut *self { Self::Tcp(stream) => Pin::new(stream).poll_flush(cx), Self::Proxy(stream) => Pin::new(stream).poll_flush(cx), Self::Channel(stream) => Pin::new(stream).poll_flush(cx) }
+    }
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        match &mut *self { Self::Tcp(stream) => Pin::new(stream).poll_shutdown(cx), Self::Proxy(stream) => Pin::new(stream).poll_shutdown(cx), Self::Channel(stream) => Pin::new(stream).poll_shutdown(cx) }
+    }
+}
+
+async fn open_transport_stream(spec: &SshConnectionSpec) -> Result<TransportStream, SshError> {
+    if let Some(jump) = &spec.jump_connection {
+        return jump.open_direct_tcpip(&spec.host, spec.port, "127.0.0.1", 0).await.map(TransportStream::Channel);
+    }
+    if let Some(command) = spec.proxy_command.as_deref() {
+        return open_proxy_command_stream(spec, command).await.map(TransportStream::Proxy);
+    }
+    if let Some(proxy_host) = spec.http_proxy_host.as_deref() {
+        return open_http_proxy_stream(spec, proxy_host).await.map(TransportStream::Tcp);
+    }
+    if let Some(proxy_host) = spec.socks_proxy_host.as_deref() {
+        return open_socks_proxy_stream(spec, proxy_host).await.map(TransportStream::Tcp);
+    }
+    TcpStream::connect((spec.host.as_str(), spec.port)).await
+        .map(TransportStream::Tcp)
+        .map_err(|error| SshError::Transport(error.to_string()))
+}
+
+async fn open_proxy_command_stream(spec: &SshConnectionSpec, command: &str) -> Result<DuplexStream, SshError> {
+    let command = command.replace("%h", &spec.host).replace("%p", &spec.port.to_string()).replace("%r", &spec.username);
+    let mut child = if cfg!(windows) {
+        let mut process = Command::new("cmd.exe");
+        process.args(["/d", "/s", "/c", &command]);
+        process
+    } else {
+        let mut process = Command::new("sh");
+        process.args(["-c", &command]);
+        process
+    };
+    let mut child = child.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn()
+        .map_err(|error| SshError::Transport(format!("ProxyCommand failed to start: {error}")))?;
+    let mut stdin = child.stdin.take().ok_or_else(|| SshError::Transport("ProxyCommand stdin unavailable".to_string()))?;
+    let mut stdout = child.stdout.take().ok_or_else(|| SshError::Transport("ProxyCommand stdout unavailable".to_string()))?;
+    let (client, bridge) = tokio::io::duplex(64 * 1024);
+    let (mut bridge_read, mut bridge_write) = tokio::io::split(bridge);
+    tokio::spawn(async move {
+        let _ = tokio::try_join!(copy(&mut stdout, &mut bridge_write), copy(&mut bridge_read, &mut stdin));
+        let _ = child.kill().await;
+    });
+    Ok(client)
+}
+
+async fn open_http_proxy_stream(spec: &SshConnectionSpec, proxy_host: &str) -> Result<TcpStream, SshError> {
+    let proxy_port = spec.http_proxy_port.ok_or(SshError::InvalidPort)?;
+    let mut stream = TcpStream::connect((proxy_host, proxy_port)).await
+        .map_err(|error| SshError::Transport(format!("HTTP proxy connect failed: {error}")))?;
+    let request = format!("CONNECT {}:{} HTTP/1.1\r\nHost: {}:{}\r\n\r\n", spec.host, spec.port, spec.host, spec.port);
+    stream.write_all(request.as_bytes()).await
+        .map_err(|error| SshError::Transport(format!("HTTP proxy request failed: {error}")))?;
+    let mut response = Vec::with_capacity(256);
+    let mut byte = [0u8; 1];
+    while response.len() < 8_192 {
+        stream.read_exact(&mut byte).await
+            .map_err(|error| SshError::Transport(format!("HTTP proxy response failed: {error}")))?;
+        response.push(byte[0]);
+        if response.ends_with(b"\r\n\r\n") { break; }
+    }
+    let status = std::str::from_utf8(&response).unwrap_or_default().lines().next().unwrap_or_default();
+    if !status.starts_with("HTTP/") || !status.split_whitespace().nth(1).is_some_and(|code| code.starts_with('2')) {
+        return Err(SshError::Transport(format!("HTTP proxy rejected CONNECT: {status}")));
+    }
+    Ok(stream)
+}
+
+async fn open_socks_proxy_stream(spec: &SshConnectionSpec, proxy_host: &str) -> Result<TcpStream, SshError> {
+    let proxy_port = spec.socks_proxy_port.ok_or(SshError::InvalidPort)?;
+    let mut stream = TcpStream::connect((proxy_host, proxy_port)).await
+        .map_err(|error| SshError::Transport(format!("SOCKS proxy connect failed: {error}")))?;
+    stream.write_all(&[5, 1, 0]).await
+        .map_err(|error| SshError::Transport(format!("SOCKS proxy greeting failed: {error}")))?;
+    let mut greeting = [0u8; 2];
+    stream.read_exact(&mut greeting).await
+        .map_err(|error| SshError::Transport(format!("SOCKS proxy greeting failed: {error}")))?;
+    if greeting != [5, 0] { return Err(SshError::Transport("SOCKS proxy requires unsupported authentication".to_string())); }
+    let host = spec.host.as_bytes();
+    if host.len() > 255 { return Err(SshError::InvalidHost); }
+    let mut request = Vec::with_capacity(host.len() + 7);
+    request.extend_from_slice(&[5, 1, 0, 3, host.len() as u8]);
+    request.extend_from_slice(host);
+    request.extend_from_slice(&spec.port.to_be_bytes());
+    stream.write_all(&request).await
+        .map_err(|error| SshError::Transport(format!("SOCKS proxy CONNECT failed: {error}")))?;
+    let mut response = [0u8; 4];
+    stream.read_exact(&mut response).await
+        .map_err(|error| SshError::Transport(format!("SOCKS proxy response failed: {error}")))?;
+    if response[0] != 5 || response[1] != 0 { return Err(SshError::Transport(format!("SOCKS proxy rejected CONNECT: {}", response[1]))); }
+    let trailing = match response[3] { 1 => 6, 3 => { let mut length = [0u8; 1]; stream.read_exact(&mut length).await.map_err(|error| SshError::Transport(error.to_string()))?; length[0] as usize + 2 }, 4 => 18, _ => return Err(SshError::Transport("SOCKS proxy sent invalid address type".to_string())) };
+    let mut discard = vec![0u8; trailing];
+    stream.read_exact(&mut discard).await.map_err(|error| SshError::Transport(format!("SOCKS proxy response failed: {error}")))?;
+    Ok(stream)
 }
 
 pub struct SshChannelWriter {
@@ -560,6 +934,15 @@ mod tests {
             private_key_path: None,
             private_key_passphrase: None,
             expected_host_key: "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+            http_proxy_host: None,
+            http_proxy_port: None,
+            socks_proxy_host: None,
+            socks_proxy_port: None,
+            keyboard_interactive: false,
+            proxy_command: None,
+            x11: false,
+            x11_display: None,
+            jump_connection: None,
         }
     }
 
@@ -739,12 +1122,21 @@ mod tests {
                 private_key_path: None,
                 private_key_passphrase: None,
                 expected_host_key: fingerprint,
+                http_proxy_host: None,
+                http_proxy_port: None,
+                socks_proxy_host: None,
+                socks_proxy_port: None,
+                keyboard_interactive: false,
+                proxy_command: None,
+                x11: false,
+                x11_display: None,
+                jump_connection: None,
             })
             .await
             .expect("connection should succeed");
 
             let mut interactive = connection
-                .open_interactive(120, 36)
+                .open_interactive(120, 36, false, false)
                 .await
                 .expect("interactive channel should open");
 
@@ -1121,6 +1513,15 @@ mod tests {
                 private_key_path: None,
                 private_key_passphrase: None,
                 expected_host_key: fingerprint,
+                http_proxy_host: None,
+                http_proxy_port: None,
+                socks_proxy_host: None,
+                socks_proxy_port: None,
+                keyboard_interactive: false,
+                proxy_command: None,
+                x11: false,
+                x11_display: None,
+                jump_connection: None,
             })
             .await
             .expect("connection should succeed");

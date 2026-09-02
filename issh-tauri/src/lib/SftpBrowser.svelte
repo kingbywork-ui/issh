@@ -51,6 +51,8 @@
     // isshd 要求先 sftp.open 建立 SFTP 子系统通道，后续 sftp.list 等操作才能找到会话。
     // sessionId 变化（切换 tab）时重新 open；卸载时关闭，避免通道泄漏。
     let openedSessionId = ''
+    let initializedSessionId = ''
+    let initializedInitialPath = ''
 
     const PREVIEW_LIMIT = 256 * 1024
     const UPLOAD_CHUNK = 512 * 1024
@@ -225,8 +227,7 @@
 
     async function openEntry (entry: SftpEntry): Promise<void> {
         if (entry.isDir) {
-            cwd = entry.path
-            await refresh()
+            await navigate(entry.path)
         } else {
             await preview(entry)
         }
@@ -513,6 +514,9 @@
     $effect(() => {
         const currentSessionId = sessionId
         const currentInitialPath = initialPath
+        if (initializedSessionId === currentSessionId && initializedInitialPath === currentInitialPath) return
+        initializedSessionId = currentSessionId
+        initializedInitialPath = currentInitialPath
         void (async () => {
             loading = true
             error = ''
@@ -532,7 +536,7 @@
 
 <section class="sftp-browser" aria-label={sudoMode ? 'SUDO SFTP 文件浏览器' : 'SFTP 文件浏览器'}>
     <header class="sftp-toolbar">
-        <button class="sftp-nav" type="button" onclick={() => { cwd = parentPath(cwd); void refresh() }} disabled={cwd === '/' || loading} title="上级目录">
+        <button class="sftp-nav" type="button" onclick={() => void navigate(parentPath(cwd))} disabled={cwd === '/' || loading} title="上级目录">
             ↑
         </button>
         <nav class="sftp-crumbs" aria-label="当前路径">
@@ -603,7 +607,7 @@
 
     <div class="sftp-list" role="list">
         {#if cwd !== '/'}
-            <button class="sftp-parent-row" type="button" onclick={() => { cwd = parentPath(cwd); void refresh() }}>↖ <span>..</span></button>
+            <button class="sftp-parent-row" type="button" onclick={() => void navigate(parentPath(cwd))}>↖ <span>..</span></button>
         {/if}
         {#each visibleEntries as entry (entry.path)}
             <div class="sftp-row" role="listitem">

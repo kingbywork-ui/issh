@@ -16,24 +16,36 @@
     import { registerTerminal, unregisterTerminal, setActiveTerminal } from './lib/plugins/terminalRegistry'
     import { broadcastSandboxEvent, setProfileWriteConfirm } from './lib/plugins/sandboxBridge'
     import ConfirmDialog from './lib/ConfirmDialog.svelte'
+    import ContextMenu, { type ContextMenuItem } from './lib/ContextMenu.svelte'
+    import SplitLayout, { type SplitLayoutNode } from './lib/SplitLayout.svelte'
+    import { focusOnMount } from './lib/a11y'
     import { checkPluginUpdates, type PluginUpdateInfo } from './lib/plugins/pluginHost'
     import { findScheme } from './lib/terminalSchemes'
     import {
+        clipboardReadText,
+        clipboardWriteText,
         closeSession,
         discoverSshHostKey,
+        hostProfiles,
         openLocalSession,
         openSshSession,
         resolveKeyPassphrase,
         resolveSshPassword,
+        startLocalForward,
+        startDynamicForward,
+        startRemoteForward,
         resizeSession,
         runtimeHealth,
         subscribeSession,
         vaultListSecrets,
         vaultStatus,
         writeSession,
+        pickSavePath,
+        writeLocalChunk,
         type RuntimeHealth,
         type RuntimeSessionSnapshot,
         type SshHostProfile,
+        type OpenSshSessionOptions,
         type VaultSecretKey,
     } from './lib/runtime'
 
@@ -44,6 +56,7 @@
         hostKeyFingerprint: string
         profile: SshHostProfile | null
         keyPath: string
+        jump?: OpenSshSessionOptions
     }
 
     interface TerminalTab {
@@ -51,9 +64,40 @@
         terminal: Terminal | null
         fitAddon: FitAddon | null
         host: HTMLDivElement | null
+        resizeObserver: ResizeObserver | null
         sequence: number
         ssh: SshTabInfo | null
         decoratorCleanups: Array<() => void> | null
+        sudoAction: { label: string, invoke: () => void } | null
+    }
+
+    const splitLayoutKey = 'issh.splitLayout'
+    const tabRecoveryKey = 'issh.tabRecovery'
+    interface TabRecoveryState { layout: SplitLayoutNode | null, tabs: Array<{ oldId: string, kind: 'ssh' | 'local', profileId?: string }> }
+    function readSplitLayout (): SplitLayoutNode | null {
+        try {
+            const value = JSON.parse(localStorage.getItem(splitLayoutKey) ?? 'null') as SplitLayoutNode | null
+            return value?.type === 'pane' || value?.type === 'split' ? value : null
+        } catch { return null }
+    }
+    function layoutLeaves (node: SplitLayoutNode | null): string[] {
+        if (!node) return []
+        return node.type === 'pane' ? [node.id] : node.children.flatMap(layoutLeaves)
+    }
+    function persistSplitLayout (node: SplitLayoutNode | null): void {
+        try { node ? localStorage.setItem(splitLayoutKey, JSON.stringify(node)) : localStorage.removeItem(splitLayoutKey) } catch {}
+    }
+    function persistTabRecovery (): void {
+        try {
+            const state: TabRecoveryState = {
+                layout: splitLayout,
+                tabs: tabs.map((tab) => tab.ssh?.profile?.id
+                    ? { oldId: tab.session.id, kind: 'ssh' as const, profileId: tab.ssh.profile.id }
+                    : { oldId: tab.session.id, kind: 'local' as const }),
+            }
+            if (state.tabs.length) localStorage.setItem(tabRecoveryKey, JSON.stringify(state))
+            else localStorage.removeItem(tabRecoveryKey)
+        } catch {}
     }
 
     let health: RuntimeHealth | null = $state(null)
@@ -61,15 +105,24 @@
     let error = $state('')
     let tabs = $state<TerminalTab[]>([])
     let activeId = $state('')
+    let splitDirection = $state<'vertical' | 'horizontal' | null>((localStorage.getItem('issh.splitDirection') as 'vertical' | 'horizontal' | null) ?? null)
+    let splitPaneIds = $state<string[]>([])
+    let splitRatio = $state(Number.parseInt(localStorage.getItem('issh.splitRatio') ?? '', 10) || 50)
+    let maximizedPaneId = $state<string | null>(null)
+    let draggedPaneId = $state<string | null>(null)
+    let splitLayout = $state<SplitLayoutNode | null>(readSplitLayout())
     let showHome = $state(false)
     let showSftp = $state(false)
     let sftpInitialPath = $state('/')
     let sftpSudoMode = $state(false)
     let sftpSudoPassword = $state('')
     let sftpPrompt = $state<{ tab: TerminalTab, path: string } | null>(null)
+    let vaultPassphrase = $state('')
+    let vaultPassphrasePrompt = $state<{ resolve: (value: string | null) => void } | null>(null)
     let showSend = $state(false)
     let showConnect = $state(false)
     let showSelector = $state(false)
+    let tabMenu = $state<{ x: number, y: number, items: ContextMenuItem[] } | null>(null)
     let vaultLocked = $state(false)
     let showWelcome = $state(false)
     let showSettings = $state(false)
@@ -164,6 +217,7 @@
         vaultSecretId: string
         title?: string
         profile: SshHostProfile | null
+        jump?: OpenSshSessionOptions
     }
     let pendingParams = $state<PendingConnect | null>(null)
 
@@ -179,6 +233,88 @@
 
     const activeTab = $derived(tabs.find((tab) => tab.session.id === activeId) ?? null)
     const showStartPage = $derived(tabs.length === 0 || showHome)
+    const layoutPaneIds = $derived(splitLayout ? layoutLeaves(splitLayout).filter((id) => tabs.some((tab) => tab.session.id === id)) : [])
+    const hasSplitLayout = $derived(layoutPaneIds.length > 1)
+    const visiblePaneIds = $derived(maximizedPaneId ? [maximizedPaneId] : (layoutPaneIds.length > 1 ? layoutPaneIds : [activeId]))
+
+    function syncSplitState (): void {
+        splitPaneIds = layoutPaneIds
+        splitDirection = splitLayout?.type === 'split' ? splitLayout.orientation : null
+        if (splitDirection) localStorage.setItem('issh.splitDirection', splitDirection)
+    }
+
+    function persistRecursiveSplitRatios (): void {
+        persistSplitLayout(splitLayout)
+        if (splitLayout?.type === 'split' && splitLayout.children.length === 2) {
+            splitRatio = Math.round(splitLayout.ratios[0] * 100)
+            localStorage.setItem('issh.splitRatio', String(splitRatio))
+        }
+    }
+
+    $effect(() => {
+        const ids = tabs.map((tab) => tab.session.id)
+        if (splitLayout && !layoutLeaves(splitLayout).some((id) => ids.includes(id))) {
+            splitLayout = null
+            splitPaneIds = []
+            splitDirection = null
+            persistSplitLayout(null)
+        }
+    })
+
+    function remapRecoveryLayout (node: SplitLayoutNode | null, mapping: Map<string, string>): SplitLayoutNode | null {
+        if (!node) return null
+        if (node.type === 'pane') return mapping.has(node.id) ? { type: 'pane', id: mapping.get(node.id)! } : null
+        const children = node.children.map((child) => remapRecoveryLayout(child, mapping)).filter((child): child is SplitLayoutNode => child !== null)
+        if (children.length === 0) return null
+        if (children.length === 1) return children[0]
+        const ratios = children.map((_, index) => node.ratios[index] ?? 1 / children.length)
+        const total = ratios.reduce((sum, ratio) => sum + ratio, 0) || 1
+        return { type: 'split', orientation: node.orientation, children, ratios: ratios.map((ratio) => ratio / total) }
+    }
+
+    let recoveryStarted = false
+    async function restoreRecoveredTabs (): Promise<void> {
+        if (recoveryStarted) return
+        recoveryStarted = true
+        let saved: TabRecoveryState | null = null
+        try { saved = JSON.parse(localStorage.getItem(tabRecoveryKey) ?? 'null') as TabRecoveryState | null } catch {}
+        if (!saved?.tabs?.length) return
+        let profiles: SshHostProfile[] = []
+        try {
+            const result = await hostProfiles()
+            if (!result.encrypted || result.unlocked) profiles = result.profiles
+        } catch {}
+        const layout = saved.layout
+        const mapping = new Map<string, string>()
+        const previousLayout = splitLayout
+        splitLayout = null
+        splitPaneIds = []
+        splitDirection = null
+        for (const entry of saved.tabs) {
+            if (entry.kind === 'local') {
+                const before = new Set(tabs.map((tab) => tab.session.id))
+                await addLocalTab()
+                const created = tabs.find((tab) => !tab.ssh && !before.has(tab.session.id))
+                if (created) mapping.set(entry.oldId, created.session.id)
+                continue
+            }
+            if (!entry.profileId) continue
+            const profile = profiles.find((candidate) => candidate.id === entry.profileId)
+            if (!profile || !localStorage.getItem(`issh.trustedHostKey.${profile.host}:${profile.port}`)) continue
+            const before = new Set(tabs.map((tab) => tab.session.id))
+            await connectHost(profile)
+            const created = tabs.find((tab) => tab.ssh?.profile?.id === profile.id && !before.has(tab.session.id))
+            if (created) mapping.set(entry.oldId, created.session.id)
+        }
+        splitLayout = remapRecoveryLayout(layout ?? previousLayout, mapping)
+        if (splitLayout) {
+            persistSplitLayout(splitLayout)
+            syncSplitState()
+        } else {
+            persistSplitLayout(null)
+        }
+        persistTabRecovery()
+    }
 
     function showHomePage (): void {
         showHome = true
@@ -299,9 +435,23 @@
         if (!tab.terminal || !tab.fitAddon || !tab.host) return
         tab.terminal.open(tab.host)
         tab.fitAddon.fit()
+        observeTerminalHost(tab)
+        tab.terminal.onSelectionChange(() => {
+            void copyTerminalSelection(tab)
+        })
+        tab.terminal.element?.addEventListener('contextmenu', (event) => {
+            event.preventDefault()
+            tab.terminal?.focus()
+            void pasteTerminalClipboard(tab)
+        })
         const sessionId = tab.session.id
         enqueueWrite(sessionId, async () => {
             tab.session = await resizeSession(sessionId, tab.terminal!.cols, tab.terminal!.rows)
+        })
+        tab.terminal.onResize(({ cols, rows }) => {
+            enqueueWrite(sessionId, async () => {
+                tab.session = await resizeSession(sessionId, cols, rows)
+            })
         })
         tab.terminal.onData((data) => {
             const bytes = new TextEncoder().encode(data)
@@ -313,7 +463,47 @@
         })
     }
 
+    function observeTerminalHost (tab: TerminalTab): void {
+        if (!tab.host) return
+        tab.resizeObserver?.disconnect()
+        tab.resizeObserver = new ResizeObserver(() => {
+            requestAnimationFrame(() => tab.fitAddon?.fit())
+        })
+        tab.resizeObserver.observe(tab.host)
+    }
+
+    async function copyTerminalSelection (tab: TerminalTab): Promise<boolean> {
+        const text = tab.terminal?.getSelection() ?? ''
+        if (!text) return false
+        try {
+            await clipboardWriteText(text)
+            return true
+        } catch {
+            try {
+                await navigator.clipboard.writeText(text)
+                return true
+            } catch {
+                return false
+            }
+        }
+    }
+
+    async function pasteTerminalClipboard (tab: TerminalTab): Promise<void> {
+        try {
+            let text = ''
+            try {
+                text = await clipboardReadText()
+            } catch {
+                text = await navigator.clipboard.readText()
+            }
+            if (text) tab.terminal?.paste(text)
+        } catch {
+            // Clipboard may be temporarily unavailable; leave terminal input unchanged.
+        }
+    }
+
     function activateTab (tab: TerminalTab): void {
+        if (splitPaneIds.length > 1 && !splitPaneIds.includes(tab.session.id)) closeSplit()
         activeId = tab.session.id
         setActiveTerminal(tab.session.id)
         showHome = false
@@ -392,13 +582,182 @@
     async function addLocalTab (): Promise<void> {
         try {
             const session = await openLocalSession()
-            const tab: TerminalTab = { session, terminal: null, fitAddon: null, host: null, sequence: 0, ssh: null, decoratorCleanups: null }
+            const tab: TerminalTab = { session, terminal: null, fitAddon: null, host: null, resizeObserver: null, sequence: 0, ssh: null, decoratorCleanups: null, sudoAction: null }
             tabs.push(tab)
             activeId = session.id
             showHome = false
+            persistTabRecovery()
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
         }
+    }
+
+    function requestVaultPassphrase (): Promise<string | null> {
+        if (vaultPassphrasePrompt) return Promise.resolve(null)
+        vaultPassphrase = ''
+        return new Promise((resolve) => { vaultPassphrasePrompt = { resolve } })
+    }
+
+    function finishVaultPassphrase (value: string | null): void {
+        const request = vaultPassphrasePrompt
+        vaultPassphrasePrompt = null
+        const passphrase = vaultPassphrase
+        vaultPassphrase = ''
+        request?.resolve(value === null ? null : passphrase)
+    }
+
+    async function exportTerminal (tab: TerminalTab): Promise<void> {
+        if (!tab.terminal) return
+        const path = await pickSavePath('导出终端内容', `${tab.session.title || 'terminal'}.txt`)
+        if (!path) return
+        const lines: string[] = []
+        const buffer = tab.terminal.buffer.active
+        for (let index = 0; index < buffer.length; index++) {
+            lines.push(buffer.getLine(index)?.translateToString(true) ?? '')
+        }
+        const bytes = new TextEncoder().encode(lines.join('\n') + '\n')
+        let binary = ''
+        for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000))
+        await writeLocalChunk(path, btoa(binary), false)
+    }
+
+    function quoteDroppedPath (path: string): string {
+        return /[\s"']/.test(path) ? `"${path.replaceAll('"', '\\"')}"` : path
+    }
+
+    function dropTerminalPath (tab: TerminalTab, event: DragEvent): void {
+        event.preventDefault()
+        const files = [...(event.dataTransfer?.files ?? [])]
+        const paths = files.map((file) => (file as File & { path?: string }).path).filter((path): path is string => Boolean(path))
+        if (!paths.length) return
+        const data = paths.map(quoteDroppedPath).join(' ')
+        enqueueWrite(tab.session.id, async () => { await writeSession(tab.session.id, new TextEncoder().encode(data)) })
+    }
+
+    async function cloneTab (source: TerminalTab): Promise<TerminalTab | null> {
+        const previousActive = activeId
+        const before = new Set(tabs.map((tab) => tab.session.id))
+        try {
+            if (source.session.kind === 'local') {
+                const session = await openLocalSession(source.terminal?.cols ?? 120, source.terminal?.rows ?? 36, undefined, terminalWorkingDirectory(source) ?? undefined)
+                const clone: TerminalTab = { session, terminal: null, fitAddon: null, host: null, resizeObserver: null, sequence: 0, ssh: null, decoratorCleanups: null, sudoAction: null }
+                tabs.push(clone)
+                persistTabRecovery()
+                activeId = previousActive
+                return clone
+            }
+            if (!source.ssh?.profile) {
+                error = '当前 SSH 会话未绑定主机配置，无法复制'
+                return null
+            }
+            await connectHost(source.ssh.profile)
+            const clone = tabs.find((tab) => !before.has(tab.session.id) && tab.ssh?.profile?.id === source.ssh?.profile?.id) ?? null
+            activeId = previousActive
+            showHome = false
+            return clone
+        } catch (cause) {
+            error = cause instanceof Error ? cause.message : String(cause)
+            activeId = previousActive
+            return null
+        }
+    }
+
+    async function splitTab (source: TerminalTab, direction: 'vertical' | 'horizontal'): Promise<void> {
+        const current = source.session.id
+        const second = await cloneTab(source)
+        if (!second) return
+        splitDirection = splitDirection ?? direction
+        localStorage.setItem('issh.splitDirection', splitDirection)
+        splitPaneIds = splitPaneIds.length > 0 ? [...splitPaneIds, second.session.id] : [current, second.session.id]
+        splitLayout = { type: 'split', orientation: splitDirection, ratios: splitPaneIds.map(() => 1 / splitPaneIds.length), children: splitPaneIds.map((id) => ({ type: 'pane', id })) }
+        persistSplitLayout(splitLayout)
+        persistTabRecovery()
+        activeId = current
+    }
+
+    async function splitActive (direction: 'vertical' | 'horizontal'): Promise<void> {
+        const source = tabs.find((tab) => tab.session.id === activeId)
+        if (source) await splitTab(source, direction)
+    }
+
+    function duplicateTab (source: TerminalTab): void {
+        void cloneTab(source)
+    }
+
+    function showTabMenu (event: MouseEvent, tab: TerminalTab): void {
+        event.preventDefault()
+        event.stopPropagation()
+        tabMenu = {
+            x: Math.max(8, Math.min(event.clientX, window.innerWidth - 230)),
+            y: Math.max(8, Math.min(event.clientY, window.innerHeight - 180)),
+            items: [
+                { label: '复制', action: () => duplicateTab(tab) },
+                { label: '右分屏', action: () => { void splitTab(tab, 'vertical') } },
+                { label: '下分屏', action: () => { void splitTab(tab, 'horizontal') } },
+                { label: '关闭', danger: true, action: () => { void closeTab(tab) } },
+            ],
+        }
+    }
+
+    function closeSplit (): void {
+        splitDirection = null
+        splitPaneIds = []
+        maximizedPaneId = null
+        localStorage.removeItem('issh.splitDirection')
+        splitLayout = null
+        persistSplitLayout(null)
+        persistTabRecovery()
+    }
+
+    function togglePaneMaximize (): void {
+        if (!splitDirection || splitPaneIds.length < 2) return
+        maximizedPaneId = maximizedPaneId === activeId ? null : activeId
+    }
+
+    function navigatePane (offset: number): void {
+        if (!splitPaneIds.length) return
+        const index = splitPaneIds.indexOf(activeId)
+        const next = splitPaneIds[(index + offset + splitPaneIds.length) % splitPaneIds.length]
+        const tab = tabs.find((item) => item.session.id === next)
+        if (tab) activateTab(tab)
+    }
+
+    function reorderPane (targetId: string): void {
+        if (!draggedPaneId || draggedPaneId === targetId || !splitPaneIds.includes(draggedPaneId) || !splitPaneIds.includes(targetId)) return
+        const next = [...splitPaneIds]
+        const from = next.indexOf(draggedPaneId)
+        const to = next.indexOf(targetId)
+        next.splice(from, 1)
+        next.splice(to, 0, draggedPaneId)
+        splitPaneIds = next
+        if (splitLayout?.type === 'split') {
+            splitLayout = { ...splitLayout, children: next.map((id) => ({ type: 'pane', id })), ratios: next.map(() => 1 / next.length) }
+            persistSplitLayout(splitLayout)
+        }
+        persistTabRecovery()
+        draggedPaneId = null
+    }
+
+    function startSplitResize (event: PointerEvent): void {
+        if (!splitDirection || splitPaneIds.length !== 2) return
+        event.preventDefault()
+        const start = splitDirection === 'vertical' ? event.clientX : event.clientY
+        const host = event.currentTarget as HTMLElement
+        const rect = host.parentElement?.getBoundingClientRect()
+        if (!rect) return
+        const total = splitDirection === 'vertical' ? rect.width : rect.height
+        const startRatio = splitRatio
+        const onMove = (move: PointerEvent) => {
+            const delta = (splitDirection === 'vertical' ? move.clientX : move.clientY) - start
+            splitRatio = Math.min(80, Math.max(20, startRatio + (delta / total) * 100))
+        }
+        const onUp = () => {
+            localStorage.setItem('issh.splitRatio', String(splitRatio))
+            window.removeEventListener('pointermove', onMove)
+            window.removeEventListener('pointerup', onUp)
+        }
+        window.addEventListener('pointermove', onMove)
+        window.addEventListener('pointerup', onUp, { once: true })
     }
 
     function handleGlobalHotkeys (event: KeyboardEvent): void {
@@ -410,6 +769,36 @@
         const ctrl = event.ctrlKey || event.metaKey
         if (!ctrl) return
         const key = event.key.toLowerCase()
+        if (event.altKey && !event.shiftKey && key === 'arrowright') {
+            event.preventDefault()
+            void splitActive('vertical')
+            return
+        }
+        if (event.altKey && !event.shiftKey && key === 'arrowdown') {
+            event.preventDefault()
+            void splitActive('horizontal')
+            return
+        }
+        if (event.altKey && (key === '0' || key === 'escape')) {
+            event.preventDefault()
+            closeSplit()
+            return
+        }
+        if (event.altKey && key === 'enter') {
+            event.preventDefault()
+            togglePaneMaximize()
+            return
+        }
+        if (event.altKey && event.shiftKey && (key === 'arrowleft' || key === 'arrowup')) {
+            event.preventDefault()
+            navigatePane(-1)
+            return
+        }
+        if (event.altKey && event.shiftKey && (key === 'arrowright' || key === 'arrowdown')) {
+            event.preventDefault()
+            navigatePane(1)
+            return
+        }
         if (event.shiftKey && key === 't') {
             event.preventDefault()
             void addLocalTab()
@@ -474,6 +863,41 @@
         return p.replace(/%h/g, host).replace(/%r/g, user)
     }
 
+    async function resolveJumpProfile (profile: SshHostProfile, profiles: SshHostProfile[], seen = new Set<string>()): Promise<OpenSshSessionOptions | undefined> {
+        const jumpId = profile.jumpHost?.trim()
+        if (!jumpId) return undefined
+        if (seen.has(jumpId) || jumpId === profile.id) throw new Error('跳板机配置存在循环引用')
+        const jump = profiles.find((candidate) => candidate.id === jumpId)
+        if (!jump) throw new Error(`未找到跳板机配置“${jumpId}”`)
+        const expectedHostKey = localStorage.getItem(`issh.trustedHostKey.${jump.host}:${jump.port}`)
+        if (!expectedHostKey) throw new Error(`请先单独连接跳板机“${jump.name}”并确认其主机密钥`)
+        const keyPath = jump.privateKeys[0] ? normalizeKeyPath(jump.privateKeys[0], jump.host, jump.user) : ''
+        let password = ''
+        let privateKeyPassphrase = ''
+        try {
+            password = (await resolveSshPassword(jump.user, jump.host, jump.port)) ?? ''
+            privateKeyPassphrase = (await resolveKeyPassphrase(jump.user, jump.host, jump.port, keyPath || undefined)) ?? ''
+        } catch {}
+        const nextSeen = new Set(seen)
+        nextSeen.add(profile.id)
+        const nested = await resolveJumpProfile(jump, profiles, nextSeen)
+        return {
+            title: jump.name,
+            host: jump.host,
+            port: jump.port,
+            username: jump.user,
+            ...(password ? { password } : {}),
+            ...(keyPath ? { privateKeyPath: keyPath } : {}),
+            ...(privateKeyPassphrase ? { privateKeyPassphrase } : {}),
+            expectedHostKey,
+            ...(jump.auth === 'keyboardInteractive' ? { keyboardInteractive: true } : {}),
+            ...(jump.proxyCommand ? { proxyCommand: jump.proxyCommand } : {}),
+            ...(jump.httpProxyHost ? { httpProxyHost: jump.httpProxyHost, httpProxyPort: jump.httpProxyPort } : {}),
+            ...(jump.socksProxyHost ? { socksProxyHost: jump.socksProxyHost, socksProxyPort: jump.socksProxyPort } : {}),
+            ...(nested ? { jump: nested } : {}),
+        }
+    }
+
     async function connectHost (profile: SshHostProfile): Promise<void> {
         connectError = ''
         connecting = true
@@ -483,6 +907,8 @@
             // 从已解锁的 vault 解析保存的密码/口令
             let password = ''
             let keyPassphrase = ''
+            const profiles = (await hostProfiles()).profiles
+            const jump = await resolveJumpProfile(profile, profiles)
             try {
                 password = (await resolveSshPassword(profile.user, profile.host, profile.port)) ?? ''
                 keyPassphrase = (await resolveKeyPassphrase(profile.user, profile.host, profile.port, expandedKeyPath || undefined)) ?? ''
@@ -499,9 +925,8 @@
                 vaultSecretId: '',
                 title: profile.name,
                 profile,
+                jump,
             })
-            // 指纹确认 UI 在连接弹窗内，必须打开弹窗才能继续连接流程
-            showConnect = true
         } catch (cause) {
             connectError = cause instanceof Error ? cause.message : String(cause)
             showConnect = true
@@ -543,6 +968,16 @@
                 ...(params.keyPassphrase || formKeyPassphrase ? { privateKeyPassphrase: params.keyPassphrase || formKeyPassphrase } : {}),
                 expectedHostKey: fingerprint,
                 ...(params.vaultSecretId ? { vaultSecretId: params.vaultSecretId } : {}),
+                ...(params.profile?.agentForward ? { agentForward: true } : {}),
+                ...(params.profile?.auth === 'keyboardInteractive' ? { keyboardInteractive: true } : {}),
+                ...(params.profile?.x11 ? { x11: true } : {}),
+                ...(params.profile?.jumpHost ? { jumpHost: params.profile.jumpHost } : {}),
+                ...(params.jump ? { jump: params.jump } : {}),
+                ...(params.profile?.proxyCommand ? { proxyCommand: params.profile.proxyCommand } : {}),
+                ...(params.profile?.forwardedPorts?.length ? { forwardedPorts: params.profile.forwardedPorts } : {}),
+                ...(params.profile?.httpProxyHost ? { httpProxyHost: params.profile.httpProxyHost, httpProxyPort: params.profile.httpProxyPort } : {}),
+                ...(params.profile?.socksProxyHost ? { socksProxyHost: params.profile.socksProxyHost, socksProxyPort: params.profile.socksProxyPort } : {}),
+                ...(params.profile?.reuseSession ? { reuseSession: true } : {}),
             })
             pendingConnect = false
             pendingFingerprint = ''
@@ -555,6 +990,7 @@
                 terminal: null,
                 fitAddon: null,
                 host: null,
+                resizeObserver: null,
                 sequence: 0,
                 ssh: {
                     host: params.host,
@@ -563,17 +999,35 @@
                     hostKeyFingerprint: fingerprint,
                     profile: params.profile,
                     keyPath: params.keyPath,
+                    jump: params.jump,
                 },
+                sudoAction: null,
                 decoratorCleanups: null,
             }
             localStorage.setItem(`issh.trustedHostKey.${params.host}:${params.port}`, fingerprint)
             tabs.push(tab)
             activeId = session.id
             showHome = false
+            void startProfileLocalForwards(session.id, params.profile)
+            persistTabRecovery()
         } catch (cause) {
             connectError = cause instanceof Error ? cause.message : String(cause)
         } finally {
             connecting = false
+        }
+    }
+
+    async function startProfileLocalForwards (sessionId: string, profile: SshHostProfile | null): Promise<void> {
+        const forwards = profile?.forwardedPorts ?? []
+        for (const forward of forwards) {
+            try {
+                if (forward.type === 'Dynamic') await startDynamicForward(sessionId, forward)
+                else if (forward.type === 'Remote') await startRemoteForward(sessionId, forward)
+                else await startLocalForward(sessionId, forward)
+            } catch (cause) {
+                const label = forward.type === 'Dynamic' ? '动态 SOCKS5' : forward.type === 'Remote' ? '远程' : '本地'
+                error = `${label}端口转发 ${forward.host}:${forward.port} 启动失败：${cause instanceof Error ? cause.message : String(cause)}`
+            }
         }
     }
 
@@ -592,6 +1046,7 @@
             }
             let password = ''
             let keyPassphrase = ''
+            const jump = info.profile ? await resolveJumpProfile(info.profile, (await hostProfiles()).profiles) : undefined
             try {
                 password = (await resolveSshPassword(info.user, info.host, info.port)) ?? ''
                 keyPassphrase = (await resolveKeyPassphrase(info.user, info.host, info.port, info.keyPath || undefined)) ?? ''
@@ -607,6 +1062,13 @@
                 ...(info.keyPath ? { privateKeyPath: info.keyPath } : {}),
                 ...(keyPassphrase ? { privateKeyPassphrase: keyPassphrase } : {}),
                 expectedHostKey: info.hostKeyFingerprint,
+                ...(info.profile?.agentForward ? { agentForward: true } : {}),
+                ...(info.profile?.auth === 'keyboardInteractive' ? { keyboardInteractive: true } : {}),
+                ...(info.profile?.x11 ? { x11: true } : {}),
+                ...(info.profile?.socksProxyHost ? { socksProxyHost: info.profile.socksProxyHost, socksProxyPort: info.profile.socksProxyPort } : {}),
+                ...(info.profile?.httpProxyHost ? { httpProxyHost: info.profile.httpProxyHost, httpProxyPort: info.profile.httpProxyPort } : {}),
+                ...(info.profile?.proxyCommand ? { proxyCommand: info.profile.proxyCommand } : {}),
+                ...(jump ? { jump } : {}),
             })
             tab.session = session
             tab.sequence = 0
@@ -623,6 +1085,7 @@
             })
             runDecoratorCleanups(tab)
             applyTerminalDecorators(tab)
+            void startProfileLocalForwards(session.id, info.profile)
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
         } finally {
@@ -665,12 +1128,20 @@
                     title: tab.session.title,
                     terminal: tab.terminal,
                     profile: tab.ssh?.profile
-                        ? { name: tab.ssh.profile.name, loginScript: tab.ssh.profile.loginScript }
+                        ? {
+                            name: tab.ssh.profile.name,
+                            host: tab.ssh.profile.host,
+                            port: tab.ssh.profile.port,
+                            user: tab.ssh.profile.user,
+                            loginScript: tab.ssh.profile.loginScript,
+                        }
                         : null,
                     write: (data) => {
                         const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data
                         enqueueWrite(tab.session.id, async () => { await writeSession(tab.session.id, bytes) })
                     },
+                    setAction: (action) => { tab.sudoAction = action },
+                    requestVaultPassphrase,
                     dispose: (callback) => { cleanups.push(callback) },
                 })
             } catch (cause) {
@@ -686,9 +1157,26 @@
         tab.decoratorCleanups = null
     }
 
-    function terminalHostAction (node: HTMLDivElement, tab: TerminalTab): void {
+    function terminalHostAction (node: HTMLDivElement, tab: TerminalTab): { destroy: () => void } {
         tab.host = node
-        void mountTerminal(tab, node)
+        if (tab.terminal) {
+            if (tab.terminal.element && tab.terminal.element.parentElement !== node) {
+                node.append(tab.terminal.element)
+            }
+            observeTerminalHost(tab)
+            requestAnimationFrame(() => tab.fitAddon?.fit())
+        } else {
+            void mountTerminal(tab, node)
+        }
+        return {
+            destroy: () => {
+                if (tab.host === node) {
+                    tab.resizeObserver?.disconnect()
+                    tab.resizeObserver = null
+                    tab.host = null
+                }
+            },
+        }
     }
 
     async function pollOutput (tab: TerminalTab): Promise<void> {
@@ -732,10 +1220,21 @@
         } catch {
             // 会话可能已关闭
         }
+        tab.resizeObserver?.disconnect()
+        tab.resizeObserver = null
         tab.terminal?.dispose()
         runDecoratorCleanups(tab)
         unregisterTerminal(tab.session.id)
         tabs = tabs.filter((candidate) => candidate.session.id !== tab.session.id)
+        splitPaneIds = splitPaneIds.filter((id) => id !== tab.session.id)
+        if (splitLayout?.type === 'split') {
+            const remaining = splitPaneIds
+            splitLayout = remaining.length > 1 ? { ...splitLayout, children: remaining.map((id) => ({ type: 'pane', id })), ratios: remaining.map(() => 1 / remaining.length) } : null
+            persistSplitLayout(splitLayout)
+        }
+        persistTabRecovery()
+        if (maximizedPaneId === tab.session.id) maximizedPaneId = null
+        if (splitPaneIds.length < 2) closeSplit()
         writeQueues.delete(tab.session.id)
         writeQueueLengths.delete(tab.session.id)
         writeQueueWarned.delete(tab.session.id)
@@ -835,6 +1334,7 @@
         void (async () => {
             await refresh()
             await loadVaultSecrets()
+            await restoreRecoveredTabs()
             void checkUpdatesOnStartup()
         })()
         pollHandle = setInterval(pollAll, POLL_INTERVAL_MS)
@@ -885,6 +1385,12 @@
                     class:active={tab.session.id === activeId}
                     type="button"
                     onclick={() => activateTab(tab)}
+                    oncontextmenu={(event) => showTabMenu(event, tab)}
+                    draggable={splitPaneIds.includes(tab.session.id)}
+                    ondragstart={() => { draggedPaneId = tab.session.id }}
+                    ondragover={(event) => { if (draggedPaneId) event.preventDefault() }}
+                    ondrop={(event) => { event.preventDefault(); reorderPane(tab.session.id) }}
+                    ondragend={() => { draggedPaneId = null }}
                     title={tab.session.title}
                 >
                     <span class="tab-status" class:open={tab.session.state !== 'closed'}></span>
@@ -918,7 +1424,7 @@
         {/if}
     </header>
 
-    <div class="app-workspace" class:left-open={showSftp && !!activeTab} class:bottom-open={showSend}>
+    <div class="app-workspace" class:left-open={showSftp && !!activeTab} class:bottom-open={showSend} class:split-vertical={splitDirection === 'vertical'} class:split-horizontal={splitDirection === 'horizontal'} class:multi-split={splitPaneIds.length > 2} class:recursive-split={hasSplitLayout}>
         {#if showStartPage}
             {#if showWelcome}
                 <WelcomeHome onclose={() => { showWelcome = false }} />
@@ -932,14 +1438,22 @@
                 </aside>
             {/if}
 
-            <div class="app-panel-center">
+            <div class="app-panel-center" style={`--split-ratio: ${splitRatio}%`}>
                 <!-- 终端 stack 常驻 DOM：xterm open() 只能执行一次，
                      若用 {#if} 切换会销毁/重建 DOM 导致切回终端空白 -->
                 <div class="terminal-stack">
-                    {#each tabs as tab (tab.session.id)}
+                    {#snippet renderPane(id: string)}
+                    {#each tabs.filter((candidate) => candidate.session.id === id) as tab (tab.session.id)}
                         <div
                             class="terminal-pane"
-                            class:hidden={tab.session.id !== activeId}
+                            class:hidden={!visiblePaneIds.includes(tab.session.id)}
+                            class:split-pane={hasSplitLayout && visiblePaneIds.includes(tab.session.id)}
+                            class:split-pane-active={hasSplitLayout && tab.session.id === activeId}
+                            onclick={() => { if (visiblePaneIds.includes(tab.session.id)) activateTab(tab) }}
+                            onkeydown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); if (visiblePaneIds.includes(tab.session.id)) activateTab(tab) } }}
+                            role="button"
+                            aria-label={`终端窗格 ${tab.session.title}`}
+                            tabindex="0"
                         >
                             <div class="terminal-toolbar">
                                 {#if tab.ssh}
@@ -947,7 +1461,17 @@
                                     <strong class="toolbar-host">{tab.ssh.user}@{tab.ssh.host}:{tab.ssh.port}</strong>
                                 {/if}
                                 <span class="toolbar-spacer"></span>
-                                <button class="toolbar-btn" type="button" onclick={showHomePage} title="返回 Home">
+                                {#if tab.sudoAction}
+                                    <button
+                                        class="toolbar-btn sudo-action"
+                                        type="button"
+                                        onclick={(event) => { event.stopPropagation(); tab.sudoAction?.invoke(); tab.terminal?.focus() }}
+                                        title={tab.sudoAction.label}
+                                    >
+                                        🔑 <span>{tab.sudoAction.label}</span>
+                                    </button>
+                                {/if}
+                                <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); showHomePage() }} title="返回 Home">
                                     ⌂ <span>Home</span>
                                 </button>
                                 {#if tab.ssh}
@@ -958,6 +1482,15 @@
                                         🗀 <span>SFTP</span>
                                     </button>
                                 {/if}
+                                <button class="toolbar-btn" type="button" onclick={() => void exportTerminal(tab)} title="导出终端内容">⇩ <span>Export</span></button>
+                                {#if !splitDirection}
+                                    <button class="toolbar-btn" type="button" onclick={() => void splitActive('vertical')} title="左右分屏">◫ <span>Split</span></button>
+                                    <button class="toolbar-btn" type="button" onclick={() => void splitActive('horizontal')} title="上下分屏">▤ <span>Split</span></button>
+                                {:else}
+                                    <button class="toolbar-btn" type="button" onclick={() => void splitActive(splitDirection ?? 'vertical')} title="新增窗格">＋ <span>Pane</span></button>
+                                    <button class="toolbar-btn" type="button" onclick={togglePaneMaximize} title="最大化当前窗格">□ <span>{maximizedPaneId === tab.session.id ? 'Restore' : 'Maximize'}</span></button>
+                                    <button class="toolbar-btn" type="button" onclick={closeSplit} title="关闭分屏">▣ <span>Unsplit</span></button>
+                                {/if}
                                 <button class="toolbar-btn" type="button" onclick={() => { showSend = !showSend }} title="向多个标签发送输入">
                                     ✈ <span>Send</span>
                                 </button>
@@ -965,9 +1498,22 @@
                             <div
                                 class="terminal-host"
                                 use:terminalHostAction={tab}
+                                ondragover={(event) => { event.preventDefault() }}
+                                ondrop={(event) => dropTerminalPath(tab, event)}
+                                role="region"
+                                aria-label={`终端输入区 ${tab.session.title}`}
                             ></div>
                         </div>
+                        {#if splitPaneIds.length === 2 && splitDirection && visiblePaneIds.includes(tab.session.id) && visiblePaneIds.indexOf(tab.session.id) === 0}
+                            <button class="split-divider" type="button" aria-label="调整分屏比例" onpointerdown={startSplitResize}></button>
+                        {/if}
                     {/each}
+                    {/snippet}
+                    {#if splitLayout && hasSplitLayout}
+                        <SplitLayout node={splitLayout} pane={renderPane} onratiochange={persistRecursiveSplitRatios} />
+                    {:else}
+                        {#each tabs as tab (tab.session.id)}{@render renderPane(tab.session.id)}{/each}
+                    {/if}
                 </div>
             </div>
 
@@ -1113,5 +1659,25 @@
                 </div>
             </div>
         </div>
+    {/if}
+
+    {#if vaultPassphrasePrompt}
+        <div class="modal-backdrop" role="presentation" onclick={() => finishVaultPassphrase(null)}>
+            <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="sudo-vault-passphrase-title" tabindex="-1" onclick={(event) => event.stopPropagation()} onkeydown={(event) => event.stopPropagation()}>
+                <h2 id="sudo-vault-passphrase-title">解锁保险库以填充 sudo 密码</h2>
+                <p>仅读取当前 SSH 主机的 sudo 密码，提交后立即重新锁定保险库。</p>
+                <label>保险库主口令
+                    <input type="password" bind:value={vaultPassphrase} autocomplete="off" use:focusOnMount onkeydown={(event) => { if (event.key === 'Enter') finishVaultPassphrase('submit') }} />
+                </label>
+                <div class="connect-actions">
+                    <button type="button" onclick={() => finishVaultPassphrase('submit')} disabled={!vaultPassphrase}>解锁并填充</button>
+                    <button type="button" onclick={() => finishVaultPassphrase(null)}>取消</button>
+                </div>
+            </div>
+        </div>
+    {/if}
+
+    {#if tabMenu}
+        <ContextMenu x={tabMenu.x} y={tabMenu.y} items={tabMenu.items} onclose={() => { tabMenu = null }} />
     {/if}
 </div>

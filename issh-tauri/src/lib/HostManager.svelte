@@ -28,6 +28,8 @@
     let menu = $state<{ x: number, y: number, items: ContextMenuItem[] } | null>(null)
     let editorProfile = $state<SshHostProfile | null>(null)
     let editorGroup = $state<SshHostGroup | null>(null)
+    let moveProfile = $state<SshHostProfile | null>(null)
+    let groupDelete = $state<{ group: SshHostGroup, profiles: SshHostProfile[] } | null>(null)
     function loadRecent (): string[] { try { const value = JSON.parse(localStorage.getItem(recentKey) ?? '[]'); return Array.isArray(value) ? value.filter((x): x is string => typeof x === 'string') : [] } catch { return [] } }
     function loadStartView (): 'all' | 'favorites' | 'recent' | { group: string } {
         try {
@@ -72,13 +74,62 @@
     function findNode (nodes: GroupNode[], id: string): GroupNode | null { for (const node of nodes) { if (node.id === id) return node; const child = findNode(node.children, id); if (child) return child } return null }
     const environments = $derived([...new Set(profiles.map((profile) => profile.environment).filter((value): value is string => Boolean(value)))].sort())
     const visible = $derived.by(() => { let result = profiles.filter((profile) => !query.trim() || `${profile.name} ${profile.host} ${profile.user} ${profile.remark ?? ''} ${profile.tags.join(' ')}`.toLowerCase().includes(query.trim().toLowerCase())); if (environment) result = result.filter((profile) => profile.environment === environment); if (favoritesOnly || view === 'favorites') result = result.filter((profile) => profile.favorite); if (recentOnly || view === 'recent') result = result.filter((profile) => recentIds.includes(profile.id)); if (typeof view === 'object') { const node = findNode(groupTree, view.group); const ids = new Set<string>(); if (node) collect(node, ids); result = result.filter((profile) => ids.has(profile.id)) } return result.sort((a, b) => (recentIds.indexOf(a.id) < 0 ? 999 : recentIds.indexOf(a.id)) - (recentIds.indexOf(b.id) < 0 ? 999 : recentIds.indexOf(b.id)) || Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name)) })
-    function showMenu (event: MouseEvent, items: ContextMenuItem[]): void { event.preventDefault(); menu = { x: Math.min(event.clientX, window.innerWidth - 230), y: Math.min(event.clientY, window.innerHeight - 300), items } }
-    function profileItems (profile: SshHostProfile): ContextMenuItem[] { return [{ label: '连接', action: () => { recordRecent(profile); onconnect(profile) } }, { label: '编辑', action: () => { editorProfile = profile } }, { label: '复制', action: () => { editorProfile = { ...profile, id: '', name: `${profile.name} copy`, tags: [...profile.tags], privateKeys: [...profile.privateKeys] } } }, { label: profile.favorite ? '取消收藏' : '收藏', action: () => void mutate({ action: 'toggleFavorite', profileId: profile.id }) }, { label: '删除', danger: true, action: () => { if (window.confirm(`删除主机“${profile.name}”？`)) void mutate({ action: 'deleteProfile', profileId: profile.id }) } }] }
-    function groupItems (group: SshHostGroup): ContextMenuItem[] { return [{ label: '新建子分组', action: () => { editorGroup = { id: `group-${Date.now().toString(36)}`, name: '', parentGroupId: group.id } } }, { label: '重命名', action: () => { editorGroup = group } }, { label: '删除分组', danger: true, action: () => { if (window.confirm(`删除分组“${group.name}”？`)) void mutate({ action: 'deleteGroup', groupId: group.id }) } }] }
-    async function mutate (change: HostProfileMutation): Promise<void> { try { const result = await mutateHostProfiles(change); profiles = result.profiles; groups = result.groups; encrypted = result.encrypted; unlocked = result.unlocked; reportVaultState(); editorProfile = null; editorGroup = null } catch (cause) { error = cause instanceof Error ? cause.message : String(cause) } }
+    function showMenu (event: MouseEvent, items: ContextMenuItem[]): void { event.preventDefault(); event.stopPropagation(); menu = { x: Math.max(8, Math.min(event.clientX, window.innerWidth - 230)), y: Math.max(8, Math.min(event.clientY, window.innerHeight - 300)), items } }
+    function profileItems (profile: SshHostProfile): ContextMenuItem[] {
+        return [
+            { label: '连接', action: () => { recordRecent(profile); onconnect(profile) } },
+            { label: '编辑', action: () => { editorProfile = { ...profile, tags: [...profile.tags], privateKeys: [...profile.privateKeys] } } },
+            { label: '克隆', action: () => { editorProfile = { ...profile, id: '', name: `${profile.name} copy`, tags: [...profile.tags], privateKeys: [...profile.privateKeys] } } },
+            { label: '更改分组', action: () => { moveProfile = { ...profile, tags: [...profile.tags], privateKeys: [...profile.privateKeys] } } },
+            { label: profile.favorite ? '取消收藏' : '收藏', action: () => void mutate({ action: 'toggleFavorite', profileId: profile.id }) },
+            { label: '删除', danger: true, action: () => { if (window.confirm(`删除主机“${profile.name}”？`)) void mutate({ action: 'deleteProfile', profileId: profile.id }) } },
+        ]
+    }
+    function groupProfiles (group: SshHostGroup): SshHostProfile[] {
+        const ids = new Set<string>()
+        const collect = (id: string): void => {
+            profiles.filter((profile) => profile.group === id).forEach((profile) => ids.add(profile.id))
+            groups.filter((child) => child.parentGroupId === id).forEach((child) => collect(child.id))
+        }
+        collect(group.id)
+        return profiles.filter((profile) => ids.has(profile.id))
+    }
+    async function connectGroup (group: SshHostGroup): Promise<void> {
+        const entries = groupProfiles(group)
+        if (entries.length === 0 || !window.confirm(`连接分组“${group.name}”中的 ${entries.length} 台 SSH 主机？`)) return
+        for (const profile of entries) { recordRecent(profile); onconnect(profile) }
+    }
+    function requestDeleteGroup (group: SshHostGroup): void {
+        groupDelete = { group, profiles: groupProfiles(group) }
+    }
+    async function confirmDeleteGroup (deleteProfiles: boolean): Promise<void> {
+        const request = groupDelete
+        if (!request) return
+        groupDelete = null
+        const { group, profiles: entries } = request
+        const removeChildren = (parentId: string): SshHostGroup[] => groups.filter((item) => item.parentGroupId === parentId).flatMap((item) => [...removeChildren(item.id), item])
+        const deleteGroups = [...removeChildren(group.id), group]
+        if (deleteProfiles) {
+            for (const profile of entries) await mutate({ action: 'deleteProfile', profileId: profile.id })
+        } else if (entries.length > 0) {
+            await mutate({ action: 'moveProfiles', profileIds: entries.map((profile) => profile.id), groupId: '' })
+        }
+        for (const child of deleteGroups) await mutate({ action: 'deleteGroup', groupId: child.id })
+    }
+    function groupItems (group: SshHostGroup): ContextMenuItem[] {
+        const count = groupProfiles(group).length
+        return [
+            { label: `连接 (${count})`, disabled: count === 0, action: () => void connectGroup(group) },
+            { label: '新增主机', action: () => { editorProfile = { id: '', name: '', group: group.id, host: '', port: 22, user: '', auth: null, privateKeys: [], environment: null, remark: null, favorite: false, tags: [], loginScript: null, x11: false, agentForward: false, jumpHost: null, proxyCommand: null, forwardedPorts: [], socksProxyHost: null, socksProxyPort: null, httpProxyHost: null, httpProxyPort: null, reuseSession: false } } },
+            { label: '新增子分组', action: () => { editorGroup = { id: `group-${Date.now().toString(36)}`, name: '', parentGroupId: group.id } } },
+            { label: '重命名', action: () => { editorGroup = { ...group } } },
+            { label: '删除组', danger: true, action: () => requestDeleteGroup(group) },
+        ]
+    }
+    async function mutate (change: HostProfileMutation): Promise<void> { try { const result = await mutateHostProfiles(change); profiles = result.profiles; groups = result.groups; encrypted = result.encrypted; unlocked = result.unlocked; reportVaultState(); editorProfile = null; editorGroup = null; moveProfile = null } catch (cause) { error = cause instanceof Error ? cause.message : String(cause) } }
     function saveProfile (profile: SshHostProfile): void { void mutate({ action: profiles.some((item) => item.id === profile.id) ? 'updateProfile' : 'createProfile', profile }) }
     function saveGroup (group: SshHostGroup): void { void mutate({ action: groups.some((item) => item.id === group.id) ? 'updateGroup' : 'createGroup', group }) }
-    function newProfile (): void { editorProfile = { id: '', name: '', group: '', host: '', port: 22, user: '', auth: null, privateKeys: [], environment: null, remark: null, favorite: false, tags: [], loginScript: null } }
+    function newProfile (): void { editorProfile = { id: '', name: '', group: '', host: '', port: 22, user: '', auth: null, privateKeys: [], environment: null, remark: null, favorite: false, tags: [], loginScript: null, x11: false, agentForward: false, jumpHost: null, proxyCommand: null, forwardedPorts: [], socksProxyHost: null, socksProxyPort: null, httpProxyHost: null, httpProxyPort: null, reuseSession: false } }
     function newGroup (parentGroupId: string | null = null): void { editorGroup = { id: `group-${Date.now().toString(36)}`, name: '', parentGroupId } }
     function resetFilters (): void { query = ''; environment = ''; favoritesOnly = false; recentOnly = false; view = 'all'; persistView(view) }
     function title (): string { if (view === 'favorites') return '收藏'; if (view === 'recent') return '最近连接'; if (typeof view === 'object') return findNode(groupTree, view.group)?.name ?? '分组'; return '全部主机' }
@@ -107,3 +158,30 @@
 {#if menu}<ContextMenu x={menu.x} y={menu.y} items={menu.items} onclose={() => { menu = null }} />{/if}
 {#if editorProfile}<HostProfileEditor profile={editorProfile} groups={groups} onconnect={saveProfile} oncancel={() => { editorProfile = null }} />{/if}
 {#if editorGroup}<HostGroupEditor group={editorGroup} groups={groups} onsave={saveGroup} oncancel={() => { editorGroup = null }} />{/if}
+{#if moveProfile}
+    <div class="modal-backdrop" role="presentation" onclick={(event) => { if (event.target === event.currentTarget) moveProfile = null }}>
+        <div class="editor-panel" role="dialog" aria-modal="true" aria-labelledby="move-profile-title" tabindex="-1">
+            <form onsubmit={(event) => { event.preventDefault(); if (moveProfile) void mutate({ action: 'updateProfile', profile: moveProfile }) }}>
+                <div class="editor-header"><h2 id="move-profile-title">更改分组</h2><button type="button" class="icon-button" aria-label="关闭" onclick={() => { moveProfile = null }}>×</button></div>
+                <p>选择“{moveProfile.name}”所属的分组。</p>
+                <label>分组<select bind:value={moveProfile.group}><option value="">未分组</option>{#each groups as group (group.id)}<option value={group.id}>{group.name}</option>{/each}</select></label>
+                <div class="editor-actions"><button type="button" class="secondary" onclick={() => { moveProfile = null }}>取消</button><button type="submit">保存</button></div>
+            </form>
+        </div>
+    </div>
+{/if}
+{#if groupDelete}
+    <div class="modal-backdrop" role="presentation" onclick={(event) => { if (event.target === event.currentTarget) groupDelete = null }}>
+        <div class="editor-panel" role="dialog" aria-modal="true" aria-labelledby="group-delete-title" tabindex="-1">
+            <div class="editor-header"><h2 id="group-delete-title">删除分组</h2><button type="button" class="icon-button" aria-label="关闭" onclick={() => { groupDelete = null }}>×</button></div>
+            {#if groupDelete.profiles.length > 0}
+                <p>“{groupDelete.group.name}”及其子分组中有 {groupDelete.profiles.length} 台主机。</p>
+                <p class="settings-hint">可以保留主机并移到未分组，或连同主机一起删除。</p>
+                <div class="editor-actions"><button type="button" class="secondary" onclick={() => { groupDelete = null }}>取消</button><button type="button" class="secondary" onclick={() => void confirmDeleteGroup(false)}>移动到未分组</button><button type="button" class="plugin-remove" onclick={() => void confirmDeleteGroup(true)}>同时删除主机</button></div>
+            {:else}
+                <p>确认删除分组“{groupDelete.group.name}”及其子分组？</p>
+                <div class="editor-actions"><button type="button" class="secondary" onclick={() => { groupDelete = null }}>取消</button><button type="button" class="plugin-remove" onclick={() => void confirmDeleteGroup(false)}>删除分组</button></div>
+            {/if}
+        </div>
+    </div>
+{/if}

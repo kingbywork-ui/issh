@@ -373,7 +373,7 @@ export class XTermFrontend extends Frontend {
 
     copySelection (): void {
         const text = this.getSelection()
-        if (!text.trim().length) {
+        if (!text.length) {
             return
         }
         if (text.length < 1024 * 32 && this.configService.store.terminal.copyAsHTML) {
