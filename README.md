@@ -1,205 +1,113 @@
-![iSSH 0.1.1 host manager](docs/readme.png)
+![issh Host Manager](docs/readme.png)
 
----
+# issh — Lightweight, Secure, AI-Native SSH Terminal
 
-issh is a customized fork of [Tabby](https://tabby.sh) (formerly **Terminus**), focused on SSH and terminal workflows for Windows and Linux.
+**issh** is a next-generation SSH terminal built on **Tauri 2 + Rust**. It combines a native-performance terminal core, an enterprise-grade SSH toolkit, a locally encrypted credential vault, and AI-assisted workflows in a **~5 MB** installer — a fraction of the footprint of Electron-based terminals.
 
-The current application version is **0.1.1**, with focused improvements for Windows terminals, SSH host management, command autocomplete, and external agent workflows.
+## Why issh
 
-> For complete installation, SSH, SFTP, configuration sync, vault, autocomplete, and CLI/MCP instructions, see the [Chinese user manual](./docs/user-manual/iSSH-使用手册.md). All screenshots below were captured from the current 0.1.1 build.
-
-## Downloads
-
-Tagged GitHub releases provide unsigned packages for both x64 and ARM64:
-
-- Windows: `issh-<version>-setup-<arch>.exe` NSIS installer.
-- Linux: `issh-<version>-linux-<arch>.AppImage` and `.tar.gz` portable packages.
-
-For AppImage, run `chmod +x issh-*.AppImage` once and then launch it directly. The tarball can be extracted anywhere and started with the included `issh` executable. Every package is accompanied by a `.sha256` checksum. Development builds are also available from the corresponding GitHub Actions run artifacts.
+- **Blazing lightweight** — ~5 MB NSIS installer and low runtime footprint, powered by a Rust engine instead of a bundled Chromium browser. Fast startup, minimal memory, ideal for always-on terminal workflows.
+- **Native performance** — local PTY, SSH, SFTP, and the encrypted vault all run inside `isshd`, a purpose-built Rust runtime. No Node.js in the data path: keystrokes, streams, and file transfers stay fast even under heavy load.
+- **Security by design** — credentials live only on your machine, encrypted with **AES-256-GCM** (PBKDF2-SHA512 key derivation). Nothing is uploaded to the cloud. Marketplace plugins are verified with ed25519 signatures and SHA-256 digests before installation.
+- **Enterprise-grade SSH** — local, remote, and dynamic (SOCKS5) port forwarding, jump hosts, ProxyCommand, HTTP/SOCKS proxy, X11 forwarding, agent forwarding, and keyboard-interactive authentication, all manageable per host profile.
+- **AI-native** — LLM-powered command completion and an agent bridge that exposes your terminal workspace to Codex, Cursor, Claude Desktop, and other AI agents over a token-protected localhost channel.
+- **Open plugin ecosystem** — a signed plugin marketplace with permission declarations, dependency management, and one-click install/update, so the product grows with your workflow.
 
 ## Features
 
-### Terminal
+### Terminal Experience
 
-- VT220 terminal with multiple nested split panes
-- Tabs on any side of the window
-- Optional dockable window with global hotkey ("Quake console")
-- Progress detection and process completion notifications
-- Bracketed paste, multiline paste warnings
-- Font ligatures and custom shell profiles
-- Full Unicode support including double-width characters
-- PowerShell (and PS Core), WSL, Git-Bash, Cygwin, MSYS2, Cmder and CMD support
-- Terminal toolbar with quick actions
+- Multi-tab workspace with recursive **split panes**: nest panes arbitrarily, drag dividers to resize, maximize/restore any pane, and persist the whole layout across restarts.
+- **Session recovery**: trusted hosts reconnect automatically after a restart; local shells are rebuilt with the same shell, working directory, and size.
+- Native system clipboard with **selection auto-copy** and right-click paste.
+- One-click **terminal export** to a local file; drag a file path into the terminal to inject it.
+- Local shell selector: `cmd`, Windows PowerShell, PowerShell 7, WSL, and Git Bash (plus `bash`/`zsh`/`fish` on Unix-like systems).
+- Home page, toolbar quick actions, per-tab context menu, and full Unicode rendering via xterm.js.
 
 ### SSH Client
 
-- SSH2 client with connection manager
-- X11 and port forwarding (local, remote, dynamic/SOCKS)
-- Jump host / bastion support
-- Agent forwarding (incl. Pageant and Windows native OpenSSH Agent)
-- Login scripts
-- SFTP file transfer via Zmodem
-- RSA-SHA2 / ECDSA key authentication with passphrase support
-- HTTP / SOCKS proxy support
-- Batch input — send commands to multiple SSH sessions simultaneously
-- Enhanced SFTP panel with improved file management UI
+- Rust-based SSH engine (`russh`) with a grouped, card-style **host manager** and three-tab profile editor (General / Advanced / Security).
+- **Port forwarding**: local, remote, and dynamic (SOCKS5) — configured per profile and started automatically on connect and reconnect.
+- **Reachability toolkit**: jump host (multi-level), `ProxyCommand` with `%h`/`%p`/`%r` expansion, HTTP CONNECT and SOCKS5 proxies.
+- **Trusted host keys**: host fingerprints are remembered after first confirmation; login scripts run automatically on connect.
+- X11 forwarding, SSH agent forwarding, keyboard-interactive authentication, and session reuse.
 
-### Start Page & Host Manager
+### SFTP Browser
 
-- Redesigned start page with quick-connect shortcuts
-- Enhanced host management interface with card-based layout
-- Improved profile settings tab with streamlined configuration flow
+- Built-in SFTP panel with browse, upload, download, rename, delete, and directory navigation — no extra client needed.
 
-| Settings overview | SSH profile |
-|---|---|
-| ![iSSH settings overview](docs/user-manual/assets/02-settings.png) | ![SSH profile editor](docs/user-manual/assets/07-ssh-profile.png) |
+### Credential Vault & Auto-Sudo
 
-### AI Assistant (issh-llm)
+- All secrets — passwords, private-key passphrases, and **sudo passwords** — are stored in a locally encrypted vault (**AES-256-GCM**, key derived via PBKDF2-SHA512 with 310,000 iterations) protected by a master passphrase, with automatic lock.
+- Secrets match exactly by `host + user + port`, never leaking across servers.
+- **Auto-Sudo**: when a `sudo` password prompt appears, fill it with one click — the vault is unlocked temporarily for that single read, then locked again immediately; pending passwords expire after 10 seconds.
 
-LLM-powered command autocomplete, next-command prediction, and local CLI/MCP agent bridge, built directly into the terminal.
+### Plugin Marketplace
 
-#### Features
+- One-click install and update from a **signed marketplace** (ed25519 signatures + SHA-256 verification, permission declarations, dependency checks).
+- Built-in plugins: **AI Command Completion** (LLM autocomplete), **Agent Bridge** (workspace/agent management), **Config Sync** (JSON export/import + GitHub Gist), **Linkifier** (URL/IP/path detection), **Serial Terminal** (Web Serial), and **Herdr Workspace**.
+- Automatic CDN fallback keeps the marketplace reachable even when the primary registry is slow or blocked.
 
-- **Smart Autocomplete**: As you type, suggests commands from local history, login scripts, cached AI predictions, and live AI completions. Local matches appear immediately; live AI is debounced and silently falls back on timeout.
-- **Next-command Prediction**: After you submit a command, the assistant prefetches likely follow-up commands using the previous command and terminal context, then ranks them together with history as you start typing.
-- **Dangerous Command Guard**: Automatically detects potentially destructive commands (`rm -rf`, `dd`, `mkfs`, `chmod 777`, `curl | sh`, etc.) and shows a warning dialog before execution.
-- **Sensitive Data Redaction**: API keys, tokens, passwords, and private keys in terminal output are redacted locally before being sent to the LLM.
-- **Command History**: Loads local shell history and SSH history, keeps recent in-tab commands, and limits history candidates so the autocomplete panel stays readable.
-- **Suggestion Cache**: Autocomplete results cached for 5 minutes to reduce API calls.
-- **CLI / MCP Agent Bridge**: Optional localhost bridge for Codex, Cursor, Claude Desktop, and other agents, protected by token scopes and audit logs.
+## AI & Agent Integration
 
-#### Configuration
+- **Command completion**: as you type, an OpenAI-compatible LLM (OpenAI, Azure OpenAI, Ollama, DeepSeek, and others) suggests the next command; accept with `Ctrl+Y`, debounced to avoid interrupting your flow.
+- **Agent bridge**: expose your terminal workspace to AI coding agents (Codex, Cursor, Claude Desktop) over a token-protected localhost RPC/MCP channel. Session access, command execution, and file operations are scoped and audit-logged.
 
-Open **Settings → Command autocomplete** to configure:
+## Architecture
 
-| Setting | Default | Description |
-|---|---|---|
-| Enable AI features | Off | Master toggle for all AI functionality |
-| API base URL | `https://api.openai.com/v1` | Any OpenAI-compatible endpoint |
-| API key | — | Stored locally in `config.yaml` |
-| Model | `gpt-4o-mini` | Model name for chat completions |
-| Autocomplete model | empty | Optional fast model for autocomplete; falls back to Model |
-| Disable thinking for autocomplete | On | Sends provider-specific low/no-reasoning hints when supported |
-| Autocomplete timeout (ms) | `3000` | Falls back to local/cached candidates after continuous inactivity |
-| Autocomplete debounce (ms) | `600` | Delay before triggering live AI autocomplete while typing |
-| History candidate limit | `10` | Maximum history suggestions shown before AI/script candidates |
-| Editor autocomplete | Off | Opt-in AI text completion inside vim/nano alternate screen |
-| Autocomplete while typing | On | Auto-trigger suggestions as you type |
-| Send terminal context to API | On | Send recent terminal output for better context (sensitive patterns redacted) |
-| Max context lines | `20` | Number of recent terminal lines included in AI requests |
-| Execute on confirm | Off | Auto-run accepted autocomplete suggestions without pressing Enter |
-| Panel offset X / Y | `32` / `52` | Moves the autocomplete panel away from the cursor |
-| Panel opacity | `20%` | Lower values are more transparent; 100% disables the glass effect |
+```
+┌──────────────────────────────┐     JSON-RPC      ┌───────────────────────────┐
+│  issh UI (Tauri 2 + Svelte 5 │◄──────────────────►│  isshd (Rust runtime)     │
+│  + xterm.js)                 │  local IPC         │  PTY · SSH · SFTP · Vault │
+└──────────────────────────────┘                    └───────────────────────────┘
+```
 
-Click **Test connection** after entering your API key to verify connectivity.
+- **Frontend**: Tauri 2 + Svelte 5 + xterm.js 5, no Node.js runtime in the shipped app.
+- **Runtime**: `isshd`, a dedicated Rust daemon handling all terminal, SSH, SFTP, vault, and workspace logic.
+- **Extensibility**: sandboxed plugins communicate through a capability-based permission system; every marketplace plugin is shipped with an ed25519 signature.
 
-#### Compatible API Providers
+## Security
 
-Any provider that implements the OpenAI Chat Completions API (`/chat/completions`):
+- Credentials are encrypted at rest (**AES-256-GCM** / PBKDF2-SHA512) and never leave your machine.
+- Plugin packages are **signed and hash-verified** before installation; permissions are declared and reviewed per plugin.
+- Agent-bridge RPC is localhost-only, token-protected, scoped, and audit-logged.
+- The UI enforces a strict CSP; remote content is only loaded inside sandboxed plugin panels.
 
-- **OpenAI** — `https://api.openai.com/v1`
-- **Azure OpenAI** — `https://<resource>.openai.azure.com/openai/deployments/<deployment>/v1`
-- **Ollama** — `http://localhost:11434/v1`
-- **LM Studio** — `http://localhost:1234/v1`
-- **DeepSeek** — `https://api.deepseek.com/v1`
-- **Moonshot (Kimi)** — `https://api.moonshot.cn/v1`
+## Downloads
 
-#### Hotkeys
-
-| Hotkey | Action |
-|---|---|
-| `Ctrl+Shift+Space` | Trigger autocomplete manually |
-| `Ctrl+Y` | Accept selected suggestion |
-| `Ctrl+N` | Next suggestion |
-| `Ctrl+U` | Previous suggestion |
-| `Esc` | Dismiss autocomplete panel |
-
-All hotkeys are customizable in **Settings → Hotkeys**.
-
-![Command autocomplete settings](docs/user-manual/assets/04-autocomplete.png)
-
-#### How It Works
-
-1. **Autocomplete**: The plugin reads the current partial command from the xterm.js buffer, collects terminal context (OS, shell, working directory, recent output), and merges history, login-script, cached prediction, and live AI candidates with deduplication and ranking.
-2. **Next-command prediction**: The first command in a shell session does not trigger live AI autocomplete. Once a command is submitted, AI prefetches likely follow-up commands from the previous command and current context, then reuses that cache while you type.
-3. **Privacy**: When "Send terminal context to API" is enabled, recent terminal output is included to improve suggestion quality. Sensitive patterns (API keys, tokens, passwords, private keys) are redacted locally before sending. Disable this option to send only command fragments without recent output.
-4. **Agent Bridge**: The optional CLI/MCP bridge exposes local issh sessions to external agents over localhost using token scopes, SFTP limits, dangerous-command confirmation, and audit logging.
-
-![CLI / MCP Agent settings](docs/user-manual/assets/03-agent-bridge.png)
-
-### Security Hardening and Chromium Risk
-
-As of 2026-08-02, the current release uses Electron `43.2.0` with Chromium `150.0.7871.129`. No stable Electron release currently ships Chromium `150.0.7871.219`, so this fork uses compensating controls; these controls do not claim to remove Chromium CVEs.
-
-- The main window has a local-page CSP that permits packaged resources plus HTTPS/WSS and HTTP connections required by configurable LLM endpoints, while denying object loading and framing.
-- Privileged configuration, plugin, PTY, window-control, and new-window IPC accepts only senders from the app-owned local renderer.
-- Windows packaging enables ASAR integrity validation and `onlyLoadAppFromAsar`; the `runAsNode`, `NODE_OPTIONS`, and CLI-inspect Fuses remain disabled.
-- GPU acceleration remains an operational toggle at **Settings → Window → Hacks → Disable GPU acceleration** rather than a forced default, avoiding an unnecessary performance trade-off.
-- Load only trusted local plugins and never load remote pages in the privileged Electron window. Do not use an Electron alpha/nightly build as the production upgrade path.
-
-The current architecture still uses `nodeIntegration: true` and `contextIsolation: false`. A full sandbox/contextBridge migration is follow-up architecture work, not a small Chromium hotfix. Monitor the [Electron security guidance](https://www.electronjs.org/docs/latest/tutorial/security) and [stable release list](https://releases.electronjs.org/release/); once an official stable release carries the relevant fixes, upgrade it and run the full build, regression, and packaging gates.
-
-See [Chromium compensating-hardening record](./SECURITY_REMEDIATION_2026-08-02.md) for the implementation scope and verification record.
-
-## Portable
-
-issh will run as a portable app on Windows if you create a `data` folder in the same location where `issh.exe` lives.
+- **Windows x64**: `issh-<version>-x64-setup.exe` NSIS installer (~5 MB, current-user install). WebView2 is installed on demand when missing.
+- The core Rust runtime and frontend are cross-platform; Linux and macOS builds can be produced from source (see below).
 
 ## Building from Source
 
 ### Prerequisites
 
 - Node.js 18+
-- Yarn 1.x
-- Python 3 (for native module builds)
-- Visual Studio Build Tools (for native module compilation)
+- Rust stable toolchain
+- Windows: MSVC build tools (for the Rust runtime) and WebView2
 
 ### Build Steps
 
 ```bash
-# Install dependencies
-yarn
+# 1. Build the Rust runtime
+cd issh-runtime
+cargo build --release -p isshd
 
-# Smoke test: TypeScript type-checks
-npx tsc -p issh-core/tsconfig.json --noEmit
-npx tsc -p issh-settings/tsconfig.json --noEmit
-npx tsc -p issh-terminal/tsconfig.json --noEmit
-npx tsc -p issh-ssh/tsconfig.json --noEmit
-npx tsc -p issh-local/tsconfig.json --noEmit
-npx tsc -p issh-electron/tsconfig.json --noEmit
-npx tsc -p issh-linkifier/tsconfig.json --noEmit
-npx tsc -p issh-auto-sudo-password/tsconfig.json --noEmit
-npx tsc -p issh-community-color-schemes/tsconfig.json --noEmit
+# 2. Frontend & staging
+cd ../issh-tauri
+npm install
+npm run stage:runtime        # copies isshd into src-tauri/bin
 
-# Smoke test: Webpack build
-yarn run build
+# 3. Development
+npm run tauri -- dev
 
-# Build Windows installer
-node scripts/build-windows.mjs
-
-# Build Linux AppImage and tar.gz packages (on Linux)
-node scripts/build-linux.mjs
+# 4. Windows installer (NSIS)
+npm run tauri -- build
 ```
-
-If `prepackage-plugins.mjs` fails due to native module rebuild issues, use the skip flag:
-
-```bash
-set ISSH_SKIP_PREPACKAGE=1&&node scripts/build-windows.mjs
-```
-
-## Changes from Upstream Tabby
-
-- **Batch input**: Send commands to multiple SSH sessions at once
-- **Enhanced SFTP panel**: Improved file management UI with better visual feedback
-- **Terminal toolbar**: Quick-action toolbar for common terminal operations
-- **Redesigned start page**: Quick-connect shortcuts with improved layout
-- **Enhanced host manager**: Card-based host management with streamlined profile configuration
-- **Private key fix**: Resolved RSA-SHA2 private key authentication failures
-- **AI Assistant (issh-llm)**: LLM-powered command autocomplete, next-command prediction, CLI/MCP Agent Bridge, dangerous command detection, and sensitive data redaction
 
 ## Acknowledgements
 
-Based on [Tabby](https://github.com/Eugeny/tabby) by Eugeny. Thanks to all upstream contributors.
+issh started as a fork of [Tabby](https://github.com/Eugeny/tabby) by [Eugeny](https://github.com/Eugeny). The desktop client has since been rebuilt on Tauri + Rust with a new runtime, plugin system, and marketplace. Thanks to all upstream contributors.
 
 ---
 

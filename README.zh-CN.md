@@ -1,206 +1,114 @@
-![iSSH 0.1.1 主机管理器](docs/readme.png)
+![issh 主机管理器](docs/readme.png)
 
----
+# issh — 轻量、安全、AI 原生的 SSH 终端
 
-基于 [Tabby](https://tabby.sh)（前身 **Terminus**）的定制分支，专注于 Windows 和 Linux 下的 SSH 与终端工作流。
+**issh** 是基于 **Tauri 2 + Rust** 构建的新一代 SSH 终端。它将原生性能的终端内核、企业级 SSH 工具链、本地加密凭据保险库与 AI 辅助工作流整合进一个 **约 5 MB** 的安装包——体积远小于基于 Electron 的同类终端。
 
-当前应用版本为 **0.1.1**，针对 Windows 下的日常终端、SSH 主机管理、命令补全与外部 Agent 工作流进行了增强。
+## 为什么选择 issh
 
-> 完整安装、SSH、SFTP、配置同步、保险库、命令补全和 CLI / MCP 操作说明见[中文用户手册](./docs/user-manual/iSSH-使用手册.md)。下列截图均来自 0.1.1 当前构建。
-
-## 下载
-
-带版本标签的 GitHub Release 会同时提供 x64 和 ARM64 未签名安装包：
-
-- Windows：`issh-<version>-setup-<arch>.exe` NSIS 安装程序。
-- Linux：`issh-<version>-linux-<arch>.AppImage` 和 `.tar.gz` 通用包。
-
-AppImage 首次使用前执行 `chmod +x issh-*.AppImage`，之后即可直接运行；tar.gz 可解压到任意目录并运行其中的 `issh`。每个安装包都附带 `.sha256` 校验文件。开发构建也可从对应的 GitHub Actions 运行页面下载 Artifact。
+- **极致轻量** —— 约 5 MB 的 NSIS 安装包与极低的运行时占用，采用 Rust 引擎替代内置的 Chromium 浏览器。启动快、内存省，适合常驻的终端工作流。
+- **原生性能** —— 本地 PTY、SSH、SFTP 与加密保险库全部运行在 `isshd` 这个专用 Rust 运行时中，数据链路无 Node.js 中间层，高负载下击键、流式传输与文件操作依然流畅。
+- **安全优先** —— 凭据仅保存在本机，使用 **AES-256-GCM** 加密（PBKDF2-SHA512 派生密钥），绝不上传云端。商城插件安装前需通过 ed25519 签名与 SHA-256 摘要校验。
+- **企业级 SSH** —— 本地 / 远程 / 动态（SOCKS5）端口转发、跳板机、ProxyCommand、HTTP/SOCKS 代理、X11 转发、Agent 转发、键盘交互认证，均可按主机配置独立管理。
+- **AI 原生** —— LLM 驱动的命令补全，以及可将终端工作区暴露给 Codex、Cursor、Claude Desktop 等 AI 智能体的 Agent Bridge（token 保护的 localhost 通道）。
+- **开放的插件生态** —— 带签名校验、权限声明、依赖管理的一键安装/更新插件商城，让产品随你的工作流持续生长。
 
 ## 功能特性
 
-### 终端
+### 终端体验
 
-- VT220 终端，支持多个嵌套拆分窗格
-- 标签页可放置在窗口任意一侧
-- 可选的可停靠窗口，支持全局热键（"Quake console"）
-- 进度检测和进程完成通知
-- 带括号的粘贴，多行粘贴提示
-- 连体字和自定义 shell 配置
-- 完整的 Unicode 支持，包括双角字符
-- 支持 PowerShell（及 PS Core）、WSL、Git-Bash、Cygwin、MSYS2、Cmder 和 CMD
-- 终端工具栏，提供快捷操作
+- 多标签工作区，支持**递归分屏**：窗格任意嵌套、拖动分隔条调整比例、任意窗格最大化/还原，整个布局跨重启持久化。
+- **会话恢复**：已信任主机重启后自动重连；本地 Shell 以相同的 shell、工作目录与尺寸自动重建。
+- 原生系统剪贴板，支持**选区自动复制**与右键粘贴。
+- 一键**导出终端内容**到本地文件；将文件路径拖入终端即可注入。
+- 本地 Shell 可选：`cmd`、Windows PowerShell、PowerShell 7、WSL、Git Bash（Unix 类系统支持 `bash`/`zsh`/`fish`）。
+- 首页、工具栏快捷操作、标签页右键菜单，以及基于 xterm.js 的完整 Unicode 渲染。
 
 ### SSH 客户端
 
-- 带有连接管理器的 SSH2 客户端
-- X11 和端口转发（本地/远程/动态 SOCKS）
-- 跳板机 / 堡垒机支持
-- 代理转发（包括 Pageant 和 Windows 原生 OpenSSH 代理）
-- 登录脚本
-- 通过 Zmodem 进行 SFTP 文件传输
-- RSA-SHA2 / ECDSA 私钥认证，支持口令
-- HTTP / SOCKS 代理支持
-- **批量输入** — 同时向多个 SSH 会话发送命令
-- **增强 SFTP 面板** — 改进的文件管理界面
+- 基于 Rust（`russh`）的 SSH 引擎，配以分组卡片式**主机管理器**与三标签主机编辑器（通用 / 高级 / 安全）。
+- **端口转发**：本地、远程、动态（SOCKS5），按主机配置持久化，连接与重连时自动启动。
+- **可达性工具**：跳板机（多级）、支持 `%h`/`%p`/`%r` 展开的 `ProxyCommand`、HTTP CONNECT 与 SOCKS5 代理。
+- **可信主机密钥**：首次确认后记住主机指纹；登录脚本在连接后自动执行。
+- X11 转发、SSH Agent 转发、键盘交互认证与会话复用。
 
-### 启动页与主机管理
+### SFTP 浏览器
 
-- 重新设计的启动页，提供快速连接快捷方式
-- 增强的主机管理界面，采用卡片式布局
-- 改进的配置文件设置页，简化配置流程
+- 内置 SFTP 面板，支持浏览、上传、下载、重命名、删除与目录导航，无需额外客户端。
 
-| 设置总览 | SSH Profile |
-|---|---|
-| ![iSSH 设置总览](docs/user-manual/assets/02-settings.png) | ![SSH Profile 编辑](docs/user-manual/assets/07-ssh-profile.png) |
+### 凭据保险库与 sudo 自动填充
 
-### AI 助手（issh-llm）
+- 密码、私钥口令、**sudo 密码**等全部凭据保存在本地加密保险库（**AES-256-GCM**，PBKDF2-SHA512 派生密钥、31 万次迭代）中，由主口令保护并自动锁定。
+- 凭据按 `主机 + 用户 + 端口` 精确匹配，绝不在不同服务器间串用。
+- **sudo 自动填充**：出现 `sudo` 密码提示时一键填充——保险库仅为该次读取临时解锁，填充后立即重新锁定；待填充密码 10 秒后自动失效。
 
-基于大语言模型的命令自动补全、下一条命令预测和本地 CLI/MCP Agent Bridge，直接内嵌于终端。
+### 插件商城
 
-#### 功能
+- 从**签名商城**一键安装与更新（ed25519 签名 + SHA-256 校验、权限声明、依赖检查）。
+- 内置插件：**AI 命令补全**（LLM 补全）、**Agent 桥接**（工作区 / 智能体管理）、**配置同步**（JSON 导出导入 + GitHub Gist）、**链接识别**（URL/IP/路径识别）、**串口终端**（Web Serial）、**Herdr 工作区**。
+- 自动 CDN 回退，主源缓慢或被阻断时商城依然可达。
 
-- **智能补全**：输入时从本地历史、登录脚本、AI 预取预测和 live AI 补全中获取候选。本地候选即时显示；live AI 经过防抖并在超时后静默回退。
-- **下一条命令预测**：提交命令后，助手会基于上一条命令和终端上下文预取可能的后续命令，并在你开始输入时与历史候选一起排序展示。
-- **危险命令检测**：自动识别潜在破坏性命令（`rm -rf`、`dd`、`mkfs`、`chmod 777`、`curl | sh` 等），执行前弹出警告对话框。
-- **敏感信息脱敏**：终端输出中的 API 密钥、令牌、密码和私钥在发送给 LLM 前就地脱敏。
-- **命令历史**：读取本地 shell 历史和 SSH 历史，记录当前 tab 最近命令，并限制历史候选数量，避免补全面板过载。
-- **建议缓存**：补全结果缓存 5 分钟，减少 API 调用。
-- **CLI / MCP Agent Bridge**：可选的 localhost agent bridge，可供 Codex、Cursor、Claude Desktop 等外部 agent 访问 issh 会话，并通过 token scope 和审计日志保护。
+## AI 与智能体集成
 
-#### 配置
+- **命令补全**：输入时由 OpenAI 兼容的大模型（OpenAI、Azure OpenAI、Ollama、DeepSeek 等）预测下一条命令，`Ctrl+Y` 接受，防抖设计不打断输入节奏。
+- **Agent Bridge**：通过 token 保护的 localhost RPC/MCP 通道，将终端工作区暴露给 Codex、Cursor、Claude Desktop 等 AI 编码智能体；会话访问、命令执行与文件操作均受作用域限制与审计日志保护。
 
-打开 **设置 → 命令补全** 进行配置：
+## 架构
 
-| 设置项 | 默认值 | 说明 |
-|---|---|---|
-| 启用 AI 功能 | 关 | 所有 AI 功能的总开关 |
-| API base URL | `https://api.openai.com/v1` | 任何 OpenAI 兼容端点 |
-| API key | — | 本地存储于 `config.yaml` |
-| 模型 | `gpt-4o-mini` | 聊天补全模型名称 |
-| 补全专用模型 | 空 | 可选快速补全模型；留空时使用主模型 |
-| 补全时关闭思考 | 开 | 对支持的模型发送关闭/最低思考参数 |
-| AI 补全超时（ms） | `3000` | 连续无响应超时后继续使用本地历史/缓存候选 |
-| 补全防抖（ms） | `600` | 输入时触发 live AI 补全的延迟 |
-| 历史候选上限 | `10` | 历史候选最大展示数量 |
-| 编辑器内 AI 补全 | 关 | 在 vim/nano alternate screen 内启用 AI 文本补全 |
-| 输入时自动补全 | 开 | 输入时自动触发建议 |
-| 发送终端上下文到 API | 开 | 发送最近终端输出以提供更好上下文（敏感模式就地脱敏） |
-| 最大上下文行数 | `20` | AI 请求中包含的最近终端行数 |
-| 确认时执行 | 关 | 接受补全候选后立即回车执行 |
-| 面板水平/垂直偏移 | `32` / `52` | 让补全面板远离光标，减少遮挡 |
-| 面板不透明度 | `20%` | 数值越低越通透；100% 关闭毛玻璃效果 |
+```
+┌──────────────────────────────┐    JSON-RPC     ┌───────────────────────────┐
+│  issh 界面（Tauri 2 + Svelte │◄────────────────►│  isshd（Rust 运行时）      │
+│  5 + xterm.js）              │   本地 IPC       │  PTY · SSH · SFTP · 保险库 │
+└──────────────────────────────┘                  └───────────────────────────┘
+```
 
-输入 API key 后点击 **Test connection** 验证连接。
+- **前端**：Tauri 2 + Svelte 5 + xterm.js 5，发布产物不包含 Node.js 运行时。
+- **运行时**：`isshd`，一个专用 Rust 守护进程，承载全部终端、SSH、SFTP、保险库与工作区逻辑。
+- **可扩展性**：沙箱化插件通过基于能力（capability）的权限系统通信；商城中的每个插件均附带 ed25519 签名。
 
-#### 兼容的 API 提供商
+## 安全设计
 
-任何实现了 OpenAI Chat Completions API（`/chat/completions`）的服务商：
+- 凭据静态加密（**AES-256-GCM** / PBKDF2-SHA512），永不出本机。
+- 插件安装前**签名与哈希双重校验**；每个插件的权限均声明并可审阅。
+- Agent Bridge RPC 仅监听 localhost，受 token 保护、作用域限制与审计日志约束。
+- 界面强制 CSP；远程内容仅在沙箱化的插件面板内加载。
 
-- **OpenAI** — `https://api.openai.com/v1`
-- **Azure OpenAI** — `https://<resource>.openai.azure.com/openai/deployments/<deployment>/v1`
-- **Ollama** — `http://localhost:11434/v1`
-- **LM Studio** — `http://localhost:1234/v1`
-- **DeepSeek** — `https://api.deepseek.com/v1`
-- **Moonshot（Kimi）** — `https://api.moonshot.cn/v1`
+## 下载
 
-#### 快捷键
-
-| 快捷键 | 功能 |
-|---|---|
-| `Ctrl+Shift+Space` | 手动触发补全 |
-| `Ctrl+Y` | 接受选中建议 |
-| `Ctrl+N` | 下一条建议 |
-| `Ctrl+U` | 上一条建议 |
-| `Esc` | 关闭补全面板 |
-
-所有快捷键均可在 **设置 → 快捷键** 中自定义。
-
-![命令补全设置](docs/user-manual/assets/04-autocomplete.png)
-
-#### 工作原理
-
-1. **命令补全**：插件从 xterm.js 缓冲区读取当前部分命令，收集终端上下文（操作系统、shell、工作目录、最近输出），并将历史、登录脚本、AI 预取和 live AI 候选去重排序后展示。
-2. **下一条命令预测**：每个 shell 会话的第一条命令不触发 live AI 补全。提交命令后，AI 会基于上一条命令和当前上下文预取可能的后续命令，并在你开始输入时优先复用缓存。
-3. **隐私**：启用「发送终端上下文到 API」时，最近终端输出会被包含以提升建议质量。敏感模式（API 密钥、令牌、密码、私钥）在发送前就地脱敏。禁用此选项则仅发送命令片段，不附带最近输出。
-4. **Agent Bridge**：可选 CLI/MCP bridge 通过 localhost 暴露 issh 会话给外部 agent，使用 token scope、SFTP 限制、危险命令确认和审计日志保护。
-
-![CLI / MCP 智能体设置](docs/user-manual/assets/03-agent-bridge.png)
-
-### 安全加固与 Chromium 风险说明
-
-截至 2026-08-02，当前发行版使用 Electron `43.2.0`，内置 Chromium `150.0.7871.129`。官方稳定版尚未提供 Chromium `150.0.7871.219` 对应的 Electron，因此本项目采用补偿性加固；这些措施不能宣称已经移除 Chromium CVE。
-
-- 主窗口 CSP 仅允许本地脚本和打包资源；网络连接支持 HTTPS/WSS，以及自定义 LLM API 所需的 HTTP 连接；禁止对象加载和页面嵌入。
-- 配置、插件安装/卸载、PTY、窗口控制和新窗口等特权 IPC 只接受应用自有的本地渲染器发送者。
-- Windows 打包启用 ASAR 完整性验证和 `onlyLoadAppFromAsar`；`runAsNode`、`NODE_OPTIONS` 和 CLI 调试参数 Fuse 保持禁用。
-- GPU 加速保留为 **设置 → 窗口 → Hacks → Disable GPU acceleration** 运行时开关，不默认关闭，以避免无必要的性能损失。
-- 仅加载受信任的本地插件，不要让 Electron 主窗口加载远程页面；Electron alpha/nightly 不作为生产版本升级方案。
-
-当前架构仍使用 `nodeIntegration: true` 和 `contextIsolation: false`。完整迁移到 sandbox/contextBridge 属于后续架构工作，不是本次 Chromium 风险的简单热修复。请持续关注 [Electron 安全指南](https://www.electronjs.org/docs/latest/tutorial/security) 和[稳定版本列表](https://releases.electronjs.org/release/)，在官方稳定版本提供修复后再升级并执行完整构建、回归和打包验证。
-
-详细的实施范围和验证记录见 [Chromium 风险补偿性加固记录](./SECURITY_REMEDIATION_2026-08-02.md)。
-
-## 便携式应用
-
-如果在 `issh.exe` 所在的目录创建一个名为 `data` 的文件夹，issh 将可以在 Windows 上作为便携式应用程序运行。
+- **Windows x64**：`issh-<version>-x64-setup.exe` NSIS 安装程序（约 5 MB，当前用户安装）。缺少 WebView2 时按需静默安装。
+- Rust 运行时与前端均为跨平台设计，Linux 与 macOS 版本可从源码构建（见下）。
 
 ## 从源码构建
 
 ### 前置条件
 
 - Node.js 18+
-- Yarn 1.x
-- Python 3（用于原生模块编译）
-- Visual Studio Build Tools（用于原生模块编译）
+- Rust stable 工具链
+- Windows：MSVC 构建工具（用于 Rust 运行时）与 WebView2
 
 ### 构建步骤
 
 ```bash
-# 安装依赖
-yarn
+# 1. 构建 Rust 运行时
+cd issh-runtime
+cargo build --release -p isshd
 
-# 冒烟测试：TypeScript 类型检查
-npx tsc -p issh-core/tsconfig.json --noEmit
-npx tsc -p issh-settings/tsconfig.json --noEmit
-npx tsc -p issh-terminal/tsconfig.json --noEmit
-npx tsc -p issh-ssh/tsconfig.json --noEmit
-npx tsc -p issh-local/tsconfig.json --noEmit
-npx tsc -p issh-electron/tsconfig.json --noEmit
-npx tsc -p issh-linkifier/tsconfig.json --noEmit
-npx tsc -p issh-auto-sudo-password/tsconfig.json --noEmit
-npx tsc -p issh-community-color-schemes/tsconfig.json --noEmit
+# 2. 前端与产物暂存
+cd ../issh-tauri
+npm install
+npm run stage:runtime        # 将 isshd 拷贝到 src-tauri/bin
 
-# 冒烟测试：Webpack 构建
-yarn run build
+# 3. 开发模式
+npm run tauri -- dev
 
-# 构建 Windows 安装包
-node scripts/build-windows.mjs
-
-# 在 Linux 上构建 AppImage 和 tar.gz 通用包
-node scripts/build-linux.mjs
+# 4. Windows 安装包（NSIS）
+npm run tauri -- build
 ```
-
-如果 `prepackage-plugins.mjs` 因原生模块重建失败，可使用跳过标志：
-
-```bash
-set ISSH_SKIP_PREPACKAGE=1&&node scripts/build-windows.mjs
-```
-
-## 相对于上游 Tabby 的变更
-
-- **批量输入**：同时向多个 SSH 会话发送命令
-- **增强 SFTP 面板**：改进的文件管理界面，更好的视觉反馈
-- **终端工具栏**：常用终端操作的快捷工具栏
-- **重新设计的启动页**：快速连接快捷方式，改进的布局
-- **增强的主机管理器**：卡片式主机管理，简化的配置文件配置流程
-- **私钥修复**：解决 RSA-SHA2 私钥认证失败问题
-- **AI 助手（issh-llm）**：基于 LLM 的命令补全、下一条命令预测、CLI/MCP Agent Bridge、危险命令检测和敏感信息脱敏
 
 ## 致谢
 
-基于 [Eugeny](https://github.com/Eugeny) 开发的 [Tabby](https://github.com/Eugeny/tabby)。感谢所有上游贡献者。
+issh 起源于 [Eugeny](https://github.com/Eugeny) 开发的 [Tabby](https://github.com/Eugeny/tabby)。桌面客户端现已基于 Tauri + Rust 重建，并引入了全新的运行时、插件系统与商城。感谢所有上游贡献者。
 
 ---
 
-本 README 还适用于以下语言：[English](./README.md)
+本 README 亦提供：[English](./README.md)
