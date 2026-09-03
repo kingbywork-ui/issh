@@ -17,8 +17,7 @@
     import { terminalColorSchemes } from './terminalSchemes'
     import AutoSudoSettings from './AutoSudoSettings.svelte'
     import VaultSettings from './VaultSettings.svelte'
-    import { lockHostProfiles } from './runtime'
-    import { checkUpdate, getBuildInfo, type UpdateCheckResult, type BuildInfo } from './runtime'
+    import { lockHostProfiles, runtimeHealth, checkUpdate, getBuildInfo, type UpdateCheckResult, type BuildInfo } from './runtime'
 
     let { onclose }: { onclose: () => void } = $props()
 
@@ -391,7 +390,7 @@
 
     async function loadAbout (): Promise<void> {
         try {
-            const health = await invoke<{ runtimeVersion: string }>('runtime_health')
+            const health = await runtimeHealth()
             runtimeVersion = health.runtimeVersion
         } catch { runtimeVersion = '' }
         try {
