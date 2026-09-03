@@ -1,11 +1,20 @@
-import { invoke } from '@tauri-apps/api/core'
 import { normalizeCommand } from './commandValidation'
 import { shouldStoreCommand } from './sensitiveInput'
 import { stripPrompt } from './terminalContext'
+import type { LlmGateway } from './types'
 
 // 移植自 issh 分支 historyCommand.service.ts（去 Angular 依赖）
-// dev 端差异：本地文件经宿主 read_local_text_file 读取；远程经 ssh.execReadonly；
+// dev 端差异：本地历史文件经网关 fs.readLocalText（路径白名单）；远程经网关 ssh.execReadonly；
 // 持久化用 localStorage（Tauri webview 无 Node fs，宿主无 config.yaml 直写通道）。
+
+let gateway: LlmGateway | null = null
+
+export function setGateway (value: LlmGateway): void { gateway = value }
+
+function requireGateway (): LlmGateway {
+    if (!gateway) throw new Error('LLM 插件网关尚未初始化')
+    return gateway
+}
 
 export interface HistoryEntry {
     command: string
@@ -265,7 +274,7 @@ async function readLocalShellHistoryFiles (): Promise<string[]> {
     }
     const results = await Promise.all(candidates.map(async (path) => {
         try {
-            const content = await invoke<unknown>('read_local_text_file', { path, maxBytes: null })
+            const content = await requireGateway().fs.readLocalText(path)
             return parseHistoryFile(path, typeof content === 'string' ? content : '')
         } catch {
             return [] as string[]
@@ -315,29 +324,10 @@ interface UserPaths {
 
 async function getUserPaths (): Promise<UserPaths> {
     try {
-        return await invoke<UserPaths>('user_paths')
+        return await requireGateway().fs.userPaths()
     } catch {
         return { home: null, appData: null }
     }
-}
-
-let rpcId = 0
-
-/** 插件内嵌 JSON-RPC 包装（对齐宿主 runtimeRequest，插件独立构建不能 import 宿主模块） */
-async function runtimeRequest<T> (method: string, params?: unknown): Promise<T> {
-    rpcId += 1
-    const response = await invoke<{ result?: T, error?: { message: string } }>('runtime_request', {
-        request: {
-            jsonrpc: '2.0',
-            id: `llm-plugin-${rpcId}`,
-            method,
-            ...(params === undefined ? {} : { params }),
-        },
-    })
-    if (response.error || response.result === undefined) {
-        throw new Error(response.error?.message ?? `${method} 未返回结果`)
-    }
-    return response.result
 }
 
 /** 远程历史获取命令序列（对齐 issh 分支：history → fc → bash_history/zsh_history 回退） */
@@ -349,11 +339,11 @@ function remoteHistoryCommandSequence (): string[] {
     ]
 }
 
-/** 经宿主 runtime_request JSON-RPC 执行远程只读命令（isshd ssh.execReadonly） */
+/** 经网关 ssh.execReadonly 执行远程只读命令（isshd 端无 PTY、带超时、输出上限） */
 async function fetchRemoteHistoryCommands (sessionId: string): Promise<string[]> {
     for (const command of remoteHistoryCommandSequence()) {
         try {
-            const result = await runtimeRequest<{ output: string }>('ssh.execReadonly', {
+            const result = await requireGateway().request<{ output: string }>('ssh.execReadonly', {
                 sessionId,
                 command,
                 timeoutMs: REMOTE_TIMEOUT_MS,

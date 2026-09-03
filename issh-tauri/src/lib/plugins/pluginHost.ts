@@ -138,7 +138,16 @@ function makePluginContext (manifest: IsshPluginManifest, directory: string): Is
         registerSettingsTab: (tab) => register(settingsTabs, `${manifest.id}:${tab.id}`, tab),
         registerHomeCard: (card) => register(homeCards, `${manifest.id}:${card.id}`, card),
         registerPanel: (panel) => register(panels, `${manifest.id}:${panel.id}`, panel),
-        registerSandboxPanel: (panel) => register(sandboxPanels, `${manifest.id}:${panel.id}`, { pluginId: manifest.id, definition: panel }),
+        registerSandboxPanel: (panel) => {
+            // 插件传相对文件名（如 sandbox.html），宿主用插件目录解析为 asset URL，
+            // 避免插件直接依赖 @tauri-apps/api（convertFileSrc）。
+            const isAbsolute = /^[a-z][a-z0-9+.-]*:\/\//i.test(panel.sandboxUrl) || panel.sandboxUrl.startsWith('//')
+            const url = isAbsolute
+                ? panel.sandboxUrl
+                : convertFileSrc(`${directory.replace(/\\/g, '/')}/${panel.sandboxUrl.replace(/^\/+/, '')}`)
+            const origin = panel.sandboxOrigin || new URL(url).origin
+            return register(sandboxPanels, `${manifest.id}:${panel.id}`, { pluginId: manifest.id, definition: { ...panel, sandboxUrl: url, sandboxOrigin: origin } })
+        },
         registerTerminalDecorator: (decorator) => register(terminalDecorators, `${manifest.id}:${decorator.id}`, decorator),
         audit: (event) => recordPluginAudit(manifest.id, event),
         confirm: async (message) => window.confirm(message),

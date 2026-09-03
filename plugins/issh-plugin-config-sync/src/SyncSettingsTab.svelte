@@ -1,11 +1,13 @@
 <script lang="ts">
     import { onMount } from 'svelte'
     import syncCss from './sync.css?inline'
-    import { applyPayload, buildPayload, hostProfiles, networkFetch, pluginStorage, previewPayload, validatePayload, type SyncDiffPreview, type SyncPayload } from './syncRpc'
+    import { applyPayload, buildPayload, hostProfiles, networkFetch, pluginStorage, previewPayload, unlockHostProfiles, validatePayload, type SyncDiffPreview, type SyncPayload } from './syncRpc'
 
     let profileCount = $state(0)
     let groupCount = $state(0)
     let encrypted = $state(false)
+    let vaultUnlocked = $state(false)
+    let vaultPassphrase = $state('')
     let busy = $state(false)
     let message = $state('')
     let importText = $state('')
@@ -32,6 +34,26 @@
             profileCount = result.profiles.length
             groupCount = result.groups.length
             encrypted = result.encrypted
+            vaultUnlocked = result.unlocked
+        } catch (cause) {
+            message = cause instanceof Error ? cause.message : String(cause)
+        } finally {
+            busy = false
+        }
+    }
+
+    /** 解锁保险库：解锁后 profiles.read 返回含明文凭据的完整配置。 */
+    async function unlockVault (): Promise<void> {
+        busy = true
+        message = ''
+        try {
+            const result = await unlockHostProfiles(vaultPassphrase)
+            vaultPassphrase = ''
+            encrypted = result.encrypted
+            vaultUnlocked = result.unlocked
+            profileCount = result.profiles.length
+            groupCount = result.groups.length
+            message = '保险库已解锁，导出/同步将包含明文凭据'
         } catch (cause) {
             message = cause instanceof Error ? cause.message : String(cause)
         } finally {
@@ -167,9 +189,15 @@
             <span>{profileCount} 个主机</span>
             <span>{groupCount} 个分组</span>
             {#if encrypted}
-                <span class="sync-encrypted">已加密（导出为明文 JSON，注意保管）</span>
+                <span class="sync-encrypted">{vaultUnlocked ? '保险库已解锁（导出/同步包含明文凭据，注意保管）' : '保险库已加密，未解锁时导出不含密码凭据'}</span>
             {/if}
         </div>
+        {#if encrypted && !vaultUnlocked}
+            <div class="sync-unlock">
+                <input type="password" bind:value={vaultPassphrase} placeholder="保险库主口令" aria-label="保险库主口令" autocomplete="off" />
+                <button class="market-install" type="button" disabled={busy || !vaultPassphrase} onclick={() => void unlockVault()}>解锁保险库</button>
+            </div>
+        {/if}
         <div class="sync-toolbar">
             <button class="market-install" type="button" disabled={busy} onclick={() => void exportConfig()}>导出 JSON</button>
             <button class="market-install" type="button" disabled={busy} onclick={() => void refresh()}>刷新</button>

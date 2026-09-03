@@ -49,9 +49,25 @@ export interface TerminalDecoratorDefinition {
     decorate (options: TerminalDecoratorOptions): void | Promise<void>
 }
 
+export interface LlmGateway {
+    request<T = unknown> (method: string, args?: Record<string, unknown>, options?: { requestId?: string }): Promise<T>
+    fs: {
+        userPaths (): Promise<{ home: string | null; appData: string | null }>
+        readLocalText (path: string): Promise<string | null>
+    }
+    http: {
+        postJson (url: string, options?: { headers?: Record<string, string>; body?: string }): Promise<{ status: number; ok: boolean; body: string }>
+    }
+    ui: {
+        registerSettingsTab (tab: SettingsTabDefinition): () => void
+        registerTerminalDecorator (decorator: TerminalDecoratorDefinition): () => void
+    }
+    log (level: 'info' | 'warn' | 'error', message: string): void
+}
+
 export interface IsshPluginContext {
     manifest: IsshPluginManifest
-    gateway: { ui: { registerSettingsTab (tab: SettingsTabDefinition): () => void; registerTerminalDecorator (decorator: TerminalDecoratorDefinition): () => void }; log (level: 'info' | 'warn' | 'error', message: string): void }
+    gateway: LlmGateway
     registerSettingsTab (tab: SettingsTabDefinition): void
     registerHomeCard (card: { id: string; title: string; order?: number; component: unknown }): void
     registerPanel (panel: { id: string; title: string; placement: 'left' | 'bottom'; component: unknown }): void

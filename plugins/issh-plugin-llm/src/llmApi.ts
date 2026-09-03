@@ -1,4 +1,14 @@
 import { SuggestionCache } from './suggestionCache'
+import type { LlmGateway } from './types'
+
+let gateway: LlmGateway | null = null
+
+export function setGateway (value: LlmGateway): void { gateway = value }
+
+function requireGateway (): LlmGateway {
+    if (!gateway) throw new Error('LLM 插件网关尚未初始化')
+    return gateway
+}
 
 export interface LlmConfig {
     baseUrl: string
@@ -150,8 +160,6 @@ async function requestSuggestions (
     config: LlmConfig,
     options: { system: string; user: (context: string) => string; contextLines: string[] },
 ): Promise<AutocompleteSuggestion[]> {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), config.timeoutMs)
     try {
         const context = config.sendContext ? redactLines(options.contextLines).slice(-config.maxContextLines).join('\n') : ''
         const model = config.autocompleteModel || config.model
@@ -175,17 +183,17 @@ async function requestSuggestions (
             body.enable_thinking = false
             body.reasoning_effort = 'low'
         }
-        const response = await fetch(`${config.baseUrl.replace(/\/$/, '')}/chat/completions`, {
-            method: 'POST',
+        // 经网关 http.postJson（受控请求：请求头白名单、大小/超时限制、可审计），
+        // 替代浏览器 fetch 直连，纳入插件权限体系。
+        const response = await withTimeout(requireGateway().http.postJson(`${config.baseUrl.replace(/\/$/, '')}/chat/completions`, {
             headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${config.apiKey}`,
             },
             body: JSON.stringify(body),
-            signal: controller.signal,
-        })
+        }), config.timeoutMs)
         if (!response.ok) return []
-        const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> }
+        const data = JSON.parse(response.body) as { choices?: Array<{ message?: { content?: string } }> }
         const content = stripThinkBlock(data.choices?.[0]?.message?.content ?? '')
         const match = content.match(/\[[\s\S]*\]/)
         if (!match) return []
@@ -195,7 +203,16 @@ async function requestSuggestions (
             : []
     } catch {
         return []
-    } finally {
-        clearTimeout(timer)
     }
+}
+
+/** 插件侧超时：http.postJson 网关超时较宽，保留 config.timeoutMs 的短超时语义。 */
+async function withTimeout<T> (promise: Promise<T>, ms: number): Promise<T> {
+    return await new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('timeout')), ms)
+        promise.then(
+            (value) => { clearTimeout(timer); resolve(value) },
+            (error) => { clearTimeout(timer); reject(error) },
+        )
+    })
 }

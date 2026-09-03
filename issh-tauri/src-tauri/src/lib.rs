@@ -467,48 +467,16 @@ fn create_local_dir(path: String) -> Result<(), String> {
 }
 
 /// 插件读取本地 shell 历史文件（~/.bash_history、PSReadLine 等）。
-/// 只读 + 大小上限，防止插件侧误用变成任意大文件读取。
+/// 路径白名单（仅 shell 历史文件）+ 只读 + 大小上限，防止插件侧误用变成任意大文件读取。
 #[tauri::command]
 fn read_local_text_file(path: String, max_bytes: Option<u64>) -> Result<Option<String>, String> {
-    const DEFAULT_MAX: u64 = 1024 * 1024;
-    const HARD_MAX: u64 = 4 * 1024 * 1024;
-    let limit = max_bytes.unwrap_or(DEFAULT_MAX).min(HARD_MAX);
-    let metadata = match std::fs::metadata(&path) {
-        Ok(metadata) => metadata,
-        // 文件不存在（如尚未生成过的 shell 历史文件）按缺失处理
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(format!("无法读取文件信息 {path}：{error}")),
-    };
-    if !metadata.is_file() {
-        return Ok(None);
-    }
-    if metadata.len() > limit {
-        return Err(format!("文件超过大小上限（{limit} 字节）：{path}"));
-    }
-    match std::fs::read_to_string(&path) {
-        Ok(content) => Ok(Some(content)),
-        // 非 UTF-8 历史文件（如 GBK 编码的 PSReadLine 旧文件）按缺失处理
-        Err(error) if error.kind() == std::io::ErrorKind::InvalidData => Ok(None),
-        Err(error) => Err(format!("读取本地文件失败 {path}：{error}")),
-    }
+    plugin_gateway::read_shell_history_file(&path, max_bytes)
 }
 
 /// 插件获取用户目录路径，用于定位 shell 历史文件（~/.bash_history、PSReadLine 等）。
 #[tauri::command]
 fn user_paths() -> Result<Value, String> {
-    let home = std::env::var_os("USERPROFILE")
-        .or_else(|| std::env::var_os("HOME"))
-        .map(|value| value.to_string_lossy().into_owned());
-    let app_data = std::env::var_os("APPDATA")
-        .or_else(|| {
-            std::env::var_os("HOME").map(|home| {
-                PathBuf::from(home)
-                    .join(".config")
-                    .into_os_string()
-            })
-        })
-        .map(|value| value.to_string_lossy().into_owned());
-    Ok(json!({ "home": home, "appData": app_data }))
+    Ok(plugin_gateway::user_paths_value())
 }
 
 pub fn run() {

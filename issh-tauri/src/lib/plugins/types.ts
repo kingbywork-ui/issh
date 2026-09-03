@@ -48,6 +48,29 @@ export interface PluginGateway {
     network: {
         fetch (url: string, options?: GatewayNetworkOptions): Promise<{ status: number; ok: boolean; body: string }>
     }
+    /** 受控 JSON POST（LLM API 等用户配置端点）：https/http、请求头白名单、大小与超时限制。 */
+    http: {
+        postJson (url: string, options?: { headers?: Record<string, string>; body?: string } & GatewayRequestOptions): Promise<{ status: number; ok: boolean; body: string }>
+    }
+    /** 本地文件读取：仅限 shell 历史文件（路径白名单），缺失返回 null。 */
+    fs: {
+        userPaths (options?: GatewayRequestOptions): Promise<{ home: string | null; appData: string | null }>
+        readLocalText (path: string, options?: GatewayRequestOptions): Promise<string | null>
+    }
+    /** SFTP 文件操作（对接 isshd sftp.* RPC，参数 camelCase）。 */
+    sftp: {
+        open (sessionId: string, sudoPassword?: string, options?: GatewayRequestOptions): Promise<{ sessionId: string; sftpId: string }>
+        read (sessionId: string, path: string, offset?: number, length?: number, options?: GatewayRequestOptions): Promise<{ offset: number; length: number; dataBase64: string; eof: boolean }>
+        write (sessionId: string, path: string, dataBase64: string, offset?: number, truncate?: boolean, options?: GatewayRequestOptions): Promise<{ acceptedBytes: number; totalBytes: number }>
+        list (sessionId: string, path: string, offset?: number, limit?: number, options?: GatewayRequestOptions): Promise<{ path: string; offset: number; entries: Array<{ name: string; path: string; isDir: boolean; isFile: boolean; isSymlink: boolean; size: number; modifiedUnixSecs: number | null }>; total: number; hasMore: boolean }>
+        stat (sessionId: string, path: string, options?: GatewayRequestOptions): Promise<unknown>
+        close (sessionId: string, options?: GatewayRequestOptions): Promise<unknown>
+        mkdir (sessionId: string, path: string, options?: GatewayRequestOptions): Promise<unknown>
+        remove (sessionId: string, path: string, options?: GatewayRequestOptions): Promise<unknown>
+        removeDir (sessionId: string, path: string, options?: GatewayRequestOptions): Promise<unknown>
+        rename (sessionId: string, oldPath: string, newPath: string, options?: GatewayRequestOptions): Promise<unknown>
+        chmod (sessionId: string, path: string, mode: number, options?: GatewayRequestOptions): Promise<unknown>
+    }
     events: {
         on (eventName: string, handler: (params: unknown) => void): Disposable
     }

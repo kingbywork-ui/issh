@@ -104,24 +104,27 @@ if (!registryOnly) {
 const downloadUrl = `https://github.com/${GITHUB_ORG}/${id}/releases/download/v${version}/${tarballName}`
 const indexPath = resolve(process.cwd(), REGISTRY_LOCAL_DIR, 'index.json')
 const index = JSON.parse(await readFile(indexPath, 'utf-8'))
+const existingIndex = index.plugins.findIndex((plugin) => plugin.id === id)
+const previous = existingIndex >= 0 ? index.plugins[existingIndex] : null
+const previousDownloads = previous ? Number(previous.downloads) || 0 : 0
+// 展开旧条目以保留 audience 等非 manifest 字段，再覆盖本次发布字段
 const entryRecord = {
+    ...(previous ?? {}),
     id,
     name: manifest.name,
     version,
     description: manifest.description ?? '',
     kind: manifest.kind ?? 'feature',
     permissions: manifest.permissions ?? [],
-    minAppVersion: manifest.minAppVersion ?? undefined,
+    minAppVersion: manifest.minAppVersion ?? previous?.minAppVersion,
     downloadUrl,
     sha256,
     signature,
     homepage: manifest.homepage ?? `https://github.com/${GITHUB_ORG}/${id}`,
     repository: manifest.repository ?? `https://github.com/${GITHUB_ORG}/${id}`,
+    downloads: previousDownloads,
 }
-const existing = index.plugins.findIndex((plugin) => plugin.id === id)
-const previousDownloads = existing >= 0 ? Number(index.plugins[existing].downloads) || 0 : 0
-entryRecord.downloads = previousDownloads
-if (existing >= 0) index.plugins[existing] = entryRecord
+if (existingIndex >= 0) index.plugins[existingIndex] = entryRecord
 else index.plugins.push(entryRecord)
 index.plugins.sort((a, b) => a.id.localeCompare(b.id))
 index.updated = new Date().toISOString()

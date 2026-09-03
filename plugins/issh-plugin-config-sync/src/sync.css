@@ -2,6 +2,17 @@
 .sync-section { padding: 12px 0; border-bottom: 1px solid var(--ops-line); }
 .sync-stats { display: flex; gap: 14px; color: var(--ops-fg-muted); font-size: 12px; padding: 6px 0; }
 .sync-encrypted { color: var(--ops-warn, #d9a441); }
+.sync-unlock { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.sync-unlock input {
+    flex: 1;
+    min-height: 30px;
+    padding: 0 8px;
+    border: 1px solid var(--ops-line);
+    border-radius: var(--ops-radius);
+    background: var(--ops-base);
+    color: var(--ops-fg);
+    font-size: 12px;
+}
 .sync-toolbar { display: flex; gap: 8px; margin-top: 8px; }
 .sync-toolbar button {
     min-height: 30px;

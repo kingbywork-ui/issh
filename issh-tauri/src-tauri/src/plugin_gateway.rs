@@ -3,6 +3,7 @@ use crate::RuntimeManager;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashSet, VecDeque};
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -152,6 +153,9 @@ fn required_permission(method: &str) -> Option<&'static str> {
         "agent.register" | "agent.authorize" => Some("agent.write"),
         "sftp.open" | "sftp.list" | "sftp.read" | "sftp.stat" | "sftp.close" => Some("sftp.read"),
         "sftp.write" | "sftp.mkdir" | "sftp.remove" | "sftp.removeDir" | "sftp.rename" | "sftp.chmod" => Some("sftp.write"),
+        "fs.userPaths" | "fs.readLocalText" => Some("fs.read"),
+        "ssh.execReadonly" => Some("ssh.exec"),
+        "http.postJson" => Some("network.postJson"),
         _ => None,
     }
 }
@@ -167,11 +171,11 @@ fn static_plugin_capabilities(plugin_id: &str) -> Option<&'static [&'static str]
         "issh-plugin-agent-bridge" => Some(&[
             "ui.settings.register", "workspace.read", "workspace.write", "session.read", "agent.read", "agent.write",
         ]),
-        "issh-plugin-config-sync" => Some(&["ui.settings.register", "profiles.read", "profiles.write", "network.fetch"]),
+        "issh-plugin-config-sync" => Some(&["ui.settings.register", "profiles.read", "profiles.write", "network.fetch", "vault.read"]),
         "issh-plugin-herdr" => Some(&["ui.settings.register", "workspace.read", "workspace.write", "session.read"]),
         "issh-plugin-linkifier" => Some(&["terminal.decorate"]),
-        "issh-plugin-llm" => Some(&["ui.settings.register", "terminal.decorate"]),
-        "issh-plugin-sandbox-demo" => Some(&["ui.panel.register", "terminal.decorate", "profiles.write"]),
+        "issh-plugin-llm" => Some(&["ui.settings.register", "terminal.decorate", "fs.read", "ssh.exec", "network.postJson"]),
+        "issh-plugin-sandbox-demo" => Some(&["ui.panel.register", "terminal.decorate", "profiles.read", "profiles.write"]),
         "issh-plugin-serial" => Some(&["ui.panel.register"]),
         _ => None,
     }
@@ -185,6 +189,7 @@ fn runtime_method(method: &str) -> Option<(&str, Option<&'static str>)> {
         "session.read" | "terminal.read" => Some(("session.subscribe", Some("session.read"))),
         "session.write" | "terminal.write" => Some(("session.write", Some("terminal.write"))),
         "ssh.exec" => Some(("ssh.execReadonly", Some("ssh.exec"))),
+        "ssh.execReadonly" => Some(("ssh.execReadonly", Some("ssh.exec"))),
         "sftp.open" | "sftp.list" | "sftp.read" | "sftp.stat" | "sftp.close" => Some((method, Some("sftp.read"))),
         "sftp.write" | "sftp.mkdir" | "sftp.remove" | "sftp.removeDir" | "sftp.rename" | "sftp.chmod" => Some((method, Some("sftp.write"))),
         "vault.status" | "vault.getSecret" => Some((method, Some("vault.read"))),
@@ -248,6 +253,53 @@ mod tests {
     fn unknown_plugins_have_no_host_capability_entry() {
         assert!(static_plugin_capabilities("marketplace.unknown").is_none());
     }
+
+    #[test]
+    fn gateway_permissions_cover_llm_sftp_and_fs_methods() {
+        assert_eq!(required_permission("fs.userPaths"), Some("fs.read"));
+        assert_eq!(required_permission("fs.readLocalText"), Some("fs.read"));
+        assert_eq!(required_permission("ssh.execReadonly"), Some("ssh.exec"));
+        assert_eq!(required_permission("http.postJson"), Some("network.postJson"));
+        assert_eq!(required_permission("sftp.open"), Some("sftp.read"));
+        assert_eq!(required_permission("sftp.list"), Some("sftp.read"));
+        assert_eq!(required_permission("sftp.stat"), Some("sftp.read"));
+        assert_eq!(required_permission("sftp.close"), Some("sftp.read"));
+        assert_eq!(required_permission("sftp.mkdir"), Some("sftp.write"));
+        assert_eq!(required_permission("sftp.rename"), Some("sftp.write"));
+        assert_eq!(required_permission("sftp.chmod"), Some("sftp.write"));
+        assert_eq!(runtime_method("ssh.execReadonly"), Some(("ssh.execReadonly", Some("ssh.exec"))));
+    }
+
+    #[test]
+    fn llm_plugin_host_capabilities_cover_gateway_usage() {
+        let capabilities = static_plugin_capabilities("issh-plugin-llm").unwrap();
+        for required in ["fs.read", "ssh.exec", "network.postJson"] {
+            assert!(capabilities.contains(&required), "llm 插件缺少能力：{required}");
+        }
+    }
+
+    #[test]
+    fn config_sync_host_capabilities_cover_vault_unlock() {
+        let capabilities = static_plugin_capabilities("issh-plugin-config-sync").unwrap();
+        assert!(capabilities.contains(&"vault.read"), "config-sync 插件缺少能力：vault.read");
+        assert_eq!(required_permission("vault.unlock"), Some("vault.read"));
+    }
+
+    #[test]
+    fn shell_history_path_allowlist_rejects_arbitrary_files() {
+        if let Some(home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) {
+            let home = home.to_string_lossy().into_owned();
+            assert!(is_shell_history_path(&format!("{home}\\.bash_history")));
+            assert!(is_shell_history_path(&format!("{home}/.zsh_history")));
+            assert!(!is_shell_history_path(&format!("{home}\\Documents\\secrets.txt")));
+        }
+        if let Some(app_data) = std::env::var_os("APPDATA") {
+            let app_data = app_data.to_string_lossy().into_owned();
+            assert!(is_shell_history_path(&format!("{app_data}\\Microsoft\\Windows\\PowerShell\\PSReadLine\\ConsoleHost_history.txt")));
+        }
+        assert!(!is_shell_history_path("C:\\Windows\\win.ini"));
+        assert!(!is_shell_history_path("..\\.bash_history"));
+    }
 }
 
 fn network_host_allowed(url: &str) -> Result<(), String> {
@@ -301,6 +353,114 @@ async fn network_fetch(args: &Value) -> Result<Value, String> {
     Ok(json!({ "status": status.as_u16(), "ok": status.is_success(), "body": String::from_utf8_lossy(&bytes) }))
 }
 
+const DEFAULT_LOCAL_TEXT_MAX: u64 = 1024 * 1024;
+const HARD_LOCAL_TEXT_MAX: u64 = 4 * 1024 * 1024;
+
+/// 返回用户目录路径（home/appData），供插件定位 shell 历史文件。
+pub fn user_paths_value() -> Value {
+    let home = std::env::var_os("USERPROFILE")
+        .or_else(|| std::env::var_os("HOME"))
+        .map(|value| value.to_string_lossy().into_owned());
+    let app_data = std::env::var_os("APPDATA")
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config").into_os_string()))
+        .map(|value| value.to_string_lossy().into_owned());
+    json!({ "home": home, "appData": app_data })
+}
+
+fn shell_history_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    if let Some(home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) {
+        let home = PathBuf::from(home);
+        paths.push(home.join(".bash_history"));
+        paths.push(home.join(".zsh_history"));
+        paths.push(home.join(".local").join("share").join("fish").join("fish_history"));
+    }
+    if let Some(app_data) = std::env::var_os("APPDATA") {
+        paths.push(
+            PathBuf::from(app_data)
+                .join("Microsoft")
+                .join("Windows")
+                .join("PowerShell")
+                .join("PSReadLine")
+                .join("ConsoleHost_history.txt"),
+        );
+    }
+    paths
+}
+
+fn normalize_path_key(path: &Path) -> String {
+    path.to_string_lossy().replace('/', "\\").to_lowercase()
+}
+
+/// 校验目标路径是否属于允许读取的 shell 历史文件（bash/zsh/fish/PSReadLine）。
+pub fn is_shell_history_path(path: &str) -> bool {
+    let target = normalize_path_key(Path::new(path));
+    shell_history_paths().iter().any(|candidate| normalize_path_key(candidate) == target)
+}
+
+/// 读取本地 shell 历史文件：路径白名单 + 大小上限 + UTF-8，缺失/非 UTF-8 按 None 处理。
+pub fn read_shell_history_file(path: &str, max_bytes: Option<u64>) -> Result<Option<String>, String> {
+    if !is_shell_history_path(path) {
+        return Err(format!("仅允许读取 shell 历史文件：{path}"));
+    }
+    let limit = max_bytes.unwrap_or(DEFAULT_LOCAL_TEXT_MAX).min(HARD_LOCAL_TEXT_MAX);
+    let metadata = match std::fs::metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("无法读取文件信息 {path}：{error}")),
+    };
+    if !metadata.is_file() {
+        return Ok(None);
+    }
+    if metadata.len() > limit {
+        return Err(format!("文件超过大小上限（{limit} 字节）：{path}"));
+    }
+    match std::fs::read_to_string(path) {
+        Ok(content) => Ok(Some(content)),
+        Err(error) if error.kind() == std::io::ErrorKind::InvalidData => Ok(None),
+        Err(error) => Err(format!("读取本地文件失败 {path}：{error}")),
+    }
+}
+
+/// 受控 JSON POST：任意 http/https URL（LLM 端点等用户配置目标），
+/// 限制请求体/响应大小、超时、请求头白名单，并禁止重定向。
+async fn http_post_json(args: &Value) -> Result<Value, String> {
+    let url = args.get("url").and_then(Value::as_str).ok_or_else(|| "http.postJson 需要 url".to_string())?;
+    let parsed = url::Url::parse(url).map_err(|_| "http.postJson URL 无效".to_string())?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err("http.postJson 仅允许 http/https".to_string());
+    }
+    if parsed.host_str().is_none() {
+        return Err("http.postJson 缺少主机名".to_string());
+    }
+    let body = args.get("body").and_then(Value::as_str).ok_or_else(|| "http.postJson 需要 body".to_string())?;
+    if body.len() > 256 * 1024 {
+        return Err("http.postJson 请求体超过 256 KiB 限制".to_string());
+    }
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|error| error.to_string())?;
+    let mut request = client.post(url).header("User-Agent", "issh-plugin-gateway/1");
+    if let Some(headers) = args.get("headers").and_then(Value::as_object) {
+        for (name, value) in headers {
+            if !matches!(name.to_ascii_lowercase().as_str(), "authorization" | "content-type" | "accept") {
+                return Err(format!("http.postJson 不允许请求头：{name}"));
+            }
+            let value = value.as_str().ok_or_else(|| format!("http.postJson 请求头无效：{name}"))?;
+            request = request.header(name, value);
+        }
+    }
+    let response = request.body(body.to_string()).send().await.map_err(|error| error.to_string())?;
+    let status = response.status();
+    let bytes = response.bytes().await.map_err(|error| error.to_string())?;
+    if bytes.len() > 4 * 1024 * 1024 {
+        return Err("http.postJson 响应超过 4 MiB 限制".to_string());
+    }
+    Ok(json!({ "status": status.as_u16(), "ok": status.is_success(), "body": String::from_utf8_lossy(&bytes) }))
+}
+
 fn runtime_args(request: &PluginGatewayRequest, method: &str) -> Value {
     if method == "session.current" {
         return Value::Null;
@@ -320,7 +480,7 @@ fn runtime_args(request: &PluginGatewayRequest, method: &str) -> Value {
             }
         }
     }
-    if method == "ssh.exec" {
+    if matches!(method, "ssh.exec" | "ssh.execReadonly") {
         if let Value::Object(ref mut map) = args {
             map.entry("timeoutMs".to_string()).or_insert(Value::from(60000));
         }
@@ -370,6 +530,19 @@ pub async fn handle_request(manager: &RuntimeManager, state: &PluginGatewayState
     } else if request.method == "vault.unlock" {
         let passphrase = request.args.get("passphrase").and_then(Value::as_str).ok_or_else(|| "vault.unlock 需要 passphrase".to_string());
         passphrase.and_then(|value| manager.hosts.unlock(value).and_then(|profiles| serde_json::to_value(profiles).map_err(|error| error.to_string())))
+    } else if request.method == "fs.userPaths" {
+        Ok(user_paths_value())
+    } else if request.method == "fs.readLocalText" {
+        match request.args.get("path").and_then(Value::as_str) {
+            Some(path) => match read_shell_history_file(path, None) {
+                Ok(Some(content)) => Ok(Value::String(content)),
+                Ok(None) => Ok(Value::Null),
+                Err(error) => Err(error),
+            },
+            None => Err("fs.readLocalText 需要 path".to_string()),
+        }
+    } else if request.method == "http.postJson" {
+        http_post_json(&request.args).await
     } else if let Some((runtime_method, _method_permission)) = runtime_method(&request.method) {
         let params = runtime_args(&request, &request.method);
         let mut runtime_request = json!({ "jsonrpc": "2.0", "id": request.request_id, "method": runtime_method });

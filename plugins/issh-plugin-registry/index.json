@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-08-28T01:19:27.926Z",
+  "updated": "2026-09-03T07:28:42.508Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
@@ -28,19 +28,20 @@
     {
       "id": "issh-plugin-config-sync",
       "name": "配置同步",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "description": "主机配置导出/导入 JSON + GitHub Gist 云同步",
       "kind": "integration",
       "audience": "user",
       "permissions": [
         "settings:tab",
         "profiles:read",
-        "profiles:write"
+        "profiles:write",
+        "vault:read"
       ],
       "minAppVersion": "0.1.6",
-      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-config-sync/releases/download/v0.1.0/issh-plugin-config-sync-0.1.0.tgz",
-      "sha256": "d444d542fc45f693c0dd56f675dbba17ea16072076445248f048099340e799e4",
-      "signature": "rXw8oR/MJzvDmcjOmiKs9weJHd6kVIIddMDTL4m1RJrJ7QXU1I77ffaK0wSkkECDaA34e0X3i4VdDqWiLSqBBw==",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-config-sync/releases/download/v0.2.0/issh-plugin-config-sync-0.2.0.tgz",
+      "sha256": "881488ba5a5c150c34dcf702f4c29049118359d55546ddbb97af1d832ea46cb7",
+      "signature": "L+8/DDEjYfKieaapTgiyneVtTCo/3SpILZZWs6rrbubeDCYvFzgT9AqBpRtA2DCZwiJ6xqafL/zhQCqm1BBQDg==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-config-sync",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-config-sync",
       "downloads": 458
@@ -87,18 +88,21 @@
     {
       "id": "issh-plugin-llm",
       "name": "AI 命令补全",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "description": "LLM 驱动的 shell 命令补全：输入时防抖请求 LLM API，Ctrl+Y 接受候选",
       "kind": "feature",
       "audience": "user",
       "permissions": [
         "terminal:decorate",
-        "settings:tab"
+        "settings:tab",
+        "fs:read",
+        "ssh:exec",
+        "network:postJson"
       ],
       "minAppVersion": "0.1.6",
-      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-llm/releases/download/v0.2.0/issh-plugin-llm-0.2.0.tgz",
-      "sha256": "a9736ebda4c635a26695cdb2dfdb3b4fe059f97fc93a4c76d2e5caa0874e6f34",
-      "signature": "fX0yGiAnB7wuptlaEj1Cpg9nDrDL5FuIDzF/Ii4aNL6vYkVnHj4m54AQkWnSZUUwajnf+XdaAq2l6BXUaf2gCg==",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-llm/releases/download/v0.3.0/issh-plugin-llm-0.3.0.tgz",
+      "sha256": "452223b7a25b8199bb0af44f6214be1d8646a16a4c28c035a976b37aa608f229",
+      "signature": "sTX1Mbcbc62+e6PRSkkLNnMAuH8CBIYyoUWMrHMdwHCvelek1JBRTyHdOp9fDfNXAEqBK4satK6pvs8ONEbFCw==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-llm",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-llm",
       "downloads": 940
@@ -106,18 +110,19 @@
     {
       "id": "issh-plugin-sandbox-demo",
       "name": "沙箱演示插件",
-      "version": "0.4.0",
+      "version": "0.4.2",
       "description": "演示 iframe 沙箱面板：postMessage RPC 存储读写、终端读写、事件接收",
       "kind": "feature",
       "audience": "developer",
       "permissions": [
         "panel:register",
         "terminal:decorate",
+        "profiles:read",
         "profiles:write"
       ],
-      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo/releases/download/v0.4.0/issh-plugin-sandbox-demo-0.4.0.tgz",
-      "sha256": "6e0ef4ab7ea23879640e3315b0567bd57eb29c5bfb3d5ae64219de34fb568382",
-      "signature": "At1kaJ+aMoo9uaor4Ykbd7OAqrumqPcS3uBjdARZTGKTSNiMiXL667Y/0rswIQUBylKh2/+Ry6xyOCNYGTjMDA==",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo/releases/download/v0.4.2/issh-plugin-sandbox-demo-0.4.2.tgz",
+      "sha256": "be5703fc574fcaccd81ee47e4be357809c7da3d353b4c17301746eba792af252",
+      "signature": "FFQGvVwPaud0H9xW6BNgQn6E4R/Qd3e+C47X3lmiUELKMgt12MaWJhdvabo+UV4+K1BB1sO5fIqMky0dQt8TBQ==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo",
       "downloads": 0

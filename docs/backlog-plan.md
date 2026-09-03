@@ -186,20 +186,22 @@
 - **AC**：提交任务返回 taskId；状态可查；完成回调推送到订阅端。
 - **依赖**：C1。**关联**：与 C9（job 化）合并设计，避免两套异步模型。
 
-#### C4 cordis 事件总线（R-051）— XL / P3
+#### C4 cordis 事件总线（R-051）— XL / P3（**已放弃 kernel，事件流保留** 2026-09-03）
 - **描述**：终端事件 pub/sub 总线（输出流、会话状态、通知）。
 - **AC**：订阅/退订 RPC；事件带时间戳与来源 session。
 - **依赖**：无。**风险**：isshd 现有 session.subscribe 是单向流，cordis 需要多订阅者广播，需评估扩展成本。
+- **决策（2026-09-03）**：事件流部分已落地（`issh_workspace_events` 工具，基于 event.list SQLite + 游标）；cordis kernel（多 agent 并发 Fiber run）判定范围外，`issh_cordis_health`/`issh_run_wait/collect/cancel`/`issh_agent_dispatch` 保持诚实降级，不再实现。
 
 #### C5 pane 编排（R-051）— L / P3
 - **描述**：服务端分屏窗格编排模型，与 R-036 `SplitLayoutNode` 对齐。
 - **AC**：pane 树结构 RPC（读布局/执行窗格操作）。
 - **依赖**：R-036 已完成的 SplitLayoutNode 状态模型。
 
-#### C6 herdr UI 集成（R-051）— L / P3
+#### C6 herdr UI 集成（R-051）— L / P3（**判定：商城插件路线** 2026-09-03）
 - **描述**：工作区 UI 集成（agent 工作区面板）。
 - **AC**：与商城 Herdr 插件边界确认后接入，不重复造轮子。
 - **依赖**：**前置决策**：R-034 已审核 Herdr 产品边界，实施前需与用户确认路线（商城插件 vs 内置）。
+- **决策（2026-09-03）**：走商城插件路线（issh-plugin-herdr 已落地，经 PluginGateway 调 isshd `workspace.*`/`session.*`/`runtime.health`）。Netcatty 的 herdr 为外部 sidecar（herdr.exe），本仓库无该二进制亦无接入需求，`issh_herdr_*` 7 工具保持 roadmap 诚实降级，不重复造轮子。
 
 #### C7 codegen 能力目录重构（R-052）— M / P2
 - **描述**：issh-agent 能力目录改为从工具表生成 codegen 风格目录，客户端动态加载。

@@ -37,6 +37,11 @@ const LEGACY_PERMISSION_ALIASES: Record<string, string> = {
     'workspace:write': 'workspace.write',
     'agent:read': 'agent.read',
     'agent:write': 'agent.write',
+    'ssh:exec': 'ssh.exec',
+    'sftp:read': 'sftp.read',
+    'sftp:write': 'sftp.write',
+    'fs:read': 'fs.read',
+    'network:postJson': 'network.postJson',
 }
 
 const METHOD_PERMISSIONS: Record<string, string> = {
@@ -53,8 +58,18 @@ const METHOD_PERMISSIONS: Record<string, string> = {
     'vault.unlock': 'vault.read',
     'vault.getSecret': 'vault.read',
     'ssh.exec': 'ssh.exec',
+    'ssh.execReadonly': 'ssh.exec',
+    'sftp.open': 'sftp.read',
+    'sftp.list': 'sftp.read',
     'sftp.read': 'sftp.read',
+    'sftp.stat': 'sftp.read',
+    'sftp.close': 'sftp.read',
     'sftp.write': 'sftp.write',
+    'sftp.mkdir': 'sftp.write',
+    'sftp.remove': 'sftp.write',
+    'sftp.removeDir': 'sftp.write',
+    'sftp.rename': 'sftp.write',
+    'sftp.chmod': 'sftp.write',
     'workspace.list': 'workspace.read',
     'workspace.create': 'workspace.write',
     'workspace.bind': 'workspace.write',
@@ -63,6 +78,9 @@ const METHOD_PERMISSIONS: Record<string, string> = {
     'agent.register': 'agent.write',
     'agent.authorize': 'agent.write',
     'network.fetch': 'network.fetch',
+    'http.postJson': 'network.postJson',
+    'fs.userPaths': 'fs.read',
+    'fs.readLocalText': 'fs.read',
 }
 const MAX_IN_FLIGHT_REQUESTS = 16
 const CONFIRM_METHODS = new Set(['profiles.mutate', 'vault.unlock', 'vault.getSecret', 'ssh.exec', 'sftp.write', 'network.fetch'])
@@ -203,6 +221,26 @@ export function createPluginGateway (
         },
         network: {
             fetch: (url, options?: GatewayNetworkOptions) => request('network.fetch', { url, method: options?.method, headers: options?.headers, body: options?.body }, options),
+        },
+        http: {
+            postJson: (url, options) => request('http.postJson', { url, headers: options?.headers, body: options?.body }, options),
+        },
+        fs: {
+            userPaths: (options) => request('fs.userPaths', {}, options),
+            readLocalText: (path, options) => request('fs.readLocalText', { path }, options),
+        },
+        sftp: {
+            open: (sessionId, sudoPassword, options) => request('sftp.open', { sessionId, sudoPassword }, options),
+            read: (sessionId, path, offset, length, options) => request('sftp.read', { sessionId, path, offset, length }, options),
+            write: (sessionId, path, dataBase64, offset, truncate, options) => request('sftp.write', { sessionId, path, offset, truncate, dataBase64 }, options),
+            list: (sessionId, path, offset, limit, options) => request('sftp.list', { sessionId, path, offset, limit }, options),
+            stat: (sessionId, path, options) => request('sftp.stat', { sessionId, path }, options),
+            close: (sessionId, options) => request('sftp.close', { sessionId }, options),
+            mkdir: (sessionId, path, options) => request('sftp.mkdir', { sessionId, path }, options),
+            remove: (sessionId, path, options) => request('sftp.remove', { sessionId, path }, options),
+            removeDir: (sessionId, path, options) => request('sftp.removeDir', { sessionId, path }, options),
+            rename: (sessionId, oldPath, newPath, options) => request('sftp.rename', { sessionId, oldPath, newPath }, options),
+            chmod: (sessionId, path, mode, options) => request('sftp.chmod', { sessionId, path, mode }, options),
         },
         events,
         storage,

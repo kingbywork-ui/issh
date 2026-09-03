@@ -1,24 +1,24 @@
 import LlmSettingsTab from './src/LlmSettingsTab.svelte'
 import panelCss from './src/panel.css?inline'
 import type { IsshPlugin, IsshPluginContext, IsshPluginManifest, TerminalDecoratorDefinition } from './src/types'
-import { fetchAutocomplete, fetchEditorAutocomplete, fetchPrediction, loadConfig, type AutocompleteSuggestion } from './src/llmApi'
-import { HistoryCommandService } from './src/historyCommand'
+import { fetchAutocomplete, fetchEditorAutocomplete, fetchPrediction, loadConfig, setGateway as setLlmApiGateway, type AutocompleteSuggestion } from './src/llmApi'
+import { HistoryCommandService, setGateway as setHistoryGateway } from './src/historyCommand'
 import { normalizeCommand } from './src/commandValidation'
 import { looksLikeSensitivePrompt } from './src/sensitiveInput'
 
 export const manifest: IsshPluginManifest = {
     id: 'issh-plugin-llm',
     name: 'AI 命令补全',
-    version: '0.2.0',
+    version: '0.3.0',
     description: 'LLM 驱动的 shell 命令补全：本地/远程历史 + AI live 候选统一面板，Ctrl+Y 接受',
     kind: 'feature',
     entry: 'index.js',
-    permissions: ['terminal:decorate', 'settings:tab'],
+    permissions: ['terminal:decorate', 'settings:tab', 'fs:read', 'ssh:exec', 'network:postJson'],
     author: 'kingbywork-ui',
     homepage: 'https://github.com/kingbywork-ui/issh-plugin-llm',
     repository: 'https://github.com/kingbywork-ui/issh-plugin-llm',
     gatewayApiVersion: '1',
-    capabilities: ['ui.settings.register', 'terminal.decorate'],
+    capabilities: ['ui.settings.register', 'terminal.decorate', 'fs.read', 'ssh.exec', 'network.postJson'],
 }
 
 interface SuggestionState {
@@ -426,6 +426,8 @@ const decorator: TerminalDecoratorDefinition = {
 const plugin: IsshPlugin = {
     manifest,
     activate (ctx: IsshPluginContext) {
+        setLlmApiGateway(ctx.gateway)
+        setHistoryGateway(ctx.gateway)
         ctx.gateway.ui.registerSettingsTab({
             id: 'llm',
             title: 'AI 命令补全',
