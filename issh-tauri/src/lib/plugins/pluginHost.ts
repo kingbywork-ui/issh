@@ -58,7 +58,9 @@ export function subscribeUi (listener: Listener): () => void {
 }
 
 export function getSettingsTabs (): SettingsTabDefinition[] {
-    return [...settingsTabs.values()].sort((a, b) => (a.order ?? 100) - (b.order ?? 100))
+    return [...settingsTabs.entries()]
+        .map(([key, tab]) => ({ ...tab, key }))
+        .sort((a, b) => (a.order ?? 100) - (b.order ?? 100))
 }
 
 export function getHomeCards (): HomeCardDefinition[] {

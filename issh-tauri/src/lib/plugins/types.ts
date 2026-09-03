@@ -99,6 +99,8 @@ export interface IsshPluginManifest {
 export interface SettingsTabDefinition {
     id: string
     title: string
+    /** 宿主注入的唯一标识（`manifest.id:tab.id`），用于跨插件去重与 Svelte each key */
+    key?: string
     order?: number
     component: Component<Record<string, unknown>>
 }

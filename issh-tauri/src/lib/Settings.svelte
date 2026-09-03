@@ -216,7 +216,7 @@
     }
 
     function showPluginTab (tabId: string): void {
-        const tab = tabs.find((candidate) => candidate.id === tabId)
+        const tab = tabs.find((candidate) => (candidate.key ?? candidate.id) === tabId)
         if (!tab) return
         pluginTabSection = tabId
         leaveVault('plugin-tab')
@@ -224,13 +224,13 @@
 
     $effect(() => {
         const host = pluginTabContainer
-        const activeTab = tabs.find((candidate) => candidate.id === pluginTabSection)
+        const activeTab = tabs.find((candidate) => (candidate.key ?? candidate.id) === pluginTabSection)
         if (!host) {
             // 离开插件设置页：销毁手动挂载的组件
             unmountPluginTab()
             return
         }
-        const activeId = activeTab?.id ?? ''
+        const activeId = activeTab ? (activeTab.key ?? activeTab.id) : ''
         if (activeId === mountedPluginTab) return
         unmountPluginTab()
         for (const child of [...host.children]) child.remove()
@@ -576,8 +576,8 @@
                 <button class:active={section === 'plugins'} type="button" onclick={() => leaveVault('plugins')}>插件</button>
                 <button class:active={section === 'market'} type="button" onclick={() => leaveVault('market')}>插件商城</button>
                 <button class:active={section === 'about'} type="button" onclick={() => leaveVault('about')}>关于</button>
-                {#each tabs as tab (tab.id)}
-                    <button class:active={pluginTabSection === tab.id} class="settings-nav-plugin" type="button" onclick={() => { showPluginTab(tab.id) }}>{tab.title}</button>
+                {#each tabs as tab (tab.key ?? tab.id)}
+                    <button class:active={pluginTabSection === (tab.key ?? tab.id)} class="settings-nav-plugin" type="button" onclick={() => { showPluginTab(tab.key ?? tab.id) }}>{tab.title}</button>
                 {/each}
             </nav>
             <div class="settings-content">
@@ -882,8 +882,8 @@
                             {/if}
                         </div>
                     </section>
-                {:else if section === 'plugin-tab' && pluginTabSection && tabs.some((tab) => tab.id === pluginTabSection)}
-                    <section aria-label={tabs.find((tab) => tab.id === pluginTabSection)?.title ?? '插件设置'}>
+                {:else if section === 'plugin-tab' && pluginTabSection && tabs.some((tab) => (tab.key ?? tab.id) === pluginTabSection)}
+                    <section aria-label={tabs.find((tab) => (tab.key ?? tab.id) === pluginTabSection)?.title ?? '插件设置'}>
                         <div class="plugin-settings-host" bind:this={pluginTabContainer}></div>
                     </section>
                 {/if}
