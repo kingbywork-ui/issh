@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-09-03T07:39:18.897Z",
+  "updated": "2026-09-03T07:41:31.146Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
@@ -121,8 +121,8 @@
         "profiles:write"
       ],
       "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo/releases/download/v0.4.2/issh-plugin-sandbox-demo-0.4.2.tgz",
-      "sha256": "be5703fc574fcaccd81ee47e4be357809c7da3d353b4c17301746eba792af252",
-      "signature": "FFQGvVwPaud0H9xW6BNgQn6E4R/Qd3e+C47X3lmiUELKMgt12MaWJhdvabo+UV4+K1BB1sO5fIqMky0dQt8TBQ==",
+      "sha256": "08c88f9da803a1dc6dd696a2deafd824f95fd5ccb050fbf133585be7e120bdac",
+      "signature": "wz2qzMN2y07Y0+W3QHYcgJ8LckbgIqV0Ks4GShqmSSLlcdjcs2QU7FnHc978BnEeRdOMp5MrlmHI8mzu7cz6Cg==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo",
       "downloads": 0
