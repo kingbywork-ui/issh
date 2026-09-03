@@ -6,6 +6,42 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+/// Agent Bridge 权限档位（R-055）：
+/// - Observer：只读，写/执行/SFTP 工具只返回执行计划、不实际执行
+/// - Confirm：默认，危险操作需 confirmDangerous=true + 桌面端确认
+/// - Auto：自动放行（跳过 Agent Bridge 层 confirm 校验，桌面端确认框仍生效）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PermissionMode {
+    Observer,
+    Confirm,
+    Auto,
+}
+
+impl PermissionMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PermissionMode::Observer => "observer",
+            PermissionMode::Confirm => "confirm",
+            PermissionMode::Auto => "auto",
+        }
+    }
+
+    pub fn parse(value: &str) -> PermissionMode {
+        match value {
+            "observer" => PermissionMode::Observer,
+            "auto" => PermissionMode::Auto,
+            _ => PermissionMode::Confirm,
+        }
+    }
+}
+
+impl Default for PermissionMode {
+    fn default() -> Self {
+        PermissionMode::Confirm
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AgentBridgeConfig {
@@ -19,6 +55,8 @@ pub struct AgentBridgeConfig {
     pub audit_log_enabled: bool,
     /// 是否写 agent 可读 discovery file（issh-agent-bridge.json）。
     pub public_discovery: bool,
+    /// 权限档位（R-055）：observer / confirm / auto。
+    pub permission_mode: PermissionMode,
 }
 
 impl Default for AgentBridgeConfig {
@@ -34,6 +72,7 @@ impl Default for AgentBridgeConfig {
             sftp_root: None,
             audit_log_enabled: true,
             public_discovery: false,
+            permission_mode: PermissionMode::Confirm,
         }
     }
 }

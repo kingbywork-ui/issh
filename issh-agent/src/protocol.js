@@ -655,6 +655,29 @@ export const AGENT_BRIDGE_TOOLS = [
             additionalProperties: false,
         },
     },
+    {
+        name: 'issh_list_jobs',
+        scope: 'read',
+        description: 'List long-running command jobs started by issh_exec_command timeout fallback.',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_get_job',
+        scope: 'read',
+        description: 'Query a long-running command job status and output by jobId.',
+        inputSchema: {
+            type: 'object',
+            required: ['jobId'],
+            properties: {
+                jobId: { type: 'string', minLength: 1, description: 'Job id returned by issh_exec_command when the command timed out.' },
+            },
+            additionalProperties: false,
+        },
+    },
 ]
 
 export const LEGACY_AGENT_BRIDGE_METHOD_ALIASES = Object.freeze(Object.fromEntries(
@@ -688,6 +711,8 @@ export const IMPLEMENTED_AGENT_BRIDGE_TOOLS = Object.freeze([
     'issh_sftp_list',
     'issh_sftp_read',
     'issh_sftp_write',
+    'issh_list_jobs',
+    'issh_get_job',
 ])
 
 export function normalizeAgentBridgeMethod (method) {

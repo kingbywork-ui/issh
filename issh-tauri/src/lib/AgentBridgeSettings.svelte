@@ -16,6 +16,11 @@
     const ALL_SCOPES = ['read', 'write', 'exec', 'sftp']
     const READ_SCOPES = ['read']
     const PORT = 59688
+    const PERMISSION_MODES: Array<['observer' | 'confirm' | 'auto', string]> = [
+        ['observer', 'Observer 只读'],
+        ['confirm', 'Confirm 确认（默认）'],
+        ['auto', 'Auto 自动放行'],
+    ]
 
     let status = $state<AgentBridgeStatus | null>(null)
     let busy = $state(false)
@@ -87,6 +92,7 @@
         sftpRoot?: string | null
         auditLogEnabled?: boolean
         publicDiscovery?: boolean
+        permissionMode?: 'observer' | 'confirm' | 'auto'
     }): Promise<void> {
         busy = true
         error = ''
@@ -252,6 +258,32 @@
         </div>
 
         <div class="settings-field">
+            <div class="settings-field-title">权限档位（R-055）</div>
+            <p class="settings-hint">
+                Observer：只读，写/执行/SFTP 工具只返回执行计划、不实际执行；Confirm：危险操作需确认后执行（默认）；Auto：自动放行（桌面端确认框仍生效）。档位决策会写入审计日志。
+            </p>
+            <div class="permission-mode-row">
+                {#each PERMISSION_MODES as [mode, label]}
+                    <label class="permission-mode-option">
+                        <input
+                            type="radio"
+                            name="permission-mode"
+                            value={mode}
+                            checked={(status.permissionMode ?? 'confirm') === mode}
+                            disabled={busy}
+                            onchange={(event) => {
+                                if ((event.currentTarget as HTMLInputElement).checked) {
+                                    void savePatch({ permissionMode: mode })
+                                }
+                            }}
+                        />
+                        <span>{label}</span>
+                    </label>
+                {/each}
+            </div>
+        </div>
+
+        <div class="settings-field">
             <div class="settings-field-title">SFTP 路径限制</div>
             <p class="settings-hint">留空表示不限制；填写绝对路径后，SFTP 读写仅允许在该目录之内。</p>
             <label>SFTP 根目录
@@ -314,6 +346,14 @@
             </div>
             {#if testResult}<p class="settings-hint vault-notice">{testResult}</p>{/if}
             <p class="settings-hint">SKILL.md 随安装包发布（安装目录下 <code>SKILL.md</code>），可直接提供给支持 Skills 的外部 agent 加载 issh 能力说明。</p>
+        </div>
+
+        <div class="settings-field">
+            <div class="settings-field-title">长命令与 SSE（R-054 / R-055）</div>
+            <p class="settings-hint">
+                命令超时会自动转为异步 job（<code>issh_list_jobs</code> / <code>issh_get_job</code> 查询），不再直接判失败。
+                SSE MCP transport 已启用：<code>GET /sse</code> 建立事件流（job 完成推送），<code>POST /messages</code> 接收 JSON-RPC，两者与 <code>/rpc</code> 使用同一 token 校验。
+            </p>
         </div>
 
         <div class="settings-field">

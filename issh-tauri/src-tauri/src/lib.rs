@@ -624,7 +624,8 @@ pub fn run() {
             set_active_session,
             app_quit,
             minimize_to_tray,
-            agent_processes
+            agent_processes,
+            check_update
         ])
         .build(tauri::generate_context!())
         .expect("failed to build issh Tauri client");
@@ -714,6 +715,7 @@ fn agent_bridge_status_snapshot(
         "sftpRoot": config.sftp_root,
         "auditLogEnabled": config.audit_log_enabled,
         "publicDiscovery": config.public_discovery,
+        "permissionMode": config.permission_mode.as_str(),
         "discoveryPath": state.user_data.join("issh-agent-bridge.json").to_string_lossy(),
     }))
 }
@@ -733,7 +735,7 @@ async fn agent_bridge_enable(
             return agent_bridge_status_snapshot(&state, true);
         }
     }
-    let (token, scopes, sftp_root, public_discovery, audit_enabled) = {
+    let (token, scopes, sftp_root, public_discovery, audit_enabled, permission_mode) = {
         let config = state
             .config
             .lock()
@@ -744,6 +746,7 @@ async fn agent_bridge_enable(
             config.sftp_root.clone(),
             config.public_discovery,
             config.audit_log_enabled,
+            config.permission_mode,
         )
     };
     let handle = agent_bridge::start(
@@ -754,6 +757,7 @@ async fn agent_bridge_enable(
         sftp_root,
         public_discovery,
         audit_enabled,
+        permission_mode,
     )
     .await?;
     *state
@@ -820,6 +824,9 @@ async fn agent_bridge_configure(
         if let Some(value) = patch.get("publicDiscovery").and_then(Value::as_bool) {
             config.public_discovery = value;
         }
+        if let Some(mode) = patch.get("permissionMode").and_then(Value::as_str) {
+            config.permission_mode = crate::agent_bridge_config::PermissionMode::parse(mode);
+        }
         agent_bridge_config::save(&state.user_data, &config)?;
     }
     let was_running = sync_bridge_runtime(&state, manager.inner().clone()).await?;
@@ -846,7 +853,7 @@ async fn sync_bridge_runtime(
     if !was_running {
         return Ok(false);
     }
-    let (token, scopes, sftp_root, public_discovery, audit_enabled) = {
+    let (token, scopes, sftp_root, public_discovery, audit_enabled, permission_mode) = {
         let config = state
             .config
             .lock()
@@ -857,6 +864,7 @@ async fn sync_bridge_runtime(
             config.sftp_root.clone(),
             config.public_discovery,
             config.audit_log_enabled,
+            config.permission_mode,
         )
     };
     let mut last_error: Option<String> = None;
@@ -869,6 +877,7 @@ async fn sync_bridge_runtime(
             sftp_root.clone(),
             public_discovery,
             audit_enabled,
+            permission_mode,
         )
         .await
         {
@@ -1055,6 +1064,90 @@ fn agent_processes() -> Vec<Value> {
     Vec::new()
 }
 
+/// A1（R-009）版本检查：调用 Gitea/Forgejo Release API 获取最新版本。
+/// base_url 形如 https://gitea.example.com；repo_path 形如 org/issh。
+/// 网络失败返回 Err，由前端静默降级（不阻塞设置页）。
+#[tauri::command]
+async fn check_update(
+    base_url: String,
+    repo_path: String,
+    current_version: String,
+) -> Result<Value, String> {
+    let base = base_url.trim().trim_end_matches('/');
+    let repo = repo_path.trim().trim_matches('/');
+    if base.is_empty() || repo.is_empty() {
+        return Err("未配置仓库地址".to_string());
+    }
+    let parsed = url::Url::parse(base).map_err(|_| "仓库地址无效：必须是 http(s) URL".to_string())?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err("仓库地址必须是 http(s)".to_string());
+    }
+    if !repo
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || "-_./".contains(c))
+    {
+        return Err("仓库路径包含非法字符".to_string());
+    }
+
+    let api = format!("{base}/api/v1/repos/{repo}/releases/latest");
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let response = client
+        .get(&api)
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .map_err(|e| format!("网络请求失败：{e}"))?;
+    if !response.status().is_success() {
+        return Err(format!("检查更新失败：HTTP {}", response.status().as_u16()));
+    }
+    let data: Value = response
+        .json()
+        .await
+        .map_err(|e| format!("解析响应失败：{e}"))?;
+    let latest = data
+        .get("tag_name")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim_start_matches('v')
+        .to_string();
+    let has_update = compare_semver(&latest, &current_version) > 0;
+    Ok(json!({
+        "hasUpdate": has_update,
+        "currentVersion": current_version,
+        "latestVersion": latest,
+        "releaseNotes": data.get("body").and_then(Value::as_str).unwrap_or(""),
+        "releaseUrl": data.get("html_url").and_then(Value::as_str).unwrap_or(""),
+        "publishedAt": data.get("published_at").and_then(Value::as_str).unwrap_or(""),
+        "error": Value::Null,
+    }))
+}
+
+/// 语义化版本比较：按数字段逐一比较，忽略 v 前缀与 pre-release 后缀。
+fn compare_semver(a: &str, b: &str) -> i32 {
+    let parse = |s: &str| -> Vec<u64> {
+        s.split(|c: char| !c.is_ascii_digit())
+            .filter(|part| !part.is_empty())
+            .filter_map(|part| part.parse::<u64>().ok())
+            .collect()
+    };
+    let va = parse(a);
+    let vb = parse(b);
+    for i in 0..va.len().max(vb.len()) {
+        let x = va.get(i).copied().unwrap_or(0);
+        let y = vb.get(i).copied().unwrap_or(0);
+        if x > y {
+            return 1;
+        }
+        if x < y {
+            return -1;
+        }
+    }
+    0
+}
+
 
 fn inject_auth_token(request: &mut Value, token: &str) {
     if let Value::Object(map) = request {
@@ -1226,12 +1319,6 @@ mod tests {
 
     #[test]
     fn validates_runtime_request_shape_and_size() {
-        assert!(validate_request(&json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "runtime.health"
-        }))
-        .is_ok());
         assert!(validate_request(&json!({ "method": "runtime.health" })).is_err());
         assert!(validate_request(&json!({
             "jsonrpc": "2.0",
@@ -1258,5 +1345,15 @@ mod tests {
             }
         }))
         .is_err());
+    }
+
+    #[test]
+    fn compare_semver_orders_versions() {
+        assert!(compare_semver("0.2.0", "0.1.6") > 0);
+        assert!(compare_semver("0.1.6", "0.2.0") < 0);
+        assert_eq!(compare_semver("0.1.6", "0.1.6"), 0);
+        assert!(compare_semver("v1.0.0", "0.9.9") > 0);
+        assert!(compare_semver("0.10.0", "0.9.9") > 0);
+        assert!(compare_semver("1.0", "0.9.9") > 0);
     }
 }

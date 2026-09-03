@@ -1445,6 +1445,9 @@ button { font: inherit; color: inherit; }
 
 .settings-field { padding: 12px 0; border-bottom: 1px solid var(--ops-line); }
 .settings-field-title { margin-bottom: 8px; font-size: 13px; font-weight: 600; }
+.permission-mode-row { display: flex; flex-wrap: wrap; gap: 14px; }
+.permission-mode-option { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: var(--ops-fg); }
+.permission-mode-option input { accent-color: var(--ops-signal); }
 .settings-field select {
     min-height: 34px;
     min-width: 220px;
@@ -1634,6 +1637,11 @@ button { font: inherit; color: inherit; }
 
 .about-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--ops-line); font-size: 13px; }
 .about-row span { color: var(--ops-fg-muted); }
+.about-update-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.about-update-form .settings-input { flex: 1 1 180px; }
+.update-error { color: var(--ops-danger, #e5484d); }
+.update-available { color: var(--ops-signal); }
+.update-available a { margin-left: 8px; }
 
 .market-kinds { display: flex; gap: 6px; padding: 8px 0; flex-wrap: wrap; }
 .market-kind { min-height: 26px; padding: 0 12px; border: 1px solid var(--ops-line); border-radius: 999px; background: transparent; color: var(--ops-fg-muted); cursor: pointer; font-size: 12px; }

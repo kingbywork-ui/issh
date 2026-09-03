@@ -21,6 +21,8 @@ export function usage () {
   issh-agent sftp-list [--tab active|tab-1] --path /remote/path
   issh-agent sftp-read [--tab active|tab-1] --path /remote/file [--encoding utf8|base64] [--max-bytes 1048576]
   issh-agent sftp-write [--tab active|tab-1] --path /remote/file [--encoding utf8|base64] -- <content>
+  issh-agent jobs
+  issh-agent job --job-id <job-id>
   issh-agent herdr-status|herdr-start|herdr-stop|herdr-snapshot
   issh-agent herdr-link --workspace-id <issh-id> --herdr-workspace-id <herdr-id>
   issh-agent herdr-unlink|herdr-sync --workspace-id <issh-id>
@@ -84,6 +86,7 @@ export function parseAgentArgs (argv) {
             case '--encoding': options.encoding = requireValue(args, ++index, arg); break
             case '--max-bytes': options.maxBytes = numberValue(args, ++index, arg); break
             case '--output-id': options.outputId = requireValue(args, ++index, arg); break
+            case '--job-id': options.jobId = requireValue(args, ++index, arg); break
             case '--workspace-id': options.workspaceId = requireValue(args, ++index, arg); break
             case '--herdr-workspace-id': options.herdrWorkspaceId = requireValue(args, ++index, arg); break
             case '--pane-id': options.paneId = requireValue(args, ++index, arg); break
@@ -137,6 +140,8 @@ export function buildCall (command, options, positionals) {
         'sftp-list': ['issh_sftp_list', { ...baseParams, path: options.path }],
         'sftp-read': ['issh_sftp_read', { ...baseParams, path: options.path, encoding: options.encoding, maxBytes: options.maxBytes }],
         'sftp-write': ['issh_sftp_write', { ...baseParams, path: options.path, encoding: options.encoding, content }],
+        jobs: ['issh_list_jobs', {}],
+        job: ['issh_get_job', { jobId: options.jobId }],
         'herdr-status': ['issh_herdr_status', {}],
         'herdr-start': ['issh_herdr_start', {}],
         'herdr-stop': ['issh_herdr_stop', {}],

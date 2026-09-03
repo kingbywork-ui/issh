@@ -572,6 +572,21 @@ export interface AgentBridgeStatus {
     auditLogEnabled: boolean
     publicDiscovery: boolean
     discoveryPath: string
+    permissionMode: 'observer' | 'confirm' | 'auto'
+}
+
+export interface UpdateCheckResult {
+    hasUpdate: boolean
+    currentVersion: string
+    latestVersion: string
+    releaseNotes: string
+    releaseUrl: string
+    publishedAt: string
+    error: string | null
+}
+
+export function checkUpdate (baseUrl: string, repoPath: string, currentVersion: string): Promise<UpdateCheckResult> {
+    return invoke<UpdateCheckResult>('check_update', { baseUrl, repoPath, currentVersion })
 }
 
 export interface AgentBridgePatch {
@@ -579,6 +594,7 @@ export interface AgentBridgePatch {
     sftpRoot?: string | null
     auditLogEnabled?: boolean
     publicDiscovery?: boolean
+    permissionMode?: 'observer' | 'confirm' | 'auto'
 }
 
 export function agentBridgeEnable (): Promise<AgentBridgeStatus> {

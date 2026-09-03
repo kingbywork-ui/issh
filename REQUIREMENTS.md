@@ -12,9 +12,9 @@
 
 | 状态 | 数量 |
 |------|------|
-| 待办 | 9 |
+| 待办 | 6 |
 | 进行中 | 1 |
-| 已完成 | 45 |
+| 已完成 | 48 |
 | 已放弃 | 0 |
 
 > 状态说明（2026-09-03 同步）：R-008 原始范围（对齐 issh 分支 Agent Bridge：17 工具闭环 + CLI/MCP + 安全）已完成，Netcatty 架构超前能力拆为 R-050~R-055 待办；R-036/R-037 已完成（正文 2026-09-01 最终验收记录为准，302/308 行的「保持进行中」为当日中间快照）；R-044 为持续生效的提交约定，保持「进行中」。
@@ -33,7 +33,7 @@
 | R-006 | LLM补全：候选面板UI与快捷键对齐 | 用户需求 | 2026-08-28 | 已完成 |
 | R-007 | LLM补全：配置项与设置页全集对齐 | 用户需求 | 2026-08-28 | 已完成 |
 | R-008 | Agent Bridge 功能对齐（CLI/MCP/工具面/安全） | 用户需求 | 2026-08-28 | 已完成 |
-| R-009 | About/版本检查功能移植 | 用户需求 | 2026-08-28 | 待办 |
+| R-009 | About/版本检查功能移植 | 用户需求 | 2026-08-28 | 已完成 |
 | R-010 | SSH 主机管理细节对齐 | 用户需求 | 2026-08-28 | 待办 |
 | R-011 | 终端功能细节对齐（vim粘贴/右键菜单/搜索/批量输入/linkifier/配色） | 用户需求 | 2026-08-28 | 待办 |
 | R-012 | 配置同步插件功能对齐 | 用户需求 | 2026-08-28 | 待办 |
@@ -476,10 +476,14 @@
 
 **来源**：R-008 后续 backlog 拆分（对话衍生）。issh-agent 随 Windows 安装包（extraResources）发布 SKILL.md 供外部 agent 直接加载。
 
-### R-054 长命令 job 化（2026-09-03，待办）
+### R-054 长命令 job 化（2026-09-03，已完成）
 
 **来源**：R-008 后续 backlog 拆分（对话衍生）。Agent Bridge 命令执行超时后转为 job 异步执行 + 结果轮询，替代当前超时即失败的单次调用模型。
 
-### R-055 Observer/Confirm/Auto 权限三档 + SSE MCP transport（2026-09-03，待办）
+**实现**（`issh-tauri/src-tauri/src/agent_bridge.rs`）：`issh_exec_command` 超时不再判失败，而是返回 `{ jobId, status: "running" }`；执行放到后台 `tokio::spawn` 继续跑（上限 `timeoutMs×10`，clamp 60s~1h），完成后更新内存 job 表并推送 SSE 事件。新增工具 `issh_list_jobs` / `issh_get_job`（Read scope），job 表上限 64 条。issh-agent 协议表 + CLI（`jobs` / `job --job-id`）+ 诚实降级同步。
+
+### R-055 Observer/Confirm/Auto 权限三档 + SSE MCP transport（2026-09-03，已完成）
 
 **来源**：R-008 后续 backlog 拆分（对话衍生）。① Agent Bridge 危险/敏感操作由当前布尔确认门升级为 Observer（只读）/Confirm（确认后执行）/Auto（自动放行）三档策略；② 服务端增加 SSE MCP transport（对齐 issh 分支 `agentBridgeSseEnabled` 能力）。
+
+**实现**：① `PermissionMode` 枚举（observer/confirm/auto，默认 confirm）持久化于 `agent-bridge.json`；Observer 档下所有 write/exec/sftp 工具只返回执行计划（`planned: true, blocked: true`）不执行并写审计 `observer-blocked`；Auto 档跳过 confirm 校验（桌面端确认框仍生效）；档位决策写入审计日志。② `GET /sse` 建立 SSE 事件流（`event: endpoint` → `/messages`，job 完成事件推送，15s 心跳），`POST /messages` 与 `/rpc` 共用 JSON-RPC 处理与 token 校验。

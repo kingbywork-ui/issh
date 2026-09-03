@@ -18,6 +18,7 @@
     import AutoSudoSettings from './AutoSudoSettings.svelte'
     import VaultSettings from './VaultSettings.svelte'
     import { lockHostProfiles } from './runtime'
+    import { checkUpdate, type UpdateCheckResult } from './runtime'
 
     let { onclose }: { onclose: () => void } = $props()
 
@@ -171,6 +172,15 @@
     let isWindows = $state(navigator.userAgent.includes('Windows'))
     let elevateBusy = $state(false)
     let elevateError = $state('')
+
+    const productVersion = '0.1.6'
+    let tauriVersion = $state('')
+    let webviewVersion = $state('')
+    let giteaBaseUrl = $state(localStorage.getItem('issh.giteaBaseUrl') ?? '')
+    let giteaRepoPath = $state(localStorage.getItem('issh.giteaRepoPath') ?? '')
+    let updateChecking = $state(false)
+    let updateError = $state('')
+    let updateResult = $state<UpdateCheckResult | null>(null)
 
     let tabs = $state(getSettingsTabs())
 
@@ -355,9 +365,29 @@
             runtimeVersion = health.runtimeVersion
         } catch { runtimeVersion = '' }
         try {
-            const { getVersion } = await import('@tauri-apps/api/app')
+            const { getVersion, getTauriVersion } = await import('@tauri-apps/api/app')
             appVersion = await getVersion()
+            tauriVersion = await getTauriVersion()
         } catch { appVersion = '' }
+        // WebView2 版本：Windows 下 UA 形如 ... Edg/xx.x.x
+        const edgeMatch = navigator.userAgent.match(/Edg\/([\d.]+)/)
+        webviewVersion = edgeMatch ? edgeMatch[1] : ''
+    }
+
+    async function runUpdateCheck (): Promise<void> {
+        updateChecking = true
+        updateError = ''
+        updateResult = null
+        localStorage.setItem('issh.giteaBaseUrl', giteaBaseUrl.trim())
+        localStorage.setItem('issh.giteaRepoPath', giteaRepoPath.trim())
+        try {
+            updateResult = await checkUpdate(giteaBaseUrl.trim(), giteaRepoPath.trim(), productVersion)
+        } catch (cause) {
+            // AC3：网络失败静默降级，仅提示、不阻塞设置页
+            updateError = cause instanceof Error ? cause.message : String(cause)
+        } finally {
+            updateChecking = false
+        }
     }
 
     async function relaunchElevated (): Promise<void> {
@@ -773,8 +803,46 @@
                     </section>
                 {:else if section === 'about'}
                     <section aria-label="关于">
-                        <div class="about-row"><span>issh 版本</span><strong>{appVersion || '未知'}</strong></div>
+                        <div class="about-row"><span>issh 版本</span><strong>{productVersion || '未知'}</strong></div>
+                        <div class="about-row"><span>构建版本</span><strong>{appVersion || '未知'}</strong></div>
+                        <div class="about-row"><span>Tauri 版本</span><strong>{tauriVersion || '未知'}</strong></div>
+                        <div class="about-row"><span>WebView2 版本</span><strong>{webviewVersion || '未知'}</strong></div>
                         <div class="about-row"><span>Runtime 版本</span><strong>{runtimeVersion || '未连接'}</strong></div>
+
+                        <div class="settings-field">
+                            <div class="settings-field-title">检查更新（Gitea/Forgejo）</div>
+                            <div class="about-update-form">
+                                <input
+                                    class="settings-input"
+                                    type="text"
+                                    placeholder="https://gitea.example.com"
+                                    bind:value={giteaBaseUrl}
+                                />
+                                <input
+                                    class="settings-input"
+                                    type="text"
+                                    placeholder="org/issh"
+                                    bind:value={giteaRepoPath}
+                                />
+                                <button
+                                    type="button"
+                                    disabled={updateChecking}
+                                    onclick={() => void runUpdateCheck()}
+                                >{updateChecking ? '检查中…' : '检查更新'}</button>
+                            </div>
+                            {#if updateError}
+                                <div class="settings-hint update-error" role="alert">检查失败：{updateError}</div>
+                            {:else if updateResult}
+                                {#if updateResult.hasUpdate}
+                                    <div class="settings-hint update-available">
+                                        发现新版本 <strong>v{updateResult.latestVersion}</strong>（当前 {updateResult.currentVersion}）
+                                        {#if updateResult.releaseUrl}<a href={updateResult.releaseUrl} target="_blank" rel="noreferrer">查看 Release</a>{/if}
+                                    </div>
+                                {:else}
+                                    <div class="settings-hint">已是最新版本（当前 {updateResult.currentVersion}，最新 {updateResult.latestVersion || '未知'}）</div>
+                                {/if}
+                            {/if}
+                        </div>
                     </section>
                 {:else if section === 'plugin-tab' && pluginTabSection && tabs.some((tab) => tab.id === pluginTabSection)}
                     <section aria-label={tabs.find((tab) => tab.id === pluginTabSection)?.title ?? '插件设置'}>

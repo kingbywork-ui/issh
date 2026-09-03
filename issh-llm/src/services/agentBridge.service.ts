@@ -967,6 +967,12 @@ export class AgentBridgeService {
                 case 'issh_sftp_write':
                     rpcResponse = { id, result: await this.sftpWrite(normalizedRequest.params ?? {}) }
                     break
+                case 'issh_list_jobs':
+                    rpcResponse = { id, result: this.listBridgeJobs() }
+                    break
+                case 'issh_get_job':
+                    rpcResponse = { id, result: await this.getBridgeJob(normalizedRequest.params ?? {}) }
+                    break
                 default:
                     rpcResponse = this.error(id, 'method_not_found', `Unknown method: ${request.method ?? ''}`)
             }
@@ -1937,6 +1943,17 @@ export class AgentBridgeService {
             size: buffer.length,
             written: true,
         }
+    }
+
+    // R-054 长命令 job：dev 分支由 issh-tauri Rust Agent Bridge 维护 job 状态；
+    // Angular 遗留服务不参与运行，返回诚实降级（空表 / not found）。
+    private listBridgeJobs (): any {
+        return { jobs: [], count: 0, maxEntries: 64 }
+    }
+
+    private async getBridgeJob (params: RpcParams): Promise<any> {
+        const jobId = String((params as any)?.jobId ?? '')
+        throw new Error(`Job not found: ${jobId}（job 状态由 issh-tauri Rust Agent Bridge 维护）`)
     }
 
     private assertNotSensitive (tab: BaseTerminalTabComponent<any>): void {

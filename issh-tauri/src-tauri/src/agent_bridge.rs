@@ -20,6 +20,7 @@ use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
 
+use crate::agent_bridge_config::PermissionMode;
 use crate::RuntimeManager;
 
 /// Agent Bridge 固定监听端口（R-045：不再自动选择）。
@@ -124,6 +125,8 @@ const TOOLS: &[ToolDef] = &[
     ToolDef { name: "issh_sftp_list", scope: ToolScope::Sftp, dangerous_confirm: false },
     ToolDef { name: "issh_sftp_read", scope: ToolScope::Sftp, dangerous_confirm: false },
     ToolDef { name: "issh_sftp_write", scope: ToolScope::Sftp, dangerous_confirm: true },
+    ToolDef { name: "issh_list_jobs", scope: ToolScope::Read, dangerous_confirm: false },
+    ToolDef { name: "issh_get_job", scope: ToolScope::Read, dangerous_confirm: false },
 ];
 
 /// Agent Bridge 运行期状态：token、审计、输出缓存、scope 授权。
@@ -141,7 +144,27 @@ pub struct AgentBridgeState {
     allowed_scopes: HashSet<ToolScope>,
     /// 是否写审计日志（agent-bridge-audit.jsonl）。
     audit_enabled: bool,
+    /// 权限档位（R-055）：observer / confirm / auto。
+    permission_mode: PermissionMode,
+    /// 长命令异步 job 表（R-054）：exec 超时后转 job，可按 id 查询。
+    jobs: std::sync::Mutex<Vec<JobRecord>>,
+    /// SSE 事件广播（R-055）：job 状态变化等推送给已连接客户端。
+    sse_tx: tokio::sync::broadcast::Sender<String>,
 }
+
+/// 长命令异步 job（R-054）：状态机 running -> done/failed。
+#[derive(Debug, Clone)]
+struct JobRecord {
+    id: String,
+    status: String,
+    session: String,
+    command: String,
+    result: Option<Value>,
+    created_at: u64,
+    finished_at: Option<u64>,
+}
+
+const MAX_JOB_ENTRIES: usize = 64;
 
 struct CachedOutput {
     text: String,
@@ -168,6 +191,7 @@ pub async fn start(
     sftp_root: Option<String>,
     public_discovery: bool,
     audit_enabled: bool,
+    permission_mode: PermissionMode,
 ) -> Result<AgentBridgeHandle, String> {
     let listener = TcpListener::bind(("127.0.0.1", AGENT_BRIDGE_PORT))
         .await
@@ -177,6 +201,7 @@ pub async fn start(
 
     let token_sha256: [u8; 32] = Sha256::digest(token.as_bytes()).into();
     let audit_path = user_data.join("agent-bridge-audit.jsonl");
+    let (sse_tx, _) = tokio::sync::broadcast::channel::<String>(64);
 
     let state = Arc::new(AgentBridgeState {
         token_sha256,
@@ -188,6 +213,9 @@ pub async fn start(
         public_discovery,
         allowed_scopes,
         audit_enabled,
+        permission_mode,
+        jobs: std::sync::Mutex::new(Vec::new()),
+        sse_tx,
     });
 
     if public_discovery {
@@ -302,9 +330,13 @@ async fn handle_connection(
         return Ok(());
     }
 
-    if method != "POST" || path != "/rpc" {
+    // R-055 SSE MCP transport：GET /sse 建立事件流；POST /messages 与 /rpc 走同一 JSON-RPC 处理
+    if method == "GET" && path == "/sse" {
+        return handle_sse(writer, state).await;
+    }
+    if method != "POST" || (path != "/rpc" && path != "/messages") {
         write_response(&mut writer, 404, &json!({
-            "error": { "code": -32601, "message": "Not found; POST /rpc only" }
+            "error": { "code": -32601, "message": "Not found; POST /rpc or /messages, GET /sse" }
         }))
         .await?;
         return Ok(());
@@ -358,6 +390,64 @@ async fn handle_connection(
                 "error": { "code": -32000, "message": message }
             }))
             .await
+        }
+    }
+}
+
+/// R-055 SSE MCP transport：GET /sse 建立事件流。
+/// 首个事件告知 POST 消息端点（/messages）；随后转发 job 等状态事件，15s 心跳保活。
+async fn handle_sse(
+    mut writer: tokio::net::tcp::OwnedWriteHalf,
+    state: Arc<AgentBridgeState>,
+) -> Result<(), String> {
+    use tokio::io::AsyncWriteExt;
+    let headers = concat!(
+        "HTTP/1.1 200 OK\r\n",
+        "Content-Type: text/event-stream\r\n",
+        "Cache-Control: no-cache\r\n",
+        "Connection: keep-alive\r\n",
+        "Access-Control-Allow-Origin: *\r\n\r\n",
+    );
+    writer
+        .write_all(headers.as_bytes())
+        .await
+        .map_err(|e| e.to_string())?;
+    writer
+        .write_all(b"event: endpoint\ndata: /messages\n\n")
+        .await
+        .map_err(|e| e.to_string())?;
+    writer.flush().await.map_err(|e| e.to_string())?;
+
+    let mut rx = state.sse_tx.subscribe();
+    let mut heartbeat = tokio::time::interval(std::time::Duration::from_secs(15));
+    heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    loop {
+        tokio::select! {
+            event = rx.recv() => {
+                match event {
+                    Ok(payload) => {
+                        if writer.write_all(payload.as_bytes()).await.is_err()
+                            || writer.flush().await.is_err()
+                        {
+                            return Ok(()); // 客户端断开
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                        // 慢消费者：标记丢帧，继续
+                        if writer.write_all(b": dropped\n\n").await.is_err() {
+                            return Ok(());
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => return Ok(()),
+                }
+            }
+            _ = heartbeat.tick() => {
+                if writer.write_all(b": ping\n\n").await.is_err()
+                    || writer.flush().await.is_err()
+                {
+                    return Ok(()); // 客户端断开
+                }
+            }
         }
     }
 }
@@ -445,12 +535,33 @@ async fn dispatch_tool(
             tool.scope.as_str()
         ));
     }
+    // R-055 权限档位：Observer 下所有会改变状态的工具只返回计划、不执行。
+    if state.permission_mode == PermissionMode::Observer && tool.scope != ToolScope::Read {
+        audit(
+            state,
+            tool.name,
+            "observer-blocked",
+            json!({
+                "permissionMode": "observer",
+                "scope": tool.scope.as_str(),
+            }),
+        );
+        return Ok(json!({
+            "permissionMode": "observer",
+            "blocked": true,
+            "planned": true,
+            "tool": tool.name,
+            "params": params,
+            "reason": "Agent Bridge 权限档位为 observer（只读），该操作未执行，仅返回执行计划",
+        }));
+    }
     match tool.name {
         "issh_health" => Ok(json!({
             "ok": true,
             "port": AGENT_BRIDGE_PORT,
             "protocolVersion": "1.5.0",
             "publicDiscovery": state.public_discovery,
+            "permissionMode": state.permission_mode.as_str(),
             "tools": TOOLS.iter().map(|tool| json!({
                 "name": tool.name,
                 "scope": tool.scope.as_str(),
@@ -473,6 +584,8 @@ async fn dispatch_tool(
         "issh_sftp_list" => sftp_list(state, params).await,
         "issh_sftp_read" => sftp_read(state, params).await,
         "issh_sftp_write" => sftp_write(state, params).await,
+        "issh_list_jobs" => list_jobs(state),
+        "issh_get_job" => get_job(state, params),
         _ => Err(format!("Unknown tool: {}", tool.name)),
     }
 }
@@ -495,6 +608,105 @@ async fn rpc(state: &AgentBridgeState, method: &str, params: Value) -> Result<Va
             .to_string());
     }
     Ok(response.get("result").cloned().unwrap_or(Value::Null))
+}
+
+/// 独立于 AgentBridgeState 的 Runtime RPC（R-054：exec job 后台任务使用，
+/// 不借用 state 引用，可安全 spawn）。
+async fn rpc_runtime(
+    runtime: &Arc<RuntimeManager>,
+    method: &str,
+    params: Value,
+) -> Result<Value, String> {
+    let request = json!({
+        "jsonrpc": "2.0",
+        "id": format!("bridge-job-{}", now_unix_ms()),
+        "method": method,
+        "params": params,
+    });
+    let response = runtime.request(request).await?;
+    if let Some(error) = response.get("error") {
+        return Err(error
+            .get("message")
+            .and_then(Value::as_str)
+            .unwrap_or("Runtime RPC failed")
+            .to_string());
+    }
+    Ok(response.get("result").cloned().unwrap_or(Value::Null))
+}
+
+// ---------- long-running job（R-054）----------
+
+fn register_job(state: &Arc<AgentBridgeState>, id: &str, session: &str, command: &str) {
+    let mut jobs = state
+        .jobs
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if jobs.len() >= MAX_JOB_ENTRIES {
+        jobs.remove(0);
+    }
+    jobs.push(JobRecord {
+        id: id.to_string(),
+        status: "running".to_string(),
+        session: session.to_string(),
+        command: command.to_string(),
+        result: None,
+        created_at: now_unix_ms(),
+        finished_at: None,
+    });
+}
+
+fn finish_job(state: &Arc<AgentBridgeState>, id: &str, status: &str, result: Option<Value>) -> Value {
+    let record = {
+        let mut jobs = state
+            .jobs
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut record_json = json!({ "jobId": id, "status": status });
+        if let Some(record) = jobs.iter_mut().find(|job| job.id == id) {
+            record.status = status.to_string();
+            record.result = result.clone();
+            record.finished_at = Some(now_unix_ms());
+            record_json = job_to_json(record);
+        }
+        record_json
+    };
+    // SSE 广播（R-055）：job 状态变化推送给已连接客户端
+    let _ = state.sse_tx.send(format!("event: job\ndata: {record}\n\n"));
+    record
+}
+
+fn job_to_json(job: &JobRecord) -> Value {
+    json!({
+        "jobId": job.id,
+        "status": job.status,
+        "session": job.session,
+        "command": job.command,
+        "result": job.result,
+        "createdAt": job.created_at,
+        "finishedAt": job.finished_at,
+    })
+}
+
+fn list_jobs(state: &Arc<AgentBridgeState>) -> Result<Value, String> {
+    let jobs = state
+        .jobs
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let entries: Vec<Value> = jobs.iter().rev().map(job_to_json).collect();
+    Ok(json!({ "jobs": entries, "count": jobs.len(), "maxEntries": MAX_JOB_ENTRIES }))
+}
+
+fn get_job(state: &Arc<AgentBridgeState>, params: &Value) -> Result<Value, String> {
+    let job_id = params_str(params, "jobId").ok_or("jobId is required")?;
+    let jobs = state
+        .jobs
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let job = jobs
+        .iter()
+        .find(|job| job.id == job_id)
+        .ok_or_else(|| format!("Job not found: {job_id}（job 表上限 {MAX_JOB_ENTRIES} 条，最旧记录会被淘汰）"))?;
+    Ok(job_to_json(job))
 }
 
 fn params_str<'a>(params: &'a Value, key: &str) -> Option<&'a str> {
@@ -747,14 +959,28 @@ fn normalize_command(command: &str) -> String {
     normalized
 }
 
-fn require_confirm_flag(params: &Value, dangerous: bool) -> Result<(), String> {
+/// R-055 权限档位下的危险命令确认门：
+/// - Auto：跳过 confirm 校验（自动放行，桌面端确认框仍生效）
+/// - Confirm/Observer：危险命令需要 confirmDangerous=true（Observer 已在 dispatch 层拦截，不会到这里）
+fn require_confirm_flag(
+    mode: PermissionMode,
+    params: &Value,
+    dangerous: bool,
+) -> Result<(), String> {
     if !dangerous {
         return Ok(());
     }
-    let confirmed = params.get("confirmDangerous").and_then(Value::as_bool).unwrap_or(false);
+    if mode == PermissionMode::Auto {
+        return Ok(());
+    }
+    let confirmed = params
+        .get("confirmDangerous")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     if !confirmed {
         return Err(
-            "危险命令需要 confirmDangerous=true 才能执行；issh 桌面端仍会弹出用户确认框".to_string(),
+            "危险命令需要 confirmDangerous=true 才能执行；issh 桌面端仍会弹出用户确认框"
+                .to_string(),
         );
     }
     Ok(())
@@ -778,7 +1004,7 @@ async fn run_command(state: &AgentBridgeState, params: &Value) -> Result<Value, 
     let session_id = resolve_tab(params).await?;
     let command = params_str(params, "command").ok_or("command is required")?;
     let normalized = normalize_command(command);
-    require_confirm_flag(params, is_dangerous_command(&normalized))?;
+    require_confirm_flag(state.permission_mode, params, is_dangerous_command(&normalized))?;
     let mut payload: Vec<u8> = normalized.bytes().collect();
     payload.push(b'\r');
     let result = rpc(
@@ -790,11 +1016,11 @@ async fn run_command(state: &AgentBridgeState, params: &Value) -> Result<Value, 
     Ok(json!({ "ran": true, "session": session_id, "result": result }))
 }
 
-async fn exec_command(state: &AgentBridgeState, params: &Value) -> Result<Value, String> {
+async fn exec_command(state: &Arc<AgentBridgeState>, params: &Value) -> Result<Value, String> {
     let session_id = resolve_tab(params).await?;
     let command = params_str(params, "command").ok_or("command is required")?;
     let normalized = normalize_command(command);
-    require_confirm_flag(params, is_dangerous_command(&normalized))?;
+    require_confirm_flag(state.permission_mode, params, is_dangerous_command(&normalized))?;
     let timeout_ms = params_u64(params, "timeoutMs")
         .unwrap_or(DEFAULT_EXEC_TIMEOUT_MS)
         .clamp(1, MAX_EXEC_TIMEOUT_MS);
@@ -807,54 +1033,109 @@ async fn exec_command(state: &AgentBridgeState, params: &Value) -> Result<Value,
         return Err(format!("issh_exec_command 仅支持 SSH 会话（当前 kind={kind}）"));
     }
 
-    let result = with_timeout(
-        rpc(
-            state,
+    // R-054 长命令 job 化：执行放到后台任务，主路径等 timeout；
+    // 超时后不判失败，而是返回 jobId（running），后台完成后更新 job 记录并推送 SSE 事件。
+    let job_id = format!("job-{}", now_unix_ms());
+    register_job(state, &job_id, &session_id, &normalized);
+
+    let (tx, rx) = tokio::sync::oneshot::channel::<Value>();
+    let runtime = Arc::clone(&state.runtime);
+    let job_state = Arc::clone(state);
+    let spawn_job_id = job_id.clone();
+    let job_session = session_id.clone();
+    let job_command = normalized.clone();
+    let job_timeout_ms = (timeout_ms.saturating_mul(10)).clamp(60_000, MAX_EXEC_TIMEOUT_MS);
+    tokio::spawn(async move {
+        let outcome = match rpc_runtime(
+            &runtime,
             "ssh.execReadonly",
             json!({
-                "sessionId": session_id,
-                "command": normalized,
-                "timeoutMs": timeout_ms.saturating_sub(2_000).max(1_000),
+                "sessionId": job_session.clone(),
+                "command": job_command.clone(),
+                "timeoutMs": job_timeout_ms,
                 "maxOutputBytes": max_output_bytes,
             }),
-        ),
-        timeout_ms,
-        "exec timed out",
-    )
-    .await;
-    // isshd ssh.execReadonly 只返回 { output }（无 exit code）；超时以 RPC error 呈现。
-    // 这里适配为 issh-llm 契约：stdout / exitCode / timedOut。
-    let output = match result {
-        Ok(result) => result.get("output").and_then(Value::as_str).unwrap_or("").to_string(),
-        Err(error) => {
-            let message = error.to_lowercase();
-            let timed_out = message.contains("timed out") || message.contains("timeout");
-            return Ok(json!({
+        )
+        .await
+        {
+            Ok(result) => {
+                let output = result
+                    .get("output")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
+                let output_id = cache_output(&job_state, &output).unwrap_or_default();
+                let truncated = output.len() > 64 * 1024;
+                let visible = if truncated { &output[..64 * 1024] } else { output.as_str() };
+                finish_job(
+                    &job_state,
+                    &spawn_job_id,
+                    "done",
+                    Some(json!({
+                        "stdout": visible,
+                        "outputBytes": output.len(),
+                        "truncated": truncated,
+                        "outputId": output_id,
+                    })),
+                );
+                json!({
+                    "session": job_session,
+                    "command": job_command,
+                    "stdout": visible,
+                    "stderr": "",
+                    "exitCode": Value::Null,
+                    "timedOut": false,
+                    "truncated": truncated,
+                    "outputId": output_id,
+                    "outputBytes": output.len(),
+                    "jobId": spawn_job_id,
+                })
+            }
+            Err(error) => {
+                let message = error.to_lowercase();
+                let timed_out = message.contains("timed out") || message.contains("timeout");
+                finish_job(
+                    &job_state,
+                    &spawn_job_id,
+                    "failed",
+                    Some(json!({ "error": error, "timedOut": timed_out })),
+                );
+                json!({
+                    "session": job_session,
+                    "command": job_command,
+                    "stdout": "",
+                    "stderr": "",
+                    "exitCode": Value::Null,
+                    "timedOut": timed_out,
+                    "error": error,
+                    "jobId": spawn_job_id,
+                })
+            }
+        };
+        let _ = tx.send(outcome);
+    });
+
+    match tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), rx).await {
+        Ok(Ok(outcome)) => Ok(outcome),
+        Ok(Err(_recv_error)) => Err("exec job 内部错误：后台任务通道断开".to_string()),
+        Err(_elapsed) => {
+            // 超时转 job：返回 running 状态，后台继续执行
+            audit(
+                state,
+                "issh_exec_command",
+                "job-started",
+                json!({ "jobId": job_id, "session": session_id, "command": normalized, "timeoutMs": timeout_ms }),
+            );
+            Ok(json!({
+                "jobId": job_id,
+                "status": "running",
                 "session": session_id,
                 "command": normalized,
-                "stdout": "",
-                "stderr": "",
-                "exitCode": Value::Null,
-                "timedOut": timed_out,
-                "error": error,
-            }));
+                "timeoutMs": timeout_ms,
+                "hint": "命令仍在后台执行：使用 issh_get_job 查询进度；SSE 客户端会收到 job 完成事件",
+            }))
         }
-    };
-
-    let output_id = cache_output(state, &output)?;
-    let truncated = output.len() > 64 * 1024;
-    let visible = if truncated { &output[..64 * 1024] } else { output.as_str() };
-    Ok(json!({
-        "session": session_id,
-        "command": normalized,
-        "stdout": visible,
-        "stderr": "",
-        "exitCode": Value::Null,
-        "timedOut": false,
-        "truncated": truncated,
-        "outputId": output_id,
-        "outputBytes": output.len(),
-    }))
+    }
 }
 
 fn cache_output(state: &AgentBridgeState, text: &str) -> Result<String, String> {
@@ -909,7 +1190,7 @@ fn get_output(state: &AgentBridgeState, params: &Value) -> Result<Value, String>
 async fn batch_exec(state: &Arc<AgentBridgeState>, params: &Value) -> Result<Value, String> {
     let command = params_str(params, "command").ok_or("command is required")?;
     let normalized = normalize_command(command);
-    require_confirm_flag(params, is_dangerous_command(&normalized))?;
+    require_confirm_flag(state.permission_mode, params, is_dangerous_command(&normalized))?;
     let timeout_ms = params_u64(params, "timeoutMs")
         .unwrap_or(DEFAULT_EXEC_TIMEOUT_MS)
         .clamp(1, MAX_EXEC_TIMEOUT_MS);
@@ -1085,7 +1366,7 @@ async fn sftp_write(state: &AgentBridgeState, params: &Value) -> Result<Value, S
             "单次 SFTP 写入超过上限 {MAX_SFTP_WRITE_BYTES} 字节（1MB）；请分块写入"
         ));
     }
-    require_confirm_flag(params, true)?; // SFTP 写入始终需要确认标志
+    require_confirm_flag(state.permission_mode, params, true)?; // SFTP 写入始终需要确认标志
     let _ = ensure_sftp_open(state, &session_id).await?;
     let data_b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
     let result = rpc(
@@ -1183,9 +1464,13 @@ mod tests {
 
     #[test]
     fn require_confirm_flag_gates_dangerous_commands() {
-        assert!(require_confirm_flag(&json!({}), false).is_ok());
-        assert!(require_confirm_flag(&json!({}), true).is_err());
-        assert!(require_confirm_flag(&json!({ "confirmDangerous": true }), true).is_ok());
+        let confirm = PermissionMode::Confirm;
+        let auto = PermissionMode::Auto;
+        assert!(require_confirm_flag(confirm, &json!({}), false).is_ok());
+        assert!(require_confirm_flag(confirm, &json!({}), true).is_err());
+        assert!(require_confirm_flag(confirm, &json!({ "confirmDangerous": true }), true).is_ok());
+        // Auto 档位跳过 confirm 校验（R-055）
+        assert!(require_confirm_flag(auto, &json!({}), true).is_ok());
     }
 
     #[test]
