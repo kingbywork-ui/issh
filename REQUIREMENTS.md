@@ -12,9 +12,9 @@
 
 | 状态 | 数量 |
 |------|------|
-| 待办 | 10 |
+| 待办 | 9 |
 | 进行中 | 1 |
-| 已完成 | 44 |
+| 已完成 | 45 |
 | 已放弃 | 0 |
 
 > 状态说明（2026-09-03 同步）：R-008 原始范围（对齐 issh 分支 Agent Bridge：17 工具闭环 + CLI/MCP + 安全）已完成，Netcatty 架构超前能力拆为 R-050~R-055 待办；R-036/R-037 已完成（正文 2026-09-01 最终验收记录为准，302/308 行的「保持进行中」为当日中间快照）；R-044 为持续生效的提交约定，保持「进行中」。
@@ -37,7 +37,7 @@
 | R-010 | SSH 主机管理细节对齐 | 用户需求 | 2026-08-28 | 待办 |
 | R-011 | 终端功能细节对齐（vim粘贴/右键菜单/搜索/批量输入/linkifier/配色） | 用户需求 | 2026-08-28 | 待办 |
 | R-012 | 配置同步插件功能对齐 | 用户需求 | 2026-08-28 | 待办 |
-| R-013 | 对齐验收：整体构建+冒烟+HANDOFF 更新 | 用户需求 | 2026-08-28 | 待办 |
+| R-013 | 对齐验收：整体构建+冒烟+HANDOFF 更新 | 用户需求 | 2026-08-28 | 已完成 |
 | R-014 | Agent Bridge Rust 半成品修复：agent_bridge.rs 语法损坏修复 + 协议契约对齐（protocol.js 1.5.0 / 17 工具 / scope 映射 / exec 返回字段 stdout+exitCode+timedOut）+ lib.rs 接线 | 对话衍生 | 2026-08-28 | 已完成 |
 | R-015 | LLM补全补差：AI/历史候选统一 confidence 排序、normalizeCommand 接入候选链路、suggestionCache LRU（maxSize=100/ttl=5min）、敏感输入 gate（密码 prompt 停止补全清空 buffer）、ghost text 轻提示模式 | 对话衍生 | 2026-08-28 | 已完成 |
 | R-016 | 移植 agentProcessDetection（codex/codex-cli/hermes 等 agent 进程识别）+ codexDesktopConfig（Codex Desktop 配置指引）两个缺失服务 | 对话衍生 | 2026-08-28 | 已完成 |
