@@ -185,6 +185,7 @@
     // 插件注册的设置页组件是任意框架组件（当前生态为 Svelte 组件对象），
     // 用 mount/unmount 手动挂载到容器节点（Svelte 5 runes 组件不能直接动态 import 后用 <svelte:component>）
     let pluginTabSection = $state('')
+    let pluginTabError = $state('')
     let mountedPluginTab = ''
     const mountedComponents = new Map<string, { destroy (): void }>()
 
@@ -217,6 +218,7 @@
     function showPluginTab (tabId: string): void {
         const tab = tabs.find((candidate) => (candidate.key ?? candidate.id) === tabId)
         if (!tab) return
+        pluginTabError = ''
         pluginTabSection = tabId
         leaveVault('plugin-tab')
     }
@@ -238,8 +240,20 @@
                 const instance = mount(activeTab.component as Parameters<typeof mount>[0], { target: host })
                 mountedComponents.set(activeId, { destroy: () => unmount(instance) })
                 mountedPluginTab = activeId
+                pluginTabError = ''
             } catch (cause) {
-                console.warn(`[settings] 插件设置页挂载失败：${activeId}`, cause)
+                // 外置插件可能由旧版 Svelte 编译，尝试其 class 组件兼容入口。
+                for (const child of [...host.children]) child.remove()
+                const LegacyComponent = activeTab.component as unknown as { new (options: { target: HTMLElement }): { $destroy?: () => void } }
+                try {
+                    const legacy = new LegacyComponent({ target: host })
+                    mountedComponents.set(activeId, { destroy: () => { legacy.$destroy?.() } })
+                    mountedPluginTab = activeId
+                    pluginTabError = ''
+                } catch (legacyCause) {
+                    pluginTabError = `插件设置页加载失败：${legacyCause instanceof Error ? legacyCause.message : String(legacyCause)}`
+                    console.warn(`[settings] 插件设置页挂载失败：${activeId}`, cause, legacyCause)
+                }
             }
         }
     })
@@ -883,6 +897,9 @@
                     </section>
                 {:else if section === 'plugin-tab' && pluginTabSection && tabs.some((tab) => (tab.key ?? tab.id) === pluginTabSection)}
                     <section aria-label={tabs.find((tab) => (tab.key ?? tab.id) === pluginTabSection)?.title ?? '插件设置'}>
+                        {#if pluginTabError}
+                            <div class="settings-error" role="alert">{pluginTabError}</div>
+                        {/if}
                         <div class="plugin-settings-host" bind:this={pluginTabContainer}></div>
                     </section>
                 {/if}

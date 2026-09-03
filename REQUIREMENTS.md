@@ -54,6 +54,14 @@
 
 ## 需求记录（后续追加）
 
+### R-058 外置 Agent 桥接设置页点击后空白（2026-09-03，进行中）
+
+**需求**：用户反馈内置 Agent Bridge 设置页正常，但商城安装的「Agent 桥接」点击菜单后右侧没有内容。
+
+**初步定位**：外置插件入口已注册 `Agent 桥接` tab；宿主 `Settings.svelte` 在 `mount()` 失败时仅写 `console.warn`，不渲染错误占位，因此会出现菜单存在但右侧空白。已排除当前安装包插件入口未注册和 tab key 路由冲突。最小测试同时确认插件 JSON 的 `min_app_version=0.2.0` 与运行时入口 manifest 不一致，但入口 manifest 未携带该字段，当前不是直接触发点。
+
+**状态**：待用户确认是否授权修改挂载错误展示/兼容性修复后继续。
+
 ### R-027 分组记忆失效 + Reconnect 指纹丢失修复（2026-08-31，已完成，待用户最终确认）
 
 **需求**：用户再次反馈「保险库的功能不对，没有正确识别已存在的主机信息」。R-026 修复后 runtime/数据链路已正常，本次定位到三个**前端独立 bug**。
@@ -534,5 +542,13 @@
 - `issh-tauri/src/lib/Settings.svelte`：`loadAbout` 中加载构建分支与 release 页地址；`runUpdateCheck` 前先判断 `isCrossBranch()`（构建分支非空且非 `unknown`、且所选分支 ≠ 构建分支），命中则弹出确认框（「否」关闭、「去下载」打开 GitHub release 页）而非执行更新检查。
 
 **验证**：`cargo check` 通过（5.95s）；`svelte-check` → 0 errors / 0 warnings。
+
+### R-058 外置 Agent 桥接设置页右侧空白（2026-09-03，已完成）
+
+**需求**：用户反馈商城安装的「Agent 桥接」点击菜单后右侧无内容。
+
+**修复**：设置宿主挂载插件组件时先走 Svelte 5 `mount/unmount`，失败后兼容旧式 Svelte class 组件构造器；两种方式都失败时，在右侧设置区域显示具体加载错误，不再静默空白。
+
+**验证**：`npm.cmd --prefix issh-tauri run check` 通过（0 errors / 0 warnings）；`npm.cmd --prefix issh-tauri run build` 通过，产物已更新。已安装客户端需重新打包/安装后才会包含本修复。
 
 **最终方案修订（2026-09-03）**：用户澄清「安装包自带分支信息，检查更新直接检查当前分支即可，不需要再获取分支信息」。据此简化：移除分支下拉选择（Rust `list_release_branches` 命令、`github_default_branch` 辅助、前端 `listReleaseBranches`/`ReleaseBranch`）与交叉拦截弹窗（`isCrossBranch`/`dismissCrossBranch`/`goDownloadCrossBranch`）。`check_update` 签名改为 `(current_version)`，内部直接使用 `BUILD_BRANCH`（为 `unknown` 时返回「未识别构建分支」）；前端 `checkUpdate(currentVersion)` 不再传分支参数；关于页改为只读展示「当前分支：{buildBranch}」+「检查更新」按钮。架构防护（R-056 补充）保持不变。验证：`cargo check` 通过（7.63s）；`svelte-check` → 0 errors / 0 warnings。
