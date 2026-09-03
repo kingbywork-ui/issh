@@ -6,6 +6,8 @@
     "kind": "integration",
     "minAppVersion": "0.2.0",
     "entry": "index.js",
+    "gatewayApiVersion": "1",
+    "capabilities": ["ui.panel.register"],
     "permissions": ["panel:register"],
     "author": "kingbywork-ui",
     "homepage": "https://github.com/kingbywork-ui/issh-plugin-serial",

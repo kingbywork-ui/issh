@@ -22,11 +22,13 @@
     import { checkPluginUpdates, type PluginUpdateInfo } from './lib/plugins/pluginHost'
     import { findScheme } from './lib/terminalSchemes'
     import {
+        appQuit,
         clipboardReadText,
         clipboardWriteText,
         closeSession,
         discoverSshHostKey,
         hostProfiles,
+        minimizeToTray,
         openLocalSession,
         openSshSession,
         resolveKeyPassphrase,
@@ -36,6 +38,7 @@
         startRemoteForward,
         resizeSession,
         runtimeHealth,
+        setActiveSession,
         subscribeSession,
         vaultListSecrets,
         vaultStatus,
@@ -105,6 +108,10 @@
     let error = $state('')
     let tabs = $state<TerminalTab[]>([])
     let activeId = $state('')
+    // Agent Bridge：tab 切换时上报当前 active 会话（供外部 agent 的 "active" 引用）
+    $effect(() => {
+        void setActiveSession(activeId || null)
+    })
     let splitDirection = $state<'vertical' | 'horizontal' | null>((localStorage.getItem('issh.splitDirection') as 'vertical' | 'horizontal' | null) ?? null)
     let splitPaneIds = $state<string[]>([])
     let splitRatio = $state(Number.parseInt(localStorage.getItem('issh.splitRatio') ?? '', 10) || 50)
@@ -126,6 +133,35 @@
     let vaultLocked = $state(false)
     let showWelcome = $state(false)
     let showSettings = $state(false)
+    let showCloseDialog = $state(false)
+    let closeRemember = $state(false)
+
+    // R-046：窗口关闭行为选择（完全退出 / 最小化到托盘，可记住）
+    function handleCloseRequest (): void {
+        const saved = localStorage.getItem('issh.closeBehavior')
+        if (saved === 'quit') {
+            void appQuit()
+            return
+        }
+        if (saved === 'minimize') {
+            void minimizeToTray()
+            return
+        }
+        closeRemember = false
+        showCloseDialog = true
+    }
+
+    function closeChoice (choice: 'quit' | 'minimize'): void {
+        if (closeRemember) {
+            localStorage.setItem('issh.closeBehavior', choice)
+        }
+        showCloseDialog = false
+        if (choice === 'quit') {
+            void appQuit()
+        } else {
+            void minimizeToTray()
+        }
+    }
     let pluginUpdates = $state<PluginUpdateInfo[]>([])
     // 插件注册/注销时刷新沙箱面板列表（$state 快照不会自动跟踪 pluginHost 内部 Map）
     const sandboxPanels = $state(getSandboxPanels('bottom'))
@@ -1345,9 +1381,15 @@
         void listen<string>('issh://deep-link', (event) => { handleDeepLinkUrl(event.payload) })
             .then((unlisten) => { deepLinkUnlisten = unlisten })
             .catch(() => {})
+        // R-046：窗口关闭请求（Rust 侧 prevent_close 后 emit）
+        let closeUnlisten: (() => void) | null = null
+        void listen('issh://window-close-requested', () => { handleCloseRequest() })
+            .then((unlisten) => { closeUnlisten = unlisten })
+            .catch(() => {})
         return () => {
             if (pollHandle) clearInterval(pollHandle)
             deepLinkUnlisten?.()
+            closeUnlisten?.()
             window.removeEventListener('storage', schemeChangeHandler)
             window.removeEventListener('issh:terminal-scheme-change', schemeChangeHandler)
             for (const tab of tabs) {
@@ -1553,6 +1595,23 @@
 
     {#if confirmMessage}
         <ConfirmDialog message={confirmMessage} onresolve={resolveConfirm} />
+    {/if}
+
+    {#if showCloseDialog}
+        <div class="confirm-backdrop" role="presentation">
+            <div class="confirm-dialog" role="alertdialog" aria-modal="true" aria-label="关闭 issh">
+                <div class="confirm-title">关闭 issh</div>
+                <pre class="confirm-message">请选择退出方式。最小化到托盘后应用在后台继续运行（Agent Bridge 保持开启）；完全退出会结束进程并自动关闭 Agent Bridge。</pre>
+                <label class="settings-toggle">
+                    <input type="checkbox" bind:checked={closeRemember} />
+                    <span>记住我的选择</span>
+                </label>
+                <div class="confirm-actions">
+                    <button class="secondary" onclick={() => closeChoice('minimize')}>最小化到托盘</button>
+                    <button class="primary" onclick={() => closeChoice('quit')}>完全退出</button>
+                </div>
+            </div>
+        </div>
     {/if}
 
     {#if showConnect}

@@ -2,6 +2,54 @@
 // Mirrors issh-tauri/src/lib/plugins/types.ts and sandboxBridge.ts protocol
 
 export type PluginKind = 'feature' | 'appearance' | 'integration'
+export type PluginPermission = string
+export type Disposable = () => void
+export const PLUGIN_GATEWAY_API_VERSION: '1'
+
+export interface GatewayRequestOptions {
+    signal?: AbortSignal
+    timeoutMs?: number
+    requestId?: string
+}
+export interface GatewayNetworkOptions extends GatewayRequestOptions {
+    method?: 'GET' | 'POST' | 'PATCH'
+    headers?: Record<string, string>
+    body?: string
+}
+
+export interface PluginGateway {
+    apiVersion: '1'
+    request<T = unknown> (method: string, args?: Record<string, unknown>, options?: GatewayRequestOptions): Promise<T>
+    ui: {
+        registerSettingsTab (tab: SettingsTabDefinition): Disposable
+        registerHomeCard (card: HomeCardDefinition): Disposable
+        registerPanel (panel: PanelDefinition): Disposable
+        registerSandboxPanel (panel: SandboxPanelDefinition): Disposable
+        registerTerminalDecorator (decorator: TerminalDecoratorDefinition): Disposable
+    }
+    sessions: {
+        getCurrent (): Promise<unknown>
+        read (sessionId: string, lines?: number, options?: GatewayRequestOptions): Promise<unknown>
+        write (sessionId: string, data: string | Uint8Array, options?: GatewayRequestOptions): Promise<unknown>
+    }
+    terminal: {
+        read (sessionId: string, lines?: number, options?: GatewayRequestOptions): Promise<unknown>
+        write (sessionId: string, data: string | Uint8Array, options?: GatewayRequestOptions): Promise<unknown>
+    }
+    profiles: {
+        read (options?: GatewayRequestOptions): Promise<unknown>
+        mutate (mutation: unknown, options?: GatewayRequestOptions): Promise<unknown>
+    }
+    vault: {
+        status (options?: GatewayRequestOptions): Promise<unknown>
+        unlock (passphrase: string, options?: GatewayRequestOptions): Promise<unknown>
+        getSecret (id: string, options?: GatewayRequestOptions): Promise<unknown>
+    }
+    network: { fetch (url: string, options?: GatewayNetworkOptions): Promise<{ status: number; ok: boolean; body: string }> }
+    events: { on (eventName: string, handler: (params: unknown) => void): Disposable }
+    storage: PluginStorage
+    log (level: 'info' | 'warn' | 'error', message: string): void
+}
 
 export interface IsshPluginManifest {
     id: string
@@ -16,6 +64,9 @@ export interface IsshPluginManifest {
     author?: string
     homepage?: string
     repository?: string
+    gatewayApiVersion?: string
+    capabilities?: string[]
+    signature?: string
 }
 
 export interface SettingsTabDefinition {
@@ -80,6 +131,7 @@ export interface PluginStorage {
 
 export interface IsshPluginContext {
     manifest: IsshPluginManifest
+    gateway: PluginGateway
     registerSettingsTab (tab: SettingsTabDefinition): void
     registerHomeCard (card: HomeCardDefinition): void
     registerPanel (panel: PanelDefinition): void
@@ -108,6 +160,9 @@ export interface SandboxRpcRequest {
     params: Record<string, unknown>
     /** 面板通道 token；宿主拼在 sandboxUrl hash（#issh-channel=...）中下发，RPC 消息必须携带 */
     token?: string
+    apiVersion?: '1'
+    traceId?: string
+    deadlineMs?: number
 }
 
 export interface SandboxRpcResponse {
@@ -116,6 +171,7 @@ export interface SandboxRpcResponse {
     ok: boolean
     result?: unknown
     error?: string
+    apiVersion?: '1'
 }
 
 export interface SandboxEventMessage {
@@ -188,7 +244,7 @@ export function createSandboxRpcClient (): {
                     reject(new Error(`RPC 超时：${method}`))
                 }, 5000)
                 pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer })
-                window.parent.postMessage({ channel: SANDBOX_RPC_CHANNEL, id, method, params, token: channelToken }, '*')
+                window.parent.postMessage({ channel: SANDBOX_RPC_CHANNEL, id, method, params, token: channelToken, apiVersion: '1', traceId: id }, '*')
             })
         },
     }

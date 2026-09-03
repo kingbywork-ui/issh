@@ -12,10 +12,14 @@
 
 | 状态 | 数量 |
 |------|------|
-| 待办 | 7 |
-| 进行中 | 3 |
-| 已完成 | 34 |
+| 待办 | 13 |
+| 进行中 | 1 |
+| 已完成 | 41 |
 | 已放弃 | 0 |
+
+> 状态说明（2026-09-03 同步）：R-008 原始范围（对齐 issh 分支 Agent Bridge：17 工具闭环 + CLI/MCP + 安全）已完成，Netcatty 架构超前能力拆为 R-050~R-055 待办；R-036/R-037 已完成（正文 2026-09-01 最终验收记录为准，302/308 行的「保持进行中」为当日中间快照）；R-044 为持续生效的提交约定，保持「进行中」。
+>
+> 待办项的任务级拆解（Epic/Story/验收标准/优先级/依赖/规模）见 `docs/backlog-plan.md`（PM/BA 拆分版 v1，2026-09-03）。本文件保持精简，只维护需求状态索引。
 
 ## 功能对齐需求（LLM 插件移植）
 
@@ -28,13 +32,13 @@
 | R-005 | LLM补全：登录脚本补全（Beta） | 用户需求 | 2026-08-28 | 已完成 |
 | R-006 | LLM补全：候选面板UI与快捷键对齐 | 用户需求 | 2026-08-28 | 已完成 |
 | R-007 | LLM补全：配置项与设置页全集对齐 | 用户需求 | 2026-08-28 | 已完成 |
-| R-008 | Agent Bridge 功能对齐（CLI/MCP/工具面/安全） | 用户需求 | 2026-08-28 | 进行中 |
+| R-008 | Agent Bridge 功能对齐（CLI/MCP/工具面/安全） | 用户需求 | 2026-08-28 | 已完成 |
 | R-009 | About/版本检查功能移植 | 用户需求 | 2026-08-28 | 待办 |
 | R-010 | SSH 主机管理细节对齐 | 用户需求 | 2026-08-28 | 待办 |
 | R-011 | 终端功能细节对齐（vim粘贴/右键菜单/搜索/批量输入/linkifier/配色） | 用户需求 | 2026-08-28 | 待办 |
 | R-012 | 配置同步插件功能对齐 | 用户需求 | 2026-08-28 | 待办 |
 | R-013 | 对齐验收：整体构建+冒烟+HANDOFF 更新 | 用户需求 | 2026-08-28 | 待办 |
-| R-014 | Agent Bridge Rust 半成品修复：agent_bridge.rs 语法损坏修复 + 协议契约对齐（protocol.js 1.0.0 / 17 工具 / scope 映射 / exec 返回字段 stdout+exitCode+timedOut）+ lib.rs 接线 | 对话衍生 | 2026-08-28 | 进行中 |
+| R-014 | Agent Bridge Rust 半成品修复：agent_bridge.rs 语法损坏修复 + 协议契约对齐（protocol.js 1.5.0 / 17 工具 / scope 映射 / exec 返回字段 stdout+exitCode+timedOut）+ lib.rs 接线 | 对话衍生 | 2026-08-28 | 已完成 |
 | R-015 | LLM补全补差：AI/历史候选统一 confidence 排序、normalizeCommand 接入候选链路、suggestionCache LRU（maxSize=100/ttl=5min）、敏感输入 gate（密码 prompt 停止补全清空 buffer）、ghost text 轻提示模式 | 对话衍生 | 2026-08-28 | 待办 |
 | R-016 | 移植 agentProcessDetection（codex/codex-cli/hermes 等 agent 进程识别）+ codexDesktopConfig（Codex Desktop 配置指引）两个缺失服务 | 对话衍生 | 2026-08-28 | 待办 |
 | R-017 | 保险库同步：对比 issh 分支补齐 Tauri 端 Vault 设置页能力（启用主口令/禁用并清除/修改主口令），清除行为与 issh 一致（含主机配置全部删除），保留主机凭据管理 UI | 用户需求 | 2026-08-28 | 已完成 |
@@ -315,6 +319,8 @@
 
 **最终验收状态（2026-09-01）**：R-036/R-037 所列功能均已实现基础闭环并完成针对性验证；未确认指纹、未解锁 Vault 等需要用户确认的安全流程属于预期行为，不作为功能缺失。
 
+**状态澄清（2026-09-03）**：上文 304/310/312/314 行的「保持进行中」均为 2026-09-01 当日的中间快照，已被其后 306/308/312/314/316 及本条最终验收记录覆盖。R-036/R-037 的最终状态为**已完成**。
+
 ### R-038 dev 分支复制与边框拉伸问题诊断（2026-09-01，已完成）
 
 **需求**（用户需求）：检查 dev 分支的复制功能和边框拉伸功能，确认问题与影响范围。
@@ -390,3 +396,90 @@
 **需求**（用户需求）：从 2026-09-02 本次提交（commit 0f2b05e）起，每次提交必须附带详细的版本更新说明，介绍修复了哪些功能、优化了哪些功能、新增了哪些功能；格式参考 GitHub Release Notes（Highlights 概览 + Notes 按功能模块分节的列表）。
 
 **说明**：该规范为持续生效的提交约定，非一次性需求；遵循它即可视为满足，状态保持「进行中」直至用户明确解除。
+
+### R-045 Agent Bridge 安全开关语义（2026-09-02，已完成）
+
+**需求**（用户需求）：每次关闭 issh 客户端自动关闭 Agent Bridge 开关；开关必须手动打开，端口固定为 59688；最小化到托盘时不关闭 Agent Bridge。
+
+**范围**：enabled 为纯运行时内存态、永不落盘（进程启动默认关闭，每次使用需在设置页手动开启）；端口固定监听 `127.0.0.1:59688`，被占用时开启失败并返回明确错误（os error 10048）；完全退出进程时停止 server 并复位开关；最小化到托盘时 Agent Bridge 保持运行（用户已确认）。scope/sftpRoot/auditLog/publicDiscovery/token 持久化到 `agent-bridge.json`（enabled 与端口不持久化）。配置变更（scope/token 等）在运行中即时生效（stop + 带重试重启）。
+
+**实现**：`agent_bridge_config.rs`（新建，token/scope/sftpRoot/auditLog/publicDiscovery 持久化）；`agent_bridge.rs` 固定端口 + `start()` 返回 handle + `stop()`；`lib.rs` 新增 `AgentBridgeRuntime` State（handle + config 双 Mutex）、`sync_bridge_runtime()` 重启 helper、7 个 command（enable/disable/status/configure/rotate_token/audit_read/audit_clear）+ `set_active_session`；`RunEvent::Exit` 停 server。
+
+**验证**：`cargo check` 0 errors / 0 warnings；`cargo test -p issh-tauri` 32 passed；CDP 端到端实测（bootDefaultOff、端口占用报错、scope 收紧即时拒绝 exec/sftp、最小化保持 HTTP 200、完全退出进程+端口关闭）。
+
+### R-046 窗口关闭行为选择（2026-09-02，已完成）
+
+**需求**（用户需求）：窗口 CloseRequested（X）改为让用户选择「完全退出」还是「右下角最小化到托盘」，同时提醒是否记住此选项；记住则每次按用户选择执行，不记住则每次弹窗提醒。
+
+**范围**：点击 X 不再固定最小化到托盘，改为弹窗让用户选择；弹窗提供「记住我的选择」checkbox，勾选后写 `localStorage.isshCloseBehavior`（quit / minimize），之后点 X 直接按已记住的行为执行；不勾选则每次点 X 弹窗。Agent Bridge 联动：选择「完全退出」→ 走进程退出清理停掉 Agent Bridge；「最小化到托盘」→ 应用继续运行，Agent Bridge 保持当前状态。
+
+**实现**：`lib.rs` `CloseRequested` 改为 `prevent_close()` + `emit("issh://window-close-requested")`（不再固定 hide）；新增 `app_quit()`（停 Agent Bridge → `app.exit(0)` 走 `RunEvent::Exit`）与 `minimize_to_tray()`（`window.hide()`）command；`App.svelte` 监听事件、读 localStorage、弹 modal（完全退出/最小化到托盘 + 记住 checkbox）。
+
+**验证**：`cargo check` 0 errors / 0 warnings；`cargo test -p issh-tauri` 32 passed；CDP 实测 `minimize_to_tray` 后 bridge 保持 HTTP 200、`app_quit` 后进程退出 + 端口关闭。弹窗 UI 视觉呈现留待用户人工确认。
+
+### Agent Bridge 后续 backlog（已拆分为 R-050~R-055 待办需求，见文末）
+
+- workspace/agent/task/cordis/herdr/pane 服务端实现（issh-agent 侧对应 33 个超前工具）
+- codegen 能力目录重构、SKILL.md 随包发布、长命令 job 化
+- Observer/Confirm/Auto 权限三档、SSE MCP transport
+- R-016（Angular 遗留服务清理）
+
+### R-047 插件双层网关建设（2026-09-02，已完成基础阶段）
+
+**需求**（用户需求）：在程序与插件之间增加前端插件网关和 Rust 运行时网关，统一生命周期、权限、UI 扩展、会话/终端、Vault、SSH/SFTP、网络、审计、配额和版本兼容，并迁移插件使用方式。
+
+**实现**：新增 `PluginGateway` SDK 与兼容层；manifest 支持 `gatewayApiVersion`、`capabilities`、`signature`、`dependencies`；UI 注册返回可撤销句柄；网关统一执行权限检查、用户确认、超时/取消、并发限制、结构化请求；Rust 新增 `plugin_gateway_request`、审计读写、请求重放保护、请求/响应大小限制、Runtime 代理、Host Profile/Vault 受控操作和 GitHub 白名单网络代理；沙箱消息增加 API 版本、traceId、来源校验和能力别名兼容；内置插件 manifest 已升级，配置同步、Herdr、Agent Bridge 已移除直接 Tauri Runtime 调用。
+
+**验证**：`issh-tauri` svelte-check 0 errors / 0 warnings；Rust Tauri 36 tests passed；配置同步、Herdr、Agent Bridge 插件构建通过；公开 API 声明 TypeScript 检查通过；`git diff --check` 通过。
+
+**边界**：网关当前为桌面端进程内前端层 + Tauri Rust 命令，不拆分独立服务；网络代理首期仅允许 HTTPS 白名单、GET/POST/PATCH 和受限请求头/请求体；LLM 插件仍保留其专用鉴权 POST 实现，后续需在网关增加经用户授权的模型供应商域名策略后再迁移。
+
+**补充验证（2026-09-03）**：使用仓库内 Yarn 1.22.22 完成依赖链接；临时注入 Yarn bin 到 PATH 后根 `yarn build` 成功（147.04s）。
+
+### R-048 Agent Bridge 保持插件接入（内置插件形态）（2026-09-03，已完成）
+
+**需求**（用户需求）：Agent Bridge 应保持「插件接入」形态，而不是硬编码进设置页。
+
+**背景**：上一轮将 Agent Bridge 实现为 Settings.svelte 的硬编码 section（直接 import `AgentBridgeSettings.svelte`），破坏了插件化形态。且商城存在同名 id `issh-plugin-agent-bridge`（「Agent 桥接」，workspace/agent 管理，kingbywork-ui），与本 CLI/MCP 外部 agent 接入功能是**两个不同产品**。
+
+**实现**：新增内置插件 `issh-tauri/src/lib/plugins/agentBridgePlugin.ts`，id 采用独立命名 `issh-plugin-agent-bridge-rpc`（避免与商城「Agent 桥接」冲突）；通过 `registerSettingsTab` 注册「Agent Bridge」设置页，从 `Settings.svelte` 移除硬编码 section；`IsshPlugin` 增加可选 `deactivate` 清理钩子（插件停用 → `agentBridgeDisable()` 停止服务，避免 59688 悬空占用）；`pluginHost.ts` 新增 `registerBuiltinPlugins()` 在 `initPluginHost` 启动时注册，并将 `issh-plugin-agent-bridge-rpc` 加入 `SUPERSEDED_PLUGIN_IDS`。
+
+**说明**：内置插件为受信任一方代码，其设置页仍直接调用 Rust `agent_bridge_*` 命令（后端仅以 Tauri command 暴露，网关尚无对应 method）；R-045 安全语义（永不持久化/手动开启/端口 59688）在 Rust 命令层继续强制。经网关暴露 Agent Bridge 控制方法留作后续项。
+
+**验证**：`svelte-check` 0 errors / 0 warnings；vite build 通过；CDP 实测插件列表显示「Agent Bridge / 内置」，启用后设置导航出现「Agent Bridge」tab，点击后 `plugin-settings-host` 正常渲染完整设置页。
+
+### R-049 插件设置页 tab 选中后无内容（路由 bug）（2026-09-03，已完成）
+
+**需求**（用户需求）：部分插件接入后有菜单（设置导航 tab），但选中后没有对应内容。
+
+**根因**：`Settings.svelte` 中 `showPluginTab()` 只设置 `pluginTabSection`，未切换 `section`；而内容区 if-chain 先匹配内置 `section`（general/vault/…），导致插件 tab 分支永远不可达 —— tab 高亮但内容仍显示内置分区。同时 `tabs` 用 `$derived(getSettingsTabs())` 读取非响应式 Map，插件运行时注册的 tab 无法触发更新。
+
+**修复**：`Section` 增加 `plugin-tab` 值；`showPluginTab()` 调用 `leaveVault('plugin-tab')` 切换 section；`leaveVault` 离开插件 tab 时清空 `pluginTabSection`；`tabs` 由 `$derived` 改为 `$state` 并在 `subscribeUi` 回调中刷新；重写插件设置页 mount/unmount `$effect`，用 `mountedPluginTab` 跟踪当前挂载组件，修复「清空容器后缓存组件不重挂」的二次 bug（切换 tab 卸载旧组件、离开页面销毁组件）。
+
+**验证**：`svelte-check` 0 errors / 0 warnings；CDP 实测点击「Agent Bridge」tab 后 `plugin-settings-host` 子节点=1 且渲染完整设置内容，通用修复对所有插件 tab 生效。
+
+### R-050 workspace/agent/task 服务端实现（2026-09-03，待办）
+
+**来源**：R-008 后续 backlog 拆分（对话衍生）。Netcatty 架构中 workspace/agent/task 服务端模块，对应 issh-agent 协议中 33 个超前工具（目前协议全量 50 工具，17 个已实现）。
+
+**范围**：isshd Runtime 侧实现 workspace 绑定、agent 进程识别/注册、task 调度三个服务端模块及对应 RPC；issh-agent 客户端同步放开对应工具集。依赖 R-016（agentProcessDetection/codexDesktopConfig 移植）。
+
+### R-051 cordis/herdr/pane 服务端实现（2026-09-03，待办）
+
+**来源**：R-008 后续 backlog 拆分（对话衍生）。Netcatty 架构中 cordis（事件总线）、herdr（工作区 UI 集成）、pane（分屏窗格编排）服务端模块。与 R-034 已审核的 Herdr 商城插件存在能力重叠，实施时需先做产品边界确认。
+
+### R-052 codegen 能力目录重构（2026-09-03，待办）
+
+**来源**：R-008 后续 backlog 拆分（对话衍生）。issh-agent 的能力目录按 codegen 风格重构（当前为协议层 50 工具静态表 + 17 工具诚实降级）。
+
+### R-053 SKILL.md 随包发布（2026-09-03，待办）
+
+**来源**：R-008 后续 backlog 拆分（对话衍生）。issh-agent 随 Windows 安装包（extraResources）发布 SKILL.md 供外部 agent 直接加载。
+
+### R-054 长命令 job 化（2026-09-03，待办）
+
+**来源**：R-008 后续 backlog 拆分（对话衍生）。Agent Bridge 命令执行超时后转为 job 异步执行 + 结果轮询，替代当前超时即失败的单次调用模型。
+
+### R-055 Observer/Confirm/Auto 权限三档 + SSE MCP transport（2026-09-03，待办）
+
+**来源**：R-008 后续 backlog 拆分（对话衍生）。① Agent Bridge 危险/敏感操作由当前布尔确认门升级为 Observer（只读）/Confirm（确认后执行）/Auto（自动放行）三档策略；② 服务端增加 SSE MCP transport（对齐 issh 分支 `agentBridgeSseEnabled` 能力）。

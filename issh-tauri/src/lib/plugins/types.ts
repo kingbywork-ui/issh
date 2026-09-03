@@ -1,6 +1,60 @@
 import type { Component } from 'svelte'
 import type { Terminal } from '@xterm/xterm'
 
+export const PLUGIN_GATEWAY_API_VERSION = '1'
+export type PluginPermission = string
+export type Disposable = () => void
+
+export interface GatewayRequestOptions {
+    signal?: AbortSignal
+    timeoutMs?: number
+    requestId?: string
+}
+
+export interface GatewayNetworkOptions extends GatewayRequestOptions {
+    method?: 'GET' | 'POST' | 'PATCH'
+    headers?: Record<string, string>
+    body?: string
+}
+
+export interface PluginGateway {
+    apiVersion: typeof PLUGIN_GATEWAY_API_VERSION
+    request<T = unknown> (method: string, args?: Record<string, unknown>, options?: GatewayRequestOptions): Promise<T>
+    ui: {
+        registerSettingsTab (tab: SettingsTabDefinition): Disposable
+        registerHomeCard (card: HomeCardDefinition): Disposable
+        registerPanel (panel: PanelDefinition): Disposable
+        registerSandboxPanel (panel: SandboxPanelDefinition): Disposable
+        registerTerminalDecorator (decorator: TerminalDecoratorDefinition): Disposable
+    }
+    sessions: {
+        getCurrent (): Promise<unknown>
+        read (sessionId: string, lines?: number, options?: GatewayRequestOptions): Promise<unknown>
+        write (sessionId: string, data: string | Uint8Array, options?: GatewayRequestOptions): Promise<unknown>
+    }
+    terminal: {
+        read (sessionId: string, lines?: number, options?: GatewayRequestOptions): Promise<unknown>
+        write (sessionId: string, data: string | Uint8Array, options?: GatewayRequestOptions): Promise<unknown>
+    }
+    profiles: {
+        read (options?: GatewayRequestOptions): Promise<unknown>
+        mutate (mutation: unknown, options?: GatewayRequestOptions): Promise<unknown>
+    }
+    vault: {
+        status (options?: GatewayRequestOptions): Promise<unknown>
+        unlock (passphrase: string, options?: GatewayRequestOptions): Promise<unknown>
+        getSecret (id: string, options?: GatewayRequestOptions): Promise<unknown>
+    }
+    network: {
+        fetch (url: string, options?: GatewayNetworkOptions): Promise<{ status: number; ok: boolean; body: string }>
+    }
+    events: {
+        on (eventName: string, handler: (params: unknown) => void): Disposable
+    }
+    storage: PluginStorage
+    log (level: 'info' | 'warn' | 'error', message: string): void
+}
+
 export interface IsshPluginManifest {
     id: string
     name: string
@@ -14,6 +68,9 @@ export interface IsshPluginManifest {
     author?: string
     homepage?: string
     repository?: string
+    gatewayApiVersion?: string
+    capabilities?: string[]
+    signature?: string
 }
 
 export interface SettingsTabDefinition {
@@ -83,6 +140,7 @@ export interface PluginStorage {
 
 export interface IsshPluginContext {
     manifest: IsshPluginManifest
+    gateway: PluginGateway
     registerSettingsTab (tab: SettingsTabDefinition): void
     registerHomeCard (card: HomeCardDefinition): void
     registerPanel (panel: PanelDefinition): void
@@ -97,6 +155,8 @@ export interface IsshPluginContext {
 export interface IsshPlugin {
     manifest: IsshPluginManifest
     activate (ctx: IsshPluginContext): void | Promise<void>
+    /** 插件停用/卸载时的清理钩子（可选），用于停止后台服务、释放资源等。 */
+    deactivate? (): void | Promise<void>
 }
 
 export interface InstalledPluginRecord {

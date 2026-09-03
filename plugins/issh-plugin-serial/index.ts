@@ -12,18 +12,20 @@ export const manifest: IsshPluginManifest = {
     author: 'kingbywork-ui',
     homepage: 'https://github.com/kingbywork-ui/issh-plugin-serial',
     repository: 'https://github.com/kingbywork-ui/issh-plugin-serial',
+    gatewayApiVersion: '1',
+    capabilities: ['ui.panel.register'],
 }
 
 const plugin: IsshPlugin = {
     manifest,
     activate (ctx: IsshPluginContext) {
-        ctx.registerPanel({
+        ctx.gateway.ui.registerPanel({
             id: 'serial',
             title: '串口',
             placement: 'bottom',
             component: SerialPanel,
         })
-        ctx.log('info', 'serial plugin activated')
+        ctx.gateway.log('info', 'serial plugin activated')
     },
 }
 

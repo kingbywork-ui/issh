@@ -1,4 +1,5 @@
 import SyncSettingsTab from './src/SyncSettingsTab.svelte'
+import { setGateway } from './src/syncRpc'
 import type { IsshPlugin, IsshPluginContext, IsshPluginManifest } from './src/types'
 
 export const manifest: IsshPluginManifest = {
@@ -12,18 +13,21 @@ export const manifest: IsshPluginManifest = {
     author: 'kingbywork-ui',
     homepage: 'https://github.com/kingbywork-ui/issh-plugin-config-sync',
     repository: 'https://github.com/kingbywork-ui/issh-plugin-config-sync',
+    gatewayApiVersion: '1',
+    capabilities: ['ui.settings.register', 'profiles.read', 'profiles.write', 'network.fetch'],
 }
 
 const plugin: IsshPlugin = {
     manifest,
     activate (ctx: IsshPluginContext) {
-        ctx.registerSettingsTab({
+        setGateway(ctx.gateway)
+        ctx.gateway.ui.registerSettingsTab({
             id: 'config-sync',
             title: '配置同步',
             order: 14,
             component: SyncSettingsTab,
         })
-        ctx.log('info', 'config-sync plugin activated')
+        ctx.gateway.log('info', 'config-sync plugin activated')
     },
 }
 

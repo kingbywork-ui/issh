@@ -10,7 +10,10 @@ import {
     subscribe,
     unregisterManifest,
 } from './registry'
+import { createPluginGateway, normalizePluginPermission } from './gateway'
+import { agentBridgePlugin } from './agentBridgePlugin'
 import type {
+    Disposable,
     HomeCardDefinition,
     IsshPlugin,
     IsshPluginContext,
@@ -26,7 +29,8 @@ import type {
 type Listener = () => void
 
 // 已内置进程序的功能（原插件形态）：禁止商城同名插件再安装/加载，避免重复注册
-export const SUPERSEDED_PLUGIN_IDS = new Set(['issh-plugin-auto-sudo', 'issh-plugin-vault'])
+// 注意：商城 issh-plugin-agent-bridge（「Agent 桥接」，workspace/agent 管理）与本内置插件（CLI/MCP 外部 agent 接入）是两个不同产品，内置插件用独立 id
+export const SUPERSEDED_PLUGIN_IDS = new Set(['issh-plugin-auto-sudo', 'issh-plugin-vault', 'issh-plugin-agent-bridge-rpc'])
 
 const root = new Context()
 
@@ -41,6 +45,8 @@ const sandboxPanels = new Map<string, { pluginId: string; definition: SandboxPan
 const pluginDirectories = new Map<string, string>()
 
 const listeners = new Set<Listener>()
+const pluginAudit: Array<{ timestamp: string; pluginId: string; method: string; ok: boolean; error?: string }> = []
+const HOST_VERSION = '0.1.6'
 
 function notify (): void {
     for (const listener of listeners) listener()
@@ -96,47 +102,57 @@ function makeStorage (id: string): PluginStorage {
     }
 }
 
+function recordPluginAudit (pluginId: string, event: { method: string; ok: boolean; error?: string }): void {
+    pluginAudit.push({ timestamp: new Date().toISOString(), pluginId, ...event, error: event.error?.slice(0, 500) })
+    if (pluginAudit.length > 1000) pluginAudit.splice(0, pluginAudit.length - 1000)
+}
+
+export function getPluginAudit (): Array<{ timestamp: string; pluginId: string; method: string; ok: boolean; error?: string }> {
+    return pluginAudit.map((event) => ({ ...event }))
+}
+
 function makePluginContext (manifest: IsshPluginManifest, directory: string): IsshPluginContext {
-    const requirePermission = (permission: string, api: string): boolean => {
-        const declared = manifest.permissions ?? []
-        if (declared.includes(permission)) return true
-        console.warn(`[plugin ${manifest.id}] 未声明权限 ${permission}，拒绝 ${api}`)
-        return false
+    const hasPermission = (permission: string): boolean => {
+        const declared = [...(manifest.permissions ?? []), ...(manifest.capabilities ?? [])]
+        return declared.includes(permission) || declared.some((item) => normalizePluginPermission(item) === permission)
     }
+    const denyLegacy = (permission: string, api: string): Disposable => {
+        if (hasPermission(permission)) return () => {}
+        const error = `插件 ${manifest.id} 未声明权限：${permission}`
+        console.warn(`[plugin ${manifest.id}] ${error}，拒绝 ${api}`)
+        recordPluginAudit(manifest.id, { method: api, ok: false, error })
+        return () => {}
+    }
+    const register = <T> (map: Map<string, T>, key: string, value: T): Disposable => {
+        map.set(key, value)
+        notify()
+        return () => {
+            if (map.get(key) !== value) return
+            map.delete(key)
+            notify()
+        }
+    }
+    const storage = makeStorage(manifest.id)
+    const gateway = createPluginGateway(manifest, storage, {
+        hasPermission,
+        registerSettingsTab: (tab) => register(settingsTabs, `${manifest.id}:${tab.id}`, tab),
+        registerHomeCard: (card) => register(homeCards, `${manifest.id}:${card.id}`, card),
+        registerPanel: (panel) => register(panels, `${manifest.id}:${panel.id}`, panel),
+        registerSandboxPanel: (panel) => register(sandboxPanels, `${manifest.id}:${panel.id}`, { pluginId: manifest.id, definition: panel }),
+        registerTerminalDecorator: (decorator) => register(terminalDecorators, `${manifest.id}:${decorator.id}`, decorator),
+        audit: (event) => recordPluginAudit(manifest.id, event),
+        confirm: async (message) => window.confirm(message),
+    })
     return {
         manifest,
-        registerSettingsTab (tab) {
-            if (!requirePermission('settings:tab', 'registerSettingsTab')) return
-            settingsTabs.set(`${manifest.id}:${tab.id}`, tab)
-            notify()
-        },
-        registerHomeCard (card) {
-            if (!requirePermission('home:card', 'registerHomeCard')) return
-            homeCards.set(`${manifest.id}:${card.id}`, card)
-            notify()
-        },
-        registerPanel (panel) {
-            if (!requirePermission('panel:register', 'registerPanel')) return
-            panels.set(`${manifest.id}:${panel.id}`, panel)
-            notify()
-        },
-        registerSandboxPanel (panel) {
-            if (!requirePermission('panel:register', 'registerSandboxPanel')) return
-            sandboxPanels.set(`${manifest.id}:${panel.id}`, { pluginId: manifest.id, definition: panel })
-            notify()
-        },
-        registerTerminalDecorator (decorator) {
-            if (!requirePermission('terminal:decorate', 'registerTerminalDecorator')) return
-            terminalDecorators.set(`${manifest.id}:${decorator.id}`, decorator)
-            notify()
-        },
-        storage: makeStorage(manifest.id),
-        log (level, message) {
-            const line = `[plugin ${manifest.id}] ${message}`
-            if (level === 'error') console.error(line)
-            else if (level === 'warn') console.warn(line)
-            else console.info(line)
-        },
+        gateway,
+        registerSettingsTab: (tab) => hasPermission('ui.settings.register') || hasPermission('settings:tab') ? gateway.ui.registerSettingsTab(tab) : denyLegacy('ui.settings.register', 'registerSettingsTab'),
+        registerHomeCard: (card) => hasPermission('ui.home.register') || hasPermission('home:card') ? gateway.ui.registerHomeCard(card) : denyLegacy('ui.home.register', 'registerHomeCard'),
+        registerPanel: (panel) => hasPermission('ui.panel.register') || hasPermission('panel:register') ? gateway.ui.registerPanel(panel) : denyLegacy('ui.panel.register', 'registerPanel'),
+        registerSandboxPanel: (panel) => hasPermission('ui.panel.register') || hasPermission('panel:register') ? gateway.ui.registerSandboxPanel(panel) : denyLegacy('ui.panel.register', 'registerSandboxPanel'),
+        registerTerminalDecorator: (decorator) => hasPermission('terminal.decorate') || hasPermission('terminal:decorate') ? gateway.ui.registerTerminalDecorator(decorator) : denyLegacy('terminal.decorate', 'registerTerminalDecorator'),
+        storage,
+        log: gateway.log,
         directory,
     }
 }
@@ -145,7 +161,30 @@ export function registerPlugin (plugin: IsshPlugin, source: 'builtin' | 'marketp
     const existing = plugins.get(plugin.manifest.id)
     if (existing) return getEntry(plugin.manifest.id) ?? registerManifest(plugin.manifest, source)
     plugins.set(plugin.manifest.id, plugin)
-    return registerManifest(plugin.manifest, source)
+    const entry = registerManifest(plugin.manifest, source)
+    const compatibilityError = checkManifestCompatibility(plugin.manifest)
+    if (compatibilityError) markState(plugin.manifest.id, 'failed', compatibilityError)
+    return entry
+}
+
+function compareVersions (a: string, b: string): number {
+    const pa = a.split('.').map((part) => Number.parseInt(part, 10) || 0)
+    const pb = b.split('.').map((part) => Number.parseInt(part, 10) || 0)
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const difference = (pa[i] ?? 0) - (pb[i] ?? 0)
+        if (difference !== 0) return difference
+    }
+    return 0
+}
+
+function checkManifestCompatibility (manifest: IsshPluginManifest): string | null {
+    if (manifest.gatewayApiVersion && manifest.gatewayApiVersion !== '1') {
+        return `插件需要不兼容的网关 API 版本：${manifest.gatewayApiVersion}`
+    }
+    if (manifest.minAppVersion && compareVersions(HOST_VERSION, manifest.minAppVersion) < 0) {
+        return `插件需要 issh ${manifest.minAppVersion} 或更高版本`
+    }
+    return null
 }
 
 interface MarketplacePluginModule {
@@ -176,6 +215,11 @@ export async function activatePlugin (id: string): Promise<void> {
     const plugin = plugins.get(id)
     if (!plugin) throw new Error(`plugin not registered: ${id}`)
     if (fibers.has(id)) return
+    const compatibilityError = checkManifestCompatibility(plugin.manifest)
+    if (compatibilityError) {
+        markState(id, 'failed', compatibilityError)
+        throw new Error(compatibilityError)
+    }
     if (!isEnabled(id)) return
     const entry = getEntry(id)
     if (entry && entry.state === 'failed' && !entry.enabled) return
@@ -208,6 +252,14 @@ export async function deactivatePlugin (id: string): Promise<void> {
     if (!fiber) return
     fibers.delete(id)
     await fiber.dispose()
+    const plugin = plugins.get(id)
+    if (plugin?.deactivate) {
+        try {
+            await plugin.deactivate()
+        } catch (cause) {
+            console.warn(`[plugin ${id}] deactivate 失败：`, cause)
+        }
+    }
     markState(id, 'inactive')
     notify()
 }
@@ -253,7 +305,15 @@ export function listPlugins (): RegistryEntry[] {
     return listEntries()
 }
 
+/** 内置插件注册（保持插件接入形态，随程序发布、不可卸载）。 */
+function registerBuiltinPlugins (): void {
+    for (const plugin of [agentBridgePlugin]) {
+        registerPlugin(plugin, 'builtin')
+    }
+}
+
 export async function initPluginHost (): Promise<void> {
+    registerBuiltinPlugins()
     for (const entry of listEntries()) {
         if (!entry.enabled) continue
         await activatePlugin(entry.manifest.id).catch(() => {})
@@ -286,16 +346,6 @@ export interface PluginUpdateInfo {
     name: string
     installedVersion: string
     latestVersion: string
-}
-
-function compareVersions (a: string, b: string): number {
-    const pa = a.split('.').map((n) => Number.parseInt(n, 10) || 0)
-    const pb = b.split('.').map((n) => Number.parseInt(n, 10) || 0)
-    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-        const diff = (pa[i] ?? 0) - (pb[i] ?? 0)
-        if (diff !== 0) return diff
-    }
-    return 0
 }
 
 function normalizeDependency (dep: string | { id: string; minVersion?: string }): { id: string; minVersion?: string } {

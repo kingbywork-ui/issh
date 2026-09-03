@@ -1,16 +1,20 @@
+mod agent_bridge;
+mod agent_bridge_config;
 mod clipboard;
 mod host_profiles;
 mod plugin_market;
+mod plugin_gateway;
 
 use host_profiles::{
     CredentialMutation, HostProfileMutation, HostProfileStore, HostProfilesResult,
 };
 use plugin_market::{InstalledPlugin, PluginRegistry};
+use plugin_gateway::{PluginGatewayRequest, PluginGatewayResponse, PluginGatewayState};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{Manager, Runtime, State, WebviewUrl, WebviewWindowBuilder};
 use tokio::sync::Mutex as AsyncMutex;
@@ -18,25 +22,30 @@ use tokio::sync::Mutex as AsyncMutex;
 const MAX_MESSAGE_BYTES: usize = 64 * 1024;
 const PROTOCOL_VERSION: &str = "0.4.0";
 
-struct RuntimeManager {
+/// 解析 issh 用户数据目录（ISSH_CONFIG_DIRECTORY 环境变量优先，否则应用数据目录）。
+fn resolve_user_data<R: Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
+    match std::env::var_os("ISSH_CONFIG_DIRECTORY") {
+        Some(path) => Ok(PathBuf::from(path)),
+        None => app
+            .path()
+            .app_data_dir()
+            .map_err(|error| format!("无法定位应用数据目录：{error}")),
+    }
+}
+
+pub struct RuntimeManager {
     pipe_name: String,
     database_path: PathBuf,
     binary_path: PathBuf,
     auth_token: String,
     child: Mutex<Option<Child>>,
     startup: AsyncMutex<()>,
-    hosts: HostProfileStore,
+    pub hosts: HostProfileStore,
 }
 
 impl RuntimeManager {
     fn new<R: Runtime>(app: &tauri::AppHandle<R>) -> Result<Self, String> {
-        let user_data = match std::env::var_os("ISSH_CONFIG_DIRECTORY") {
-            Some(path) => PathBuf::from(path),
-            None => app
-                .path()
-                .app_data_dir()
-                .map_err(|error| format!("无法定位应用数据目录：{error}"))?,
-        };
+        let user_data = resolve_user_data(app)?;
         let digest = Sha256::digest(user_data.to_string_lossy().as_bytes());
         let instance_key = hex_prefix(&digest, 8);
         let binary_path = resolve_runtime_binary(app)?;
@@ -52,7 +61,7 @@ impl RuntimeManager {
         })
     }
 
-    async fn request(&self, mut request: Value) -> Result<Value, String> {
+    pub async fn request(&self, mut request: Value) -> Result<Value, String> {
         validate_request(&request)?;
         inject_auth_token(&mut request, &self.auth_token);
         self.ensure_started().await?;
@@ -177,7 +186,7 @@ impl RuntimeManager {
 }
 
 #[tauri::command]
-async fn runtime_health(manager: State<'_, RuntimeManager>) -> Result<Value, String> {
+async fn runtime_health(manager: State<'_, Arc<RuntimeManager>>) -> Result<Value, String> {
     manager
         .request(json!({
             "jsonrpc": "2.0",
@@ -219,47 +228,47 @@ fn relaunch_elevated(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 async fn runtime_request(
-    manager: State<'_, RuntimeManager>,
+    manager: State<'_, Arc<RuntimeManager>>,
     request: Value,
 ) -> Result<Value, String> {
     manager.request(request).await
 }
 
 #[tauri::command]
-fn host_profiles(manager: State<'_, RuntimeManager>) -> Result<HostProfilesResult, String> {
+fn host_profiles(manager: State<'_, Arc<RuntimeManager>>) -> Result<HostProfilesResult, String> {
     manager.hosts.read()
 }
 
 #[tauri::command]
 fn unlock_host_profiles(
-    manager: State<'_, RuntimeManager>,
+    manager: State<'_, Arc<RuntimeManager>>,
     passphrase: String,
 ) -> Result<HostProfilesResult, String> {
     manager.hosts.unlock(&passphrase)
 }
 
 #[tauri::command]
-fn lock_host_profiles(manager: State<'_, RuntimeManager>) -> Result<HostProfilesResult, String> {
+fn lock_host_profiles(manager: State<'_, Arc<RuntimeManager>>) -> Result<HostProfilesResult, String> {
     manager.hosts.lock();
     manager.hosts.read()
 }
 
 #[tauri::command]
 fn mutate_host_profiles(
-    manager: State<'_, RuntimeManager>,
+    manager: State<'_, Arc<RuntimeManager>>,
     mutation: HostProfileMutation,
 ) -> Result<HostProfilesResult, String> {
     manager.hosts.mutate(mutation)
 }
 
 #[tauri::command]
-fn host_credentials(manager: State<'_, RuntimeManager>) -> Result<host_profiles::HostCredentialsResult, String> {
+fn host_credentials(manager: State<'_, Arc<RuntimeManager>>) -> Result<host_profiles::HostCredentialsResult, String> {
     manager.hosts.list_credentials()
 }
 
 #[tauri::command]
 fn save_host_credential(
-    manager: State<'_, RuntimeManager>,
+    manager: State<'_, Arc<RuntimeManager>>,
     mutation: CredentialMutation,
 ) -> Result<host_profiles::HostCredentialsResult, String> {
     manager.hosts.save_credential(mutation)
@@ -267,7 +276,7 @@ fn save_host_credential(
 
 #[tauri::command]
 fn delete_host_credential(
-    manager: State<'_, RuntimeManager>,
+    manager: State<'_, Arc<RuntimeManager>>,
     user: String,
     host: String,
     port: u16,
@@ -277,20 +286,20 @@ fn delete_host_credential(
 
 #[tauri::command]
 fn enable_host_vault(
-    manager: State<'_, RuntimeManager>,
+    manager: State<'_, Arc<RuntimeManager>>,
     passphrase: String,
 ) -> Result<host_profiles::HostCredentialsResult, String> {
     manager.hosts.enable_vault(&passphrase)
 }
 
 #[tauri::command]
-fn disable_host_vault(manager: State<'_, RuntimeManager>) -> Result<host_profiles::HostCredentialsResult, String> {
+fn disable_host_vault(manager: State<'_, Arc<RuntimeManager>>) -> Result<host_profiles::HostCredentialsResult, String> {
     manager.hosts.disable_vault()
 }
 
 #[tauri::command]
 fn change_host_passphrase(
-    manager: State<'_, RuntimeManager>,
+    manager: State<'_, Arc<RuntimeManager>>,
     old_passphrase: String,
     new_passphrase: String,
 ) -> Result<host_profiles::HostCredentialsResult, String> {
@@ -299,12 +308,33 @@ fn change_host_passphrase(
 
 #[tauri::command]
 fn resolve_ssh_password(
-    manager: State<'_, RuntimeManager>,
+    manager: State<'_, Arc<RuntimeManager>>,
     user: String,
     host: String,
     port: u16,
 ) -> Result<Option<String>, String> {
     manager.hosts.resolve_ssh_password(&user, &host, port)
+}
+
+#[tauri::command]
+async fn plugin_gateway_request(
+    manager: State<'_, Arc<RuntimeManager>>,
+    state: State<'_, PluginGatewayState>,
+    request: Value,
+) -> Result<PluginGatewayResponse, String> {
+    let request: PluginGatewayRequest = serde_json::from_value(request)
+        .map_err(|error| format!("网关请求格式无效：{error}"))?;
+    Ok(plugin_gateway::handle_request(&manager, &state, request).await)
+}
+
+#[tauri::command]
+fn plugin_gateway_audit_read(state: State<'_, PluginGatewayState>) -> Result<Vec<plugin_gateway::PluginGatewayAuditEntry>, String> {
+    state.read_audit()
+}
+
+#[tauri::command]
+fn plugin_gateway_audit_clear(state: State<'_, PluginGatewayState>) -> Result<(), String> {
+    state.clear_audit()
 }
 
 #[tauri::command]
@@ -319,7 +349,7 @@ fn clipboard_read_text() -> Result<String, String> {
 
 #[tauri::command]
 fn resolve_sudo_password(
-    manager: State<'_, RuntimeManager>,
+    manager: State<'_, Arc<RuntimeManager>>,
     user: String,
     host: String,
     port: u16,
@@ -329,7 +359,7 @@ fn resolve_sudo_password(
 
 #[tauri::command]
 fn resolve_key_passphrase(
-    manager: State<'_, RuntimeManager>,
+    manager: State<'_, Arc<RuntimeManager>>,
     user: String,
     host: String,
     port: u16,
@@ -499,7 +529,9 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
-            app.manage(RuntimeManager::new(app.handle())?);
+            app.manage(Arc::new(RuntimeManager::new(app.handle())?));
+            app.manage(PluginGatewayState::default());
+            app.manage(AgentBridgeRuntime::new(resolve_user_data(app.handle())?));
             setup_tray(app.handle())?;
             // 深链：启动时（含冷启动带 ssh:// 参数）与运行期事件都转发给前端
             {
@@ -518,13 +550,14 @@ pub fn run() {
                     }
                 });
             }
-            // 关闭窗口 = 最小化到托盘（对齐 Electron close → tray 行为）
+            // 关闭窗口：交给前端弹窗选择「完全退出 / 最小化到托盘」（R-046）。
+            // 前端读 localStorage.isshCloseBehavior 决定直接执行或弹窗询问。
             if let Some(window) = app.get_webview_window("main") {
                 let handle = window.clone();
                 window.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                         api.prevent_close();
-                        let _ = handle.hide();
+                        let _ = handle.emit("issh://window-close-requested", ());
                     }
                 });
             }
@@ -553,6 +586,9 @@ pub fn run() {
             clipboard_read_text,
             runtime_health,
             runtime_request,
+            plugin_gateway_request,
+            plugin_gateway_audit_read,
+            plugin_gateway_audit_clear,
             host_profiles,
             host_credentials,
             save_host_credential,
@@ -577,19 +613,35 @@ pub fn run() {
             create_local_dir,
             read_local_text_file,
             user_paths,
-            relaunch_elevated
+            relaunch_elevated,
+            agent_bridge_enable,
+            agent_bridge_disable,
+            agent_bridge_status,
+            agent_bridge_configure,
+            agent_bridge_rotate_token,
+            agent_bridge_audit_read,
+            agent_bridge_audit_clear,
+            set_active_session,
+            app_quit,
+            minimize_to_tray
         ])
         .build(tauri::generate_context!())
         .expect("failed to build issh Tauri client");
 
     app.run(|handle, event| {
         if matches!(event, tauri::RunEvent::Exit) {
-            handle.state::<RuntimeManager>().stop();
+            handle.state::<Arc<RuntimeManager>>().stop();
+            // R-045：完全退出时自动关闭 Agent Bridge（开关为运行时态，重启默认关）
+            if let Ok(mut bridge_guard) = handle.state::<AgentBridgeRuntime>().bridge.lock() {
+                if let Some(bridge) = bridge_guard.take() {
+                    bridge.stop();
+                }
+            }
         }
     });
 }
 
-/// 系统托盘：显示主窗口 / 退出。关闭窗口时最小化到托盘而非退出进程。
+/// 系统托盘：显示主窗口 / 退出。关闭窗口行为由 R-046 弹窗选择决定。
 fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     use tauri::menu::{Menu, MenuItem};
     use tauri::tray::TrayIconBuilder;
@@ -624,6 +676,297 @@ fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> 
         .build(app)?;
     Ok(())
 }
+
+// ---------- Agent Bridge 运行时状态与 Tauri commands（R-045） ----------
+
+/// Agent Bridge 运行期状态：enabled 不持久化，完全退出时自动关闭。
+struct AgentBridgeRuntime {
+    user_data: PathBuf,
+    bridge: Mutex<Option<agent_bridge::AgentBridgeHandle>>,
+    config: Mutex<agent_bridge_config::AgentBridgeConfig>,
+}
+
+impl AgentBridgeRuntime {
+    fn new(user_data: PathBuf) -> Self {
+        let config = agent_bridge_config::load(&user_data).unwrap_or_default();
+        Self {
+            user_data,
+            bridge: Mutex::new(None),
+            config: Mutex::new(config),
+        }
+    }
+}
+
+fn agent_bridge_status_snapshot(
+    state: &AgentBridgeRuntime,
+    running: bool,
+) -> Result<Value, String> {
+    let config = state
+        .config
+        .lock()
+        .map_err(|_| "Agent Bridge 配置状态不可用".to_string())?;
+    Ok(json!({
+        "enabled": running,
+        "port": agent_bridge::AGENT_BRIDGE_PORT,
+        "token": config.token,
+        "scopes": config.allowed_scopes,
+        "sftpRoot": config.sftp_root,
+        "auditLogEnabled": config.audit_log_enabled,
+        "publicDiscovery": config.public_discovery,
+        "discoveryPath": state.user_data.join("issh-agent-bridge.json").to_string_lossy(),
+    }))
+}
+
+/// 手动开启 Agent Bridge（R-045：开关永不持久化，重启后默认关闭）。
+#[tauri::command]
+async fn agent_bridge_enable(
+    state: State<'_, AgentBridgeRuntime>,
+    manager: State<'_, Arc<RuntimeManager>>,
+) -> Result<Value, String> {
+    {
+        let bridge = state
+            .bridge
+            .lock()
+            .map_err(|_| "Agent Bridge 状态不可用".to_string())?;
+        if bridge.is_some() {
+            return agent_bridge_status_snapshot(&state, true);
+        }
+    }
+    let (token, scopes, sftp_root, public_discovery, audit_enabled) = {
+        let config = state
+            .config
+            .lock()
+            .map_err(|_| "Agent Bridge 配置不可用".to_string())?;
+        (
+            config.token.clone(),
+            config.allowed_scopes.clone(),
+            config.sftp_root.clone(),
+            config.public_discovery,
+            config.audit_log_enabled,
+        )
+    };
+    let handle = agent_bridge::start(
+        manager.inner().clone(),
+        state.user_data.clone(),
+        token,
+        agent_bridge::parse_scopes(&scopes),
+        sftp_root,
+        public_discovery,
+        audit_enabled,
+    )
+    .await?;
+    *state
+        .bridge
+        .lock()
+        .map_err(|_| "Agent Bridge 状态不可用".to_string())? = Some(handle);
+    agent_bridge_status_snapshot(&state, true)
+}
+
+#[tauri::command]
+fn agent_bridge_disable(state: State<'_, AgentBridgeRuntime>) -> Result<Value, String> {
+    let bridge = {
+        let mut guard = state
+            .bridge
+            .lock()
+            .map_err(|_| "Agent Bridge 状态不可用".to_string())?;
+        guard.take()
+    };
+    if let Some(handle) = bridge {
+        handle.stop();
+    }
+    agent_bridge_status_snapshot(&state, false)
+}
+
+#[tauri::command]
+fn agent_bridge_status(state: State<'_, AgentBridgeRuntime>) -> Result<Value, String> {
+    let running = state
+        .bridge
+        .lock()
+        .map_err(|_| "Agent Bridge 状态不可用".to_string())?
+        .is_some();
+    agent_bridge_status_snapshot(&state, running)
+}
+
+/// 更新 scope / sftpRoot / auditLogEnabled / publicDiscovery（token 与 enabled 不可经此修改）。
+/// 配置变更即时生效：若 server 正在运行则用新配置重启（R-045 安全语义）。
+#[tauri::command]
+async fn agent_bridge_configure(
+    state: State<'_, AgentBridgeRuntime>,
+    manager: State<'_, Arc<RuntimeManager>>,
+    patch: Value,
+) -> Result<Value, String> {
+    {
+        let mut config = state
+            .config
+            .lock()
+            .map_err(|_| "Agent Bridge 配置不可用".to_string())?;
+        if let Some(scopes) = patch.get("scopes").and_then(Value::as_array) {
+            config.allowed_scopes = scopes
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect();
+        }
+        if let Some(root) = patch.get("sftpRoot") {
+            config.sftp_root = root
+                .as_str()
+                .filter(|root| !root.is_empty())
+                .map(str::to_string);
+        }
+        if let Some(value) = patch.get("auditLogEnabled").and_then(Value::as_bool) {
+            config.audit_log_enabled = value;
+        }
+        if let Some(value) = patch.get("publicDiscovery").and_then(Value::as_bool) {
+            config.public_discovery = value;
+        }
+        agent_bridge_config::save(&state.user_data, &config)?;
+    }
+    let was_running = sync_bridge_runtime(&state, manager.inner().clone()).await?;
+    agent_bridge_status_snapshot(&state, was_running)
+}
+
+/// 用最新持久化配置重启运行中的 server（stop → 等待端口释放 → start，带重试）。
+/// 返回重启前是否正在运行。
+async fn sync_bridge_runtime(
+    state: &AgentBridgeRuntime,
+    manager: Arc<RuntimeManager>,
+) -> Result<bool, String> {
+    let old = {
+        let mut guard = state
+            .bridge
+            .lock()
+            .map_err(|_| "Agent Bridge 状态不可用".to_string())?;
+        guard.take()
+    };
+    let was_running = old.is_some();
+    if let Some(handle) = old {
+        handle.stop();
+    }
+    if !was_running {
+        return Ok(false);
+    }
+    let (token, scopes, sftp_root, public_discovery, audit_enabled) = {
+        let config = state
+            .config
+            .lock()
+            .map_err(|_| "Agent Bridge 配置不可用".to_string())?;
+        (
+            config.token.clone(),
+            config.allowed_scopes.clone(),
+            config.sftp_root.clone(),
+            config.public_discovery,
+            config.audit_log_enabled,
+        )
+    };
+    let mut last_error: Option<String> = None;
+    for _ in 0..10 {
+        match agent_bridge::start(
+            manager.clone(),
+            state.user_data.clone(),
+            token.clone(),
+            agent_bridge::parse_scopes(&scopes),
+            sftp_root.clone(),
+            public_discovery,
+            audit_enabled,
+        )
+        .await
+        {
+            Ok(handle) => {
+                *state
+                    .bridge
+                    .lock()
+                    .map_err(|_| "Agent Bridge 状态不可用".to_string())? = Some(handle);
+                return Ok(true);
+            }
+            Err(error) => {
+                last_error = Some(error);
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            }
+        }
+    }
+    Err(last_error.unwrap_or_else(|| "Agent Bridge 重启失败".to_string()))
+}
+
+/// 轮换 token：生成新 token 持久化；若正在运行则重启 server 使新 token 生效。
+#[tauri::command]
+async fn agent_bridge_rotate_token(
+    state: State<'_, AgentBridgeRuntime>,
+    manager: State<'_, Arc<RuntimeManager>>,
+) -> Result<Value, String> {
+    let old_bridge = {
+        let mut guard = state
+            .bridge
+            .lock()
+            .map_err(|_| "Agent Bridge 状态不可用".to_string())?;
+        guard.take()
+    };
+    let was_running = old_bridge.is_some();
+    if let Some(handle) = old_bridge {
+        handle.stop();
+    }
+    {
+        let mut config = state
+            .config
+            .lock()
+            .map_err(|_| "Agent Bridge 配置不可用".to_string())?;
+        config.token = agent_bridge_config::generate_token();
+        agent_bridge_config::save(&state.user_data, &config)?;
+    }
+    let was_running = if was_running {
+        sync_bridge_runtime(&state, manager.inner().clone()).await?
+    } else {
+        false
+    };
+    agent_bridge_status_snapshot(&state, was_running)
+}
+
+#[tauri::command]
+fn agent_bridge_audit_read(state: State<'_, AgentBridgeRuntime>) -> Result<String, String> {
+    let path = agent_bridge_config::audit_log_path(&state.user_data);
+    match std::fs::read_to_string(&path) {
+        Ok(raw) => Ok(raw),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(error) => Err(format!("无法读取审计日志：{error}")),
+    }
+}
+
+#[tauri::command]
+fn agent_bridge_audit_clear(state: State<'_, AgentBridgeRuntime>) -> Result<(), String> {
+    let path = agent_bridge_config::audit_log_path(&state.user_data);
+    match std::fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("无法清除审计日志：{error}")),
+    }
+}
+
+/// 前端 tab 切换时上报当前 active 会话。
+#[tauri::command]
+fn set_active_session(id: Option<String>) -> Result<(), String> {
+    if let Some(id) = id {
+        agent_bridge::set_active_session_id(&id);
+    }
+    Ok(())
+}
+
+/// 完全退出（R-046）：Agent Bridge 由 RunEvent::Exit 统一清理。
+#[tauri::command]
+fn app_quit(app: tauri::AppHandle) -> Result<(), String> {
+    app.exit(0);
+    Ok(())
+}
+
+/// 最小化到托盘（R-046）：Agent Bridge 保持运行。
+#[tauri::command]
+fn minimize_to_tray(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        window
+            .hide()
+            .map_err(|error| format!("无法最小化到托盘：{error}"))?;
+    }
+    Ok(())
+}
+
 
 fn inject_auth_token(request: &mut Value, token: &str) {
     if let Value::Object(map) = request {

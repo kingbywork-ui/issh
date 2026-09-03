@@ -21,7 +21,7 @@
 
     let { onclose }: { onclose: () => void } = $props()
 
-    type Section = 'general' | 'vault' | 'auto-sudo' | 'plugins' | 'market' | 'about'
+    type Section = 'general' | 'vault' | 'auto-sudo' | 'plugins' | 'market' | 'about' | 'plugin-tab'
 
     interface MarketEntry {
         id: string
@@ -172,18 +172,30 @@
     let elevateBusy = $state(false)
     let elevateError = $state('')
 
-    const tabs = $derived(getSettingsTabs())
+    let tabs = $state(getSettingsTabs())
 
     // 插件注册的设置页组件是任意框架组件（当前生态为 Svelte 组件对象），
     // 用 mount/unmount 手动挂载到容器节点（Svelte 5 runes 组件不能直接动态 import 后用 <svelte:component>）
     let pluginTabSection = $state('')
+    let mountedPluginTab = ''
     const mountedComponents = new Map<string, { destroy (): void }>()
+
+    function unmountPluginTab (): void {
+        if (!mountedPluginTab) return
+        const previous = mountedComponents.get(mountedPluginTab)
+        if (previous) {
+            try { previous.destroy() } catch { /* 忽略卸载失败 */ }
+            mountedComponents.delete(mountedPluginTab)
+        }
+        mountedPluginTab = ''
+    }
 
     function leaveVault (next: Section): void {
         if (section === 'vault' && next !== 'vault') {
             void lockHostProfiles().catch(() => {})
         }
         section = next
+        if (next !== 'plugin-tab') pluginTabSection = ''
     }
 
     function closeSettings (): void {
@@ -197,32 +209,28 @@
         const tab = tabs.find((candidate) => candidate.id === tabId)
         if (!tab) return
         pluginTabSection = tabId
+        leaveVault('plugin-tab')
     }
 
     $effect(() => {
-        const current = tabs
         const host = pluginTabContainer
-        if (!host) return
-        const activeTab = current.find((candidate) => candidate.id === pluginTabSection)
-        // 清理已卸载插件的组件
-        for (const [id, mounted] of mountedComponents.entries()) {
-            if (!current.some((candidate) => candidate.id === id)) {
-                try { mounted.destroy() } catch { /* 忽略卸载失败 */ }
-                mountedComponents.delete(id)
-            }
+        const activeTab = tabs.find((candidate) => candidate.id === pluginTabSection)
+        if (!host) {
+            // 离开插件设置页：销毁手动挂载的组件
+            unmountPluginTab()
+            return
         }
-        // 渲染当前激活的插件设置页
+        const activeId = activeTab?.id ?? ''
+        if (activeId === mountedPluginTab) return
+        unmountPluginTab()
         for (const child of [...host.children]) child.remove()
-        if (activeTab && activeTab.component) {
-            let mounted = mountedComponents.get(activeTab.id)
-            if (!mounted) {
-                try {
-                    const instance = mount(activeTab.component as Parameters<typeof mount>[0], { target: host })
-                    mounted = { destroy: () => unmount(instance) }
-                    mountedComponents.set(activeTab.id, mounted)
-                } catch (cause) {
-                    console.warn(`[settings] 插件设置页挂载失败：${activeTab.id}`, cause)
-                }
+        if (activeTab?.component) {
+            try {
+                const instance = mount(activeTab.component as Parameters<typeof mount>[0], { target: host })
+                mountedComponents.set(activeId, { destroy: () => unmount(instance) })
+                mountedPluginTab = activeId
+            } catch (cause) {
+                console.warn(`[settings] 插件设置页挂载失败：${activeId}`, cause)
             }
         }
     })
@@ -267,7 +275,11 @@
 
     onMount(() => {
         plugins = listPlugins()
-        const unsubscribe = subscribeUi(() => { plugins = listPlugins() })
+        tabs = getSettingsTabs()
+        const unsubscribe = subscribeUi(() => {
+            plugins = listPlugins()
+            tabs = getSettingsTabs()
+        })
         void loadInstalled()
         void loadAbout()
         return unsubscribe
@@ -764,7 +776,7 @@
                         <div class="about-row"><span>issh 版本</span><strong>{appVersion || '未知'}</strong></div>
                         <div class="about-row"><span>Runtime 版本</span><strong>{runtimeVersion || '未连接'}</strong></div>
                     </section>
-                {:else if pluginTabSection && tabs.some((tab) => tab.id === pluginTabSection)}
+                {:else if section === 'plugin-tab' && pluginTabSection && tabs.some((tab) => tab.id === pluginTabSection)}
                     <section aria-label={tabs.find((tab) => tab.id === pluginTabSection)?.title ?? '插件设置'}>
                         <div class="plugin-settings-host" bind:this={pluginTabContainer}></div>
                     </section>

@@ -560,3 +560,80 @@ export function deleteLocalFile (path: string): Promise<void> {
 export function createLocalDir (path: string): Promise<void> {
     return invoke<void>('create_local_dir', { path })
 }
+
+// ---------- Agent Bridge（CLI / MCP 外部 agent 接入，R-045 安全语义） ----------
+
+export interface AgentBridgeStatus {
+    enabled: boolean
+    port: number
+    token: string
+    scopes: string[]
+    sftpRoot: string | null
+    auditLogEnabled: boolean
+    publicDiscovery: boolean
+    discoveryPath: string
+}
+
+export interface AgentBridgePatch {
+    scopes?: string[]
+    sftpRoot?: string | null
+    auditLogEnabled?: boolean
+    publicDiscovery?: boolean
+}
+
+export function agentBridgeEnable (): Promise<AgentBridgeStatus> {
+    return invoke<AgentBridgeStatus>('agent_bridge_enable')
+}
+
+export function agentBridgeDisable (): Promise<AgentBridgeStatus> {
+    return invoke<AgentBridgeStatus>('agent_bridge_disable')
+}
+
+export function agentBridgeStatus (): Promise<AgentBridgeStatus> {
+    return invoke<AgentBridgeStatus>('agent_bridge_status')
+}
+
+export function agentBridgeConfigure (patch: AgentBridgePatch): Promise<AgentBridgeStatus> {
+    return invoke<AgentBridgeStatus>('agent_bridge_configure', { patch })
+}
+
+export function agentBridgeRotateToken (): Promise<AgentBridgeStatus> {
+    return invoke<AgentBridgeStatus>('agent_bridge_rotate_token')
+}
+
+export function agentBridgeAuditRead (): Promise<string> {
+    return invoke<string>('agent_bridge_audit_read')
+}
+
+export function agentBridgeAuditClear (): Promise<void> {
+    return invoke<void>('agent_bridge_audit_clear')
+}
+
+export function setActiveSession (id: string | null): Promise<void> {
+    return invoke<void>('set_active_session', { id })
+}
+
+export function appQuit (): Promise<void> {
+    return invoke<void>('app_quit')
+}
+
+export function minimizeToTray (): Promise<void> {
+    return invoke<void>('minimize_to_tray')
+}
+
+export interface PluginGatewayAuditEntry {
+    timestamp: string
+    requestId: string
+    pluginId: string
+    method: string
+    ok: boolean
+    errorCode?: string
+}
+
+export function pluginGatewayAuditRead (): Promise<PluginGatewayAuditEntry[]> {
+    return invoke<PluginGatewayAuditEntry[]>('plugin_gateway_audit_read')
+}
+
+export function pluginGatewayAuditClear (): Promise<void> {
+    return invoke<void>('plugin_gateway_audit_clear')
+}

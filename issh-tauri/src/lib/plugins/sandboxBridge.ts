@@ -13,6 +13,9 @@ export interface SandboxRpcRequest {
     params: Record<string, unknown>
     /** 面板通道 token；由宿主在 sandboxUrl hash 中下发，消息必须携带才能被接受 */
     token?: string
+    apiVersion?: '1'
+    traceId?: string
+    deadlineMs?: number
 }
 
 export interface SandboxRpcResponse {
@@ -21,6 +24,7 @@ export interface SandboxRpcResponse {
     ok: boolean
     result?: unknown
     error?: string
+    apiVersion?: '1'
 }
 
 export interface SandboxEventMessage {
@@ -81,7 +85,18 @@ function storagePrefix (pluginId: string): string {
 function requirePermission (pluginId: string, permission: string): boolean {
     const entry = getEntry(pluginId)
     if (!entry) return false
-    return (entry.manifest.permissions ?? []).includes(permission)
+    const declared = [...(entry.manifest.permissions ?? []), ...(entry.manifest.capabilities ?? [])]
+    return declared.some((item) => item === permission || legacyPermission(item) === permission)
+}
+
+function legacyPermission (permission: string): string | null {
+    const aliases: Record<string, string> = {
+        'panel:register': 'ui.panel.register',
+        'terminal:decorate': 'terminal.decorate',
+        'profiles:read': 'profiles.read',
+        'profiles:write': 'profiles.write',
+    }
+    return aliases[permission] ?? null
 }
 
 const METHOD_PERMISSIONS: Record<string, string[]> = {
@@ -90,10 +105,10 @@ const METHOD_PERMISSIONS: Record<string, string[]> = {
     'storage.delete': [],
     'storage.keys': [],
     'manifest.get': [],
-    'terminal.read': ['terminal:decorate'],
-    'terminal.write': ['terminal:decorate'],
-    'profiles.list': ['profiles:read'],
-    'profiles.write': ['profiles:write'],
+    'terminal.read': ['terminal.read', 'terminal.decorate'],
+    'terminal.write': ['terminal.write', 'terminal.decorate'],
+    'profiles.list': ['profiles.read', 'profiles:read'],
+    'profiles.write': ['profiles.write', 'profiles:write'],
 }
 
 export function registerSandboxOrigin (pluginId: string, origin: string): void {
@@ -143,10 +158,8 @@ function dispatchRpc (pluginId: string, request: SandboxRpcRequest): unknown {
     if (!requiredPermissions) {
         throw new Error(`未知 method：${request.method}`)
     }
-    for (const permission of requiredPermissions) {
-        if (!requirePermission(pluginId, permission)) {
-            throw new Error(`插件 ${pluginId} 未声明权限：${permission}`)
-        }
+    if (requiredPermissions.length > 0 && !requiredPermissions.some((permission) => requirePermission(pluginId, permission))) {
+        throw new Error(`插件 ${pluginId} 未声明权限：${requiredPermissions.join(' 或 ')}`)
     }
     if (request.method.startsWith('storage.') || request.method === 'manifest.get') {
         return handleStorageCall(pluginId, request.method, request.params)
@@ -265,11 +278,15 @@ export function installSandboxBridge (): void {
         // 凭通道 token 归因（而非 event.origin：沙箱 iframe 的 origin 为 null/共享 asset.localhost）
         const pluginId = findPluginByToken(data.token)
         if (!pluginId) return
+        if (data.apiVersion && data.apiVersion !== '1') return
+        const frame = findSandboxFrame(pluginId)
+        if (!frame || event.source !== frame.contentWindow) return
         const respond = (ok: boolean, payload: unknown, errorMessage?: string) => {
             const response: SandboxRpcResponse = {
                 channel: SANDBOX_RPC_CHANNEL,
                 id: data.id,
                 ok,
+                apiVersion: '1',
             }
             if (ok) response.result = payload
             else response.error = errorMessage
@@ -355,6 +372,8 @@ export function createSandboxClient (pluginId: string): {
                 id,
                 method,
                 params,
+                apiVersion: '1',
+                traceId: id,
             }
             const frame = findSandboxFrame(pluginId)
             if (!frame) throw new Error(`沙箱 iframe 未找到：${pluginId}`)

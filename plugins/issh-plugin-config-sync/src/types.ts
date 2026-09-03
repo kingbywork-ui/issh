@@ -10,6 +10,8 @@ export interface IsshPluginManifest {
     author?: string
     homepage?: string
     repository?: string
+    gatewayApiVersion?: string
+    capabilities?: string[]
 }
 
 export interface SettingsTabDefinition {
@@ -28,6 +30,14 @@ export interface PluginStorage {
 
 export interface IsshPluginContext {
     manifest: IsshPluginManifest
+    gateway: {
+        request<T = unknown> (method: string, args?: Record<string, unknown>): Promise<T>
+        profiles: { read (): Promise<unknown>; mutate (mutation: unknown): Promise<unknown> }
+        network: { fetch (url: string, options?: { method?: 'GET' | 'POST' | 'PATCH'; headers?: Record<string, string>; body?: string }): Promise<{ status: number; ok: boolean; body: string }> }
+        storage: PluginStorage
+        ui: { registerSettingsTab (tab: SettingsTabDefinition): () => void }
+        log (level: 'info' | 'warn' | 'error', message: string): void
+    }
     registerSettingsTab (tab: SettingsTabDefinition): void
     registerHomeCard (card: { id: string; title: string; order?: number; component: unknown }): void
     registerPanel (panel: { id: string; title: string; placement: 'left' | 'bottom'; component: unknown }): void

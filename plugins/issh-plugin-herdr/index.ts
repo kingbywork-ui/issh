@@ -1,4 +1,5 @@
 import HerdrSettingsTab from './src/HerdrSettingsTab.svelte'
+import { setGateway } from './src/herdrRpc'
 import type { IsshPlugin, IsshPluginContext, IsshPluginManifest } from './src/types'
 
 export const manifest: IsshPluginManifest = {
@@ -12,18 +13,21 @@ export const manifest: IsshPluginManifest = {
     author: 'kingbywork-ui',
     homepage: 'https://github.com/kingbywork-ui/issh-plugin-herdr',
     repository: 'https://github.com/kingbywork-ui/issh-plugin-herdr',
+    gatewayApiVersion: '1',
+    capabilities: ['ui.settings.register', 'workspace.read', 'workspace.write', 'session.read'],
 }
 
 const plugin: IsshPlugin = {
     manifest,
     activate (ctx: IsshPluginContext) {
-        ctx.registerSettingsTab({
+        setGateway(ctx.gateway)
+        ctx.gateway.ui.registerSettingsTab({
             id: 'herdr',
             title: 'Herdr 工作区',
             order: 12,
             component: HerdrSettingsTab,
         })
-        ctx.log('info', 'herdr plugin activated')
+        ctx.gateway.log('info', 'herdr plugin activated')
     },
 }
 

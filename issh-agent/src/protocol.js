@@ -661,6 +661,35 @@ export const LEGACY_AGENT_BRIDGE_METHOD_ALIASES = Object.freeze(Object.fromEntri
     AGENT_BRIDGE_TOOLS.map(tool => [tool.name.replace(/^issh_/, 'tabby_'), tool.name]),
 ))
 
+/**
+ * Tools implemented by the Rust Agent Bridge server (17 core tools, issh-tauri).
+ *
+ * Tools declared in AGENT_BRIDGE_TOOLS but not listed here are protocol roadmap
+ * items whose server side is not implemented yet (workspace/agent/task/cordis/
+ * herdr/pane). External surfaces (MCP tools/list) must not advertise them so
+ * that every tool an agent sees actually works. The full protocol remains the
+ * single source of truth for the future server implementation.
+ */
+export const IMPLEMENTED_AGENT_BRIDGE_TOOLS = Object.freeze([
+    'issh_health',
+    'issh_list_sessions',
+    'issh_list_profiles',
+    'issh_connect_profile',
+    'issh_disconnect_session',
+    'issh_select_session',
+    'issh_get_context',
+    'issh_read_buffer',
+    'issh_preview_command',
+    'issh_insert_command',
+    'issh_run_command',
+    'issh_exec_command',
+    'issh_get_output',
+    'issh_batch_exec',
+    'issh_sftp_list',
+    'issh_sftp_read',
+    'issh_sftp_write',
+])
+
 export function normalizeAgentBridgeMethod (method) {
     return LEGACY_AGENT_BRIDGE_METHOD_ALIASES[method] ?? method
 }
@@ -675,5 +704,7 @@ export const AGENT_BRIDGE_METHOD_SCOPES = Object.freeze({
 })
 
 export function getMcpTools () {
-    return AGENT_BRIDGE_TOOLS.map(({ scope: _scope, ...tool }) => tool)
+    return AGENT_BRIDGE_TOOLS
+        .filter(tool => IMPLEMENTED_AGENT_BRIDGE_TOOLS.includes(tool.name))
+        .map(({ scope: _scope, ...tool }) => tool)
 }

@@ -10,6 +10,8 @@ export interface IsshPluginManifest {
     author?: string
     homepage?: string
     repository?: string
+    gatewayApiVersion?: string
+    capabilities?: string[]
 }
 
 export interface SandboxPanelDefinition {
@@ -23,6 +25,7 @@ export interface SandboxPanelDefinition {
 
 export interface IsshPluginContext {
     manifest: IsshPluginManifest
+    gateway: { ui: { registerSandboxPanel (panel: SandboxPanelDefinition): () => void }; log (level: 'info' | 'warn' | 'error', message: string): void }
     registerSettingsTab (tab: unknown): void
     registerHomeCard (card: unknown): void
     registerPanel (panel: unknown): void

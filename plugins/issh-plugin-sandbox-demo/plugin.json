@@ -5,6 +5,8 @@
     "version": "0.4.0",
     "kind": "feature",
     "entry": "index.js",
+    "gatewayApiVersion": "1",
+    "capabilities": ["ui.panel.register", "terminal.decorate", "profiles.write"],
     "permissions": [
         "panel:register",
         "terminal:decorate",

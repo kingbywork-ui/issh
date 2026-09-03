@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte'
     import syncCss from './sync.css?inline'
-    import { applyPayload, buildPayload, hostProfiles, validatePayload } from './syncRpc'
+    import { applyPayload, buildPayload, hostProfiles, networkFetch, pluginStorage, validatePayload } from './syncRpc'
 
     let profileCount = $state(0)
     let groupCount = $state(0)
@@ -9,10 +9,12 @@
     let busy = $state(false)
     let message = $state('')
     let importText = $state('')
-    let gistToken = $state(localStorage.getItem('issh-plugin-config-sync:gistToken') ?? '')
-    let gistId = $state(localStorage.getItem('issh-plugin-config-sync:gistId') ?? '')
+    let gistToken = $state('')
+    let gistId = $state('')
 
     onMount(() => {
+        gistToken = pluginStorage().get('gistToken') ?? ''
+        gistId = pluginStorage().get('gistId') ?? ''
         if (!document.getElementById('issh-plugin-config-sync-style')) {
             const style = document.createElement('style')
             style.id = 'issh-plugin-config-sync-style'
@@ -76,8 +78,8 @@
     }
 
     function saveGistSettings (): void {
-        localStorage.setItem('issh-plugin-config-sync:gistToken', gistToken)
-        localStorage.setItem('issh-plugin-config-sync:gistId', gistId)
+        pluginStorage().set('gistToken', gistToken)
+        pluginStorage().set('gistId', gistId)
         message = 'Gist 设置已保存'
     }
 
@@ -88,7 +90,7 @@
             if (!gistToken) throw new Error('需要 GitHub Token')
             const result = await hostProfiles()
             const json = JSON.stringify(buildPayload(result))
-            const response = await fetch('https://api.github.com/gists' + (gistId ? `/${gistId}` : ''), {
+            const response = await networkFetch('https://api.github.com/gists' + (gistId ? `/${gistId}` : ''), {
                 method: gistId ? 'PATCH' : 'POST',
                 headers: {
                     Authorization: `Bearer ${gistToken}`,
@@ -100,9 +102,9 @@
                 }),
             })
             if (!response.ok) throw new Error(`Gist 同步失败：${response.status}`)
-            const data = await response.json() as { id: string }
+            const data = JSON.parse(response.body) as { id: string }
             gistId = data.id
-            localStorage.setItem('issh-plugin-config-sync:gistId', gistId)
+            pluginStorage().set('gistId', gistId)
             message = `已同步到 Gist ${gistId}`
         } catch (cause) {
             message = cause instanceof Error ? cause.message : String(cause)
@@ -116,11 +118,11 @@
         message = ''
         try {
             if (!gistToken || !gistId) throw new Error('需要 GitHub Token 和 Gist ID')
-            const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+            const response = await networkFetch(`https://api.github.com/gists/${gistId}`, {
                 headers: { Authorization: `Bearer ${gistToken}` },
             })
             if (!response.ok) throw new Error(`Gist 拉取失败：${response.status}`)
-            const data = await response.json() as { files?: Record<string, { content?: string }> }
+            const data = JSON.parse(response.body) as { files?: Record<string, { content?: string }> }
             const content = data.files?.['issh-host-profiles.json']?.content
             if (!content) throw new Error('Gist 中未找到 issh-host-profiles.json')
             const payload = validatePayload(content)

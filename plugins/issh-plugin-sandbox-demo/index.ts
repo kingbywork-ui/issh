@@ -12,6 +12,8 @@ export const manifest: IsshPluginManifest = {
     author: 'kingbywork-ui',
     homepage: 'https://github.com/kingbywork-ui/issh-plugin-sandbox-demo',
     repository: 'https://github.com/kingbywork-ui/issh-plugin-sandbox-demo',
+    gatewayApiVersion: '1',
+    capabilities: ['ui.panel.register', 'terminal.decorate', 'profiles.write'],
 }
 
 const plugin: IsshPlugin = {
@@ -27,8 +29,8 @@ const plugin: IsshPlugin = {
             sandboxOrigin: new URL(sandboxUrl).origin,
             height: 140,
         }
-        ctx.registerSandboxPanel(panel)
-        ctx.log('info', 'sandbox demo plugin activated')
+        ctx.gateway.ui.registerSandboxPanel(panel)
+        ctx.gateway.log('info', 'sandbox demo plugin activated')
     },
 }
 

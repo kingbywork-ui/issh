@@ -1,29 +1,14 @@
-import { invoke } from '@tauri-apps/api/core'
-
-interface RuntimeResponse<T> {
-    result?: T
-    error?: {
-        code: number
-        message: string
-    }
-}
+import type { IsshPluginContext } from './types'
 
 let requestId = 0
+let gateway: IsshPluginContext['gateway'] | null = null
+
+export function setGateway (value: IsshPluginContext['gateway']): void { gateway = value }
 
 export async function runtimeRequest<T> (method: string, params?: unknown): Promise<T> {
     requestId += 1
-    const response = await invoke<RuntimeResponse<T>>('runtime_request', {
-        request: {
-            jsonrpc: '2.0',
-            id: `herdr-${requestId}`,
-            method,
-            ...(params === undefined ? {} : { params }),
-        },
-    })
-    if (response.error || response.result === undefined) {
-        throw new Error(response.error?.message ?? `${method} 未返回结果`)
-    }
-    return response.result
+    if (!gateway) throw new Error('Herdr 网关尚未初始化')
+    return gateway.request<T>(method === 'health' ? 'runtime.health' : method, params === undefined ? {} : params as Record<string, unknown>, { requestId: `herdr-${requestId}` })
 }
 
 export interface SessionInfo {

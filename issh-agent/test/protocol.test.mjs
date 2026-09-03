@@ -22,25 +22,18 @@ test('protocol exposes the complete current bridge surface without removed RAG t
     assert.equal(normalizeAgentBridgeMethod('tabby_select_session'), 'issh_select_session')
 })
 
-test('MCP tools contain operation-specific schemas', () => {
+test('MCP tools expose only the implemented core surface with operation-specific schemas', () => {
     const tools = getMcpTools()
+    assert.equal(tools.length, 17)
     const exec = tools.find(tool => tool.name === 'issh_exec_command')
     assert.deepEqual(exec.inputSchema.required, ['command'])
     assert.equal(exec.inputSchema.properties.timeoutMs.maximum, 3600000)
     assert(!('scope' in exec))
-    const bind = tools.find(tool => tool.name === 'issh_workspace_bind')
-    assert.deepEqual(bind.inputSchema.required, ['workspaceId', 'sessionId'])
-    const prompt = tools.find(tool => tool.name === 'issh_agent_prompt')
-    assert.deepEqual(prompt.inputSchema.required, ['agentId', 'prompt'])
-    const dispatch = tools.find(tool => tool.name === 'issh_agent_dispatch')
-    assert.deepEqual(dispatch.inputSchema.required, ['workspaceId', 'agentIds', 'prompt'])
-    const runCommand = tools.find(tool => tool.name === 'issh_task_run_command')
-    assert.equal(runCommand.inputSchema.properties.execute.default, false)
-    const herdrLink = tools.find(tool => tool.name === 'issh_herdr_link')
-    assert.deepEqual(herdrLink.inputSchema.required, ['workspaceId', 'herdrWorkspaceId'])
-    const paneWrite = tools.find(tool => tool.name === 'issh_pane_write')
-    assert.deepEqual(paneWrite.inputSchema.required, ['paneId', 'ownerId', 'data'])
-    assert.equal(paneWrite.inputSchema.properties.data.items.maximum, 255)
+    // 未实现服务端的超前工具不得暴露给外部 agent（诚实降级）
+    for (const name of ['issh_workspace_bind', 'issh_agent_prompt', 'issh_agent_dispatch', 'issh_task_run_command', 'issh_herdr_link', 'issh_pane_write']) {
+        assert.equal(tools.find(tool => tool.name === name), undefined, `${name} must not be advertised`)
+    }
+    // scope 表仍覆盖全量协议（未来服务端实现沿用）
     assert.equal(AGENT_BRIDGE_METHOD_SCOPES.issh_pane_subscribe, 'read')
     assert.equal(AGENT_BRIDGE_METHOD_SCOPES.issh_pane_write, 'write')
     assert.equal(AGENT_BRIDGE_METHOD_SCOPES.issh_herdr_stop, 'exec')

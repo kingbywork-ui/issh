@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core'
+import type { IsshPluginContext } from './types'
 
 export interface SshHostProfile {
     id: string
@@ -39,16 +39,36 @@ export interface HostProfileMutation {
     profileIds?: string[]
 }
 
+type Gateway = IsshPluginContext['gateway']
+let gateway: Gateway | null = null
+
+export function setGateway (value: Gateway): void {
+    gateway = value
+}
+
+function requireGateway (): Gateway {
+    if (!gateway) throw new Error('配置同步网关尚未初始化')
+    return gateway
+}
+
+export function networkFetch (url: string, options?: Parameters<Gateway['network']['fetch']>[1]): Promise<{ status: number; ok: boolean; body: string }> {
+    return requireGateway().network.fetch(url, options)
+}
+
+export function pluginStorage (): Gateway['storage'] {
+    return requireGateway().storage
+}
+
 export function hostProfiles (): Promise<HostProfilesResult> {
-    return invoke<HostProfilesResult>('host_profiles')
+    return requireGateway().profiles.read() as Promise<HostProfilesResult>
 }
 
 export function mutateHostProfiles (mutation: HostProfileMutation): Promise<HostProfilesResult> {
-    return invoke<HostProfilesResult>('mutate_host_profiles', { mutation })
+    return requireGateway().profiles.mutate(mutation) as Promise<HostProfilesResult>
 }
 
 export function unlockHostProfiles (passphrase: string): Promise<HostProfilesResult> {
-    return invoke<HostProfilesResult>('unlock_host_profiles', { passphrase })
+    return requireGateway().request<HostProfilesResult>('vault.unlock', { passphrase })
 }
 
 export interface SyncPayload {

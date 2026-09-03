@@ -42,15 +42,17 @@ test('stdio MCP uses newline-delimited JSON and exposes current schemas', async 
         params: {},
     })}\n`)
     const listed = JSON.parse(await toolsResponse)
-    assert.equal(listed.result.tools.length, 50)
+    assert.equal(listed.result.tools.length, 17)
     assert(!listed.result.tools.some(tool => tool.name.includes('rag')))
     assert.deepEqual(
         listed.result.tools.find(tool => tool.name === 'issh_sftp_write').inputSchema.required,
         ['path', 'content'],
     )
-    assert.deepEqual(
-        listed.result.tools.find(tool => tool.name === 'issh_pane_write').inputSchema.required,
-        ['paneId', 'ownerId', 'data'],
+    // 未实现服务端的超前工具不得暴露给外部 agent（诚实降级）
+    assert.equal(
+        listed.result.tools.find(tool => tool.name === 'issh_pane_write'),
+        undefined,
+        'issh_pane_write must not be advertised until the server implements it',
     )
 })
 

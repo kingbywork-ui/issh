@@ -1,4 +1,5 @@
 import BridgeSettingsTab from './src/BridgeSettingsTab.svelte'
+import { setGateway } from './src/bridgeRpc'
 import type { IsshPlugin, IsshPluginContext, IsshPluginManifest } from './src/types'
 
 export const manifest: IsshPluginManifest = {
@@ -12,18 +13,21 @@ export const manifest: IsshPluginManifest = {
     author: 'kingbywork-ui',
     homepage: 'https://github.com/kingbywork-ui/issh-plugin-agent-bridge',
     repository: 'https://github.com/kingbywork-ui/issh-plugin-agent-bridge',
+    gatewayApiVersion: '1',
+    capabilities: ['ui.settings.register', 'workspace.read', 'workspace.write', 'session.read', 'agent.read', 'agent.write'],
 }
 
 const plugin: IsshPlugin = {
     manifest,
     activate (ctx: IsshPluginContext) {
-        ctx.registerSettingsTab({
+        setGateway(ctx.gateway)
+        ctx.gateway.ui.registerSettingsTab({
             id: 'agent-bridge',
             title: 'Agent 桥接',
             order: 11,
             component: BridgeSettingsTab,
         })
-        ctx.log('info', 'agent-bridge plugin activated')
+        ctx.gateway.log('info', 'agent-bridge plugin activated')
     },
 }
 

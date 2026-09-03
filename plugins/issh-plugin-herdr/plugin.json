@@ -6,6 +6,8 @@
     "kind": "integration",
     "minAppVersion": "0.2.0",
     "entry": "index.js",
+    "gatewayApiVersion": "1",
+    "capabilities": ["ui.settings.register", "workspace.read", "workspace.write", "session.read"],
     "permissions": ["workspace:read", "workspace:write", "session:read", "settings:tab"],
     "author": "kingbywork-ui",
     "homepage": "https://github.com/kingbywork-ui/issh-plugin-herdr",

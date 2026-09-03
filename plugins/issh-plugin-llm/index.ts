@@ -15,6 +15,8 @@ export const manifest: IsshPluginManifest = {
     author: 'kingbywork-ui',
     homepage: 'https://github.com/kingbywork-ui/issh-plugin-llm',
     repository: 'https://github.com/kingbywork-ui/issh-plugin-llm',
+    gatewayApiVersion: '1',
+    capabilities: ['ui.settings.register', 'terminal.decorate'],
 }
 
 interface SuggestionState {
@@ -341,14 +343,14 @@ const decorator: TerminalDecoratorDefinition = {
 const plugin: IsshPlugin = {
     manifest,
     activate (ctx: IsshPluginContext) {
-        ctx.registerSettingsTab({
+        ctx.gateway.ui.registerSettingsTab({
             id: 'llm',
             title: 'AI 命令补全',
             order: 13,
             component: LlmSettingsTab,
         })
-        ctx.registerTerminalDecorator(decorator)
-        ctx.log('info', 'llm plugin activated')
+        ctx.gateway.ui.registerTerminalDecorator(decorator)
+        ctx.gateway.log('info', 'llm plugin activated')
     },
 }
 

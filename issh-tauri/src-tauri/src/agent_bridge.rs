@@ -1,36 +1,64 @@
 //! CLI / MCP Agent Bridge：把 issh 终端会话暴露给外部 agent（Codex / Cursor / Claude Desktop）。
 //!
 //! 对齐 issh 分支 issh-llm AgentBridgeService 的能力面：
-//! - localhost-only HTTP + Bearer token 认证
+//! - localhost-only HTTP + Bearer token 认证，端口固定 59688（R-045）
 //! - 工具面：session list/select、context/buffer read、command preview/insert/run、
 //!   SSH exec、SFTP read/write、批量 exec、audit log
 //! - 危险命令确认、SFTP root 限制、单次写入上限、审计日志（JSONL）
+//!
+//! 安全开关语义（R-045）：enabled 不持久化，由 Tauri 端每次手动开启；
+//! 完全退出进程时自动停止；最小化到托盘时保持运行。
 
 use base64::Engine;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
 
 use crate::RuntimeManager;
+
+/// Agent Bridge 固定监听端口（R-045：不再自动选择）。
+pub const AGENT_BRIDGE_PORT: u16 = 59688;
 
 const MAX_BODY_BYTES: usize = 16 * 1024 * 1024;
 const MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_SFTP_WRITE_BYTES: u64 = 1024 * 1024;
 const MAX_BUFFER_LINES: usize = 500;
-const MAX_OUTPUT_CACHE_BYTES: usize = 1024 * 1024;
+const MAX_OUTPUT_CACHE_ENTRIES: usize = 32;
 const DEFAULT_EXEC_TIMEOUT_MS: u64 = 60_000;
 const MAX_EXEC_TIMEOUT_MS: u64 = 3_600_000;
 const AUDIT_LOG_MAX_BYTES: u64 = 4 * 1024 * 1024;
+/// session.subscribe 的 maxBytes 上限（isshd MAX_SESSION_BATCH_BYTES = 12 KiB）。
+const MAX_SUBSCRIBE_BYTES: u64 = 12 * 1024;
+
+/// 当前选中（active）会话 id，由 Tauri 前端通过 set_active_session 上报。
+static ACTIVE_SESSION_ID: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// 前端上报当前 active 会话（tab 切换时调用）。
+pub fn set_active_session_id(id: &str) {
+    if let Ok(mut guard) = ACTIVE_SESSION_ID.lock() {
+        *guard = Some(id.to_string());
+    }
+}
+
+fn active_session_id() -> Value {
+    match ACTIVE_SESSION_ID.lock() {
+        Ok(guard) => guard
+            .as_ref()
+            .map(|id| Value::String(id.clone()))
+            .unwrap_or(Value::Null),
+        Err(_) => Value::Null,
+    }
+}
 
 /// 工具分类（对应 protocol.js 的 scope：read / write / exec / sftp）。
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum ToolScope {
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ToolScope {
     Read,
     Write,
     Exec,
@@ -48,6 +76,29 @@ impl ToolScope {
     }
 }
 
+/// 把配置中的 scope 字符串列表解析为授权集合（未知项忽略）。
+pub fn parse_scopes(items: &[String]) -> HashSet<ToolScope> {
+    let mut set = HashSet::new();
+    for item in items {
+        match item.as_str() {
+            "read" => {
+                set.insert(ToolScope::Read);
+            }
+            "write" => {
+                set.insert(ToolScope::Write);
+            }
+            "exec" => {
+                set.insert(ToolScope::Exec);
+            }
+            "sftp" => {
+                set.insert(ToolScope::Sftp);
+            }
+            _ => {}
+        }
+    }
+    set
+}
+
 struct ToolDef {
     name: &'static str,
     scope: ToolScope,
@@ -63,11 +114,11 @@ const TOOLS: &[ToolDef] = &[
     ToolDef { name: "issh_disconnect_session", scope: ToolScope::Write, dangerous_confirm: false },
     ToolDef { name: "issh_select_session", scope: ToolScope::Write, dangerous_confirm: false },
     ToolDef { name: "issh_get_context", scope: ToolScope::Read, dangerous_confirm: false },
-    ToolDef { name: "issh_read_buffer", scope: ToolScope::Read, dangerous_confirm: clamped: false },
+    ToolDef { name: "issh_read_buffer", scope: ToolScope::Read, dangerous_confirm: false },
     ToolDef { name: "issh_preview_command", scope: ToolScope::Read, dangerous_confirm: false },
     ToolDef { name: "issh_insert_command", scope: ToolScope::Exec, dangerous_confirm: false },
     ToolDef { name: "issh_run_command", scope: ToolScope::Exec, dangerous_confirm: true },
-    ToolRef { name: "issh_exec_command", scope: ToolScope::Exec, dangerous_confirm: true },
+    ToolDef { name: "issh_exec_command", scope: ToolScope::Exec, dangerous_confirm: true },
     ToolDef { name: "issh_get_output", scope: ToolScope::Read, dangerous_confirm: false },
     ToolDef { name: "issh_batch_exec", scope: ToolScope::Exec, dangerous_confirm: true },
     ToolDef { name: "issh_sftp_list", scope: ToolScope::Sftp, dangerous_confirm: false },
@@ -75,9 +126,8 @@ const TOOLS: &[ToolDef] = &[
     ToolDef { name: "issh_sftp_write", scope: ToolScope::Sftp, dangerous_confirm: true },
 ];
 
-/// Agent Bridge 运行期状态：端口、token、输出缓存、审计计数。
+/// Agent Bridge 运行期状态：token、审计、输出缓存、scope 授权。
 pub struct AgentBridgeState {
-    port: AtomicU64,
     token_sha256: [u8; 32],
     audit_path: PathBuf,
     audit_seq: AtomicU64,
@@ -87,6 +137,10 @@ pub struct AgentBridgeState {
     sftp_root: Option<PathBuf>,
     /// 是否写 discovery file（agent 可读的连接信息）。
     public_discovery: bool,
+    /// 已授权的工具 scope（对齐 issh-llm assertMethodScope）。
+    allowed_scopes: HashSet<ToolScope>,
+    /// 是否写审计日志（agent-bridge-audit.jsonl）。
+    audit_enabled: bool,
 }
 
 struct CachedOutput {
@@ -94,27 +148,37 @@ struct CachedOutput {
     created_seq: u64,
 }
 
-/// 启动 Agent Bridge HTTP server。返回绑定端口。
+/// 已启动的 Agent Bridge server 句柄：stop() 关闭 accept loop。
+pub struct AgentBridgeHandle {
+    shutdown: Arc<AtomicBool>,
+}
+
+impl AgentBridgeHandle {
+    pub fn stop(&self) {
+        self.shutdown.store(true, Ordering::SeqCst);
+    }
+}
+
+/// 启动 Agent Bridge HTTP server（固定端口 59688）。
 pub async fn start(
     runtime: Arc<RuntimeManager>,
     user_data: PathBuf,
     token: String,
+    allowed_scopes: HashSet<ToolScope>,
     sftp_root: Option<String>,
     public_discovery: bool,
-) -> Result<u16, String> {
-    let listener = TcpListener::bind("127.0.0.1:0")
+    audit_enabled: bool,
+) -> Result<AgentBridgeHandle, String> {
+    let listener = TcpListener::bind(("127.0.0.1", AGENT_BRIDGE_PORT))
         .await
-        .map_err(|error| format!("Agent Bridge 无法绑定 127.0.0.1：{error}"))?;
-    let port = listener
-        .local_addr()
-        .map_err(|error| format!("Agent Bridge 无法读取端口：{error}"))?
-        .port();
+        .map_err(|error| {
+            format!("Agent Bridge 无法绑定 127.0.0.1:{AGENT_BRIDGE_PORT}：{error}（端口可能已被占用）")
+        })?;
 
     let token_sha256: [u8; 32] = Sha256::digest(token.as_bytes()).into();
     let audit_path = user_data.join("agent-bridge-audit.jsonl");
 
     let state = Arc::new(AgentBridgeState {
-        port: AtomicU64::new(port as u64),
         token_sha256,
         audit_path,
         audit_seq: AtomicU64::new(0),
@@ -122,35 +186,53 @@ pub async fn start(
         runtime,
         sftp_root: sftp_root.as_deref().map(PathBuf::from),
         public_discovery,
+        allowed_scopes,
+        audit_enabled,
     });
 
     if public_discovery {
-        write_discovery_file(&user_data, port, &token);
+        write_discovery_file(&user_data, &token);
     }
 
-    tokio::spawn(async move {
-        loop {
-            let (stream, _peer) = match listener.accept().await {
-                Ok(accepted) => accepted,
-                Err(_) => continue,
-            };
-            let state = Arc::clone(&state);
-            tokio::spawn(async move {
-                let _ = handle_connection(stream, state).await;
-            });
-            tokio::task::yield_now().await;
-        }
-    });
+    let shutdown = Arc::new(AtomicBool::new(false));
+    {
+        let state = Arc::clone(&state);
+        let shutdown = Arc::clone(&shutdown);
+        tokio::spawn(async move {
+            loop {
+                if shutdown.load(Ordering::SeqCst) {
+                    break;
+                }
+                // 轮询式 accept：每 200ms 检查一次 shutdown 标志（避免额外 tokio features）
+                match tokio::time::timeout(
+                    std::time::Duration::from_millis(200),
+                    listener.accept(),
+                )
+                .await
+                {
+                    Ok(Ok((stream, _peer))) => {
+                        let state = Arc::clone(&state);
+                        tokio::spawn(async move {
+                            let _ = handle_connection(stream, state).await;
+                        });
+                        tokio::task::yield_now().await;
+                    }
+                    Ok(Err(_)) => continue,
+                    Err(_elapsed) => continue,
+                }
+            }
+        });
+    }
 
-    Ok(port)
+    Ok(AgentBridgeHandle { shutdown })
 }
 
 /// 写 agent 可读 discovery file（对齐 issh-llm agentBridgePublicDiscoveryEnabled）。
-fn write_discovery_file(user_data: &PathBuf, port: u16, token: &str) {
+fn write_discovery_file(user_data: &PathBuf, token: &str) {
     let discovery = json!({
-        "rpcUrl": format!("http://127.0.0.1:{port}/rpc"),
+        "rpcUrl": format!("http://127.0.0.1:{AGENT_BRIDGE_PORT}/rpc"),
         "host": "127.0.0.1",
-        "port": port,
+        "port": AGENT_BRIDGE_PORT,
         "token": token,
     });
     let path = user_data.join("issh-agent-bridge.json");
@@ -298,7 +380,7 @@ async fn write_response(
 
 async fn raw_response(
     writer: &mut tokio::net::tcp::OwnedWriteHalf,
-    status: 16u16,
+    status: u16,
     body: &[u8],
 ) -> Result<(), String> {
     let head = format!(
@@ -312,7 +394,10 @@ async fn raw_response(
     Ok(())
 }
 
-async fn audit(state: &AgentBridgeState, tool: &str, outcome: &str, detail: Value) {
+fn audit(state: &AgentBridgeState, tool: &str, outcome: &str, detail: Value) {
+    if !state.audit_enabled {
+        return;
+    }
     if state.audit_seq.load(Ordering::Relaxed) > u64::MAX / 2 {
         return;
     }
@@ -335,7 +420,6 @@ async fn audit(state: &AgentBridgeState, tool: &str, outcome: &str, detail: Valu
         .create(true)
         .append(true)
         .open(&state.audit_path)
-        .map_err(|e| e.to_string())
     {
         let _ = writeln!(file, "{line}");
     }
@@ -349,25 +433,35 @@ fn now_unix_ms() -> u64 {
 }
 
 async fn dispatch_tool(
-    state: &AgentBridgeState,
+    state: &Arc<AgentBridgeState>,
     tool: &ToolDef,
     params: &Value,
 ) -> Result<Value, String> {
+    // scope 校验（对齐 issh-llm assertMethodScope）
+    if !state.allowed_scopes.contains(&tool.scope) {
+        return Err(format!(
+            "工具 {} 需要 scope \"{}\" 授权，当前 Agent Bridge 的 scope 未包含该权限",
+            tool.name,
+            tool.scope.as_str()
+        ));
+    }
     match tool.name {
         "issh_health" => Ok(json!({
             "ok": true,
-            "port": state.port.load(Ordering::Relaxed),
+            "port": AGENT_BRIDGE_PORT,
             "protocolVersion": "1.5.0",
+            "publicDiscovery": state.public_discovery,
             "tools": TOOLS.iter().map(|tool| json!({
                 "name": tool.name,
                 "scope": tool.scope.as_str(),
+                "dangerousConfirm": tool.dangerous_confirm,
             })).collect::<Vec<_>>(),
         })),
         "issh_list_sessions" => list_sessions(state).await,
         "issh_list_profiles" => list_profiles(state).await,
         "issh_connect_profile" => connect_profile(state, params).await,
         "issh_disconnect_session" => disconnect_session(state, params).await,
-        "issh_select_session" => select_session(state, params).await,
+        "issh_select_session" => select_session(params).await,
         "issh_get_context" => get_context(state, params).await,
         "issh_read_buffer" => read_buffer(state, params).await,
         "issh_preview_command" => preview_command(params),
@@ -414,44 +508,47 @@ fn params_u64(params: &Value, key: &str) -> Option<u64> {
 // ---------- session tools ----------
 
 async fn list_sessions(state: &AgentBridgeState) -> Result<Value, String> {
+    // isshd session.list 返回顶层数组（workspace SessionSnapshot：id/title/customTitle/
+    // profileType/host/user/port/connected，无 kind/state/columns/rows）。
     let result = rpc(state, "session.list", json!({})).await?;
-    let sessions = result
-        .get("sessions")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let sessions: Vec<Value> = sessions
-        .iter()
-        .map(|session| {
-            json!({
-                "id": session.get("id").cloned().unwrap_or(Value::Null),
-                "title": session.get("title").cloned().unwrap_or(Value::Null),
-                "kind": session.get("kind").cloned().unwrap_or(Value::Null),
-                "state": session.get("state").cloned().unwrap_or(Value::Null),
-                "columns": session.get("columns").cloned().unwrap_or(Value::Null),
-                "rows": session.get("rows").cloned().unwrap_or(Value::Null),
-            })
-        .collect();
+    let items = result.as_array().cloned().unwrap_or_default();
+    let mut sessions = Vec::new();
+    for item in items {
+        let id = item.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+        // 逐个 snapshot 补会话运行态；已关闭的会话优雅降级为 null。
+        let (kind, state_name, columns, rows) =
+            match rpc(state, "session.snapshot", json!({ "sessionId": id })).await {
+                Ok(snapshot) => (
+                    snapshot.get("kind").cloned().unwrap_or(Value::Null),
+                    snapshot.get("state").cloned().unwrap_or(Value::Null),
+                    snapshot.get("columns").cloned().unwrap_or(Value::Null),
+                    snapshot.get("rows").cloned().unwrap_or(Value::Null),
+                ),
+                Err(_) => (Value::Null, Value::Null, Value::Null, Value::Null),
+            };
+        sessions.push(json!({
+            "id": item.get("id").cloned().unwrap_or(Value::Null),
+            "title": item.get("customTitle").cloned().unwrap_or_else(|| {
+                item.get("title").cloned().unwrap_or(Value::Null)
+            }),
+            "profileType": item.get("profileType").cloned().unwrap_or(Value::Null),
+            "host": item.get("host").cloned().unwrap_or(Value::Null),
+            "user": item.get("user").cloned().unwrap_or(Value::Null),
+            "port": item.get("port").cloned().unwrap_or(Value::Null),
+            "connected": item.get("connected").cloned().unwrap_or(Value::Null),
+            "kind": kind,
+            "state": state_name,
+            "columns": columns,
+            "rows": rows,
+        }));
+    }
     Ok(json!({ "sessions": sessions, "active": active_session_id() }))
 }
 
-fn active_session_id() -> Value {
-    crate::ACTIVE_SESSION_ID
-        .get()
-        .map(|id| Value::String(id.to_string()))
-        .unwrap_or(Value::Null)
-}
-
-async fn list_profiles(state: &crate::AgentBridgeState) -> Result<Value, String> {
-    let result = rpc(state, "session.list", json!({})).wrong;
-    let _ = result;
+async fn list_profiles(state: &AgentBridgeState) -> Result<Value, String> {
     // 主机档案不在 isshd RPC 面，而是 Tauri command host_profiles（config.yaml 镜像）。
     // Agent Bridge 直接读 HostProfileStore（与 UI 同一份数据源）。
-    let hosts = state
-        .runtime
-        .hosts
-        .read()
-        .map_err(|e| e)?;
+    let hosts = state.runtime.hosts.read()?;
     let profiles: Vec<Value> = hosts
         .profiles
         .iter()
@@ -515,7 +612,7 @@ async fn connect_profile(state: &AgentBridgeState, params: &Value) -> Result<Val
     )
     .await?;
     if let Some(id) = result.get("id").and_then(Value::as_str) {
-        crate::ACTIVE_SESSION_ID.get_or_init(|| id.to_string());
+        set_active_session_id(id);
     }
     Ok(result)
 }
@@ -540,19 +637,19 @@ where
 }
 
 async fn disconnect_session(state: &AgentBridgeState, params: &Value) -> Result<Value, String> {
-    let session_id = resolve_tab(state, params).await?;
+    let session_id = resolve_tab(params).await?;
     let result = rpc(state, "session.close", json!({ "sessionId": session_id })).await?;
     Ok(json!({ "closed": true, "session": result }))
 }
 
-async fn select_session(state: &AgentBridgeState, params: &Value) -> Value, String> {
-    let session_id = resolve_tab(state, params).await?;
-    crate::ACTIVE_SESSION_ID.get_or_init(|| session_id.clone());
+async fn select_session(params: &Value) -> Result<Value, String> {
+    let session_id = resolve_tab(params).await?;
+    set_active_session_id(&session_id);
     Ok(json!({ "selected": session_id }))
 }
 
 async fn get_context(state: &AgentBridgeState, params: &Value) -> Result<Value, String> {
-    let session_id = resolve_tab(state, params).await?;
+    let session_id = resolve_tab(params).await?;
     let snapshot = rpc(state, "session.snapshot", json!({ "sessionId": session_id })).await?;
     let buffer = read_buffer_text(state, &session_id, 20).await?;
     Ok(json!({
@@ -563,7 +660,7 @@ async fn get_context(state: &AgentBridgeState, params: &Value) -> Result<Value, 
 }
 
 async fn read_buffer(state: &AgentBridgeState, params: &Value) -> Result<Value, String> {
-    let session_id = resolve_tab(state, params).await?;
+    let session_id = resolve_tab(params).await?;
     let lines = params_u64(params, "lines").unwrap_or(50).min(MAX_BUFFER_LINES as u64) as usize;
     let text = read_buffer_text(state, &session_id, lines).await?;
     Ok(json!({ "session": session_id, "lines": text }))
@@ -577,7 +674,7 @@ async fn read_buffer_text(
     let subscription = rpc(
         state,
         "session.subscribe",
-        json!({ "sessionId": session_id, "afterSequence": 0, "maxEvents": 256, "maxBytes": 49152 }),
+        json!({ "sessionId": session_id, "afterSequence": 0, "maxEvents": 256, "maxBytes": MAX_SUBSCRIBE_BYTES }),
     )
     .await?;
     let events = subscription
@@ -638,7 +735,7 @@ fn preview_command(params: &Value) -> Result<Value, String> {
         "command": command,
         "dangerous": is_dangerous_command(command),
         "confirmRequired": is_dangerous_command(command),
-    })
+    }))
 }
 
 fn normalize_command(command: &str) -> String {
@@ -664,7 +761,7 @@ fn require_confirm_flag(params: &Value, dangerous: bool) -> Result<(), String> {
 }
 
 async fn insert_command(state: &AgentBridgeState, params: &Value) -> Result<Value, String> {
-    let session_id = resolve_tab(state, params).await?;
+    let session_id = resolve_tab(params).await?;
     let command = params_str(params, "command").ok_or("command is required")?;
     let normalized = normalize_command(command);
     let payload: Vec<u8> = normalized.bytes().collect();
@@ -678,7 +775,7 @@ async fn insert_command(state: &AgentBridgeState, params: &Value) -> Result<Valu
 }
 
 async fn run_command(state: &AgentBridgeState, params: &Value) -> Result<Value, String> {
-    let session_id = resolve_tab(state, params).await?;
+    let session_id = resolve_tab(params).await?;
     let command = params_str(params, "command").ok_or("command is required")?;
     let normalized = normalize_command(command);
     require_confirm_flag(params, is_dangerous_command(&normalized))?;
@@ -694,7 +791,7 @@ async fn run_command(state: &AgentBridgeState, params: &Value) -> Result<Value, 
 }
 
 async fn exec_command(state: &AgentBridgeState, params: &Value) -> Result<Value, String> {
-    let session_id = resolve_tab(state, params).await?;
+    let session_id = resolve_tab(params).await?;
     let command = params_str(params, "command").ok_or("command is required")?;
     let normalized = normalize_command(command);
     require_confirm_flag(params, is_dangerous_command(&normalized))?;
@@ -724,31 +821,58 @@ async fn exec_command(state: &AgentBridgeState, params: &Value) -> Result<Value,
         timeout_ms,
         "exec timed out",
     )
-    .await?;
+    .await;
+    // isshd ssh.execReadonly 只返回 { output }（无 exit code）；超时以 RPC error 呈现。
+    // 这里适配为 issh-llm 契约：stdout / exitCode / timedOut。
+    let output = match result {
+        Ok(result) => result.get("output").and_then(Value::as_str).unwrap_or("").to_string(),
+        Err(error) => {
+            let message = error.to_lowercase();
+            let timed_out = message.contains("timed out") || message.contains("timeout");
+            return Ok(json!({
+                "session": session_id,
+                "command": normalized,
+                "stdout": "",
+                "stderr": "",
+                "exitCode": Value::Null,
+                "timedOut": timed_out,
+                "error": error,
+            }));
+        }
+    };
 
-    let output = result.get("output").and_then(Value::as_str).unwrap_or("");
-    let output_id = cache_output(state, output);
+    let output_id = cache_output(state, &output)?;
     let truncated = output.len() > 64 * 1024;
-    let visible = if truncated { &output[..64 * 1024] } else { output };
+    let visible = if truncated { &output[..64 * 1024] } else { output.as_str() };
     Ok(json!({
         "session": session_id,
         "command": normalized,
-        "output": visible,
+        "stdout": visible,
+        "stderr": "",
+        "exitCode": Value::Null,
+        "timedOut": false,
         "truncated": truncated,
         "outputId": output_id,
         "outputBytes": output.len(),
     }))
 }
 
-fn cache_output(state: &AgentBridgeState, text: &str) -> String {
+fn cache_output(state: &AgentBridgeState, text: &str) -> Result<String, String> {
     let seq = state.audit_seq.fetch_add(1, Ordering::Relaxed);
     let output_id = format!("out-{seq}");
     let mut cache = state
         .output_cache
         .lock()
-        .map_err(|_| "output cache unavailable".to_string())?;
-    if cache.len() > 32 {
-        cache.clear();
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if cache.len() >= MAX_OUTPUT_CACHE_ENTRIES {
+        // 按创建序号淘汰最旧条目
+        if let Some(oldest) = cache
+            .iter()
+            .min_by_key(|(_, cached)| cached.created_seq)
+            .map(|(key, _)| key.clone())
+        {
+            cache.remove(&oldest);
+        }
     }
     cache.insert(output_id.clone(), CachedOutput {
         text: text.to_string(),
@@ -761,12 +885,14 @@ fn get_output(state: &AgentBridgeState, params: &Value) -> Result<Value, String>
     let output_id = params_str(params, "outputId").ok_or("outputId is required")?;
     let offset = params_u64(params, "offset").unwrap_or(0) as usize;
     let limit = params_u64(params, "limit").unwrap_or(64 * 1024).min(65536) as usize;
-    let mut cache = state
+    let cache = state
         .output_cache
         .lock()
-        .map_err(|_| "output cache unavailable".to_string())?;
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let Some(cached) = cache.get(output_id) else {
-        return Err(format!("Output not found: {output_id}（缓存上限 32 条，过期后需重新 exec）"));
+        return Err(format!(
+            "Output not found: {output_id}（缓存上限 {MAX_OUTPUT_CACHE_ENTRIES} 条，过期后需重新 exec）"
+        ));
     };
     let text = &cached.text;
     let start = offset.min(text.len());
@@ -780,7 +906,7 @@ fn get_output(state: &AgentBridgeState, params: &Value) -> Result<Value, String>
     }))
 }
 
-async fn batch_exec(state: &AgentBridgeState, params: &Value) -> Result<Value, String> {
+async fn batch_exec(state: &Arc<AgentBridgeState>, params: &Value) -> Result<Value, String> {
     let command = params_str(params, "command").ok_or("command is required")?;
     let normalized = normalize_command(command);
     require_confirm_flag(params, is_dangerous_command(&normalized))?;
@@ -812,16 +938,23 @@ async fn batch_exec(state: &AgentBridgeState, params: &Value) -> Result<Value, S
 
     let parallel = params.get("parallel").and_then(Value::as_bool).unwrap_or(false);
     let mut results = Vec::new();
-    for session_id in &targets {
-        let entry = if parallel {
-            let state = unsafe { &*(state as *const AgentBridgeState) };
-            // 并行分支受 Arc 共享保护，这里仅是借用技巧
-            let fut = exec_on_session(state, session_id, &normalized, timeout_ms);
-            tokio::spawn(fut).await.map_err(|e| e.to_string())?
-        } else {
-            exec_on_session(state, session_id, &normalized, timeout_ms).await?
-        };
-        results.push(entry);
+    if parallel {
+        let mut handles = Vec::new();
+        for session_id in &targets {
+            let state = Arc::clone(state);
+            let session_id = session_id.clone();
+            let normalized = normalized.clone();
+            handles.push(tokio::spawn(async move {
+                exec_on_session(&state, &session_id, &normalized, timeout_ms).await
+            }));
+        }
+        for handle in handles {
+            results.push(handle.await.map_err(|error| error.to_string())??);
+        }
+    } else {
+        for session_id in &targets {
+            results.push(exec_on_session(state, session_id, &normalized, timeout_ms).await?);
+        }
     }
     Ok(json!({ "results": results, "count": results.len() }))
 }
@@ -879,22 +1012,21 @@ fn ensure_sftp_root(state: &AgentBridgeState, path: &str) -> Result<(), String> 
 }
 
 async fn sftp_list(state: &AgentBridgeState, params: &Value) -> Result<Value, String> {
-    let session_id = resolve_tab(state, params).await?;
+    let session_id = resolve_tab(params).await?;
     let path = params_str(params, "path").ok_or("path is required")?;
     ensure_sftp_root(state, path)?;
-    let sftp = ensure_sftp_open(state, &session_id).await?;
+    let _ = ensure_sftp_open(state, &session_id).await?;
     let result = rpc(
         state,
         "sftp.list",
         json!({ "sessionId": session_id, "path": path, "offset": 0, "limit": 256 }),
     )
     .await?;
-    let _ = sftp;
     Ok(result)
 }
 
 async fn sftp_read(state: &AgentBridgeState, params: &Value) -> Result<Value, String> {
-    let session_id = resolve_tab(state, params).await?;
+    let session_id = resolve_tab(params).await?;
     let path = params_str(params, "path").ok_or("path is required")?;
     ensure_sftp_root(state, path)?;
     let encoding = params_str(params, "encoding").unwrap_or("utf8");
@@ -936,7 +1068,7 @@ async fn sftp_read(state: &AgentBridgeState, params: &Value) -> Result<Value, St
 }
 
 async fn sftp_write(state: &AgentBridgeState, params: &Value) -> Result<Value, String> {
-    let session_id = resolve_tab(state, params).await?;
+    let session_id = resolve_tab(params).await?;
     let path = params_str(params, "path").ok_or("path is required")?;
     ensure_sftp_root(state, path)?;
     let content = params_str(params, "content").unwrap_or("");
@@ -950,8 +1082,7 @@ async fn sftp_write(state: &AgentBridgeState, params: &Value) -> Result<Value, S
     };
     if bytes.len() as u64 > MAX_SFTP_WRITE_BYTES {
         return Err(format!(
-            "单次 SFTP 写入超过上限 {MAX_SFTP_WRITE_BYTES} 字节；请分块写入"
-        1MB
+            "单次 SFTP 写入超过上限 {MAX_SFTP_WRITE_BYTES} 字节（1MB）；请分块写入"
         ));
     }
     require_confirm_flag(params, true)?; // SFTP 写入始终需要确认标志
@@ -978,7 +1109,7 @@ async fn ensure_sftp_open(state: &AgentBridgeState, session_id: &str) -> Result<
     rpc(state, "sftp.open", json!({ "sessionId": session_id })).await
 }
 
-async fn resolve_tab(state: &AgentBridgeState, params: &Value) -> Result<String, String> {
+async fn resolve_tab(params: &Value) -> Result<String, String> {
     match params_str(params, "tab") {
         Some("active") | None => {
             let active = active_session_id();
@@ -988,5 +1119,80 @@ async fn resolve_tab(state: &AgentBridgeState, params: &Value) -> Result<String,
             Ok(active.as_str().unwrap_or_default().to_string())
         }
         Some(tab) => Ok(tab.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_scopes_handles_full_and_partial_lists() {
+        let full = parse_scopes(&[
+            "read".to_string(),
+            "write".to_string(),
+            "exec".to_string(),
+            "sftp".to_string(),
+        ]);
+        assert!(full.contains(&ToolScope::Read));
+        assert!(full.contains(&ToolScope::Write));
+        assert!(full.contains(&ToolScope::Exec));
+        assert!(full.contains(&ToolScope::Sftp));
+
+        let readonly = parse_scopes(&["read".to_string()]);
+        assert!(readonly.contains(&ToolScope::Read));
+        assert!(!readonly.contains(&ToolScope::Exec));
+        assert!(!readonly.contains(&ToolScope::Sftp));
+
+        // 未知项忽略，不 panic
+        let mixed = parse_scopes(&["read".to_string(), "bogus".to_string()]);
+        assert_eq!(mixed.len(), 1);
+    }
+
+    #[test]
+    fn normalize_command_strips_inline_comments() {
+        assert_eq!(normalize_command("echo hi # hello"), "echo hi");
+        assert_eq!(normalize_command("  ls -la  "), "ls -la");
+        assert_eq!(normalize_command("echo '#not a comment'"), "echo '#not a comment'");
+    }
+
+    #[test]
+    fn dangerous_command_detection_matches_core_patterns() {
+        assert!(is_dangerous_command("rm -rf /"));
+        assert!(is_dangerous_command("rm -rf ~"));
+        assert!(is_dangerous_command("mkfs.ext4 /dev/sda1"));
+        assert!(is_dangerous_command("shutdown -h now"));
+        assert!(is_dangerous_command("dd if=/dev/zero of=/dev/sda"));
+        assert!(!is_dangerous_command("ls -la"));
+        assert!(!is_dangerous_command("cat /etc/hosts"));
+        assert!(!is_dangerous_command("rm file.txt"));
+    }
+
+    #[test]
+    fn preview_command_flags_danger_and_confirm() {
+        let preview = preview_command(&json!({ "command": "ls -la" })).expect("preview");
+        assert_eq!(preview.get("dangerous"), Some(&Value::Bool(false)));
+        assert_eq!(preview.get("confirmRequired"), Some(&Value::Bool(false)));
+
+        let preview = preview_command(&json!({ "command": "rm -rf /" })).expect("preview");
+        assert_eq!(preview.get("dangerous"), Some(&Value::Bool(true)));
+        assert_eq!(preview.get("confirmRequired"), Some(&Value::Bool(true)));
+
+        assert!(preview_command(&json!({})).is_err());
+    }
+
+    #[test]
+    fn require_confirm_flag_gates_dangerous_commands() {
+        assert!(require_confirm_flag(&json!({}), false).is_ok());
+        assert!(require_confirm_flag(&json!({}), true).is_err());
+        assert!(require_confirm_flag(&json!({ "confirmDangerous": true }), true).is_ok());
+    }
+
+    #[test]
+    fn set_active_session_id_roundtrip() {
+        set_active_session_id("ssh-1");
+        assert_eq!(active_session_id(), Value::String("ssh-1".to_string()));
+        set_active_session_id("ssh-2");
+        assert_eq!(active_session_id(), Value::String("ssh-2".to_string()));
     }
 }
