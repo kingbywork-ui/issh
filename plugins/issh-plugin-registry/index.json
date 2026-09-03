@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-09-03T07:37:12.126Z",
+  "updated": "2026-09-03T07:39:18.897Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
@@ -29,7 +29,7 @@
       "id": "issh-plugin-config-sync",
       "name": "配置同步",
       "version": "0.2.0",
-      "description": "主机配置导出/导入 JSON + GitHub Gist 云同步",
+      "description": "主机配置导出/导入 JSON + GitHub Gist 云同步（支持解锁保险库导出完整凭据）",
       "kind": "integration",
       "audience": "user",
       "permissions": [
@@ -38,10 +38,10 @@
         "profiles:write",
         "vault:read"
       ],
-      "minAppVersion": "0.1.6",
+      "minAppVersion": "0.2.0",
       "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-config-sync/releases/download/v0.2.0/issh-plugin-config-sync-0.2.0.tgz",
-      "sha256": "881488ba5a5c150c34dcf702f4c29049118359d55546ddbb97af1d832ea46cb7",
-      "signature": "L+8/DDEjYfKieaapTgiyneVtTCo/3SpILZZWs6rrbubeDCYvFzgT9AqBpRtA2DCZwiJ6xqafL/zhQCqm1BBQDg==",
+      "sha256": "96964eaa778d95261381114764b3e52b4a76caa6df533b2f812713d47d4f4f4f",
+      "signature": "f1nMdD1PemUg1nsvvXYeQR1bPQkQLGXm6GNMD/7kXU58KqZlseguZfkqroGkOl29mSQsZDsJekr6+1Ji2bVaAw==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-config-sync",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-config-sync",
       "downloads": 458
