@@ -45,3 +45,11 @@
     color: var(--ops-fg-muted, #8b93a7);
     border-top: 1px solid var(--ops-line, #39415a);
 }
+.issh-llm-ghost {
+    position: fixed;
+    z-index: 9998;
+    pointer-events: none;
+    white-space: pre;
+    color: rgba(139, 147, 167, 0.55);
+    opacity: 0.85;
+}

@@ -12,9 +12,9 @@
 
 | 状态 | 数量 |
 |------|------|
-| 待办 | 13 |
+| 待办 | 10 |
 | 进行中 | 1 |
-| 已完成 | 41 |
+| 已完成 | 44 |
 | 已放弃 | 0 |
 
 > 状态说明（2026-09-03 同步）：R-008 原始范围（对齐 issh 分支 Agent Bridge：17 工具闭环 + CLI/MCP + 安全）已完成，Netcatty 架构超前能力拆为 R-050~R-055 待办；R-036/R-037 已完成（正文 2026-09-01 最终验收记录为准，302/308 行的「保持进行中」为当日中间快照）；R-044 为持续生效的提交约定，保持「进行中」。
@@ -39,8 +39,8 @@
 | R-012 | 配置同步插件功能对齐 | 用户需求 | 2026-08-28 | 待办 |
 | R-013 | 对齐验收：整体构建+冒烟+HANDOFF 更新 | 用户需求 | 2026-08-28 | 待办 |
 | R-014 | Agent Bridge Rust 半成品修复：agent_bridge.rs 语法损坏修复 + 协议契约对齐（protocol.js 1.5.0 / 17 工具 / scope 映射 / exec 返回字段 stdout+exitCode+timedOut）+ lib.rs 接线 | 对话衍生 | 2026-08-28 | 已完成 |
-| R-015 | LLM补全补差：AI/历史候选统一 confidence 排序、normalizeCommand 接入候选链路、suggestionCache LRU（maxSize=100/ttl=5min）、敏感输入 gate（密码 prompt 停止补全清空 buffer）、ghost text 轻提示模式 | 对话衍生 | 2026-08-28 | 待办 |
-| R-016 | 移植 agentProcessDetection（codex/codex-cli/hermes 等 agent 进程识别）+ codexDesktopConfig（Codex Desktop 配置指引）两个缺失服务 | 对话衍生 | 2026-08-28 | 待办 |
+| R-015 | LLM补全补差：AI/历史候选统一 confidence 排序、normalizeCommand 接入候选链路、suggestionCache LRU（maxSize=100/ttl=5min）、敏感输入 gate（密码 prompt 停止补全清空 buffer）、ghost text 轻提示模式 | 对话衍生 | 2026-08-28 | 已完成 |
+| R-016 | 移植 agentProcessDetection（codex/codex-cli/hermes 等 agent 进程识别）+ codexDesktopConfig（Codex Desktop 配置指引）两个缺失服务 | 对话衍生 | 2026-08-28 | 已完成 |
 | R-017 | 保险库同步：对比 issh 分支补齐 Tauri 端 Vault 设置页能力（启用主口令/禁用并清除/修改主口令），清除行为与 issh 一致（含主机配置全部删除），保留主机凭据管理 UI | 用户需求 | 2026-08-28 | 已完成 |
 | R-018 | 修复 issh-tauri 工作区全部 22 个 svelte-check 警告（10 处 state_referenced_locally + 12 处 a11y），验证 0 errors / 0 warnings + vite build 通过 | 用户需求 | 2026-08-29 | 已完成 |
 | R-019 | issh 分支 logo 同步到 Tauri 图标 + 版本号同步（4 处）+ isshd runtime 构建 stage + Tauri NSIS 打包 + 安装/图标验证 | 用户需求 | 2026-08-29 | 已完成 |
@@ -472,7 +472,7 @@
 
 **来源**：R-008 后续 backlog 拆分（对话衍生）。issh-agent 的能力目录按 codegen 风格重构（当前为协议层 50 工具静态表 + 17 工具诚实降级）。
 
-### R-053 SKILL.md 随包发布（2026-09-03，待办）
+### R-053 SKILL.md 随包发布（2026-09-03，已完成）
 
 **来源**：R-008 后续 backlog 拆分（对话衍生）。issh-agent 随 Windows 安装包（extraResources）发布 SKILL.md 供外部 agent 直接加载。
 

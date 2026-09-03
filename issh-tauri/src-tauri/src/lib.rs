@@ -623,7 +623,8 @@ pub fn run() {
             agent_bridge_audit_clear,
             set_active_session,
             app_quit,
-            minimize_to_tray
+            minimize_to_tray,
+            agent_processes
         ])
         .build(tauri::generate_context!())
         .expect("failed to build issh Tauri client");
@@ -965,6 +966,93 @@ fn minimize_to_tray(app: tauri::AppHandle) -> Result<(), String> {
             .map_err(|error| format!("无法最小化到托盘：{error}"))?;
     }
     Ok(())
+}
+
+/// B6 (R-016)：枚举本机运行的外部 agent 进程（codex/codex-cli/hermes 等），供 Agent Bridge 设置页展示
+#[cfg(target_os = "windows")]
+#[tauri::command]
+fn agent_processes() -> Vec<Value> {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+
+    const AGENT_NAMES: &[&str] = &[
+        "codex",
+        "codex-cli",
+        "hermes",
+        "hermes-agent",
+        "hermes-cli",
+        "claude",
+        "cursor",
+        "windsurf",
+        "gemini",
+        "aider",
+        "opencode",
+        "cody",
+    ];
+
+    let mut result = Vec::new();
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snapshot == INVALID_HANDLE_VALUE {
+            return result;
+        }
+        let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+        if Process32FirstW(snapshot, &mut entry) != 0 {
+            loop {
+                let raw_name: Vec<u16> = entry
+                    .szExeFile
+                    .iter()
+                    .take_while(|c| **c != 0)
+                    .copied()
+                    .collect();
+                let name = OsString::from_wide(&raw_name).to_string_lossy().to_string();
+                // 精确 basename 匹配（去 .exe），避免 code.exe / hermes-backup 等误报
+                let base = name.to_lowercase();
+                let base = base.strip_suffix(".exe").unwrap_or(&base);
+                if AGENT_NAMES.contains(&base) {
+                    let pid = entry.th32ProcessID;
+                    let mut exe_path = String::new();
+                    let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+                    if !handle.is_null() {
+                        let mut buf = [0u16; 1024];
+                        let mut size = buf.len() as u32;
+                        if QueryFullProcessImageNameW(handle, 0, buf.as_mut_ptr(), &mut size) != 0 {
+                            exe_path = OsString::from_wide(&buf[..size as usize])
+                                .to_string_lossy()
+                                .to_string();
+                        }
+                        CloseHandle(handle);
+                    }
+                    result.push(serde_json::json!({
+                        "name": name,
+                        "pid": pid,
+                        "exePath": exe_path,
+                    }));
+                }
+                if Process32NextW(snapshot, &mut entry) == 0 {
+                    break;
+                }
+            }
+        }
+        CloseHandle(snapshot);
+    }
+    result
+}
+
+/// 非 Windows 平台无 agent 进程检测能力，返回空列表
+#[cfg(not(target_os = "windows"))]
+#[tauri::command]
+fn agent_processes() -> Vec<Value> {
+    Vec::new()
 }
 
 

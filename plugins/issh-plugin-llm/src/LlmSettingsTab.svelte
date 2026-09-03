@@ -101,6 +101,10 @@
             <input type="checkbox" bind:checked={config.executeOnConfirm} onchange={persist} />
             <span>接受补全后立即执行</span>
         </label>
+        <label class="settings-field settings-check">
+            <input type="checkbox" bind:checked={config.lightweightHintEnabled} onchange={persist} />
+            <span>行内 ghost text 轻提示（替代浮动面板）</span>
+        </label>
     </div>
 
     {#if saved}

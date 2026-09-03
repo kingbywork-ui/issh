@@ -8,7 +8,9 @@
         agentBridgeEnable,
         agentBridgeRotateToken,
         agentBridgeStatus,
+        agentProcesses,
         type AgentBridgeStatus,
+        type AgentProcessInfo,
     } from './runtime'
 
     const ALL_SCOPES = ['read', 'write', 'exec', 'sftp']
@@ -25,6 +27,19 @@
     let showAudit = $state(false)
     let auditBusy = $state(false)
     let testResult = $state('')
+    let agentList = $state<AgentProcessInfo[] | null>(null)
+    let agentBusy = $state(false)
+
+    async function detectAgents (): Promise<void> {
+        agentBusy = true
+        try {
+            agentList = await agentProcesses()
+        } catch {
+            agentList = []
+        } finally {
+            agentBusy = false
+        }
+    }
 
     async function refresh (): Promise<void> {
         loading = true
@@ -298,6 +313,26 @@
                 <button type="button" disabled={busy || !status.enabled} onclick={() => void runTest()}>连接测试</button>
             </div>
             {#if testResult}<p class="settings-hint vault-notice">{testResult}</p>{/if}
+            <p class="settings-hint">SKILL.md 随安装包发布（安装目录下 <code>SKILL.md</code>），可直接提供给支持 Skills 的外部 agent 加载 issh 能力说明。</p>
+        </div>
+
+        <div class="settings-field">
+            <div class="settings-field-title">检测本机 agent 进程</div>
+            <p class="settings-hint">识别正在运行的 Codex / Claude / Gemini / Cursor 等外部 agent 进程，确认哪些 agent 可能接入 issh。</p>
+            <div class="sudo-actions">
+                <button type="button" disabled={agentBusy} onclick={() => void detectAgents()}>{agentBusy ? '检测中…' : '检测'}</button>
+            </div>
+            {#if agentList !== null}
+                {#if agentList.length === 0}
+                    <p class="settings-hint">未检测到已知 agent 进程。</p>
+                {:else}
+                    <ul class="agent-list">
+                        {#each agentList as agent (agent.pid)}
+                            <li>{agent.name}（PID {agent.pid}）{#if agent.exePath}<span class="settings-hint">{agent.exePath}</span>{/if}</li>
+                        {/each}
+                    </ul>
+                {/if}
+            {/if}
         </div>
     {/if}
 </section>

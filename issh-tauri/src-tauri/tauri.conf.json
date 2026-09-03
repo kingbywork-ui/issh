@@ -48,7 +48,8 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "bin/isshd.exe": "issh-runtime/isshd.exe"
+      "bin/isshd.exe": "issh-runtime/isshd.exe",
+      "bin/SKILL.md": "SKILL.md"
     },
     "windows": {
       "webviewInstallMode": {

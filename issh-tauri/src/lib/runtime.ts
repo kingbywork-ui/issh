@@ -621,6 +621,16 @@ export function minimizeToTray (): Promise<void> {
     return invoke<void>('minimize_to_tray')
 }
 
+export interface AgentProcessInfo {
+    name: string
+    pid: number
+    exePath: string
+}
+
+export function agentProcesses (): Promise<AgentProcessInfo[]> {
+    return invoke<AgentProcessInfo[]>('agent_processes')
+}
+
 export interface PluginGatewayAuditEntry {
     timestamp: string
     requestId: string

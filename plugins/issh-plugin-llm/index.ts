@@ -3,6 +3,8 @@ import panelCss from './src/panel.css?inline'
 import type { IsshPlugin, IsshPluginContext, IsshPluginManifest, TerminalDecoratorDefinition } from './src/types'
 import { fetchAutocomplete, fetchEditorAutocomplete, fetchPrediction, loadConfig, type AutocompleteSuggestion } from './src/llmApi'
 import { HistoryCommandService } from './src/historyCommand'
+import { normalizeCommand } from './src/commandValidation'
+import { looksLikeSensitivePrompt } from './src/sensitiveInput'
 
 export const manifest: IsshPluginManifest = {
     id: 'issh-plugin-llm',
@@ -26,6 +28,25 @@ interface SuggestionState {
 }
 
 const historyService = new HistoryCommandService()
+
+/** B2：候选统一过滤——AI/脚本候选经 normalizeCommand 清洗，剔除输出噪音/非法/不完整命令 */
+function sanitizeCommandSuggestions (list: AutocompleteSuggestion[]): AutocompleteSuggestion[] {
+    return list
+        .map((item) => ({ command: normalizeCommand(item.command) ?? '', confidence: item.confidence }))
+        .filter((item) => item.command.length > 0)
+}
+
+/** B1：候选统一 confidence 降序排序 + 去重（同 confidence 稳定保持来源顺序：历史→脚本→AI） */
+function mergeAndSortCandidates (candidates: AutocompleteSuggestion[]): AutocompleteSuggestion[] {
+    const best = new Map<string, AutocompleteSuggestion>()
+    for (const item of candidates) {
+        const existing = best.get(item.command)
+        if (!existing || item.confidence > existing.confidence) {
+            best.set(item.command, item)
+        }
+    }
+    return Array.from(best.values()).sort((a, b) => b.confidence - a.confidence)
+}
 
 const decorator: TerminalDecoratorDefinition = {
     id: 'llm-autocomplete',
@@ -54,6 +75,7 @@ const decorator: TerminalDecoratorDefinition = {
         let completedCommandCount = 0
         let prefetchedSuggestions: AutocompleteSuggestion[] = []
         let predictionGeneration = 0
+        let sensitivePromptActive = false
         // 对齐 issh 分支 autocompletePanelOffsetX/Y 默认值
         const PANEL_OFFSET_X = 32
         const PANEL_OFFSET_Y = 52
@@ -115,6 +137,11 @@ const decorator: TerminalDecoratorDefinition = {
             return lines
         }
 
+        // B4：检测最近输出是否出现密码/口令等敏感提示（password/passphrase/验证码等）
+        function detectSensitivePrompt (): boolean {
+            return readContext().some((line) => looksLikeSensitivePrompt(line))
+        }
+
         // 下一条命令预测：命令提交后用上一条命令 + 终端上下文预取，缓存到当前 tab
         function startPrediction (submitted: string): void {
             const config = loadConfig()
@@ -132,6 +159,7 @@ const decorator: TerminalDecoratorDefinition = {
         }
 
         let panelElement: HTMLDivElement | null = null
+        let ghostElement: HTMLSpanElement | null = null
 
         function render (): void {
             const buffer = terminal.buffer.active
@@ -144,7 +172,15 @@ const decorator: TerminalDecoratorDefinition = {
                 hidePanel()
                 return
             }
-            showPanel(partial)
+            // B5 ghost text 轻提示：开启时以行内幽灵文本替代浮动面板
+            const config = loadConfig()
+            const hint = config.lightweightHintEnabled ? getHintText(partial) : ''
+            if (config.lightweightHintEnabled && hint) {
+                hidePanel()
+                showGhost(hint)
+            } else {
+                showPanel(partial)
+            }
         }
 
         function showPanel (partial: string): void {
@@ -213,6 +249,47 @@ const decorator: TerminalDecoratorDefinition = {
         function hidePanel (): void {
             panelElement?.remove()
             panelElement = null
+            hideGhost()
+        }
+
+        function getHintText (partial: string): string {
+            const suggestion = state.suggestions[state.index]
+            if (!suggestion) return ''
+            if (partial && suggestion.command.startsWith(partial)) {
+                return suggestion.command.substring(partial.length)
+            }
+            const trimmed = partial.trim()
+            if (trimmed && suggestion.command.startsWith(trimmed)) {
+                return suggestion.command.substring(trimmed.length)
+            }
+            return ''
+        }
+
+        function showGhost (hint: string): void {
+            if (!terminal.element || !(terminal.element as HTMLElement).offsetParent) return
+            if (!ghostElement) {
+                ghostElement = document.createElement('span')
+                ghostElement.className = 'issh-llm-ghost'
+                document.body.appendChild(ghostElement)
+            }
+            ghostElement.textContent = hint
+            const rect = (terminal.element as HTMLElement).getBoundingClientRect()
+            const dimensions = (terminal as unknown as {
+                _core?: { _renderService?: { dimensions?: { css?: { cell?: { width: number; height: number } } } } }
+            })._core?._renderService?.dimensions?.css?.cell
+            const cellWidth = dimensions?.width ?? 9
+            const cellHeight = dimensions?.height ?? 18
+            const options = (terminal as unknown as { options?: { fontSize?: number; fontFamily?: string } }).options
+            ghostElement.style.fontSize = `${options?.fontSize ?? 14}px`
+            if (options?.fontFamily) ghostElement.style.fontFamily = options.fontFamily
+            const buffer = terminal.buffer.active
+            ghostElement.style.left = `${rect.left + buffer.cursorX * cellWidth}px`
+            ghostElement.style.top = `${rect.top + buffer.cursorY * cellHeight}px`
+        }
+
+        function hideGhost (): void {
+            ghostElement?.remove()
+            ghostElement = null
         }
 
         function escapeHtml (text: string): string {
@@ -230,9 +307,21 @@ const decorator: TerminalDecoratorDefinition = {
                     completedCommandCount += 1
                     startPrediction(submitted)
                 }
+                sensitivePromptActive = false
                 state.suggestions = []
                 state.loading = false
                 hidePanel()
+                return
+            }
+            // B4 敏感输入 gate：密码 prompt 出现后立即停止补全并清空候选，回车后复位
+            if (detectSensitivePrompt()) {
+                sensitivePromptActive = true
+                state.suggestions = []
+                state.loading = false
+                hidePanel()
+                return
+            }
+            if (sensitivePromptActive) {
                 return
             }
             const config = loadConfig()
@@ -275,9 +364,11 @@ const decorator: TerminalDecoratorDefinition = {
             const historyCommands = config.historyAutocompleteEnabled
                 ? historyService.search(tabKey, partial, config.historyAutocompleteLimit)
                 : []
-            // 登录脚本候选：前缀匹配当前输入，排在历史之后（Beta）
+            // 登录脚本候选：前缀匹配当前输入，排在历史之后（Beta）；经 normalizeCommand 清洗
             const scriptCommands = config.scriptAutocompleteEnabled
-                ? loginScriptCommands.filter(command => command.startsWith(partial) && command !== partial)
+                ? loginScriptCommands
+                    .map(command => normalizeCommand(command) ?? '')
+                    .filter(command => command.length > 0 && command.startsWith(partial) && command !== partial)
                 : []
             const historySuggestions: AutocompleteSuggestion[] = [
                 ...historyCommands.map(command => ({ command, confidence: 1 })),
@@ -299,14 +390,10 @@ const decorator: TerminalDecoratorDefinition = {
                 item.command.startsWith(partial) && item.command !== partial,
             )
             if (prefetchMatches.length > 0) {
-                const merged = [...historySuggestions]
-                for (const item of prefetchMatches) {
-                    if (!merged.some(existing => existing.command === item.command)) {
-                        merged.push(item)
-                    }
-                    if (merged.length >= 8) break
-                }
-                state.suggestions = merged.filter(item => item.command !== partial)
+                const sanitized = sanitizeCommandSuggestions(prefetchMatches)
+                state.suggestions = mergeAndSortCandidates([...historySuggestions, ...sanitized])
+                    .filter(item => item.command !== partial)
+                    .slice(0, 8)
                 state.index = 0
                 state.loading = false
                 render()
@@ -316,14 +403,10 @@ const decorator: TerminalDecoratorDefinition = {
             render()
             void fetchAutocomplete(config, partial, context).then((suggestions) => {
                 if (generation !== requestGeneration) return
-                const merged = [...historySuggestions]
-                for (const item of suggestions) {
-                    if (!merged.some(existing => existing.command === item.command)) {
-                        merged.push(item)
-                    }
-                    if (merged.length >= 8) break
-                }
-                state.suggestions = merged.filter((item) => item.command !== partial)
+                const sanitized = sanitizeCommandSuggestions(suggestions)
+                state.suggestions = mergeAndSortCandidates([...historySuggestions, ...sanitized])
+                    .filter((item) => item.command !== partial)
+                    .slice(0, 8)
                 state.index = 0
                 state.loading = false
                 render()

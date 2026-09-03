@@ -1,3 +1,5 @@
+import { SuggestionCache } from './suggestionCache'
+
 export interface LlmConfig {
     baseUrl: string
     apiKey: string
@@ -17,6 +19,7 @@ export interface LlmConfig {
     timeoutMs: number
     maxContextLines: number
     sendContext: boolean
+    lightweightHintEnabled: boolean
 }
 
 const DEFAULTS: LlmConfig = {
@@ -38,6 +41,7 @@ const DEFAULTS: LlmConfig = {
     timeoutMs: 3000,
     maxContextLines: 20,
     sendContext: true,
+    lightweightHintEnabled: false,
 }
 
 const STORAGE_KEY = 'issh-plugin-llm:config'
@@ -61,6 +65,8 @@ export function redactLines (lines: string[]): string[] {
     })
 }
 
+const suggestionCache = new SuggestionCache<AutocompleteSuggestion[]>()
+
 export function loadConfig (): LlmConfig {
     try {
         const raw = localStorage.getItem(STORAGE_KEY)
@@ -82,31 +88,57 @@ export interface AutocompleteSuggestion {
 
 export async function fetchAutocomplete (config: LlmConfig, partial: string, contextLines: string[]): Promise<AutocompleteSuggestion[]> {
     if (!config.apiKey || !config.baseUrl || !config.model) return []
-    return requestSuggestions(config, {
+    return withCache('autocomplete', partial, contextLines, config, () => requestSuggestions(config, {
         system: '你是 shell 命令补全助手。根据用户当前部分输入和终端上下文，返回 1-3 个最可能的完整命令。只返回 JSON 数组：[{"command":"...","confidence":0.9}]，不要其他文字。',
         user: (context) => `终端上下文：\n${context}\n\n当前输入：${partial}`,
         contextLines,
-    })
+    }))
 }
 
 // 下一条命令预测：基于刚提交的命令与终端上下文，预取下一步可能命令
 export async function fetchPrediction (config: LlmConfig, submitted: string, contextLines: string[]): Promise<AutocompleteSuggestion[]> {
     if (!config.apiKey || !config.baseUrl || !config.model) return []
-    return requestSuggestions(config, {
+    return withCache('prediction', submitted, contextLines, config, () => requestSuggestions(config, {
         system: '你是 shell 命令预测助手。用户刚执行了一条命令，根据该命令和终端上下文，预测用户接下来最可能执行的 1-3 条新命令。不要返回刚执行命令的变体或重复。只返回 JSON 数组：[{"command":"...","confidence":0.9}]，不要其他文字。',
         user: (context) => `终端上下文：\n${context}\n\n刚执行的命令：${submitted}\n\n预测接下来可能执行的命令。`,
         contextLines,
-    })
+    }))
 }
 
 // 编辑器文本补全（vim/nano 等 alternate screen）：补全当前行文本而非 shell 命令
 export async function fetchEditorAutocomplete (config: LlmConfig, partial: string, contextLines: string[]): Promise<AutocompleteSuggestion[]> {
     if (!config.apiKey || !config.baseUrl || !config.model) return []
-    return requestSuggestions(config, {
+    return withCache('editor', partial, contextLines, config, () => requestSuggestions(config, {
         system: '你是文本编辑补全助手。用户正在终端编辑器（vim/nano）中编辑文件，根据编辑器上下文补全当前行文本。返回补全后的完整行文本。只返回 JSON 数组：[{"command":"补全后的整行文本","confidence":0.9}]，不要其他文字。',
         user: (context) => `编辑器上下文：\n${context}\n\n当前行：${partial}\n\n补全当前行。`,
         contextLines,
+    }))
+}
+
+/** LRU 缓存包装：命中直接返回，未命中请求后写入（key=kind+model+输入+上下文） */
+async function withCache (
+    kind: string,
+    input: string,
+    contextLines: string[],
+    config: LlmConfig,
+    request: () => Promise<AutocompleteSuggestion[]>,
+): Promise<AutocompleteSuggestion[]> {
+    const model = config.autocompleteModel || config.model
+    const key = suggestionCache.makeKey({
+        kind,
+        model,
+        input,
+        context: contextLines.join('\n'),
     })
+    const cached = suggestionCache.get(key)
+    if (cached) {
+        return cached
+    }
+    const result = await request()
+    if (result.length > 0) {
+        suggestionCache.set(key, result)
+    }
+    return result
 }
 
 // 剥离推理模型 <think> 块（deepseek-r1 等），避免污染 JSON 提取
