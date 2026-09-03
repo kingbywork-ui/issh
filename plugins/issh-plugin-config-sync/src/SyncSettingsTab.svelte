@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte'
     import syncCss from './sync.css?inline'
-    import { applyPayload, buildPayload, hostProfiles, networkFetch, pluginStorage, validatePayload } from './syncRpc'
+    import { applyPayload, buildPayload, hostProfiles, networkFetch, pluginStorage, previewPayload, validatePayload, type SyncDiffPreview, type SyncPayload } from './syncRpc'
 
     let profileCount = $state(0)
     let groupCount = $state(0)
@@ -61,12 +61,29 @@
         }
     }
 
+    let pendingPayload = $state<SyncPayload | null>(null)
+    let pendingDiff = $state<SyncDiffPreview | null>(null)
+
     async function importConfig (): Promise<void> {
         busy = true
         message = ''
         try {
             const payload = validatePayload(importText)
-            const stats = await applyPayload(payload)
+            // A11 差异摘要：先预览（新建/更新明细），确认后再应用
+            pendingPayload = payload
+            pendingDiff = await previewPayload(payload)
+        } catch (cause) {
+            message = cause instanceof Error ? cause.message : String(cause)
+        } finally {
+            busy = false
+        }
+    }
+
+    async function confirmImport (): Promise<void> {
+        if (!pendingPayload) return
+        busy = true
+        try {
+            const stats = await applyPayload(pendingPayload)
             message = `导入完成：新建 ${stats.created}，更新 ${stats.updated}`
             importText = ''
             await refresh()
@@ -74,6 +91,8 @@
             message = cause instanceof Error ? cause.message : String(cause)
         } finally {
             busy = false
+            pendingPayload = null
+            pendingDiff = null
         }
     }
 
@@ -164,6 +183,36 @@
             <button class="market-install" type="button" disabled={busy || !importText.trim()} onclick={() => void importConfig()}>导入配置</button>
         </div>
     </div>
+
+    {#if pendingDiff && pendingPayload}
+        <div class="sync-modal-mask" role="presentation" tabindex="-1" onclick={() => { pendingPayload = null; pendingDiff = null }} onkeydown={(event) => { if (event.key === 'Escape') { pendingPayload = null; pendingDiff = null } }}>
+            <div class="sync-modal" role="dialog" aria-modal="true" aria-labelledby="sync-import-title" tabindex="-1" onclick={(event) => event.stopPropagation()} onkeydown={(event) => event.stopPropagation()}>
+                <h3 id="sync-import-title">导入预览</h3>
+                <p class="sync-modal-hint">确认后将应用到主机配置，请核对差异：</p>
+                <div class="sync-diff-list">
+                    {#if pendingDiff.profiles.create.length}
+                        <div class="sync-diff-group"><strong>新建主机（{pendingDiff.profiles.create.length}）</strong>{#each pendingDiff.profiles.create.slice(0, 20) as item}<div>{item}</div>{/each}{#if pendingDiff.profiles.create.length > 20}<div>… 等 {pendingDiff.profiles.create.length - 20} 项</div>{/if}</div>
+                    {/if}
+                    {#if pendingDiff.profiles.update.length}
+                        <div class="sync-diff-group"><strong>更新主机（{pendingDiff.profiles.update.length}）</strong>{#each pendingDiff.profiles.update.slice(0, 20) as item}<div>{item}</div>{/each}{#if pendingDiff.profiles.update.length > 20}<div>… 等 {pendingDiff.profiles.update.length - 20} 项</div>{/if}</div>
+                    {/if}
+                    {#if pendingDiff.groups.create.length}
+                        <div class="sync-diff-group"><strong>新建分组（{pendingDiff.groups.create.length}）</strong>{#each pendingDiff.groups.create as item}<div>{item}</div>{/each}</div>
+                    {/if}
+                    {#if pendingDiff.groups.update.length}
+                        <div class="sync-diff-group"><strong>更新分组（{pendingDiff.groups.update.length}）</strong>{#each pendingDiff.groups.update as item}<div>{item}</div>{/each}</div>
+                    {/if}
+                    {#if !pendingDiff.profiles.create.length && !pendingDiff.profiles.update.length && !pendingDiff.groups.create.length && !pendingDiff.groups.update.length}
+                        <p class="sync-diff-empty">没有检测到差异，导入不会产生变化。</p>
+                    {/if}
+                </div>
+                <div class="sync-modal-actions">
+                    <button class="secondary" type="button" onclick={() => { pendingPayload = null; pendingDiff = null }}>取消</button>
+                    <button class="market-install" type="button" disabled={busy} onclick={() => void confirmImport()}>确认导入</button>
+                </div>
+            </div>
+        </div>
+    {/if}
 
     <div class="sync-section">
         <div class="settings-field-title">GitHub Gist 同步</div>

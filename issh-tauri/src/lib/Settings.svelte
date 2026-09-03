@@ -206,6 +206,7 @@
         }
         section = next
         if (next !== 'plugin-tab') pluginTabSection = ''
+        if (next === 'general') loadKnownHosts()
     }
 
     function closeSettings (): void {
@@ -297,6 +298,36 @@
 
     function persist (key: string, value: string): void {
         try { localStorage.setItem(key, value) } catch {}
+    }
+
+    // A3（R-010）已知主机指纹管理：扫描 localStorage 中 issh.trustedHostKey.{host}:{port} 记录
+    interface KnownHostEntry {
+        key: string
+        host: string
+        port: string
+        fingerprint: string
+    }
+
+    let knownHosts = $state<KnownHostEntry[]>([])
+
+    function loadKnownHosts (): void {
+        const entries: KnownHostEntry[] = []
+        for (let index = 0; index < localStorage.length; index += 1) {
+            const key = localStorage.key(index)
+            if (!key?.startsWith('issh.trustedHostKey.')) continue
+            const fingerprint = localStorage.getItem(key) ?? ''
+            const target = key.slice('issh.trustedHostKey.'.length)
+            const colon = target.lastIndexOf(':')
+            const host = colon >= 0 ? target.slice(0, colon) : target
+            const port = colon >= 0 ? target.slice(colon + 1) : '22'
+            entries.push({ key, host, port, fingerprint })
+        }
+        knownHosts = entries.sort((a, b) => `${a.host}:${a.port}`.localeCompare(`${b.host}:${b.port}`))
+    }
+
+    function removeKnownHost (key: string): void {
+        localStorage.removeItem(key)
+        loadKnownHosts()
     }
 
     function applyColorScheme (): void {
@@ -605,6 +636,23 @@
                             <input type="checkbox" bind:checked={globalHotkey} onchange={() => persist('issh.globalHotkey', String(globalHotkey))} />
                             <span>全局快捷键唤起</span>
                         </label>
+                        <div class="settings-field">
+                            <div class="settings-field-title">已知主机指纹</div>
+                            <p class="settings-hint">已信任的 SSH 主机密钥指纹；删除后下次连接将重新走指纹确认。</p>
+                            {#if knownHosts.length === 0}
+                                <div class="settings-empty">暂无已信任主机。</div>
+                            {:else}
+                                {#each knownHosts as host (host.key)}
+                                    <div class="known-host-row">
+                                        <div class="known-host-info">
+                                            <strong>{host.host}:{host.port}</strong>
+                                            <code class="known-host-fp">{host.fingerprint}</code>
+                                        </div>
+                                        <button type="button" class="known-host-remove" onclick={() => removeKnownHost(host.key)}>删除</button>
+                                    </div>
+                                {/each}
+                            {/if}
+                        </div>
                     </section>
                 {:else if section === 'vault'}
                     <VaultSettings />

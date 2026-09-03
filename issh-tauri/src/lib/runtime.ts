@@ -589,6 +589,14 @@ export function checkUpdate (baseUrl: string, repoPath: string, currentVersion: 
     return invoke<UpdateCheckResult>('check_update', { baseUrl, repoPath, currentVersion })
 }
 
+export function openExternalUrl (url: string): Promise<void> {
+    return invoke<void>('open_external_url', { url })
+}
+
+export function readSshConfig (): Promise<string> {
+    return invoke<string>('read_ssh_config')
+}
+
 export interface AgentBridgePatch {
     scopes?: string[]
     sftpRoot?: string | null

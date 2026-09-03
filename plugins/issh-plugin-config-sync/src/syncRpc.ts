@@ -94,6 +94,28 @@ export function validatePayload (raw: string): SyncPayload {
     return parsed
 }
 
+export interface SyncDiffPreview {
+    profiles: { create: string[]; update: string[] }
+    groups: { create: string[]; update: string[] }
+}
+
+export async function previewPayload (payload: SyncPayload): Promise<SyncDiffPreview> {
+    const current = await hostProfiles()
+    const existingProfileIds = new Set(current.profiles.map((profile) => profile.id))
+    const existingGroupIds = new Set(current.groups.map((group) => group.id))
+    const label = (profile: SshHostProfile): string => `${profile.name}（${profile.user}@${profile.host}）`
+    return {
+        groups: {
+            create: payload.groups.filter((group) => !existingGroupIds.has(group.id)).map((group) => group.name),
+            update: payload.groups.filter((group) => existingGroupIds.has(group.id)).map((group) => group.name),
+        },
+        profiles: {
+            create: payload.profiles.filter((profile) => !existingProfileIds.has(profile.id)).map(label),
+            update: payload.profiles.filter((profile) => existingProfileIds.has(profile.id)).map(label),
+        },
+    }
+}
+
 export async function applyPayload (payload: SyncPayload): Promise<{ created: number; updated: number }> {
     const current = await hostProfiles()
     const existingProfileIds = new Set(current.profiles.map((profile) => profile.id))

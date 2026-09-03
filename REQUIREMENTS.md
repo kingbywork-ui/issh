@@ -34,9 +34,9 @@
 | R-007 | LLM补全：配置项与设置页全集对齐 | 用户需求 | 2026-08-28 | 已完成 |
 | R-008 | Agent Bridge 功能对齐（CLI/MCP/工具面/安全） | 用户需求 | 2026-08-28 | 已完成 |
 | R-009 | About/版本检查功能移植 | 用户需求 | 2026-08-28 | 已完成 |
-| R-010 | SSH 主机管理细节对齐 | 用户需求 | 2026-08-28 | 待办 |
-| R-011 | 终端功能细节对齐（vim粘贴/右键菜单/搜索/批量输入/linkifier/配色） | 用户需求 | 2026-08-28 | 待办 |
-| R-012 | 配置同步插件功能对齐 | 用户需求 | 2026-08-28 | 待办 |
+| R-010 | SSH 主机管理细节对齐 | 用户需求 | 2026-08-28 | 已完成 |
+| R-011 | 终端功能细节对齐（vim粘贴/右键菜单/搜索/批量输入/linkifier/配色） | 用户需求 | 2026-08-28 | 已完成 |
+| R-012 | 配置同步插件功能对齐 | 用户需求 | 2026-08-28 | 已完成 |
 | R-013 | 对齐验收：整体构建+冒烟+HANDOFF 更新 | 用户需求 | 2026-08-28 | 已完成 |
 | R-014 | Agent Bridge Rust 半成品修复：agent_bridge.rs 语法损坏修复 + 协议契约对齐（protocol.js 1.5.0 / 17 工具 / scope 映射 / exec 返回字段 stdout+exitCode+timedOut）+ lib.rs 接线 | 对话衍生 | 2026-08-28 | 已完成 |
 | R-015 | LLM补全补差：AI/历史候选统一 confidence 排序、normalizeCommand 接入候选链路、suggestionCache LRU（maxSize=100/ttl=5min）、敏感输入 gate（密码 prompt 停止补全清空 buffer）、ghost text 轻提示模式 | 对话衍生 | 2026-08-28 | 已完成 |
@@ -468,9 +468,29 @@
 
 **来源**：R-008 后续 backlog 拆分（对话衍生）。Netcatty 架构中 cordis（事件总线）、herdr（工作区 UI 集成）、pane（分屏窗格编排）服务端模块。与 R-034 已审核的 Herdr 商城插件存在能力重叠，实施时需先做产品边界确认。
 
-### R-052 codegen 能力目录重构（2026-09-03，待办）
+### R-010 / R-011 / R-012 对齐细节验收（Wave 2，2026-09-03 已完成）
+
+**R-010（SSH 主机管理细节）**：
+- **A2 SSH config 导入**：`issh-tauri/src/lib/sshConfig.ts` 新增 OpenSSH config 解析器（Host/HostName/User/Port/IdentityFile/ProxyJump，忽略 Match/Include）；Rust 新增 `read_ssh_config` command 读 `~/.ssh/config`；HostManager 新增「导入 SSH Config」按钮，增量导入 + 去重（host:port:user），IdentityFile 路径记录到备注（私钥绑定留待编辑器手动完成）。
+- **A3 已知主机指纹管理**：Settings「通用」页新增「已知主机指纹」列表，扫描 localStorage `issh.trustedHostKey.*` 键，支持单条删除（下次连接重新走指纹确认）。
+- **A4 连接复用（降级）**：`SshHostProfile.reuseSession` 字段保留为 UI 预留，但 isshd（russh）底层无 ControlMaster/ControlPath 多路复用能力，本次不实现。如需真连接复用需引入 russh 连接池或 OpenSSH ControlMaster 桥接，超出当前范围。
+
+**R-011（终端功能细节）**：
+- **A5 vim 粘贴（bracketed paste）**：`App.svelte` 通过 `terminal.parser.registerCsiHandler` 检测远端 `?2004h/l`，vim/编辑器模式下多行粘贴自动包 `\x1b[200~…\x1b[201~`。
+- **A6 终端内搜索**：新增 `SearchPanel.svelte`（基于 `@xterm/addon-search`），Ctrl+Shift+F 唤起，支持大小写/正则/全词、上下循环、计数。
+- **A7 批量输入**：已有 `BatchInputPanel.svelte`（current/all/selected 三态广播），关闭。
+- **A8 linkifier**：新增 `linkifier.ts`（xterm registerLinkProvider 自实现），URL 点击经 `open_external_url` 用系统浏览器打开（仅 http(s)，防注入），绝对路径点击复制到剪贴板。
+- **A9 配色**：已有 `terminalSchemes.ts`（Dracula/Solarized/TokyoNight 等）+ Settings 终端配色选择，关闭。
+- **A10 右键菜单**：终端区域右键粘贴已由 R-040 覆盖，标签右键菜单已由 R-043 覆盖；backlog AC 的「复制/粘贴/清屏/新建会话」弹出菜单与 R-040「右键粘贴」行为冲突，关闭并保留现状。
+
+**R-012（配置同步插件）**：
+- **A11 导入差异摘要**：`issh-plugin-config-sync` 新增 `previewPayload`（导入前展示新建/更新主机与分组明细），`SyncSettingsTab` 导入改为「预览 → 确认 → 应用」两段式，补齐 AC 的差异摘要要求。
+
+### R-052 codegen 能力目录重构（2026-09-03，已完成）
 
 **来源**：R-008 后续 backlog 拆分（对话衍生）。issh-agent 的能力目录按 codegen 风格重构（当前为协议层 50 工具静态表 + 17 工具诚实降级）。
+
+**验收记录（2026-09-03）**：核对 issh-agent `src/protocol.js` 后判定 AC 已满足——工具定义单源于 `AGENT_BRIDGE_TOOLS` 协议表（52 工具），`getMcpTools()` 动态从表派生导出目录（无手写目录文件）；`IMPLEMENTED_AGENT_BRIDGE_TOOLS` 名单是服务端能力的「诚实降级边界」（数据快照而非重复代码），新增工具仅需在协议表加定义 + 在该名单加名字，无需改任何导出函数。未引入跨语言（Rust→JS）codegen 生成器：当前双端契约靠协议版本号 + issh-agent 测试锁定，生成器属于过度工程（AGENTS.md 约束）。
 
 ### R-053 SKILL.md 随包发布（2026-09-03，已完成）
 

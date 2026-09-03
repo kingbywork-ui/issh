@@ -45,12 +45,15 @@
         writeSession,
         pickSavePath,
         writeLocalChunk,
+        openExternalUrl,
         type RuntimeHealth,
         type RuntimeSessionSnapshot,
         type SshHostProfile,
         type OpenSshSessionOptions,
         type VaultSecretKey,
     } from './lib/runtime'
+    import { registerTerminalLinkifier } from './lib/linkifier'
+    import SearchPanel from './lib/SearchPanel.svelte'
 
     interface SshTabInfo {
         host: string
@@ -72,6 +75,7 @@
         ssh: SshTabInfo | null
         decoratorCleanups: Array<() => void> | null
         sudoAction: { label: string, invoke: () => void } | null
+        bracketedPaste: boolean
     }
 
     const splitLayoutKey = 'issh.splitLayout'
@@ -130,6 +134,7 @@
     let showConnect = $state(false)
     let showSelector = $state(false)
     let tabMenu = $state<{ x: number, y: number, items: ContextMenuItem[] } | null>(null)
+    let searchOpen = $state(false)
     let vaultLocked = $state(false)
     let showWelcome = $state(false)
     let showSettings = $state(false)
@@ -497,6 +502,23 @@
             const bytes = new TextEncoder().encode(data)
             enqueueWrite(sessionId, async () => { await writeSession(sessionId, bytes) })
         })
+        // A8 linkifier：URL 点击打开浏览器；绝对路径点击复制到剪贴板
+        registerTerminalLinkifier(tab.terminal, (match) => {
+            if (match.kind === 'url') {
+                void openExternalUrl(match.text).catch(() => {})
+            } else {
+                void clipboardWriteText(match.text).catch(() => {})
+            }
+        })
+        // A5（R-013）bracketed paste：检测远端 ?2004h/l，vim/编辑器内粘贴多行时自动包装
+        tab.terminal.parser.registerCsiHandler({ prefix: '?', final: 'h' }, (params) => {
+            if (params[0] === 2004) tab.bracketedPaste = true
+            return false
+        })
+        tab.terminal.parser.registerCsiHandler({ prefix: '?', final: 'l' }, (params) => {
+            if (params[0] === 2004) tab.bracketedPaste = false
+            return false
+        })
     }
 
     function observeTerminalHost (tab: TerminalTab): void {
@@ -532,7 +554,16 @@
             } catch {
                 text = await navigator.clipboard.readText()
             }
-            if (text) tab.terminal?.paste(text)
+            if (text) {
+                // A5（R-013）：bracketed paste 模式下多行粘贴整体包装，避免 vim/编辑器 autoindent 逐行错乱
+                if (tab.bracketedPaste && text.includes('\n')) {
+                    const wrapped = `\x1b[200~${text}\x1b[201~`
+                    const bytes = new TextEncoder().encode(wrapped)
+                    enqueueWrite(tab.session.id, async () => { await writeSession(tab.session.id, bytes) })
+                } else {
+                    tab.terminal?.paste(text)
+                }
+            }
         } catch {
             // Clipboard may be temporarily unavailable; leave terminal input unchanged.
         }
@@ -618,7 +649,7 @@
     async function addLocalTab (): Promise<void> {
         try {
             const session = await openLocalSession()
-            const tab: TerminalTab = { session, terminal: null, fitAddon: null, host: null, resizeObserver: null, sequence: 0, ssh: null, decoratorCleanups: null, sudoAction: null }
+            const tab: TerminalTab = { session, terminal: null, fitAddon: null, host: null, resizeObserver: null, sequence: 0, ssh: null, decoratorCleanups: null, sudoAction: null, bracketedPaste: false }
             tabs.push(tab)
             activeId = session.id
             showHome = false
@@ -676,7 +707,7 @@
         try {
             if (source.session.kind === 'local') {
                 const session = await openLocalSession(source.terminal?.cols ?? 120, source.terminal?.rows ?? 36, undefined, terminalWorkingDirectory(source) ?? undefined)
-                const clone: TerminalTab = { session, terminal: null, fitAddon: null, host: null, resizeObserver: null, sequence: 0, ssh: null, decoratorCleanups: null, sudoAction: null }
+                const clone: TerminalTab = { session, terminal: null, fitAddon: null, host: null, resizeObserver: null, sequence: 0, ssh: null, decoratorCleanups: null, sudoAction: null, bracketedPaste: false }
                 tabs.push(clone)
                 persistTabRecovery()
                 activeId = previousActive
@@ -856,6 +887,10 @@
         } else if (!event.shiftKey && key === ',') {
             event.preventDefault()
             showSettings = true
+        } else if (event.shiftKey && key === 'f') {
+            // A6 终端内搜索
+            event.preventDefault()
+            searchOpen = !searchOpen
         }
     }
 
@@ -1039,6 +1074,7 @@
                 },
                 sudoAction: null,
                 decoratorCleanups: null,
+                bracketedPaste: false,
             }
             localStorage.setItem(`issh.trustedHostKey.${params.host}:${params.port}`, fingerprint)
             tabs.push(tab)
@@ -1738,5 +1774,9 @@
 
     {#if tabMenu}
         <ContextMenu x={tabMenu.x} y={tabMenu.y} items={tabMenu.items} onclose={() => { tabMenu = null }} />
+    {/if}
+
+    {#if searchOpen && activeTab?.terminal}
+        <SearchPanel terminal={activeTab.terminal} onclose={() => { searchOpen = false }} />
     {/if}
 </div>

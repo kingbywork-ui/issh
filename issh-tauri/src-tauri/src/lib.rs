@@ -625,7 +625,9 @@ pub fn run() {
             app_quit,
             minimize_to_tray,
             agent_processes,
-            check_update
+            check_update,
+            open_external_url,
+            read_ssh_config
         ])
         .build(tauri::generate_context!())
         .expect("failed to build issh Tauri client");
@@ -1146,6 +1148,44 @@ fn compare_semver(a: &str, b: &str) -> i32 {
         }
     }
     0
+}
+
+/// A8（R-011）linkifier：用系统默认浏览器打开 http(s) URL。
+/// 安全约束：仅允许 http(s) 协议，拒绝空白字符与长度超限的输入。
+#[tauri::command]
+fn open_external_url(url: String) -> Result<(), String> {
+    let trimmed = url.trim();
+    if trimmed.len() > 2048 {
+        return Err("URL 过长".to_string());
+    }
+    if !(trimmed.starts_with("https://") || trimmed.starts_with("http://")) {
+        return Err("仅允许打开 http(s) URL".to_string());
+    }
+    if trimmed.chars().any(char::is_whitespace) {
+        return Err("URL 包含非法空白字符".to_string());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", trimmed])
+            .spawn()
+            .map_err(|e| format!("启动默认浏览器失败：{e}"))?;
+    }
+    Ok(())
+}
+
+/// A2（R-012）SSH config 导入：读取用户主目录下的 ~/.ssh/config 文本。
+/// 仅返回文本内容，解析在前端完成。
+#[tauri::command]
+fn read_ssh_config() -> Result<String, String> {
+    let home = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .map_err(|_| "无法定位用户主目录".to_string())?;
+    let path = std::path::Path::new(&home).join(".ssh").join("config");
+    if !path.exists() {
+        return Err("未找到 ~/.ssh/config".to_string());
+    }
+    std::fs::read_to_string(&path).map_err(|e| format!("读取 ~/.ssh/config 失败：{e}"))
 }
 
 

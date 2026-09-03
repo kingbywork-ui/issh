@@ -4,7 +4,8 @@
     import HostGroupEditor from './HostGroupEditor.svelte'
     import HostProfileEditor from './HostProfileEditor.svelte'
     import { focusOnMount } from './a11y'
-    import { hostProfiles, lockHostProfiles, mutateHostProfiles, unlockHostProfiles, type HostProfileMutation, type SshHostGroup, type SshHostProfile } from './runtime'
+    import { hostProfiles, lockHostProfiles, mutateHostProfiles, unlockHostProfiles, readSshConfig, type HostProfileMutation, type SshHostGroup, type SshHostProfile } from './runtime'
+    import { parseSshConfig } from './sshConfig'
 
     let { onconnect, onopenlocal, onvaultstate }: { onconnect: (profile: SshHostProfile) => void, onopenlocal: () => void, onvaultstate?: (locked: boolean) => void } = $props()
     interface GroupNode extends SshHostGroup { children: GroupNode[], profileIds: string[], count: number }
@@ -14,6 +15,7 @@
     let unlocked = $state(true)
     let loading = $state(true)
     let error = $state('')
+    let importing = $state(false)
     let query = $state('')
     let environment = $state('')
     let favoritesOnly = $state(false)
@@ -134,6 +136,53 @@
     function resetFilters (): void { query = ''; environment = ''; favoritesOnly = false; recentOnly = false; view = 'all'; persistView(view) }
     function title (): string { if (view === 'favorites') return '收藏'; if (view === 'recent') return '最近连接'; if (typeof view === 'object') return findNode(groupTree, view.group)?.name ?? '分组'; return '全部主机' }
     function launch (profile: SshHostProfile): void { recordRecent(profile); onconnect(profile) }
+
+    // A2（R-012）SSH config 导入：读取 ~/.ssh/config 并解析为非通配符主机条目增量导入。
+    async function importSshConfig (): Promise<void> {
+        importing = true
+        error = ''
+        try {
+            const text = await readSshConfig()
+            const parsed = parseSshConfig(text)
+            if (parsed.hosts.length === 0) {
+                window.alert('未从 ~/.ssh/config 解析到可导入的主机条目（通配符 Host 与 Match 段已跳过）。')
+                return
+            }
+            const existing = new Set(profiles.map((p) => `${p.host}:${p.port}:${p.user}`))
+            let created = 0
+            let skipped = 0
+            for (const host of parsed.hosts) {
+                const key = `${host.hostName}:${host.port ?? 22}:${host.user ?? ''}`
+                if (existing.has(key)) { skipped += 1; continue }
+                const remarkParts = [
+                    host.identityFiles.length ? `IdentityFile: ${host.identityFiles.join(', ')}` : '',
+                    host.proxyJump ? `ProxyJump: ${host.proxyJump}` : '',
+                ].filter(Boolean)
+                const profile: SshHostProfile = {
+                    id: '', name: host.alias, group: '', host: host.hostName, port: host.port ?? 22,
+                    user: host.user ?? '', auth: null, privateKeys: [], environment: null,
+                    remark: remarkParts.join('；') || null, favorite: false, tags: ['ssh-config'],
+                    loginScript: null, x11: false, agentForward: false, jumpHost: null, proxyCommand: null,
+                    forwardedPorts: [], socksProxyHost: null, socksProxyPort: null, httpProxyHost: null, httpProxyPort: null,
+                    reuseSession: false,
+                }
+                try {
+                    await mutateHostProfiles({ action: 'createProfile', profile })
+                    created += 1
+                    existing.add(key)
+                } catch { skipped += 1 }
+            }
+            await refresh()
+            const extras: string[] = []
+            if (skipped > 0) extras.push(`${skipped} 个已存在或失败跳过`)
+            if (parsed.ignored > 0) extras.push(`${parsed.ignored} 个通配符条目跳过`)
+            window.alert(`导入完成：新增 ${created} 台主机。${extras.join('；')}`)
+        } catch (cause) {
+            error = cause instanceof Error ? cause.message : String(cause)
+        } finally {
+            importing = false
+        }
+    }
     onMount(() => { void refresh() })
     $effect(() => { reportVaultState() })
 </script>
@@ -150,7 +199,7 @@
         {#each groupTree as node (node.id)}{@render renderGroup(node, 0)}{/each}
         {#if encrypted}<div class="sidebar-footer"><button class="lock-button" type="button" onclick={lock}>🔒 锁定配置</button></div>{/if}
     </aside>
-    <main class="start-page-main"><header class="main-header"><div><h2 class="main-title">{title()}</h2><span class="main-count">{visible.length} 台主机</span></div><span class="main-spacer"></span><button type="button" class="local-terminal-button" onclick={onopenlocal}>⌂ 本地终端</button><button type="button" class="local-terminal-button" onclick={newProfile}>＋ 新建 SSH</button></header>
+    <main class="start-page-main"><header class="main-header"><div><h2 class="main-title">{title()}</h2><span class="main-count">{visible.length} 台主机</span></div><span class="main-spacer"></span><button type="button" class="local-terminal-button" onclick={onopenlocal}>⌂ 本地终端</button><button type="button" class="local-terminal-button" onclick={newProfile}>＋ 新建 SSH</button><button type="button" class="local-terminal-button" onclick={() => void importSshConfig()} disabled={importing}>{importing ? '导入中…' : '⇩ 导入 SSH Config'}</button></header>
         <div class="host-toolbar"><input type="search" bind:value={query} placeholder="搜索名称、地址或用户名" /><select bind:value={environment}><option value="">全部环境</option>{#each environments as item}<option value={item}>{item}</option>{/each}</select><label><input type="checkbox" bind:checked={favoritesOnly} /> 仅收藏</label><label><input type="checkbox" bind:checked={recentOnly} /> 最近</label><button type="button" class="secondary" onclick={resetFilters}>清除筛选</button></div>
         {#if error}<p class="start-error" role="alert">{error}</p>{/if}
         {#if visible.length}<div class="host-list">{#each visible as profile (profile.id)}<div class="host-list-item" role="button" tabindex="0" onclick={() => launch(profile)} onkeydown={(event) => { if (event.key === 'Enter') launch(profile) }} oncontextmenu={(event) => showMenu(event, profileItems(profile))}><span class="host-status-rail" data-kind={profile.favorite ? 'favorite' : 'signal'}></span><div class="host-item-body"><div class="host-item-info"><div class="host-item-name-row"><strong>{profile.name}</strong>{#if profile.favorite}<span class="host-badge favorite">收藏</span>{/if}{#if recentIds.includes(profile.id)}<span class="host-badge recent">最近</span>{/if}</div><div class="host-item-meta">{profile.user}@{profile.host}:{profile.port}</div>{#if profile.remark}<div class="host-item-remark">{profile.remark}</div>{/if}{#if profile.tags.length}<div class="host-item-tags">{#each profile.tags as tag}<span class="host-tag">{tag}</span>{/each}</div>{/if}</div><div class="host-item-actions">{#if profile.environment}<span class="env-badge env-badge--info">{profile.environment}</span>{/if}<button type="button" class="icon-button" title="更多操作" onclick={(event) => { event.stopPropagation(); showMenu(event, profileItems(profile)) }}>⋯</button><span class="connect-btn">连接</span></div></div></div>{/each}</div>{:else}<div class="host-list-empty"><div class="empty-icon">▦</div><div class="empty-text">当前筛选没有匹配的 SSH 主机</div></div>{/if}
