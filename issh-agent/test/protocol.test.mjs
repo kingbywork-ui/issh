@@ -24,13 +24,13 @@ test('protocol exposes the complete current bridge surface without removed RAG t
 
 test('MCP tools expose only the implemented core surface with operation-specific schemas', () => {
     const tools = getMcpTools()
-    assert.equal(tools.length, 19)
+    assert.equal(tools.length, 38)
     const exec = tools.find(tool => tool.name === 'issh_exec_command')
     assert.deepEqual(exec.inputSchema.required, ['command'])
     assert.equal(exec.inputSchema.properties.timeoutMs.maximum, 3600000)
     assert(!('scope' in exec))
-    // 未实现服务端的超前工具不得暴露给外部 agent（诚实降级）
-    for (const name of ['issh_workspace_bind', 'issh_agent_prompt', 'issh_agent_dispatch', 'issh_task_run_command', 'issh_herdr_link', 'issh_pane_write']) {
+    // 未实现服务端的超前工具不得暴露给外部 agent（诚实降级）：runtime 深层健康、cordis 并发 run、herdr 商城插件仍降级
+    for (const name of ['issh_runtime_health', 'issh_cordis_health', 'issh_agent_dispatch', 'issh_run_wait', 'issh_run_collect', 'issh_run_cancel', 'issh_task_run_command', 'issh_herdr_status', 'issh_herdr_start', 'issh_herdr_stop', 'issh_herdr_snapshot', 'issh_herdr_link', 'issh_herdr_unlink', 'issh_herdr_sync']) {
         assert.equal(tools.find(tool => tool.name === name), undefined, `${name} must not be advertised`)
     }
     // scope 表仍覆盖全量协议（未来服务端实现沿用）

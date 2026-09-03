@@ -713,6 +713,26 @@ export const IMPLEMENTED_AGENT_BRIDGE_TOOLS = Object.freeze([
     'issh_sftp_write',
     'issh_list_jobs',
     'issh_get_job',
+    // Wave 3（C1/C2/C3/C4/C5）：isshd 已接线的 workspace/agent/task/event/pane 工具
+    'issh_pane_list',
+    'issh_pane_snapshot',
+    'issh_pane_subscribe',
+    'issh_pane_claim_input',
+    'issh_pane_release_input',
+    'issh_pane_write',
+    'issh_pane_resize',
+    'issh_workspace_list',
+    'issh_workspace_create',
+    'issh_workspace_bind',
+    'issh_workspace_unbind',
+    'issh_agent_register',
+    'issh_agent_list',
+    'issh_agent_prompt',
+    'issh_task_wait',
+    'issh_task_read',
+    'issh_task_list',
+    'issh_task_cancel',
+    'issh_workspace_events',
 ])
 
 export function normalizeAgentBridgeMethod (method) {

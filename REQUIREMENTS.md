@@ -17,7 +17,7 @@
 | 已完成 | 48 |
 | 已放弃 | 0 |
 
-> 状态说明（2026-09-03 同步）：R-008 原始范围（对齐 issh 分支 Agent Bridge：17 工具闭环 + CLI/MCP + 安全）已完成，Netcatty 架构超前能力拆为 R-050~R-055 待办；R-036/R-037 已完成（正文 2026-09-01 最终验收记录为准，302/308 行的「保持进行中」为当日中间快照）；R-044 为持续生效的提交约定，保持「进行中」。
+> 状态说明（2026-09-03 同步）：R-008 原始范围（对齐 issh 分支 Agent Bridge：17 工具闭环 + CLI/MCP + 安全）已完成，Netcatty 架构超前能力拆为 R-050~R-055；R-050 已完成（isshd workspace/agent/task 服务端已有，本轮放开 19 个工具），R-051 部分完成（pane 完成、cordis 事件流完成、cordis kernel 与 herdr 待用户决策）；R-036/R-037 已完成（正文 2026-09-01 最终验收记录为准，302/308 行的「保持进行中」为当日中间快照）；R-044 为持续生效的提交约定，保持「进行中」。
 >
 > 待办项的任务级拆解（Epic/Story/验收标准/优先级/依赖/规模）见 `docs/backlog-plan.md`（PM/BA 拆分版 v1，2026-09-03）。本文件保持精简，只维护需求状态索引。
 
@@ -458,15 +458,20 @@
 
 **验证**：`svelte-check` 0 errors / 0 warnings；CDP 实测点击「Agent Bridge」tab 后 `plugin-settings-host` 子节点=1 且渲染完整设置内容，通用修复对所有插件 tab 生效。
 
-### R-050 workspace/agent/task 服务端实现（2026-09-03，待办）
+### R-050 workspace/agent/task 服务端实现（2026-09-03，已完成）
 
 **来源**：R-008 后续 backlog 拆分（对话衍生）。Netcatty 架构中 workspace/agent/task 服务端模块，对应 issh-agent 协议中 33 个超前工具（目前协议全量 50 工具，17 个已实现）。
 
-**范围**：isshd Runtime 侧实现 workspace 绑定、agent 进程识别/注册、task 调度三个服务端模块及对应 RPC；issh-agent 客户端同步放开对应工具集。依赖 R-016（agentProcessDetection/codexDesktopConfig 移植）。
+**验收记录（2026-09-03）**：核对发现 issh-runtime 已完整实现——`issh-runtime/crates/workspace`（1386 行，WorkspaceStore + create_workspace/list_workspaces/bind/unbind/register_agent/authorize_agent/create_task/start_task/wait_task/complete_task/fail_task/cancel_task + SQLite 持久化 + RuntimeEvent 事件流），且 isshd main.rs 已接线 `workspace.create/list/bind/unbind`、`agent.register/list/authorize`、`task.prompt/start/wait/read/list/cancel/complete/fail` 全套 RPC。本轮补齐 Agent Bridge 暴露面：agent_bridge.rs TOOLS 表 + 19 个工具（C1 workspace 4 + C2 agent 3 + C3 task 4 + C4 events 1 + C5 pane 7），issh-agent IMPLEMENTED 名单同步放开（38 工具）。issh_agent_dispatch / issh_task_run_command 依赖 cordis 并发模型，保持诚实降级。
 
-### R-051 cordis/herdr/pane 服务端实现（2026-09-03，待办）
+### R-051 cordis/herdr/pane 服务端实现（2026-09-03，部分完成）
 
 **来源**：R-008 后续 backlog 拆分（对话衍生）。Netcatty 架构中 cordis（事件总线）、herdr（工作区 UI 集成）、pane（分屏窗格编排）服务端模块。与 R-034 已审核的 Herdr 商城插件存在能力重叠，实施时需先做产品边界确认。
+
+**验收记录（2026-09-03）**：
+- **C5 pane 编排（已完成）**：isshd 已接线 `pane.list/open/snapshot/close/claimInput/releaseInput/write/resize/pushOutput/subscribe` 全套 RPC（issh-runtime/crates/pane 513 行），本轮放开 7 个 `issh_pane_*` 工具。
+- **C4 cordis 事件总线（部分完成）**：isshd 已有 `event.list` RPC + workspace events SQLite 表 + 游标拉取 + RuntimeEvent 带时间戳，本轮放开 `issh_workspace_events` 工具。但 Netcatty 的 cordis kernel（多 agent 并发 Fiber run）依赖 JS→Rust 技术选型，`issh_cordis_health`/`issh_run_wait/collect/cancel`/`issh_agent_dispatch` 保持诚实降级。
+- **C6 herdr UI 集成（待用户决策）**：issh-plugin-herdr 商城插件已存在（HerdrSettingsTab + herdrRpc），`issh_herdr_*` 7 工具保持降级，路线（商城插件 vs 内置）需用户确认。
 
 ### R-010 / R-011 / R-012 对齐细节验收（Wave 2，2026-09-03 已完成）
 
