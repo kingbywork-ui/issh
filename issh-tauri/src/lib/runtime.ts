@@ -579,14 +579,27 @@ export interface UpdateCheckResult {
     hasUpdate: boolean
     currentVersion: string
     latestVersion: string
+    architecture: string
+    assetName: string
     releaseNotes: string
     releaseUrl: string
     publishedAt: string
     error: string | null
 }
 
-export function checkUpdate (baseUrl: string, repoPath: string, currentVersion: string): Promise<UpdateCheckResult> {
-    return invoke<UpdateCheckResult>('check_update', { baseUrl, repoPath, currentVersion })
+export function checkUpdate (currentVersion: string): Promise<UpdateCheckResult> {
+    return invoke<UpdateCheckResult>('check_update', { currentVersion })
+}
+
+export interface BuildInfo {
+    branch: string
+    arch: string
+    os: string
+    releasesUrl: string
+}
+
+export function getBuildInfo (): Promise<BuildInfo> {
+    return invoke<BuildInfo>('get_build_info')
 }
 
 export function openExternalUrl (url: string): Promise<void> {

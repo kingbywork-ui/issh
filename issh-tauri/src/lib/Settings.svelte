@@ -18,7 +18,7 @@
     import AutoSudoSettings from './AutoSudoSettings.svelte'
     import VaultSettings from './VaultSettings.svelte'
     import { lockHostProfiles } from './runtime'
-    import { checkUpdate, type UpdateCheckResult } from './runtime'
+    import { checkUpdate, getBuildInfo, type UpdateCheckResult, type BuildInfo } from './runtime'
 
     let { onclose }: { onclose: () => void } = $props()
 
@@ -176,11 +176,10 @@
     const productVersion = '0.1.6'
     let tauriVersion = $state('')
     let webviewVersion = $state('')
-    let giteaBaseUrl = $state(localStorage.getItem('issh.giteaBaseUrl') ?? '')
-    let giteaRepoPath = $state(localStorage.getItem('issh.giteaRepoPath') ?? '')
     let updateChecking = $state(false)
     let updateError = $state('')
     let updateResult = $state<UpdateCheckResult | null>(null)
+    let buildBranch = $state('')
 
     let tabs = $state(getSettingsTabs())
 
@@ -403,16 +402,18 @@
         // WebView2 版本：Windows 下 UA 形如 ... Edg/xx.x.x
         const edgeMatch = navigator.userAgent.match(/Edg\/([\d.]+)/)
         webviewVersion = edgeMatch ? edgeMatch[1] : ''
+        try {
+            const info = await getBuildInfo()
+            buildBranch = info.branch
+        } catch { buildBranch = '' }
     }
 
     async function runUpdateCheck (): Promise<void> {
         updateChecking = true
         updateError = ''
         updateResult = null
-        localStorage.setItem('issh.giteaBaseUrl', giteaBaseUrl.trim())
-        localStorage.setItem('issh.giteaRepoPath', giteaRepoPath.trim())
         try {
-            updateResult = await checkUpdate(giteaBaseUrl.trim(), giteaRepoPath.trim(), productVersion)
+            updateResult = await checkUpdate(productVersion)
         } catch (cause) {
             // AC3：网络失败静默降级，仅提示、不阻塞设置页
             updateError = cause instanceof Error ? cause.message : String(cause)
@@ -858,20 +859,9 @@
                         <div class="about-row"><span>Runtime 版本</span><strong>{runtimeVersion || '未连接'}</strong></div>
 
                         <div class="settings-field">
-                            <div class="settings-field-title">检查更新（Gitea/Forgejo）</div>
+                            <div class="settings-field-title">检查更新（GitHub）</div>
                             <div class="about-update-form">
-                                <input
-                                    class="settings-input"
-                                    type="text"
-                                    placeholder="https://gitea.example.com"
-                                    bind:value={giteaBaseUrl}
-                                />
-                                <input
-                                    class="settings-input"
-                                    type="text"
-                                    placeholder="org/issh"
-                                    bind:value={giteaRepoPath}
-                                />
+                                <div class="settings-hint">当前分支：<strong>{buildBranch || '未知'}</strong></div>
                                 <button
                                     type="button"
                                     disabled={updateChecking}
@@ -883,8 +873,8 @@
                             {:else if updateResult}
                                 {#if updateResult.hasUpdate}
                                     <div class="settings-hint update-available">
-                                        发现新版本 <strong>v{updateResult.latestVersion}</strong>（当前 {updateResult.currentVersion}）
-                                        {#if updateResult.releaseUrl}<a href={updateResult.releaseUrl} target="_blank" rel="noreferrer">查看 Release</a>{/if}
+                                        发现新版本 <strong>v{updateResult.latestVersion}</strong>（当前 {updateResult.currentVersion}，适配 {updateResult.architecture}）
+                                        {#if updateResult.releaseUrl}<a href={updateResult.releaseUrl} target="_blank" rel="noreferrer">下载安装包</a>{/if}
                                     </div>
                                 {:else}
                                     <div class="settings-hint">已是最新版本（当前 {updateResult.currentVersion}，最新 {updateResult.latestVersion || '未知'}）</div>

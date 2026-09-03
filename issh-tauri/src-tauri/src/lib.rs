@@ -21,6 +21,11 @@ use tokio::sync::Mutex as AsyncMutex;
 
 const MAX_MESSAGE_BYTES: usize = 64 * 1024;
 const PROTOCOL_VERSION: &str = "0.4.0";
+/// 构建时嵌入的当前分支名（build.rs 通过 git/环境变量注入），用于跨分支交叉更新拦截。
+const BUILD_BRANCH: &str = match option_env!("ISSH_BUILD_BRANCH") {
+    Some(branch) => branch,
+    None => "unknown",
+};
 
 /// 解析 issh 用户数据目录（ISSH_CONFIG_DIRECTORY 环境变量优先，否则应用数据目录）。
 fn resolve_user_data<R: Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
@@ -594,6 +599,7 @@ pub fn run() {
             minimize_to_tray,
             agent_processes,
             check_update,
+            get_build_info,
             open_external_url,
             read_ssh_config
         ])
@@ -1034,50 +1040,130 @@ fn agent_processes() -> Vec<Value> {
     Vec::new()
 }
 
-/// A1（R-009）版本检查：调用 Gitea/Forgejo Release API 获取最新版本。
-/// base_url 形如 https://gitea.example.com；repo_path 形如 org/issh。
-/// 网络失败返回 Err，由前端静默降级（不阻塞设置页）。
-#[tauri::command]
-async fn check_update(
-    base_url: String,
-    repo_path: String,
-    current_version: String,
-) -> Result<Value, String> {
-    let base = base_url.trim().trim_end_matches('/');
-    let repo = repo_path.trim().trim_matches('/');
-    if base.is_empty() || repo.is_empty() {
-        return Err("未配置仓库地址".to_string());
-    }
-    let parsed = url::Url::parse(base).map_err(|_| "仓库地址无效：必须是 http(s) URL".to_string())?;
-    if parsed.scheme() != "http" && parsed.scheme() != "https" {
-        return Err("仓库地址必须是 http(s)".to_string());
-    }
-    if !repo
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || "-_./".contains(c))
-    {
-        return Err("仓库路径包含非法字符".to_string());
-    }
+/// 版本检查固定使用的 GitHub 仓库（地址内置，不暴露给用户）。
+const GITHUB_REPO: &str = "kingbywork-ui/issh";
+const GITHUB_API_BASE: &str = "https://api.github.com";
 
-    let api = format!("{base}/api/v1/repos/{repo}/releases/latest");
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
+/// 构建带超时与 User-Agent 的 HTTP 客户端（GitHub API 要求 User-Agent 头）。
+fn github_http_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(15))
+        .user_agent("issh-update-check")
         .build()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())
+}
+
+async fn github_get_json(client: &reqwest::Client, url: &str) -> Result<Value, String> {
     let response = client
-        .get(&api)
-        .header("Accept", "application/json")
+        .get(url)
+        .header("Accept", "application/vnd.github+json")
         .send()
         .await
         .map_err(|e| format!("网络请求失败：{e}"))?;
     if !response.status().is_success() {
-        return Err(format!("检查更新失败：HTTP {}", response.status().as_u16()));
+        return Err(format!(
+            "GitHub API 请求失败：HTTP {}",
+            response.status().as_u16()
+        ));
     }
-    let data: Value = response
-        .json()
+    response
+        .json::<Value>()
         .await
-        .map_err(|e| format!("解析响应失败：{e}"))?;
-    let latest = data
+        .map_err(|e| format!("解析响应失败：{e}"))
+}
+
+/// 当前编译目标架构标识（对齐 Tauri NSIS 产物命名：x86_64→x64，aarch64→arm64）。
+fn current_arch() -> &'static str {
+    match std::env::consts::ARCH {
+        "x86_64" => "x64",
+        "aarch64" => "arm64",
+        other => other,
+    }
+}
+
+/// 当前编译目标操作系统。
+fn current_os() -> &'static str {
+    std::env::consts::OS
+}
+
+/// 判断 Release 资产名是否适配当前平台 + 架构（交叉更新防护）。
+fn asset_matches_platform(name: &str, arch: &str, os: &str) -> bool {
+    let lower = name.to_lowercase();
+    if !lower.contains(&arch.to_lowercase()) {
+        return false;
+    }
+    match os {
+        "windows" => lower.ends_with(".exe"),
+        "macos" => {
+            lower.ends_with(".dmg")
+                || lower.ends_with(".app")
+                || lower.contains("darwin")
+                || lower.contains("macos")
+        }
+        "linux" => {
+            lower.ends_with(".deb")
+                || lower.ends_with(".rpm")
+                || lower.ends_with(".appimage")
+        }
+        _ => false,
+    }
+}
+
+/// A1（R-009）版本检查：安装包自带构建分支（BUILD_BRANCH），直接检查当前分支最新且适配当前架构的 Release。
+/// 交叉更新防护：仅当 Release 的 assets 中存在匹配当前架构的安装包时才判定「有更新」，
+/// releaseUrl 指向该匹配架构安装包的直接下载链接；否则返回明确提示，不误报更新。
+/// 网络失败返回 Err，由前端静默降级（不阻塞设置页）。
+#[tauri::command]
+async fn check_update(current_version: String) -> Result<Value, String> {
+    let branch = BUILD_BRANCH;
+    if branch == "unknown" {
+        return Err("未识别构建分支".to_string());
+    }
+    let arch = current_arch();
+    let os = current_os();
+    let client = github_http_client()?;
+    let data = github_get_json(
+        &client,
+        &format!("{GITHUB_API_BASE}/repos/{GITHUB_REPO}/releases?per_page=100"),
+    )
+    .await?;
+    let releases = data
+        .as_array()
+        .ok_or_else(|| "解析 Release 列表失败".to_string())?;
+
+    // GitHub releases 默认按创建时间倒序；遍历该分支的 Release，
+    // 找到第一个 assets 中含当前架构安装包的 Release。
+    let mut matched_release: Option<&Value> = None;
+    let mut matched_asset: Option<&Value> = None;
+    for release in releases {
+        let is_branch = release
+            .get("target_commitish")
+            .and_then(Value::as_str)
+            .map(|target| target == branch)
+            .unwrap_or(false);
+        if !is_branch {
+            continue;
+        }
+        if let Some(assets) = release.get("assets").and_then(Value::as_array) {
+            for asset in assets {
+                let name = asset.get("name").and_then(Value::as_str).unwrap_or("");
+                if asset_matches_platform(name, arch, os) {
+                    matched_release = Some(release);
+                    matched_asset = Some(asset);
+                    break;
+                }
+            }
+        }
+        if matched_release.is_some() {
+            break;
+        }
+    }
+
+    let release = matched_release
+        .ok_or_else(|| format!("分支 {branch} 暂无适配当前架构（{os} {arch}）的安装包"))?;
+    let asset = matched_asset.ok_or_else(|| "未定位到匹配架构的安装包".to_string())?;
+
+    let latest = release
         .get("tag_name")
         .and_then(Value::as_str)
         .unwrap_or("")
@@ -1088,11 +1174,25 @@ async fn check_update(
         "hasUpdate": has_update,
         "currentVersion": current_version,
         "latestVersion": latest,
-        "releaseNotes": data.get("body").and_then(Value::as_str).unwrap_or(""),
-        "releaseUrl": data.get("html_url").and_then(Value::as_str).unwrap_or(""),
-        "publishedAt": data.get("published_at").and_then(Value::as_str).unwrap_or(""),
+        "architecture": format!("{os}-{arch}"),
+        "assetName": asset.get("name").and_then(Value::as_str).unwrap_or(""),
+        "releaseNotes": release.get("body").and_then(Value::as_str).unwrap_or(""),
+        "releaseUrl": asset.get("browser_download_url").and_then(Value::as_str).unwrap_or(""),
+        "publishedAt": release.get("published_at").and_then(Value::as_str).unwrap_or(""),
         "error": Value::Null,
     }))
+}
+
+/// 返回当前安装包的构建信息（构建分支、平台架构、GitHub release 页地址），
+/// 供前端做跨分支交叉更新拦截（R-057）。
+#[tauri::command]
+fn get_build_info() -> Value {
+    json!({
+        "branch": BUILD_BRANCH,
+        "arch": current_arch(),
+        "os": current_os(),
+        "releasesUrl": format!("https://github.com/{GITHUB_REPO}/releases"),
+    })
 }
 
 /// 语义化版本比较：按数字段逐一比较，忽略 v 前缀与 pre-release 后缀。

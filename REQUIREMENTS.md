@@ -512,3 +512,27 @@
 **来源**：R-008 后续 backlog 拆分（对话衍生）。① Agent Bridge 危险/敏感操作由当前布尔确认门升级为 Observer（只读）/Confirm（确认后执行）/Auto（自动放行）三档策略；② 服务端增加 SSE MCP transport（对齐 issh 分支 `agentBridgeSseEnabled` 能力）。
 
 **实现**：① `PermissionMode` 枚举（observer/confirm/auto，默认 confirm）持久化于 `agent-bridge.json`；Observer 档下所有 write/exec/sftp 工具只返回执行计划（`planned: true, blocked: true`）不执行并写审计 `observer-blocked`；Auto 档跳过 confirm 校验（桌面端确认框仍生效）；档位决策写入审计日志。② `GET /sse` 建立 SSE 事件流（`event: endpoint` → `/messages`，job 完成事件推送，15s 心跳），`POST /messages` 与 `/rpc` 共用 JSON-RPC 处理与 token 校验。
+
+### R-056 关于页更新检查内置 GitHub 仓库 + 分支下拉（2026-09-03，已完成）
+
+**来源**（用户需求）：关于页「检查更新」不再暴露仓库地址输入，改为直接内置 GitHub 仓库 `kingbywork-ui/issh`；分支改为自动获取后下拉选择，检查更新按所选分支取该分支最新 Release 的 tag 版本。
+
+**实现**：`issh-tauri/src-tauri/src/lib.rs` 新增 `list_release_branches` 命令（调用 GitHub API `/repos/kingbywork-ui/issh/branches` 与 `/repos/kingbywork-ui/issh` 获取默认分支，返回 `[{name, isDefault}]`，默认分支置顶），并将 `check_update` 改为按 `branch` 参数（`/repos/.../releases?per_page=100` 中匹配 `target_commitish == branch` 的最新一条 Release，比较其 tag 版本）；仓库地址与 API base 内置为常量，不再暴露给用户。前端 `runtime.ts` 新增 `listReleaseBranches` 桥接并调整 `checkUpdate(branch, currentVersion)` 签名；`Settings.svelte` 关于页移除 gitea 地址/仓库路径输入，改为分支下拉 + 刷新 + 检查更新，所选分支持久化到 `issh.updateBranch`。GitHub API 请求统一带 `User-Agent` 与 15s 超时。
+
+**验证**：`cargo check --manifest-path issh-tauri/src-tauri/Cargo.toml` 通过；`issh-tauri/node_modules/.bin/svelte-check.cmd --tsconfig issh-tauri/tsconfig.json` → 0 errors / 0 warnings。
+
+**交叉更新防护（2026-09-03 补充，已完成）**：不同分支可能发布不同架构/平台的安装包，若仅按分支比较 tag 版本会导致交叉更新（如 Windows x64 应用误推荐到 arm64/macOS 安装包）。修复：`check_update` 增加当前编译目标架构/平台感知（`current_arch()`：x86_64→x64、aarch64→arm64；`current_os()`），仅在所选分支的 Release 的 `assets` 中存在匹配当前架构的安装包（`asset_matches_platform`，Windows 按 `.exe` + 架构标识）时才判定「有更新」，并将 `releaseUrl` 指向该匹配 asset 的 `browser_download_url`（直链）；无匹配资产时返回「该分支暂无适配当前架构的安装包」而非误报更新。前端 `UpdateCheckResult` 增加 `architecture`/`assetName` 字段，关于页展示架构标注、链接改为「下载安装包」。验证：`cargo check` 通过（24.99s）；`svelte-check` → 0 errors / 0 warnings。
+
+### R-057 跨分支交叉更新拦截（2026-09-03，已完成）
+
+**来源**（用户需求）：不同分支之间不能交叉更新。例如当前是 dev 分支安装包，检查更新时切换到 issh 分支，应提醒用户「当前是 dev 分支安装包，不能使用其它分支的安装包，如需安装其它分支安装包请到 github 中直接下载」；用户选「否」关闭提醒，选「去下载」则打开所选分支对应的 GitHub release 页。
+
+**实现**：
+- `issh-tauri/src-tauri/build.rs`：编译期通过 git（`git rev-parse --abbrev-ref HEAD`，环境变量 `ISSH_BUILD_BRANCH` 可覆盖）获取当前构建分支，经 `cargo:rustc-env=ISSH_BUILD_BRANCH` 嵌入二进制；加 `cargo:rerun-if-changed=.git/HEAD` 与 `cargo:rerun-if-env-changed=ISSH_BUILD_BRANCH` 保证分支切换/环境变量变化时重跑。
+- `issh-tauri/src-tauri/src/lib.rs`：新增 `BUILD_BRANCH` 常量（`option_env!` + match 兜底 `unknown`）与 `get_build_info` 命令（返回 `branch`/`arch`/`os`/`releasesUrl`，其中 `releasesUrl` 为 `https://github.com/kingbywork-ui/issh/releases`），注册到 `generate_handler!`。
+- `issh-tauri/src/lib/runtime.ts`：新增 `BuildInfo` 接口与 `getBuildInfo()`。
+- `issh-tauri/src/lib/Settings.svelte`：`loadAbout` 中加载构建分支与 release 页地址；`runUpdateCheck` 前先判断 `isCrossBranch()`（构建分支非空且非 `unknown`、且所选分支 ≠ 构建分支），命中则弹出确认框（「否」关闭、「去下载」打开 GitHub release 页）而非执行更新检查。
+
+**验证**：`cargo check` 通过（5.95s）；`svelte-check` → 0 errors / 0 warnings。
+
+**最终方案修订（2026-09-03）**：用户澄清「安装包自带分支信息，检查更新直接检查当前分支即可，不需要再获取分支信息」。据此简化：移除分支下拉选择（Rust `list_release_branches` 命令、`github_default_branch` 辅助、前端 `listReleaseBranches`/`ReleaseBranch`）与交叉拦截弹窗（`isCrossBranch`/`dismissCrossBranch`/`goDownloadCrossBranch`）。`check_update` 签名改为 `(current_version)`，内部直接使用 `BUILD_BRANCH`（为 `unknown` 时返回「未识别构建分支」）；前端 `checkUpdate(currentVersion)` 不再传分支参数；关于页改为只读展示「当前分支：{buildBranch}」+「检查更新」按钮。架构防护（R-056 补充）保持不变。验证：`cargo check` 通过（7.63s）；`svelte-check` → 0 errors / 0 warnings。
