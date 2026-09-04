@@ -22,6 +22,16 @@ export function listSessions (): Promise<SessionInfo[]> {
     return runtimeRequest<SessionInfo[]>('session.list')
 }
 
+export interface SessionReadResult {
+    events?: Array<{ data?: number[] }>
+}
+
+export async function readSessionOutput (sessionId: string, lines = 120): Promise<string> {
+    const result = await runtimeRequest<SessionReadResult>('session.read', { sessionId, lines })
+    const bytes = (result.events ?? []).flatMap((event) => event.data ?? [])
+    return new TextDecoder().decode(Uint8Array.from(bytes))
+}
+
 export interface RuntimeHealth {
     runtimeVersion: string
     capabilities: string[]

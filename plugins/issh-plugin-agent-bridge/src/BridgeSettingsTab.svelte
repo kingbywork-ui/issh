@@ -7,6 +7,7 @@
         createWorkspace,
         listAgents,
         listSessions,
+        readSessionOutput,
         listWorkspaces,
         registerAgent,
         unbindSession,
@@ -17,6 +18,7 @@
 
     let workspaces = $state<Workspace[]>([])
     let sessions = $state<SessionInfo[]>([])
+    let detectedAgents = $state<DetectedAgent[]>([])
     let agents = $state<Agent[]>([])
     let selectedWorkspaceId = $state('')
     let newWorkspaceName = $state('')
@@ -27,10 +29,37 @@
     let busy = $state(false)
     let error = $state('')
 
+    interface DetectedAgent {
+        name: string
+        sessionId: string
+        evidence: string
+    }
+
     const selectedWorkspace = $derived(workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null)
     const openSessions = $derived(sessions.filter((session) => session.connected))
     const boundOpenSessions = $derived(openSessions.filter((session) => selectedWorkspace?.bindings.some((binding) => binding.sessionId === session.id)))
     const disconnectedBindings = $derived(selectedWorkspace?.bindings.filter((binding) => binding.sessionId && !openSessions.some((session) => session.id === binding.sessionId)) ?? [])
+    const unregisteredDetectedAgents = $derived(detectedAgents.filter((detected) => !agents.some((agent) => agent.sessionId === detected.sessionId)))
+
+    async function detectTerminalAgents (candidates: SessionInfo[]): Promise<DetectedAgent[]> {
+        const results = await Promise.all(candidates.filter((session) => session.connected).map(async (session) => {
+            try {
+                const output = await readSessionOutput(session.id)
+                const marker = [
+                    { name: 'Hermes Agent', pattern: /hermes\s+agent/i },
+                    { name: 'Codex', pattern: /(?:openai\s+)?codex(?:\s+cli)?/i },
+                    { name: 'Claude Code', pattern: /claude\s+code/i },
+                    { name: 'OpenCode', pattern: /open\s*code/i },
+                    { name: 'Pi', pattern: /(?:pi\s+(?:coding\s+)?agent|welcome\s+to\s+pi\b|pi\s+v?\d+\b|(?:^|\n)[^\r\n]{0,80}(?:[$>#❯➜]\s*)pi(?:\s|$))/im },
+                    { name: 'OMP', pattern: /(?:omp\s+agent|oh[- ]my[- ]prompt|welcome\s+to\s+omp\b|omp\s+v?\d+\b|(?:^|\n)[^\r\n]{0,80}(?:[$>#❯➜]\s*)omp(?:\s|$))/im },
+                ].find((candidate) => candidate.pattern.test(output))
+                return marker ? { name: marker.name, sessionId: session.id, evidence: session.title } : null
+            } catch {
+                return null
+            }
+        }))
+        return results.filter((result): result is DetectedAgent => result !== null)
+    }
 
     async function refresh (): Promise<void> {
         busy = true
@@ -39,6 +68,7 @@
             const [ws, ss] = await Promise.all([listWorkspaces(), listSessions()])
             workspaces = ws
             sessions = ss
+            detectedAgents = await detectTerminalAgents(ss)
             health = await runtimeHealth().catch(() => null)
             if (!workspaces.some((workspace) => workspace.id === selectedWorkspaceId)) {
                 selectedWorkspaceId = workspaces[0]?.id ?? ''
@@ -122,6 +152,28 @@
         }
     }
 
+    async function registerDetectedAgent (detected: DetectedAgent): Promise<void> {
+        if (!selectedWorkspace) return
+        busy = true
+        error = ''
+        try {
+            if (!selectedWorkspace.bindings.some((binding) => binding.sessionId === detected.sessionId)) {
+                await bindSession(selectedWorkspace.id, detected.sessionId)
+            }
+            await registerAgent({
+                workspaceId: selectedWorkspace.id,
+                name: detected.name,
+                adapter: 'llm',
+                sessionId: detected.sessionId,
+                scopes: ['context.read', 'llm.prompt', 'command.propose'],
+            })
+            await refresh()
+        } catch (cause) {
+            error = cause instanceof Error ? cause.message : String(cause)
+        } finally {
+            busy = false
+        }
+    }
     function timeLabel (unixMs: number): string {
         return new Date(unixMs).toLocaleString()
     }
@@ -187,6 +239,18 @@
 
         <div class="bridge-section">
             <div class="settings-field-title">Agent（{agents.length}）</div>
+            {#if unregisteredDetectedAgents.length > 0}
+                <div class="bridge-section">
+                    <div class="settings-hint">检测到终端 Agent（点击注册到当前工作区）</div>
+                    {#each unregisteredDetectedAgents as detected (detected.sessionId)}
+                        <div class="bridge-row">
+                            <span class="bridge-session-title">{detected.name} · {detected.evidence}</span>
+                            <span class="bridge-session-kind">{detected.sessionId}</span>
+                            <button type="button" disabled={busy} onclick={() => void registerDetectedAgent(detected)}>注册</button>
+                        </div>
+                    {/each}
+                </div>
+            {/if}
             <div class="bridge-toolbar">
                 <input type="text" placeholder="agent 名称" bind:value={newAgentName} aria-label="agent 名称" />
                 <span class="bridge-session-kind">llm</span>
