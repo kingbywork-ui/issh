@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-09-04T01:33:43.210Z",
+  "updated": "2026-09-04T01:34:52.414Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
@@ -61,8 +61,8 @@
       ],
       "minAppVersion": "0.0.1",
       "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-herdr/releases/download/v0.1.1/issh-plugin-herdr-0.1.1.tgz",
-      "sha256": "7a6c2b7c4de3db56a3122560fe5c61db915ebd9f71347ec823ecced0693b2b3c",
-      "signature": "ZbpqrdrxfxQNVNMtGoY8QbH2Rh4ZHgXwXKmRgfZmYFZJvrrHogB5cHqUEGoKyLTxp/dsx26zvD8Z91cJ/UHFCg==",
+      "sha256": "7048f981057348ff37af4eb6599edd8507c0399e3dc5ffab0070bfa7c1d3b074",
+      "signature": "PyArWPC9dpIb612CiJbGN9OGptPbhO48/Er99j3aOCSObNWGb6mSW5Iu67xGEGqkEUJ9wqnsH86f3Adb/75ODQ==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-herdr",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-herdr",
       "downloads": 633
