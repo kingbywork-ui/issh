@@ -579,3 +579,25 @@
 - 4 个外置插件（agent-bridge/config-sync/herdr/llm）`index.ts`：改为注册 `mount` 函数，用各自打包的 svelte runtime 的 `mount/unmount` 完成挂载，避免跨 runtime 冲突；`src/types.ts` 同步将 `SettingsTabDefinition.component` 改为可选并新增 `mount`。
 
 **验证**：`svelte-check` 0 errors / 0 warnings；4 个插件重新 build/package（dist 产物由 `component:` 改为 `mount:` 注册）；宿主重新 build（bundle 含 mount 分支）；重新构建 NSIS 安装包并静默安装。运行时 UI 因 WebView2 远程调试端口未启用未做 CDP 断言，以用户人工确认为准。4 个插件已重新发布（gh release upload --clobber 覆盖 + registry 哈希/签名更新）。
+
+### R-062 issh 升级 0.0.2 + Agent 桥接 0.2.0 合并 Herdr 发布（2026-09-04，已完成）
+
+**来源**（用户需求）：把新版 issh 统一升到 0.0.2，同步修改 Tauri、前端版本检测和安装包版本，重新打包；同时发布 Agent 桥接 0.2.0。
+
+**版本升级（0.0.1 → 0.0.2，5 处）**：
+- 根 `package.json`、`issh-tauri/package.json`、`issh-tauri/src-tauri/tauri.conf.json`、`issh-tauri/src-tauri/Cargo.toml` 的 `version`。
+- 前端版本检测：`issh-tauri/src/lib/Settings.svelte` 的 `productVersion` 硬编码 `'0.1.6'` → `'0.0.2'`（`appVersion` 由 Tauri `getVersion()` 动态注入，无需改；`productVersion` 用于 `checkUpdate`/`meetsAppVersion` 版本比较）。
+- `AGENTS.md` 版本引用同步（本地维护，被 .gitignore 排除不入库）。
+
+**Agent 桥接 0.2.0（合并 Herdr）**：
+- 原独立插件 `issh-plugin-herdr`（Herdr 工作区）功能合并进 `issh-plugin-agent-bridge`，描述改为「统一的 Herdr/Workspace 与 Agent 管理」。
+- isshd 新增 `session.runtimeList` RPC；`lib.rs` 的 `set_active_session` 支持清空；`plugin_gateway.rs` 移除 `issh-plugin-herdr` capabilities；`pluginHost.ts` 的 `SUPERSEDED_PLUGIN_IDS` 加入 `issh-plugin-herdr`。
+- registry 删除 `issh-plugin-herdr` 条目（插件总数 7 → 6）。
+
+**打包与验证**：
+- `issh_0.0.2_x64-setup.exe`（5,187,389 字节）；isshd 1m18s、tauri cargo release 5m22s（版本变更触发主 crate 重编译）。
+- 静默安装验证：注册表 `DisplayVersion=0.0.2`、安装布局（issh-tauri.exe + issh-runtime/isshd.exe + uninstall.exe）、launch test（窗口标题 `issh`，isshd 从 `%LOCALAPPDATA%\issh\issh-runtime\isshd.exe` 拉起）、数据目录 `%APPDATA%\issh` 复用正常。
+
+**发布**：agent-bridge 独立仓库 main `3d621a1..814a82b`、tag `v0.2.0`、gh release；registry main `dad6e29..29cb431`。远程 release tgz 哈希 `cbc218ca…` 与 registry 声明 **MATCH**。
+
+**提交**：`b4f59d4`（feat: agent-bridge 0.2.0 合并 Herdr，14 文件）、`b4a99e5`（chore: 版本升级 0.0.2，6 文件）、`aab8db1`（chore(registry): publish agent-bridge 0.2.0）。
