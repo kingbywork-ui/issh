@@ -614,3 +614,16 @@
 **发布**：agent-bridge 独立仓库 main `814a82b..121051f`、tag `v0.2.2`、gh release（tgz + .sha256 双资产）、registry main `29cb431..fd74a48`。registry 远程核对 `version=0.2.2`、`sha256=a38db470…`（重新 build 后的哈希；用户手动 package 的 `2d88dcd0…` 因 vite build 非确定性不同，最终以发布产物为准）。
 
 **提交**：`4e7c452`（fix(host): HOST_VERSION 修正）、`9d3bf33`（feat(agent-bridge): 0.2.2，5 文件）、`3b21448`（chore(registry): publish v0.2.2）。
+
+### R-064 Agent 桥接 0.2.3 发布：远端 SSH Agent 探测 + ssh.execReadonly 独立权限（2026-09-04，已完成）
+
+**来源**（用户需求）：提交插件更新（0.2.3 已本地更新）。
+
+**功能变更（0.2.2 → 0.2.3）**：
+- `ssh.execReadonly` 从 `ssh.exec` 的 alias 拆分为**独立只读权限**：`plugin_gateway.rs` 的 `runtime_method` 映射、`gateway.ts` 的 `METHOD_PERMISSIONS` / `LEGACY_PERMISSION_ALIASES` 均改为独立权限，供插件远端只读探测命令使用。
+- `bridgeRpc.ts` 新增 `probeRemoteAgents(sessionId)`：通过 `ssh.execReadonly` 在 SSH 会话执行 `command -v` 探测远端 Agent 二进制（pi/omp/codex/claude/opencode/hermes/hermes-agent）。
+- `BridgeSettingsTab.svelte`：`detectAgents` 合并远端探测与终端输出扫描，新增「重新探测」按钮，UI 区分「远端命令 / 终端输出」来源；each key 改为 `sessionId:name:command` 组合避免重复。
+
+**发布**：agent-bridge 独立仓库 main `121051f..939d8fe`、tag `v0.2.3`、gh release（复用用户已 package 的 tgz，不重新 build，避免 vite 非确定性哈希变化）、registry main `fd74a48..6d0698b`。release tgz 哈希 `802194fc…` 与 registry 声明 **MATCH**（远程已核对）。
+
+**提交**：`9b10757`（feat(host): ssh.execReadonly 独立权限）、`5bc693a`（feat(agent-bridge): 0.2.3 远端 SSH Agent 探测）、`4a256e3`（chore(registry): publish v0.2.3）。主仓库 github/dev `377eeb1..4a256e3`（补齐此前 21 个未推送提交）。
