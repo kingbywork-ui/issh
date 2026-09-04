@@ -46,7 +46,7 @@ const pluginDirectories = new Map<string, string>()
 
 const listeners = new Set<Listener>()
 const pluginAudit: Array<{ timestamp: string; pluginId: string; method: string; ok: boolean; error?: string }> = []
-const HOST_VERSION = '0.1.6'
+const HOST_VERSION = '0.0.2'
 
 function notify (): void {
     for (const listener of listeners) listener()
