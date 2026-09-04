@@ -14,6 +14,7 @@ export const manifest: IsshPluginManifest = {
     homepage: 'https://github.com/kingbywork-ui/issh-plugin-agent-bridge',
     repository: 'https://github.com/kingbywork-ui/issh-plugin-agent-bridge',
     gatewayApiVersion: '1',
+    minAppVersion: '0.0.1',
     capabilities: ['ui.settings.register', 'workspace.read', 'workspace.write', 'session.read', 'agent.read', 'agent.write'],
 }
 

@@ -4,6 +4,7 @@
     "description": "演示 iframe 沙箱面板：postMessage RPC 存储读写、终端读写、事件接收",
     "version": "0.4.2",
     "kind": "feature",
+    "minAppVersion": "0.0.1",
     "entry": "index.js",
     "gatewayApiVersion": "1",
     "capabilities": ["ui.panel.register", "terminal.decorate", "profiles.read", "profiles.write"],

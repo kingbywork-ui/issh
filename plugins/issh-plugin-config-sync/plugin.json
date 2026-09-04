@@ -4,7 +4,7 @@
     "version": "0.2.0",
     "description": "主机配置导出/导入 JSON + GitHub Gist 云同步（支持解锁保险库导出完整凭据）",
     "kind": "integration",
-    "minAppVersion": "0.2.0",
+    "minAppVersion": "0.0.1",
     "entry": "index.js",
     "gatewayApiVersion": "1",
     "capabilities": ["ui.settings.register", "profiles.read", "profiles.write", "network.fetch", "vault.read"],

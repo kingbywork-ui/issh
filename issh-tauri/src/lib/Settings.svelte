@@ -519,8 +519,9 @@
         return 0
     }
 
-    function meetsAppVersion (_minAppVersion?: string | null): boolean {
-        return true
+    function meetsAppVersion (minAppVersion?: string | null): boolean {
+        if (!minAppVersion) return true
+        return compareVersions(productVersion, minAppVersion) >= 0
     }
 
     async function confirmInstall (): Promise<void> {

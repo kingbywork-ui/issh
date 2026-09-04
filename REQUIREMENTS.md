@@ -54,13 +54,27 @@
 
 ## 需求记录（后续追加）
 
-### R-058 外置 Agent 桥接设置页点击后空白（2026-09-03，进行中）
+### R-058 外置 Agent 桥接设置页点击后空白（2026-09-03，已完成）
 
 **需求**：用户反馈内置 Agent Bridge 设置页正常，但商城安装的「Agent 桥接」点击菜单后右侧没有内容。
 
-**初步定位**：外置插件入口已注册 `Agent 桥接` tab；宿主 `Settings.svelte` 在 `mount()` 失败时仅写 `console.warn`，不渲染错误占位，因此会出现菜单存在但右侧空白。已排除当前安装包插件入口未注册和 tab key 路由冲突。最小测试同时确认插件 JSON 的 `min_app_version=0.2.0` 与运行时入口 manifest 不一致，但入口 manifest 未携带该字段，当前不是直接触发点。
+**初步定位**：外置插件入口已注册 `Agent 桥接` tab；宿主 `Settings.svelte` 在 `mount()` 失败时仅写 `console.warn`，不渲染错误占位，因此会出现菜单存在但右侧空白。已排除当前安装包插件入口未注册和 tab key 路由冲突。另发现商城索引、插件包与入口 manifest 的最低版本声明不一致，已一并统一。
 
-**状态**：待用户确认是否授权修改挂载错误展示/兼容性修复后继续。
+**修复**：设置页挂载支持 Svelte 5 与旧式 Svelte class 组件，并在两种方式失败时显示具体错误。所有插件包元数据和商城索引的最低客户端版本统一为 `0.0.1`，安装流程恢复真实最低版本校验。
+
+**验证**：插件重新构建/打包成功；`svelte-check` 0 errors / 0 warnings；Vite build 成功；Rust plugin_market 测试 11/11 通过。
+
+### R-059 所有商城插件最低版本统一为 0.0.1（2026-09-03，已完成）
+
+**来源**：用户需求。所有插件目录的 `plugin.json`、Agent Bridge TypeScript manifest、商城 registry `index.json` 及 README 示例均已统一声明 `minAppVersion: 0.0.1`；安装流程恢复真实最低版本比较。
+
+**验证**：8 个插件目录、7 个 registry 条目全量断言通过；相关插件本地 build/package 成功。GitHub 已发布旧包仍需重新发布并更新 registry 哈希后，线上商城下载才会包含新包内元数据。
+
+### R-060 重新发布最低版本元数据并更新 registry 哈希（2026-09-04，已完成）
+
+**来源**：用户需求。重新构建并发布全部商城插件，覆盖同版本 GitHub release 资产，更新 registry 中的 SHA256 与签名，使线上商城实际下载包与索引一致。
+
+**进展**：7 个插件均已在本地重新 build/package，生成新 SHA256 与 ed25519 签名，并经 `gh release upload --clobber` 覆盖上传同名资产（tgz + .sha256），下载核对远程哈希一致；`index.json` 已同步更新 7 个条目的 `sha256`/`signature`（`downloadUrl`/`version` 不变，`minAppVersion` 均为 0.0.1）。sandbox-demo v0.4.2 因旧 tgz 缺 `minAppVersion` 字段已重新构建。签名私钥与线上公钥匹配验证通过。已推送各插件独立仓库与 registry 仓库。
 
 ### R-027 分组记忆失效 + Reconnect 指纹丢失修复（2026-08-31，已完成，待用户最终确认）
 

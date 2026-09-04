@@ -4,7 +4,7 @@
     "version": "0.1.0",
     "description": "Web Serial API 串口连接：选择串口/波特率，收发数据（底部面板）",
     "kind": "integration",
-    "minAppVersion": "0.2.0",
+    "minAppVersion": "0.0.1",
     "entry": "index.js",
     "gatewayApiVersion": "1",
     "capabilities": ["ui.panel.register"],

@@ -4,7 +4,7 @@
     "version": "0.1.1",
     "description": "Herdr/Workspace 管理：工作区创建、终端会话绑定（对接 isshd workspace.* RPC）",
     "kind": "integration",
-    "minAppVersion": "0.2.0",
+    "minAppVersion": "0.0.1",
     "entry": "index.js",
     "gatewayApiVersion": "1",
     "capabilities": ["ui.settings.register", "workspace.read", "workspace.write", "session.read"],

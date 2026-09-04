@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-09-03T07:41:31.146Z",
+  "updated": "2026-09-04T00:05:52.968Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
@@ -17,10 +17,10 @@
         "session:read",
         "settings:tab"
       ],
-      "minAppVersion": "0.1.6",
+      "minAppVersion": "0.0.1",
       "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge/releases/download/v0.1.1/issh-plugin-agent-bridge-0.1.1.tgz",
-      "sha256": "814bfe707bf7528ed7215a80717a103e335fd5942f177e4fb58ae9f622fa76a8",
-      "signature": "RxUNazPhXChoXh7Hp0g/S51xdzW/p53jYeYgSrSoR4eJHKE9aTp77+qwatRiTaK8A1xYWWantJ0yVr/2TfXWCw==",
+      "sha256": "ac5422c33de18acb016f138544a9f506d3a82d0cb92b5220ac2bd264d6d91d14",
+      "signature": "GBAQuJNVWS6PBF0p2a1FGyRlvpV1yspoABDlKVcV4ZlWTGQe3vkQ//Gt4WZV+s6GzHG3ldj1JOBd4rFH6DxhCg==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge",
       "downloads": 435
@@ -38,10 +38,10 @@
         "profiles:write",
         "vault:read"
       ],
-      "minAppVersion": "0.2.0",
+      "minAppVersion": "0.0.1",
       "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-config-sync/releases/download/v0.2.0/issh-plugin-config-sync-0.2.0.tgz",
-      "sha256": "96964eaa778d95261381114764b3e52b4a76caa6df533b2f812713d47d4f4f4f",
-      "signature": "f1nMdD1PemUg1nsvvXYeQR1bPQkQLGXm6GNMD/7kXU58KqZlseguZfkqroGkOl29mSQsZDsJekr6+1Ji2bVaAw==",
+      "sha256": "423187fb11d5bb70ec07f6d0f04a45b599030945e747883cf4411a87b5bf58aa",
+      "signature": "3SuLohRgwk9ziXl0BGh6MkPsR8TfhHgqLZnID3I72ESkkViNeN2XvaoQMkWRtaKxDxoaw5K4ZTA8Hh42Q0nEDQ==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-config-sync",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-config-sync",
       "downloads": 458
@@ -59,10 +59,10 @@
         "session:read",
         "settings:tab"
       ],
-      "minAppVersion": "0.1.6",
+      "minAppVersion": "0.0.1",
       "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-herdr/releases/download/v0.1.1/issh-plugin-herdr-0.1.1.tgz",
-      "sha256": "1002908e8a9a4f70bdfedb0350c580c333db698eb6bf0a149915dbf34da0e116",
-      "signature": "1eGuv2sB6dQfTo6RoLoHhwemRul7jTKT1wM50OMUoI2pX+D9KKHXBPfCFkxv9gR1fq6gdy/MnkS5DKG5FmiMCg==",
+      "sha256": "7a6c2b7c4de3db56a3122560fe5c61db915ebd9f71347ec823ecced0693b2b3c",
+      "signature": "ZbpqrdrxfxQNVNMtGoY8QbH2Rh4ZHgXwXKmRgfZmYFZJvrrHogB5cHqUEGoKyLTxp/dsx26zvD8Z91cJ/UHFCg==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-herdr",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-herdr",
       "downloads": 633
@@ -77,10 +77,10 @@
       "permissions": [
         "terminal:decorate"
       ],
-      "minAppVersion": "0.1.6",
+      "minAppVersion": "0.0.1",
       "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-linkifier/releases/download/v0.1.1/issh-plugin-linkifier-0.1.1.tgz",
-      "sha256": "3ba850ae65409e6a867edffef4d321fe66e765e3ea21bf017efab139fb3a7dcf",
-      "signature": "gtTfrjvd37j21NbLY3yL2t6wMUygkc4Zvdjk/43bARq5p4U3EdKBo2AtSpDAw1NIi2HF3DsrxP1euRZDW2dECg==",
+      "sha256": "a1cefb6b2ff74537f389b79dc7b4c9ee7c896057601d536776b2e436f9a8d219",
+      "signature": "eMVm2hznr0otESWvN33cVHTSFUZEN7EoDdP7bVqkg1yuWK+Gj/l+g1OEfjlca5YP+WCJhsiS/NsM6dVw2kG5Bw==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-linkifier",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-linkifier",
       "downloads": 154
@@ -99,10 +99,10 @@
         "ssh:exec",
         "network:postJson"
       ],
-      "minAppVersion": "0.2.0",
+      "minAppVersion": "0.0.1",
       "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-llm/releases/download/v0.3.0/issh-plugin-llm-0.3.0.tgz",
-      "sha256": "ae80c701b38a91536e3359240f7492a989cc34d53ea825c575ec927853cbb0b9",
-      "signature": "y0JY1Hy+3RxyNtltclgtxn5Ol4McOiLNEzjK2q9XAQk3zfZ/62xU5KGmdWcSv2jyErph9RSsqeVTdtLstZaxAQ==",
+      "sha256": "809e54fcb4bb1785eb3d8b53c9545c1ddb98fd4f64575789e6836a4b2f4348e2",
+      "signature": "nZbTCj1Nu9cohxk/i+kKQ0bKEA3A9K8B4wOeWCnCYf1MlGv+z6HpkxPpV7ldU5Vs1F17OiV1UnX+gWsYh3iSCA==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-llm",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-llm",
       "downloads": 940
@@ -120,9 +120,10 @@
         "profiles:read",
         "profiles:write"
       ],
+      "minAppVersion": "0.0.1",
       "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo/releases/download/v0.4.2/issh-plugin-sandbox-demo-0.4.2.tgz",
-      "sha256": "08c88f9da803a1dc6dd696a2deafd824f95fd5ccb050fbf133585be7e120bdac",
-      "signature": "wz2qzMN2y07Y0+W3QHYcgJ8LckbgIqV0Ks4GShqmSSLlcdjcs2QU7FnHc978BnEeRdOMp5MrlmHI8mzu7cz6Cg==",
+      "sha256": "559c730b7b1ab8e60ef18da4516669925f70cda71c7bce72009c0773928a036a",
+      "signature": "eXjlMnSW+lpCW2m2oDDsYL6LQK5qDwNoI873EAIUt4J0HjZAk39FAmVR0Bqu8YV9d4sf1CVpxM9D5j3GoktNDQ==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-sandbox-demo",
       "downloads": 0
@@ -137,10 +138,10 @@
       "permissions": [
         "panel:register"
       ],
-      "minAppVersion": "0.1.6",
+      "minAppVersion": "0.0.1",
       "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-serial/releases/download/v0.1.0/issh-plugin-serial-0.1.0.tgz",
-      "sha256": "464583af3bb75690536db88ce4c822646fe6a00fbcdaaa4c5ab97f5b236010d3",
-      "signature": "8yRdBj1Toc2VnZ9pRcNqMO6uuUwitrRQR2vb7oADIXn9SVkGttW3+urdd8VMJ6VYhOVvTTUIUYa7PU5NfRQ2BA==",
+      "sha256": "85a7ca6da348bff3a31ea8cc9607e54f90e69d1530a26929ac09a51754c2f69e",
+      "signature": "35dsWfkYuH1qFtZl4niDHT2PZ87lrWzu73/QNpAOwTFzqW3TSpeYUnrKnOIkPPlouExG9xZowm4l7wku9Wm8AQ==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-serial",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-serial",
       "downloads": 526

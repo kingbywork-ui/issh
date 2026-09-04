@@ -4,7 +4,7 @@
     "version": "0.3.0",
     "description": "LLM 驱动的 shell 命令补全：输入时防抖请求 LLM API，Ctrl+Y 接受候选",
     "kind": "feature",
-    "minAppVersion": "0.2.0",
+    "minAppVersion": "0.0.1",
     "entry": "index.js",
     "gatewayApiVersion": "1",
     "capabilities": ["ui.settings.register", "terminal.decorate", "fs.read", "ssh.exec", "network.postJson"],
