@@ -1,6 +1,6 @@
 [package]
 name = "issh-tauri"
-version = "0.0.1"
+version = "0.0.2"
 description = "Native issh desktop client"
 authors = ["issh Developers"]
 edition = "2021"

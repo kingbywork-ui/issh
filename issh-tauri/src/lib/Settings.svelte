@@ -172,7 +172,7 @@
     let elevateBusy = $state(false)
     let elevateError = $state('')
 
-    const productVersion = '0.1.6'
+    const productVersion = '0.0.2'
     let tauriVersion = $state('')
     let webviewVersion = $state('')
     let updateChecking = $state(false)
