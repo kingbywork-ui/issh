@@ -172,7 +172,6 @@ fn static_plugin_capabilities(plugin_id: &str) -> Option<&'static [&'static str]
             "ui.settings.register", "workspace.read", "workspace.write", "session.read", "agent.read", "agent.write",
         ]),
         "issh-plugin-config-sync" => Some(&["ui.settings.register", "profiles.read", "profiles.write", "network.fetch", "vault.read"]),
-        "issh-plugin-herdr" => Some(&["ui.settings.register", "workspace.read", "workspace.write", "session.read"]),
         "issh-plugin-linkifier" => Some(&["terminal.decorate"]),
         "issh-plugin-llm" => Some(&["ui.settings.register", "terminal.decorate", "fs.read", "ssh.exec", "network.postJson"]),
         "issh-plugin-sandbox-demo" => Some(&["ui.panel.register", "terminal.decorate", "profiles.read", "profiles.write"]),

@@ -1,6 +1,6 @@
 # issh-plugin-agent-bridge
 
-issh 桌面客户端（Tauri 版）的 Agent 桥接插件。
+issh 桌面客户端（Tauri 版）的 Herdr/Workspace 与 Agent 统一管理插件；原 Herdr 独立插件的功能已合并到这里。
 
 ## 功能
 

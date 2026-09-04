@@ -30,7 +30,7 @@ type Listener = () => void
 
 // 已内置进程序的功能（原插件形态）：禁止商城同名插件再安装/加载，避免重复注册
 // 注意：商城 issh-plugin-agent-bridge（「Agent 桥接」，workspace/agent 管理）与本内置插件（CLI/MCP 外部 agent 接入）是两个不同产品，内置插件用独立 id
-export const SUPERSEDED_PLUGIN_IDS = new Set(['issh-plugin-auto-sudo', 'issh-plugin-vault', 'issh-plugin-agent-bridge-rpc'])
+export const SUPERSEDED_PLUGIN_IDS = new Set(['issh-plugin-auto-sudo', 'issh-plugin-vault', 'issh-plugin-agent-bridge-rpc', 'issh-plugin-herdr'])
 
 const root = new Context()
 

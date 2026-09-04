@@ -908,6 +908,7 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                     "runtime.health",
                     "session.sync",
                     "session.list",
+                    "session.runtimeList",
                     "session.openLocal",
                     "session.openSsh",
                     "session.snapshot",
@@ -981,6 +982,7 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
         "session.list" => with_workspace(state, id, |workspace| {
             Ok::<_, issh_runtime_workspace::WorkspaceError>(workspace.list_sessions())
         }),
+        "session.runtimeList" => with_sessions(state, id, |sessions| sessions.list()),
         "session.openLocal" => {
             let params = match parse_params::<LocalSessionOpenParams>(request.params) {
                 Ok(params) => params,

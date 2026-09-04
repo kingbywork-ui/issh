@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount } from 'svelte'
+    import { onMount, untrack } from 'svelte'
     import { FitAddon } from '@xterm/addon-fit'
     import { Terminal } from '@xterm/xterm'
     import '@xterm/xterm/css/xterm.css'
@@ -40,6 +40,7 @@
         runtimeHealth,
         setActiveSession,
         subscribeSession,
+        syncWorkspaceSessions,
         vaultListSecrets,
         vaultStatus,
         writeSession,
@@ -112,9 +113,32 @@
     let error = $state('')
     let tabs = $state<TerminalTab[]>([])
     let activeId = $state('')
+
+    async function syncWorkspaceState (): Promise<void> {
+        try {
+            await syncWorkspaceSessions(tabs.map((tab) => ({
+                id: tab.session.id,
+                title: tab.session.title,
+                customTitle: null,
+                active: tab.session.id === activeId,
+                focused: tab.session.id === activeId,
+                profileType: tab.ssh ? 'ssh' : 'local',
+                profileName: tab.ssh?.profile?.name ?? null,
+                profileId: tab.ssh?.profile?.id ?? null,
+                host: tab.ssh?.host ?? null,
+                user: tab.ssh?.user ?? null,
+                port: tab.ssh?.port ?? null,
+                connected: tab.session.state === 'running',
+            })))
+        } catch (cause) {
+            console.warn('[workspace] session sync failed', cause)
+        }
+    }
     // Agent Bridge：tab 切换时上报当前 active 会话（供外部 agent 的 "active" 引用）
     $effect(() => {
-        void setActiveSession(activeId || null)
+        const currentActiveId = activeId
+        void setActiveSession(currentActiveId || null)
+        untrack(() => { void syncWorkspaceState() })
     })
     let splitDirection = $state<'vertical' | 'horizontal' | null>((localStorage.getItem('issh.splitDirection') as 'vertical' | 'horizontal' | null) ?? null)
     let splitPaneIds = $state<string[]>([])
@@ -654,6 +678,7 @@
             activeId = session.id
             showHome = false
             persistTabRecovery()
+            await syncWorkspaceState()
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
         }
@@ -711,6 +736,7 @@
                 tabs.push(clone)
                 persistTabRecovery()
                 activeId = previousActive
+                await syncWorkspaceState()
                 return clone
             }
             if (!source.ssh?.profile) {
@@ -721,6 +747,7 @@
             const clone = tabs.find((tab) => !before.has(tab.session.id) && tab.ssh?.profile?.id === source.ssh?.profile?.id) ?? null
             activeId = previousActive
             showHome = false
+            await syncWorkspaceState()
             return clone
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
@@ -1082,6 +1109,7 @@
             showHome = false
             void startProfileLocalForwards(session.id, params.profile)
             persistTabRecovery()
+            await syncWorkspaceState()
         } catch (cause) {
             connectError = cause instanceof Error ? cause.message : String(cause)
         } finally {
@@ -1158,6 +1186,7 @@
             runDecoratorCleanups(tab)
             applyTerminalDecorators(tab)
             void startProfileLocalForwards(session.id, info.profile)
+            await syncWorkspaceState()
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
         } finally {
@@ -1320,6 +1349,7 @@
                 showSend = false
             }
         }
+        await syncWorkspaceState()
     }
 
     async function loadVaultSecrets (): Promise<void> {

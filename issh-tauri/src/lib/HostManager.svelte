@@ -188,7 +188,7 @@
 </script>
 
 {#if loading}<div class="start-empty">正在读取主机配置…</div>
-{:else if encrypted && !unlocked}<div class="vault-locked"><h2>主机配置已加密</h2><p>解锁后可以查看和管理 SSH 主机。</p><form class="vault-unlock-form" onsubmit={(event) => { event.preventDefault(); const input = event.currentTarget.querySelector('input') as HTMLInputElement; void unlock(input.value) }}><input type="password" placeholder="主口令" use:focusOnMount /><button type="submit">解锁</button></form></div>
+{:else if encrypted && !unlocked}<div class="vault-locked"><h2>主机配置已加密</h2><p>解锁后可以查看和管理 SSH 主机。</p><form class="vault-unlock-form" onsubmit={(event) => { event.preventDefault(); const input = event.currentTarget.querySelector('input') as HTMLInputElement; void unlock(input.value) }}><input type="password" placeholder="主口令" use:focusOnMount /><button type="submit">解锁</button></form>{#if error}<p class="start-error" role="alert">{error}</p>{/if}</div>
 {:else}<div class="start-page-layout">
     <aside class="start-page-sidebar" oncontextmenu={(event) => showMenu(event, [{ label: '新建分组', action: () => newGroup() }, { label: '新建 SSH 主机', action: newProfile }])}>
         <div class="sidebar-heading"><span>连接</span><button class="icon-button" type="button" title="新建分组" onclick={() => newGroup()}>＋</button></div>

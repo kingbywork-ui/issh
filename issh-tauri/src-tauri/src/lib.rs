@@ -929,9 +929,7 @@ fn agent_bridge_audit_clear(state: State<'_, AgentBridgeRuntime>) -> Result<(), 
 /// 前端 tab 切换时上报当前 active 会话。
 #[tauri::command]
 fn set_active_session(id: Option<String>) -> Result<(), String> {
-    if let Some(id) = id {
-        agent_bridge::set_active_session_id(&id);
-    }
+    agent_bridge::set_active_session_id(id.as_deref());
     Ok(())
 }
 

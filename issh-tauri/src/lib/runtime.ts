@@ -266,6 +266,25 @@ export function subscribeSession (sessionId: string, afterSequence: number): Pro
     })
 }
 
+export interface WorkspaceSessionSnapshot {
+    id: string
+    title: string
+    customTitle: string | null
+    active: boolean
+    focused: boolean
+    profileType: string | null
+    profileName: string | null
+    profileId: string | null
+    host: string | null
+    user: string | null
+    port: number | null
+    connected: boolean
+}
+
+export function syncWorkspaceSessions (sessions: WorkspaceSessionSnapshot[]): Promise<unknown> {
+    return runtimeRequest('session.sync', { sessions })
+}
+
 export function closeSession (sessionId: string): Promise<RuntimeSessionSnapshot> {
     return runtimeRequest<RuntimeSessionSnapshot>('session.close', { sessionId })
 }

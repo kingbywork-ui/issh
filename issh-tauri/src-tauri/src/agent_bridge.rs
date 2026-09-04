@@ -41,9 +41,9 @@ const MAX_SUBSCRIBE_BYTES: u64 = 12 * 1024;
 static ACTIVE_SESSION_ID: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
 /// 前端上报当前 active 会话（tab 切换时调用）。
-pub fn set_active_session_id(id: &str) {
+pub fn set_active_session_id(id: Option<&str>) {
     if let Ok(mut guard) = ACTIVE_SESSION_ID.lock() {
-        *guard = Some(id.to_string());
+        *guard = id.map(str::to_string);
     }
 }
 
@@ -760,40 +760,59 @@ fn params_u64(params: &Value, key: &str) -> Option<u64> {
 // ---------- session tools ----------
 
 async fn list_sessions(state: &AgentBridgeState) -> Result<Value, String> {
-    // isshd session.list 返回顶层数组（workspace SessionSnapshot：id/title/customTitle/
-    // profileType/host/user/port/connected，无 kind/state/columns/rows）。
-    let result = rpc(state, "session.list", json!({})).await?;
-    let items = result.as_array().cloned().unwrap_or_default();
-    let mut sessions = Vec::new();
-    for item in items {
-        let id = item.get("id").and_then(Value::as_str).unwrap_or("").to_string();
-        // 逐个 snapshot 补会话运行态；已关闭的会话优雅降级为 null。
-        let (kind, state_name, columns, rows) =
-            match rpc(state, "session.snapshot", json!({ "sessionId": id })).await {
-                Ok(snapshot) => (
-                    snapshot.get("kind").cloned().unwrap_or(Value::Null),
-                    snapshot.get("state").cloned().unwrap_or(Value::Null),
-                    snapshot.get("columns").cloned().unwrap_or(Value::Null),
-                    snapshot.get("rows").cloned().unwrap_or(Value::Null),
-                ),
-                Err(_) => (Value::Null, Value::Null, Value::Null, Value::Null),
+    let workspace_items = rpc(state, "session.list", json!({}))
+        .await?
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let runtime_items = rpc(state, "session.runtimeList", json!({}))
+        .await?
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let sessions = runtime_items
+        .into_iter()
+        .map(|item| {
+            let id = item.get("id").and_then(Value::as_str).unwrap_or("");
+            let metadata = workspace_items
+                .iter()
+                .find(|candidate| candidate.get("id").and_then(Value::as_str) == Some(id));
+            let metadata_value = |key: &str| {
+                metadata
+                    .and_then(|candidate| candidate.get(key))
+                    .cloned()
+                    .unwrap_or(Value::Null)
             };
-        sessions.push(json!({
-            "id": item.get("id").cloned().unwrap_or(Value::Null),
-            "title": item.get("customTitle").cloned().unwrap_or_else(|| {
-                item.get("title").cloned().unwrap_or(Value::Null)
-            }),
-            "profileType": item.get("profileType").cloned().unwrap_or(Value::Null),
-            "host": item.get("host").cloned().unwrap_or(Value::Null),
-            "user": item.get("user").cloned().unwrap_or(Value::Null),
-            "port": item.get("port").cloned().unwrap_or(Value::Null),
-            "connected": item.get("connected").cloned().unwrap_or(Value::Null),
-            "kind": kind,
-            "state": state_name,
-            "columns": columns,
-            "rows": rows,
-        }));
-    }
+            let title = metadata
+                .and_then(|candidate| candidate.get("customTitle"))
+                .filter(|value| !value.is_null())
+                .cloned()
+                .or_else(|| metadata.and_then(|candidate| candidate.get("title")).cloned())
+                .or_else(|| item.get("title").cloned())
+                .unwrap_or(Value::Null);
+            let kind = item.get("kind").cloned().unwrap_or(Value::Null);
+            let profile_type = metadata
+                .and_then(|candidate| candidate.get("profileType"))
+                .filter(|value| !value.is_null())
+                .cloned()
+                .unwrap_or_else(|| kind.clone());
+            let state_name = item.get("state").cloned().unwrap_or(Value::Null);
+            let connected = state_name.as_str() == Some("running");
+            json!({
+                "id": item.get("id").cloned().unwrap_or(Value::Null),
+                "title": title,
+                "profileType": profile_type,
+                "host": metadata_value("host"),
+                "user": metadata_value("user"),
+                "port": metadata_value("port"),
+                "connected": connected,
+                "kind": kind,
+                "state": state_name,
+                "columns": item.get("columns").cloned().unwrap_or(Value::Null),
+                "rows": item.get("rows").cloned().unwrap_or(Value::Null),
+            })
+        })
+        .collect::<Vec<_>>();
     Ok(json!({ "sessions": sessions, "active": active_session_id() }))
 }
 
@@ -864,7 +883,7 @@ async fn connect_profile(state: &AgentBridgeState, params: &Value) -> Result<Val
     )
     .await?;
     if let Some(id) = result.get("id").and_then(Value::as_str) {
-        set_active_session_id(id);
+        set_active_session_id(Some(id));
     }
     Ok(result)
 }
@@ -896,7 +915,7 @@ async fn disconnect_session(state: &AgentBridgeState, params: &Value) -> Result<
 
 async fn select_session(params: &Value) -> Result<Value, String> {
     let session_id = resolve_tab(params).await?;
-    set_active_session_id(&session_id);
+    set_active_session_id(Some(&session_id));
     Ok(json!({ "selected": session_id }))
 }
 
@@ -1515,9 +1534,11 @@ mod tests {
 
     #[test]
     fn set_active_session_id_roundtrip() {
-        set_active_session_id("ssh-1");
+        set_active_session_id(Some("ssh-1"));
         assert_eq!(active_session_id(), Value::String("ssh-1".to_string()));
-        set_active_session_id("ssh-2");
+        set_active_session_id(Some("ssh-2"));
         assert_eq!(active_session_id(), Value::String("ssh-2".to_string()));
+        set_active_session_id(None);
+        assert_eq!(active_session_id(), Value::Null);
     }
 }

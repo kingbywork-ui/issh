@@ -2,7 +2,7 @@
     import { onMount } from 'svelte'
     import bridgeCss from './bridge.css?inline'
     import {
-        authorizeAgent,
+        runtimeHealth,
         bindSession,
         createWorkspace,
         listAgents,
@@ -21,14 +21,16 @@
     let selectedWorkspaceId = $state('')
     let newWorkspaceName = $state('')
     let newAgentName = $state('')
-    let newAgentAdapter = $state('llm')
     let newAgentSessionId = $state('')
-    let newAgentScopes = $state('read')
+    let newAgentScopes = $state('context.read,llm.prompt,command.propose')
+    let health = $state<{ runtimeVersion: string; capabilities: string[] } | null>(null)
     let busy = $state(false)
     let error = $state('')
 
     const selectedWorkspace = $derived(workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null)
-    const openSessions = $derived(sessions.filter((session) => session.state !== 'closed'))
+    const openSessions = $derived(sessions.filter((session) => session.connected))
+    const boundOpenSessions = $derived(openSessions.filter((session) => selectedWorkspace?.bindings.some((binding) => binding.sessionId === session.id)))
+    const disconnectedBindings = $derived(selectedWorkspace?.bindings.filter((binding) => binding.sessionId && !openSessions.some((session) => session.id === binding.sessionId)) ?? [])
 
     async function refresh (): Promise<void> {
         busy = true
@@ -37,6 +39,7 @@
             const [ws, ss] = await Promise.all([listWorkspaces(), listSessions()])
             workspaces = ws
             sessions = ss
+            health = await runtimeHealth().catch(() => null)
             if (!workspaces.some((workspace) => workspace.id === selectedWorkspaceId)) {
                 selectedWorkspaceId = workspaces[0]?.id ?? ''
             }
@@ -104,26 +107,13 @@
             await registerAgent({
                 workspaceId: selectedWorkspaceId,
                 name: newAgentName.trim(),
-                adapter: newAgentAdapter || 'llm',
+                adapter: 'llm',
                 sessionId: newAgentSessionId || undefined,
                 scopes: newAgentScopes.split(',').map((scope) => scope.trim()).filter(Boolean),
             })
             newAgentName = ''
             newAgentSessionId = ''
-            newAgentScopes = 'read'
-            await refreshAgents()
-        } catch (cause) {
-            error = cause instanceof Error ? cause.message : String(cause)
-        } finally {
-            busy = false
-        }
-    }
-
-    async function grantScope (agent: Agent, scope: string): Promise<void> {
-        busy = true
-        error = ''
-        try {
-            await authorizeAgent(agent.id, scope)
+            newAgentScopes = 'context.read,llm.prompt,command.propose'
             await refreshAgents()
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
@@ -141,6 +131,15 @@
     {#if error}
         <div class="settings-error" role="alert">{error}</div>
     {/if}
+
+    <div class="bridge-section">
+        <div class="settings-field-title">Runtime</div>
+        {#if health}
+            <div class="settings-hint">版本 {health.runtimeVersion} · workspace 能力：{health.capabilities.filter((capability) => capability.startsWith('workspace.')).join(', ') || '（未声明）'}</div>
+        {:else}
+            <div class="settings-empty">Runtime 未连接或 health 不可用。</div>
+        {/if}
+    </div>
 
     <div class="bridge-section">
         <div class="settings-field-title">工作区</div>
@@ -167,7 +166,7 @@
             {#each openSessions as session (session.id)}
                 <div class="bridge-row">
                     <span class="bridge-session-title">{session.title}</span>
-                    <span class="bridge-session-kind">{session.kind}</span>
+                    <span class="bridge-session-kind">{session.profileType === 'ssh' ? 'SSH' : '本地'}</span>
                     <button
                         type="button"
                         disabled={busy}
@@ -177,19 +176,23 @@
                     </button>
                 </div>
             {/each}
+            {#each disconnectedBindings as binding (binding.sessionId)}
+                <div class="bridge-row">
+                    <span class="bridge-session-title">{binding.sessionId}</span>
+                    <span class="bridge-session-kind">已断开</span>
+                    <button type="button" disabled={busy} onclick={() => void toggleBind(binding.sessionId)}>解绑</button>
+                </div>
+            {/each}
         </div>
 
         <div class="bridge-section">
             <div class="settings-field-title">Agent（{agents.length}）</div>
             <div class="bridge-toolbar">
                 <input type="text" placeholder="agent 名称" bind:value={newAgentName} aria-label="agent 名称" />
-                <select bind:value={newAgentAdapter} aria-label="适配器">
-                    <option value="llm">llm</option>
-                    <option value="cli">cli</option>
-                </select>
+                <span class="bridge-session-kind">llm</span>
                 <select bind:value={newAgentSessionId} aria-label="绑定会话">
                     <option value="">不绑定会话</option>
-                    {#each openSessions as session (session.id)}
+                    {#each boundOpenSessions as session (session.id)}
                         <option value={session.id}>{session.title}</option>
                     {/each}
                 </select>
@@ -212,13 +215,6 @@
                         {#if agent.sessionId}
                             <span>会话：{agent.sessionId}</span>
                         {/if}
-                    </div>
-                    <div class="bridge-agent-actions">
-                        {#each ['read', 'write', 'execute'] as scope (scope)}
-                            {#if !agent.scopes.includes(scope)}
-                                <button type="button" disabled={busy} onclick={() => void grantScope(agent, scope)}>授权 {scope}</button>
-                            {/if}
-                        {/each}
                     </div>
                 </div>
             {/each}

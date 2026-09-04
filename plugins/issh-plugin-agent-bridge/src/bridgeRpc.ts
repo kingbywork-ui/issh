@@ -14,19 +14,28 @@ export async function runtimeRequest<T> (method: string, params?: unknown): Prom
 export interface SessionInfo {
     id: string
     title: string
-    kind: string
-    state: string
+    profileType: string | null
+    connected: boolean
 }
 
 export function listSessions (): Promise<SessionInfo[]> {
     return runtimeRequest<SessionInfo[]>('session.list')
 }
 
+export interface RuntimeHealth {
+    runtimeVersion: string
+    capabilities: string[]
+}
+
+export function runtimeHealth (): Promise<RuntimeHealth> {
+    return runtimeRequest<RuntimeHealth>('runtime.health')
+}
+
 export interface Workspace {
     id: string
     name: string
     createdAtUnixMs: number
-    bindings: Array<{ workspaceId: string; sessionId: string; boundAtUnixMs: number }>
+    bindings: Array<{ sessionId: string; profileId?: string | null; host?: string | null; user?: string | null; status?: string }>
 }
 
 export function listWorkspaces (): Promise<Workspace[]> {
@@ -63,8 +72,4 @@ export function listAgents (workspaceId: string): Promise<Agent[]> {
 
 export function registerAgent (params: { workspaceId: string; name: string; adapter?: string; sessionId?: string; scopes?: string[] }): Promise<Agent> {
     return runtimeRequest<Agent>('agent.register', params)
-}
-
-export function authorizeAgent (agentId: string, scope: string): Promise<Agent> {
-    return runtimeRequest<Agent>('agent.authorize', { agentId, scope })
 }
