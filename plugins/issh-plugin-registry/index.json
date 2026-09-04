@@ -1,11 +1,11 @@
 {
   "schema": 1,
-  "updated": "2026-09-04T11:11:17.767Z",
+  "updated": "2026-09-04T13:32:33.485Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
       "name": "Agent 桥接",
-      "version": "0.2.0",
+      "version": "0.2.2",
       "description": "统一的 Herdr/Workspace 与 Agent 管理：工作区创建、终端会话绑定、agent 注册与授权（对接 isshd workspace.*/agent.* RPC）",
       "kind": "integration",
       "audience": "user",
@@ -18,9 +18,9 @@
         "settings:tab"
       ],
       "minAppVersion": "0.0.1",
-      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge/releases/download/v0.2.0/issh-plugin-agent-bridge-0.2.0.tgz",
-      "sha256": "cbc218ca6f5488d1dd73542731c50f04dc3366d6fd7c2083f5200ac0329ae37f",
-      "signature": "pticOlUVK/eS0dX3q9M3DtED1TLUx1XpoGzgVabLESOkgIykL/ffh0kOblvyqbjIvdTWiGa1Eihn/qJ6nDO0AQ==",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge/releases/download/v0.2.2/issh-plugin-agent-bridge-0.2.2.tgz",
+      "sha256": "a38db4701932b1e8d59db463ac2a2752d900ef6e57567d52d4f0c71c58ca7fee",
+      "signature": "N4S+k5aiXr09bdhMGQQ10dfGEV5YEJ7djDSulqnHMtHFvd2ZGwbXGg+w4YQXEoFiLkMTql0HTt4wdBAdArBCDg==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge",
       "downloads": 435
