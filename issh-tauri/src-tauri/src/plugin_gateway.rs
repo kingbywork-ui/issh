@@ -154,7 +154,7 @@ fn required_permission(method: &str) -> Option<&'static str> {
         "sftp.open" | "sftp.list" | "sftp.read" | "sftp.stat" | "sftp.close" => Some("sftp.read"),
         "sftp.write" | "sftp.mkdir" | "sftp.remove" | "sftp.removeDir" | "sftp.rename" | "sftp.chmod" => Some("sftp.write"),
         "fs.userPaths" | "fs.readLocalText" => Some("fs.read"),
-        "ssh.execReadonly" => Some("ssh.exec"),
+        "ssh.execReadonly" => Some("ssh.execReadonly"),
         "http.postJson" => Some("network.postJson"),
         _ => None,
     }
@@ -169,7 +169,7 @@ fn permission_allowed(request: &PluginGatewayRequest, required: &str) -> bool {
 fn static_plugin_capabilities(plugin_id: &str) -> Option<&'static [&'static str]> {
     match plugin_id {
         "issh-plugin-agent-bridge" => Some(&[
-            "ui.settings.register", "workspace.read", "workspace.write", "session.read", "agent.read", "agent.write",
+            "ui.settings.register", "workspace.read", "workspace.write", "session.read", "ssh.execReadonly", "agent.read", "agent.write",
         ]),
         "issh-plugin-config-sync" => Some(&["ui.settings.register", "profiles.read", "profiles.write", "network.fetch", "vault.read"]),
         "issh-plugin-linkifier" => Some(&["terminal.decorate"]),
@@ -188,7 +188,7 @@ fn runtime_method(method: &str) -> Option<(&str, Option<&'static str>)> {
         "session.read" | "terminal.read" => Some(("session.subscribe", Some("session.read"))),
         "session.write" | "terminal.write" => Some(("session.write", Some("terminal.write"))),
         "ssh.exec" => Some(("ssh.execReadonly", Some("ssh.exec"))),
-        "ssh.execReadonly" => Some(("ssh.execReadonly", Some("ssh.exec"))),
+        "ssh.execReadonly" => Some(("ssh.execReadonly", Some("ssh.execReadonly"))),
         "sftp.open" | "sftp.list" | "sftp.read" | "sftp.stat" | "sftp.close" => Some((method, Some("sftp.read"))),
         "sftp.write" | "sftp.mkdir" | "sftp.remove" | "sftp.removeDir" | "sftp.rename" | "sftp.chmod" => Some((method, Some("sftp.write"))),
         "vault.status" | "vault.getSecret" => Some((method, Some("vault.read"))),
@@ -257,7 +257,7 @@ mod tests {
     fn gateway_permissions_cover_llm_sftp_and_fs_methods() {
         assert_eq!(required_permission("fs.userPaths"), Some("fs.read"));
         assert_eq!(required_permission("fs.readLocalText"), Some("fs.read"));
-        assert_eq!(required_permission("ssh.execReadonly"), Some("ssh.exec"));
+        assert_eq!(required_permission("ssh.execReadonly"), Some("ssh.execReadonly"));
         assert_eq!(required_permission("http.postJson"), Some("network.postJson"));
         assert_eq!(required_permission("sftp.open"), Some("sftp.read"));
         assert_eq!(required_permission("sftp.list"), Some("sftp.read"));
@@ -266,7 +266,7 @@ mod tests {
         assert_eq!(required_permission("sftp.mkdir"), Some("sftp.write"));
         assert_eq!(required_permission("sftp.rename"), Some("sftp.write"));
         assert_eq!(required_permission("sftp.chmod"), Some("sftp.write"));
-        assert_eq!(runtime_method("ssh.execReadonly"), Some(("ssh.execReadonly", Some("ssh.exec"))));
+        assert_eq!(runtime_method("ssh.execReadonly"), Some(("ssh.execReadonly", Some("ssh.execReadonly"))));
     }
 
     #[test]
