@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "updated": "2026-09-04T01:36:22.511Z",
+  "updated": "2026-09-04T11:11:17.767Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
       "name": "Agent 桥接",
-      "version": "0.1.1",
-      "description": "Workspace/Agent 管理：工作区创建、终端会话绑定、agent 注册与授权（对接 isshd workspace.*/agent.* RPC）",
+      "version": "0.2.0",
+      "description": "统一的 Herdr/Workspace 与 Agent 管理：工作区创建、终端会话绑定、agent 注册与授权（对接 isshd workspace.*/agent.* RPC）",
       "kind": "integration",
       "audience": "user",
       "permissions": [
@@ -18,9 +18,9 @@
         "settings:tab"
       ],
       "minAppVersion": "0.0.1",
-      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge/releases/download/v0.1.1/issh-plugin-agent-bridge-0.1.1.tgz",
-      "sha256": "aeb90e301441cbd8c19ff9427883734d45e7c40fe4df10cd6da432aa4f158648",
-      "signature": "Us17Qy9AZGI98AlVzVJREJI7FRp8K+a9F9gCr8+JPWtuJlFm/ma5ildxR5ASRnvEL8OjhazNqF/Xns36rESkBQ==",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge/releases/download/v0.2.0/issh-plugin-agent-bridge-0.2.0.tgz",
+      "sha256": "cbc218ca6f5488d1dd73542731c50f04dc3366d6fd7c2083f5200ac0329ae37f",
+      "signature": "pticOlUVK/eS0dX3q9M3DtED1TLUx1XpoGzgVabLESOkgIykL/ffh0kOblvyqbjIvdTWiGa1Eihn/qJ6nDO0AQ==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge",
       "downloads": 435
@@ -45,27 +45,6 @@
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-config-sync",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-config-sync",
       "downloads": 458
-    },
-    {
-      "id": "issh-plugin-herdr",
-      "name": "Herdr 工作区",
-      "version": "0.1.1",
-      "description": "Herdr/Workspace 管理：工作区创建、终端会话绑定（对接 isshd workspace.* RPC）",
-      "kind": "integration",
-      "audience": "user",
-      "permissions": [
-        "workspace:read",
-        "workspace:write",
-        "session:read",
-        "settings:tab"
-      ],
-      "minAppVersion": "0.0.1",
-      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-herdr/releases/download/v0.1.1/issh-plugin-herdr-0.1.1.tgz",
-      "sha256": "7048f981057348ff37af4eb6599edd8507c0399e3dc5ffab0070bfa7c1d3b074",
-      "signature": "PyArWPC9dpIb612CiJbGN9OGptPbhO48/Er99j3aOCSObNWGb6mSW5Iu67xGEGqkEUJ9wqnsH86f3Adb/75ODQ==",
-      "homepage": "https://github.com/kingbywork-ui/issh-plugin-herdr",
-      "repository": "https://github.com/kingbywork-ui/issh-plugin-herdr",
-      "downloads": 633
     },
     {
       "id": "issh-plugin-linkifier",

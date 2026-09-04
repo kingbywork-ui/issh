@@ -64,8 +64,7 @@ node scripts/publish-plugin.mjs <pluginDirName>
 
 | 插件 | 版本 | 分类 | 说明 |
 |---|---|---|---|
-| issh-plugin-agent-bridge | 0.1.1 | feature | Workspace/Agent 管理 |
-| issh-plugin-herdr | 0.1.1 | feature | Herdr 工作区管理 |
+| issh-plugin-agent-bridge | 0.2.0 | integration | Herdr/Workspace 与 Agent 统一管理 |
 | issh-plugin-linkifier | 0.1.1 | feature | 终端链接识别 |
 | issh-plugin-llm | 0.2.0 | feature | AI 命令补全 |
 | issh-plugin-config-sync | 0.1.0 | integration | 主机配置同步 |
