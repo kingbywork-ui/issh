@@ -7,6 +7,7 @@
         createWorkspace,
         listAgents,
         listSessions,
+        probeRemoteAgents,
         readSessionOutput,
         listWorkspaces,
         registerAgent,
@@ -33,16 +34,43 @@
         name: string
         sessionId: string
         evidence: string
+        command?: string
+        path?: string
+        source: 'remote' | 'terminal'
     }
+
+    const REMOTE_AGENT_COMMANDS = [
+        { command: 'pi', name: 'Pi' },
+        { command: 'omp', name: 'OMP' },
+        { command: 'codex', name: 'Codex' },
+        { command: 'claude', name: 'Claude Code' },
+        { command: 'opencode', name: 'OpenCode' },
+        { command: 'hermes', name: 'Hermes Agent' },
+        { command: 'hermes-agent', name: 'Hermes Agent' },
+    ] as const
 
     const selectedWorkspace = $derived(workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null)
     const openSessions = $derived(sessions.filter((session) => session.connected))
     const boundOpenSessions = $derived(openSessions.filter((session) => selectedWorkspace?.bindings.some((binding) => binding.sessionId === session.id)))
     const disconnectedBindings = $derived(selectedWorkspace?.bindings.filter((binding) => binding.sessionId && !openSessions.some((session) => session.id === binding.sessionId)) ?? [])
-    const unregisteredDetectedAgents = $derived(detectedAgents.filter((detected) => !agents.some((agent) => agent.sessionId === detected.sessionId)))
+    const unregisteredDetectedAgents = $derived(detectedAgents.filter((detected) => !agents.some((agent) => agent.sessionId === detected.sessionId && agent.name === detected.name)))
 
-    async function detectTerminalAgents (candidates: SessionInfo[]): Promise<DetectedAgent[]> {
-        const results = await Promise.all(candidates.filter((session) => session.connected).map(async (session) => {
+    async function detectAgents (candidates: SessionInfo[], workspace: Workspace | null): Promise<DetectedAgent[]> {
+        const boundSessionIds = new Set(workspace?.bindings.map((binding) => binding.sessionId) ?? [])
+        const results = await Promise.all(candidates.filter((session) => session.connected && session.profileType === 'ssh' && boundSessionIds.has(session.id)).map(async (session) => {
+            const detected: DetectedAgent[] = []
+            try {
+                const remote = await probeRemoteAgents(session.id)
+                for (const line of remote.output.split(/\r?\n/)) {
+                    const [command, path] = line.trim().split(/\t+/, 2)
+                    const candidate = REMOTE_AGENT_COMMANDS.find((item) => item.command === command)
+                    if (candidate && path && !detected.some((agent) => agent.name === candidate.name)) {
+                        detected.push({ name: candidate.name, command, path, sessionId: session.id, evidence: session.title, source: 'remote' })
+                    }
+                }
+            } catch {
+                // SSH exec 不可用时继续用终端输出作为降级识别。
+            }
             try {
                 const output = await readSessionOutput(session.id)
                 const marker = [
@@ -53,12 +81,15 @@
                     { name: 'Pi', pattern: /(?:pi\s+(?:coding\s+)?agent|welcome\s+to\s+pi\b|pi\s+v?\d+\b|(?:^|\n)[^\r\n]{0,80}(?:[$>#❯➜]\s*)pi(?:\s|$))/im },
                     { name: 'OMP', pattern: /(?:omp\s+agent|oh[- ]my[- ]prompt|welcome\s+to\s+omp\b|omp\s+v?\d+\b|(?:^|\n)[^\r\n]{0,80}(?:[$>#❯➜]\s*)omp(?:\s|$))/im },
                 ].find((candidate) => candidate.pattern.test(output))
-                return marker ? { name: marker.name, sessionId: session.id, evidence: session.title } : null
+                if (marker && !detected.some((agent) => agent.name === marker.name)) {
+                    detected.push({ name: marker.name, sessionId: session.id, evidence: session.title, source: 'terminal' })
+                }
             } catch {
-                return null
+                // 远端探测已成功时，读取终端输出失败不影响结果。
             }
+            return detected
         }))
-        return results.filter((result): result is DetectedAgent => result !== null)
+        return results.flat()
     }
 
     async function refresh (): Promise<void> {
@@ -68,11 +99,12 @@
             const [ws, ss] = await Promise.all([listWorkspaces(), listSessions()])
             workspaces = ws
             sessions = ss
-            detectedAgents = await detectTerminalAgents(ss)
             health = await runtimeHealth().catch(() => null)
             if (!workspaces.some((workspace) => workspace.id === selectedWorkspaceId)) {
                 selectedWorkspaceId = workspaces[0]?.id ?? ''
             }
+            const workspace = workspaces.find((candidate) => candidate.id === selectedWorkspaceId) ?? null
+            detectedAgents = await detectAgents(ss, workspace)
             agents = selectedWorkspaceId ? await listAgents(selectedWorkspaceId) : []
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
@@ -196,7 +228,7 @@
     <div class="bridge-section">
         <div class="settings-field-title">工作区</div>
         <div class="bridge-toolbar">
-            <select bind:value={selectedWorkspaceId} onchange={() => void refreshAgents()} aria-label="选择工作区" disabled={workspaces.length === 0}>
+            <select bind:value={selectedWorkspaceId} onchange={() => void refresh()} aria-label="选择工作区" disabled={workspaces.length === 0}>
                 {#if workspaces.length === 0}
                     <option value="">暂无工作区</option>
                 {/if}
@@ -238,14 +270,17 @@
         </div>
 
         <div class="bridge-section">
-            <div class="settings-field-title">Agent（{agents.length}）</div>
+            <div class="bridge-row">
+                <div class="settings-field-title">Agent（{agents.length}）</div>
+                <button type="button" disabled={busy} onclick={() => void refresh()}>重新探测</button>
+            </div>
             {#if unregisteredDetectedAgents.length > 0}
                 <div class="bridge-section">
-                    <div class="settings-hint">检测到终端 Agent（点击注册到当前工作区）</div>
-                    {#each unregisteredDetectedAgents as detected (detected.sessionId)}
+                    <div class="settings-hint">检测到当前 SSH 登录账号中的 Agent（点击注册到当前工作区）</div>
+                    {#each unregisteredDetectedAgents as detected (detected.sessionId + ':' + detected.name + ':' + (detected.command ?? 'terminal'))}
                         <div class="bridge-row">
-                            <span class="bridge-session-title">{detected.name} · {detected.evidence}</span>
-                            <span class="bridge-session-kind">{detected.sessionId}</span>
+                            <span class="bridge-session-title">{detected.name} · {detected.evidence}{#if detected.path} · {detected.path}{/if}</span>
+                            <span class="bridge-session-kind">{detected.source === 'remote' ? '远端命令' : '终端输出'}</span>
                             <button type="button" disabled={busy} onclick={() => void registerDetectedAgent(detected)}>注册</button>
                         </div>
                     {/each}

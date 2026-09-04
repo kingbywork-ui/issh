@@ -31,6 +31,18 @@ export async function readSessionOutput (sessionId: string, lines = 120): Promis
     const bytes = (result.events ?? []).flatMap((event) => event.data ?? [])
     return new TextDecoder().decode(Uint8Array.from(bytes))
 }
+export interface RemoteAgentProbeResult {
+    output: string
+}
+
+export function probeRemoteAgents (sessionId: string): Promise<RemoteAgentProbeResult> {
+    return runtimeRequest<RemoteAgentProbeResult>('ssh.execReadonly', {
+        sessionId,
+        command: 'sh -lc \'for name in pi omp codex claude opencode hermes hermes-agent; do path="$(command -v "$name" 2>/dev/null)" && printf "%s\t%s\n" "$name" "$path"; done\'',
+        timeoutMs: 10000,
+        maxOutputBytes: 16 * 1024,
+    })
+}
 
 export interface RuntimeHealth {
     runtimeVersion: string

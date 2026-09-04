@@ -1,6 +1,6 @@
 {
     "name": "issh-plugin-agent-bridge",
-    "version": "0.2.2",
+    "version": "0.2.3",
     "description": "Herdr/Workspace 与 Agent 统一管理插件（issh Tauri 客户端）",
     "type": "module",
     "main": "index.ts",
