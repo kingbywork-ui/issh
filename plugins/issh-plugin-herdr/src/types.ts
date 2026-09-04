@@ -18,7 +18,8 @@ export interface SettingsTabDefinition {
     id: string
     title: string
     order?: number
-    component: unknown
+    component?: unknown
+    mount?: (target: HTMLElement) => () => void
 }
 
 export interface PluginStorage {

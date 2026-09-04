@@ -1,3 +1,4 @@
+import { mount, unmount } from 'svelte'
 import HerdrSettingsTab from './src/HerdrSettingsTab.svelte'
 import { setGateway } from './src/herdrRpc'
 import type { IsshPlugin, IsshPluginContext, IsshPluginManifest } from './src/types'
@@ -25,7 +26,10 @@ const plugin: IsshPlugin = {
             id: 'herdr',
             title: 'Herdr 工作区',
             order: 12,
-            component: HerdrSettingsTab,
+            mount: (target) => {
+                const instance = mount(HerdrSettingsTab, { target })
+                return () => unmount(instance)
+            },
         })
         ctx.gateway.log('info', 'herdr plugin activated')
     },

@@ -1,3 +1,4 @@
+import { mount, unmount } from 'svelte'
 import LlmSettingsTab from './src/LlmSettingsTab.svelte'
 import panelCss from './src/panel.css?inline'
 import type { IsshPlugin, IsshPluginContext, IsshPluginManifest, TerminalDecoratorDefinition } from './src/types'
@@ -432,7 +433,10 @@ const plugin: IsshPlugin = {
             id: 'llm',
             title: 'AI 命令补全',
             order: 13,
-            component: LlmSettingsTab,
+            mount: (target) => {
+                const instance = mount(LlmSettingsTab, { target })
+                return () => unmount(instance)
+            },
         })
         ctx.gateway.ui.registerTerminalDecorator(decorator)
         ctx.gateway.log('info', 'llm plugin activated')

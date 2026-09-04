@@ -102,7 +102,16 @@ export interface SettingsTabDefinition {
     /** 宿主注入的唯一标识（`manifest.id:tab.id`），用于跨插件去重与 Svelte each key */
     key?: string
     order?: number
-    component: Component<Record<string, unknown>>
+    /**
+     * 宿主导入的 Svelte 组件（内置插件与宿主共享 svelte runtime 时使用）。
+     * 外置插件因自带 svelte runtime，跨 runtime 挂载会触发 effect_orphan，应改用 `mount`。
+     */
+    component?: Component<Record<string, unknown>>
+    /**
+     * 插件自挂载入口：外置插件用自身打包的 svelte runtime 把组件挂载到 target，
+     * 返回销毁函数（卸载时由宿主调用）。
+     */
+    mount?: (target: HTMLElement) => () => void
 }
 
 export interface HomeCardDefinition {

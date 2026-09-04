@@ -1,3 +1,4 @@
+import { mount, unmount } from 'svelte'
 import SyncSettingsTab from './src/SyncSettingsTab.svelte'
 import { setGateway } from './src/syncRpc'
 import type { IsshPlugin, IsshPluginContext, IsshPluginManifest } from './src/types'
@@ -25,7 +26,10 @@ const plugin: IsshPlugin = {
             id: 'config-sync',
             title: '配置同步',
             order: 14,
-            component: SyncSettingsTab,
+            mount: (target) => {
+                const instance = mount(SyncSettingsTab, { target })
+                return () => unmount(instance)
+            },
         })
         ctx.gateway.log('info', 'config-sync plugin activated')
     },

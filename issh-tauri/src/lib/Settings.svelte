@@ -235,7 +235,18 @@
         if (activeId === mountedPluginTab) return
         unmountPluginTab()
         for (const child of [...host.children]) child.remove()
-        if (activeTab?.component) {
+        if (activeTab?.mount) {
+            // 外置插件用自身打包的 svelte runtime 自挂载，避免跨 runtime 触发 effect_orphan
+            try {
+                const destroy = activeTab.mount(host)
+                mountedComponents.set(activeId, { destroy })
+                mountedPluginTab = activeId
+                pluginTabError = ''
+            } catch (cause) {
+                pluginTabError = `插件设置页加载失败：${cause instanceof Error ? cause.message : String(cause)}`
+                console.warn(`[settings] 插件设置页自挂载失败：${activeId}`, cause)
+            }
+        } else if (activeTab?.component) {
             try {
                 const instance = mount(activeTab.component as Parameters<typeof mount>[0], { target: host })
                 mountedComponents.set(activeId, { destroy: () => unmount(instance) })

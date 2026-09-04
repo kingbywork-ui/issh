@@ -1,3 +1,4 @@
+import { mount, unmount } from 'svelte'
 import BridgeSettingsTab from './src/BridgeSettingsTab.svelte'
 import { setGateway } from './src/bridgeRpc'
 import type { IsshPlugin, IsshPluginContext, IsshPluginManifest } from './src/types'
@@ -26,7 +27,10 @@ const plugin: IsshPlugin = {
             id: 'agent-bridge',
             title: 'Agent 桥接',
             order: 11,
-            component: BridgeSettingsTab,
+            mount: (target) => {
+                const instance = mount(BridgeSettingsTab, { target })
+                return () => unmount(instance)
+            },
         })
         ctx.gateway.log('info', 'agent-bridge plugin activated')
     },

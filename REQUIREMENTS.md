@@ -566,3 +566,16 @@
 **验证**：`npm.cmd --prefix issh-tauri run check` 通过（0 errors / 0 warnings）；`npm.cmd --prefix issh-tauri run build` 通过，产物已更新。已安装客户端需重新打包/安装后才会包含本修复。
 
 **最终方案修订（2026-09-03）**：用户澄清「安装包自带分支信息，检查更新直接检查当前分支即可，不需要再获取分支信息」。据此简化：移除分支下拉选择（Rust `list_release_branches` 命令、`github_default_branch` 辅助、前端 `listReleaseBranches`/`ReleaseBranch`）与交叉拦截弹窗（`isCrossBranch`/`dismissCrossBranch`/`goDownloadCrossBranch`）。`check_update` 签名改为 `(current_version)`，内部直接使用 `BUILD_BRANCH`（为 `unknown` 时返回「未识别构建分支」）；前端 `checkUpdate(currentVersion)` 不再传分支参数；关于页改为只读展示「当前分支：{buildBranch}」+「检查更新」按钮。架构防护（R-056 补充）保持不变。验证：`cargo check` 通过（7.63s）；`svelte-check` → 0 errors / 0 warnings。
+
+### R-061 商城插件设置页 effect_orphan 崩溃（2026-09-04，已完成）
+
+**来源**：用户需求。用户反馈商城安装的「Agent 桥接」插件设置页加载失败，报错 `https://svelte.dev/e/effect_orphan`。
+
+**根因**：外置插件 vite 配置 `external: []` 将 svelte 完整打包进插件 bundle，与宿主各带一份独立 svelte runtime；宿主 `Settings.svelte` 用宿主的 `mount()` 挂载插件组件（插件 runtime），两个 runtime 的 effect 上下文无法共享，组件初始化时创建 `$state`/`onMount` effect 被判为孤儿（orphan），抛出 `effect_orphan`。
+
+**修复**：
+- 宿主 `issh-tauri/src/lib/plugins/types.ts`：`SettingsTabDefinition.component` 改为可选，新增 `mount?: (target: HTMLElement) => () => void` 自挂载入口。
+- 宿主 `issh-tauri/src/lib/Settings.svelte`：插件设置页挂载优先调用 `tab.mount(host)`（插件自挂载），回退宿主 `mount(component)`。
+- 4 个外置插件（agent-bridge/config-sync/herdr/llm）`index.ts`：改为注册 `mount` 函数，用各自打包的 svelte runtime 的 `mount/unmount` 完成挂载，避免跨 runtime 冲突；`src/types.ts` 同步将 `SettingsTabDefinition.component` 改为可选并新增 `mount`。
+
+**验证**：`svelte-check` 0 errors / 0 warnings；4 个插件重新 build/package（dist 产物由 `component:` 改为 `mount:` 注册）；宿主重新 build（bundle 含 mount 分支）；重新构建 NSIS 安装包并静默安装。运行时 UI 因 WebView2 远程调试端口未启用未做 CDP 断言，以用户人工确认为准。4 个插件已重新发布（gh release upload --clobber 覆盖 + registry 哈希/签名更新）。
