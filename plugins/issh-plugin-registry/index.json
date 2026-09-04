@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-09-04T00:05:52.968Z",
+  "updated": "2026-09-04T01:32:22.827Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
@@ -19,8 +19,8 @@
       ],
       "minAppVersion": "0.0.1",
       "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge/releases/download/v0.1.1/issh-plugin-agent-bridge-0.1.1.tgz",
-      "sha256": "ac5422c33de18acb016f138544a9f506d3a82d0cb92b5220ac2bd264d6d91d14",
-      "signature": "GBAQuJNVWS6PBF0p2a1FGyRlvpV1yspoABDlKVcV4ZlWTGQe3vkQ//Gt4WZV+s6GzHG3ldj1JOBd4rFH6DxhCg==",
+      "sha256": "aeb90e301441cbd8c19ff9427883734d45e7c40fe4df10cd6da432aa4f158648",
+      "signature": "Us17Qy9AZGI98AlVzVJREJI7FRp8K+a9F9gCr8+JPWtuJlFm/ma5ildxR5ASRnvEL8OjhazNqF/Xns36rESkBQ==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge",
       "downloads": 435
