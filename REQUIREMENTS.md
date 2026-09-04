@@ -601,3 +601,16 @@
 **发布**：agent-bridge 独立仓库 main `3d621a1..814a82b`、tag `v0.2.0`、gh release；registry main `dad6e29..29cb431`。远程 release tgz 哈希 `cbc218ca…` 与 registry 声明 **MATCH**。
 
 **提交**：`b4f59d4`（feat: agent-bridge 0.2.0 合并 Herdr，14 文件）、`b4a99e5`（chore: 版本升级 0.0.2，6 文件）、`aab8db1`（chore(registry): publish agent-bridge 0.2.0）。
+
+### R-063 Agent 桥接 0.2.2 发布：终端 Agent 自动检测与注册（2026-09-04，已完成）
+
+**来源**（用户需求）：`issh-plugin-agent-bridge-0.2.2.tgz` 已更新，上传到 GitHub。
+
+**功能变更（0.2.0 → 0.2.2）**：
+- `bridgeRpc.ts` 新增 `readSessionOutput(sessionId, lines)`：通过 `session.read` RPC 读取会话输出（解码 `events[].data` 字节）。
+- `BridgeSettingsTab.svelte` 新增终端 Agent 自动检测：扫描已连接会话输出，正则识别 Hermes Agent / Codex / Claude Code / OpenCode / Pi / OMP，展示未注册 Agent 并提供「注册」按钮（绑定会话 + `registerAgent` 到当前工作区，scopes: context.read/llm.prompt/command.propose）。
+- `pluginHost.ts` 的 `HOST_VERSION` 硬编码 `'0.1.6'` → `'0.0.2'`（补齐 0.0.2 版本升级漏改的前端版本常量）。
+
+**发布**：agent-bridge 独立仓库 main `814a82b..121051f`、tag `v0.2.2`、gh release（tgz + .sha256 双资产）、registry main `29cb431..fd74a48`。registry 远程核对 `version=0.2.2`、`sha256=a38db470…`（重新 build 后的哈希；用户手动 package 的 `2d88dcd0…` 因 vite build 非确定性不同，最终以发布产物为准）。
+
+**提交**：`4e7c452`（fix(host): HOST_VERSION 修正）、`9d3bf33`（feat(agent-bridge): 0.2.2，5 文件）、`3b21448`（chore(registry): publish v0.2.2）。
