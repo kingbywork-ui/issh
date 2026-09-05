@@ -9,7 +9,7 @@ issh 终端通过本地 HTTP RPC（默认 `127.0.0.1:59688`）把终端会话暴
 
 ## 连接
 
-- 端点：`http://127.0.0.1:59688/rpc`（JSON-RPC 2.0）
+- 端点：优先读取 discovery 文件中的 `rpcUrl`；默认 `http://127.0.0.1:59688/rpc`（JSON-RPC 2.0）。Bridge 设置页可改用其它端口。
 - 认证：请求头 `Authorization: Bearer <token>`，token 在 issh 设置页「Agent Bridge」中查看/轮换
 - 手动开启：Agent Bridge 开关每次启动默认关闭，必须在 issh 设置页手动开启；完全退出 issh 时自动关闭
 
@@ -60,7 +60,7 @@ issh 终端通过本地 HTTP RPC（默认 `127.0.0.1:59688`）把终端会话暴
 
 ## 安全边界
 
-- 只监听 `127.0.0.1`，端口固定 `59688`；每次启动默认关闭，需手动开启
+- 只监听 `127.0.0.1`，默认端口 `59688`；每次启动默认关闭，需手动开启。设置页的“断开 Agent 连接”会关闭现有 SSE 长连接但保留 Bridge 监听。
 - 危险命令（`rm -rf`、`dd`、`mkfs` 等）执行前在 issh 界面弹确认框，agent 无法绕过
 - SFTP 根目录与单次写入字节上限由用户配置，越界直接拒绝
 - 所有操作写入本地审计日志（`agent-bridge-audit.jsonl`）

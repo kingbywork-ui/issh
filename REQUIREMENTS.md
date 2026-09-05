@@ -714,3 +714,13 @@
 **实现**：新增持久化 port，旧配置缺失时默认 59688；前后端校验 1–65535 整数，拒绝 0/随机端口。关闭 Bridge 时可修改保存端口，运行时禁止修改；启用/配置重启、状态、health、discovery、前端连接测试统一使用配置端口。10013/PermissionDenied 提示系统排除端口等原因，AddrInUse 单独提示占用。enabled 仍不持久化，保留手动开启、localhost-only、token/scope/危险命令/SFTP 安全限制。
 
 **验证与边界**：原生 cargo test 47/47 通过，其中 Bridge 相关 10/10（含真实 HTTP 鉴权/health/discovery/端口释放、旧配置兼容和非法端口）；前端 check/build 通过。严格 Clippy 被原有 build.rs:10 redundant_closure 阻挡；cargo fmt --check 有仓库既有格式差异，未扩大范围格式化。已重新打包并静默安装验证：安装包 `issh_0.0.2_x64-setup.exe`（5,194,767 字节，02:21），注册表 DisplayVersion=0.0.2，launch test 窗口标题 issh、isshd 从 `%LOCALAPPDATA%\issh\issh-runtime\isshd.exe` 拉起、数据目录 `%APPDATA%\issh` 复用（config.yaml 08/31 未改动）。原生桌面操作工具不可用，端口持久化 GUI 实机点击（关闭 Bridge→保存 39688→手动开启→连接测试→关闭重开应用确认端口保留）仍待桌面验收。39688 当前可用，不保证未来不被其它程序占用。
+
+### R-074 主动断开 Agent 连接（2026-09-05，进行中：源码完成，桌面验收待办）
+
+**来源**（用户需求）：测试 Agent Bridge 时发现 issh 无法主动断开与 Agent 的连接，要求修复。
+
+**根因**：`AgentBridgeHandle::stop()` 只设置 accept loop 的停止标志；已经建立的 SSE 长连接由独立任务持有，未订阅停止信号，因此“关闭 Bridge”不会主动关闭现有 Agent 连接。
+
+**实现**：增加可递增的连接断开 generation 与 watch 通知；每条 SSE 连接监听断开事件并在收到通知时关闭 socket，进行中的 RPC 请求也会被取消等待并返回断开错误。新增 Tauri `agent_bridge_disconnect` 命令、前端 `agentBridgeDisconnect()` 和“断开 Agent 连接”按钮；该操作断开已有 Agent 长连接，Bridge 继续监听，外部 Agent 可重新连接；关闭 Bridge 同时断开连接并停止监听。保留 token、scope、危险命令确认和 localhost-only 边界。
+
+**验证与边界**：原生 `cargo test` 48/48 通过，其中新增测试验证 SSE 连接被主动关闭且 Bridge 仍可进行 health 请求；前端 `svelte-check` 0 errors / 0 warnings，Vite build 通过。已重新打包并静默安装验证：安装包 `issh_0.0.2_x64-setup.exe`（5,197,557 字节，03:18），注册表 DisplayVersion=0.0.2，launch test 窗口标题 issh、isshd 从 `%LOCALAPPDATA%\issh\issh-runtime\isshd.exe` 拉起。当前无原生桌面自动化工具，「断开 Agent 连接」按钮的实机点击验收仍待桌面验证。该修复针对 Bridge HTTP/SSE 外部 Agent 连接，不会终止远端 SSH 中运行的 Hermes 进程；远端进程生命周期仍由 SSH 会话/Agent 自身管理。
