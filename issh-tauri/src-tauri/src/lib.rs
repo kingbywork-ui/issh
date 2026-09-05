@@ -685,7 +685,7 @@ fn agent_bridge_status_snapshot(
         .map_err(|_| "Agent Bridge 配置状态不可用".to_string())?;
     Ok(json!({
         "enabled": running,
-        "port": agent_bridge::AGENT_BRIDGE_PORT,
+        "port": config.port,
         "token": config.token,
         "scopes": config.allowed_scopes,
         "sftpRoot": config.sftp_root,
@@ -711,13 +711,14 @@ async fn agent_bridge_enable(
             return agent_bridge_status_snapshot(&state, true);
         }
     }
-    let (token, scopes, sftp_root, public_discovery, audit_enabled, permission_mode) = {
+    let (token, port, scopes, sftp_root, public_discovery, audit_enabled, permission_mode) = {
         let config = state
             .config
             .lock()
             .map_err(|_| "Agent Bridge 配置不可用".to_string())?;
         (
             config.token.clone(),
+            config.port,
             config.allowed_scopes.clone(),
             config.sftp_root.clone(),
             config.public_discovery,
@@ -729,6 +730,7 @@ async fn agent_bridge_enable(
         manager.inner().clone(),
         state.user_data.clone(),
         token,
+        port,
         agent_bridge::parse_scopes(&scopes),
         sftp_root,
         public_discovery,
@@ -768,7 +770,7 @@ fn agent_bridge_status(state: State<'_, AgentBridgeRuntime>) -> Result<Value, St
     agent_bridge_status_snapshot(&state, running)
 }
 
-/// 更新 scope / sftpRoot / auditLogEnabled / publicDiscovery（token 与 enabled 不可经此修改）。
+/// 更新 port / scope / sftpRoot / auditLogEnabled / publicDiscovery（token 与 enabled 不可经此修改）。
 /// 配置变更即时生效：若 server 正在运行则用新配置重启（R-045 安全语义）。
 #[tauri::command]
 async fn agent_bridge_configure(
@@ -776,11 +778,19 @@ async fn agent_bridge_configure(
     manager: State<'_, Arc<RuntimeManager>>,
     patch: Value,
 ) -> Result<Value, String> {
+    let port = patch.get("port").map(agent_bridge_config::parse_port).transpose()?;
+    if port.is_some() && state.bridge.lock()
+        .map_err(|_| "Agent Bridge 状态不可用".to_string())?.is_some() {
+        return Err("请先关闭 Agent Bridge 再修改端口".to_string());
+    }
     {
         let mut config = state
             .config
             .lock()
             .map_err(|_| "Agent Bridge 配置不可用".to_string())?;
+        if let Some(port) = port {
+            config.port = port;
+        }
         if let Some(scopes) = patch.get("scopes").and_then(Value::as_array) {
             config.allowed_scopes = scopes
                 .iter()
@@ -829,13 +839,14 @@ async fn sync_bridge_runtime(
     if !was_running {
         return Ok(false);
     }
-    let (token, scopes, sftp_root, public_discovery, audit_enabled, permission_mode) = {
+    let (token, port, scopes, sftp_root, public_discovery, audit_enabled, permission_mode) = {
         let config = state
             .config
             .lock()
             .map_err(|_| "Agent Bridge 配置不可用".to_string())?;
         (
             config.token.clone(),
+            config.port,
             config.allowed_scopes.clone(),
             config.sftp_root.clone(),
             config.public_discovery,
@@ -849,6 +860,7 @@ async fn sync_bridge_runtime(
             manager.clone(),
             state.user_data.clone(),
             token.clone(),
+            port,
             agent_bridge::parse_scopes(&scopes),
             sftp_root.clone(),
             public_discovery,

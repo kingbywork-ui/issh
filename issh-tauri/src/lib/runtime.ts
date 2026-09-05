@@ -630,6 +630,7 @@ export function readSshConfig (): Promise<string> {
 }
 
 export interface AgentBridgePatch {
+    port?: number
     scopes?: string[]
     sftpRoot?: string | null
     auditLogEnabled?: boolean

@@ -15,7 +15,7 @@
 
     const ALL_SCOPES = ['read', 'write', 'exec', 'sftp']
     const READ_SCOPES = ['read']
-    const PORT = 59688
+    let portInput = $state<number | undefined>(59688)
     const PERMISSION_MODES: Array<['observer' | 'confirm' | 'auto', string]> = [
         ['observer', 'Observer 只读'],
         ['confirm', 'Confirm 确认（默认）'],
@@ -51,6 +51,7 @@
         error = ''
         try {
             status = await agentBridgeStatus()
+            portInput = status.port
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
         } finally {
@@ -64,7 +65,7 @@
         notice = ''
         try {
             status = value ? await agentBridgeEnable() : await agentBridgeDisable()
-            notice = value ? `已开启，监听 127.0.0.1:${PORT}` : '已关闭'
+            notice = value ? `已开启，监听 127.0.0.1:${status.port}` : '已关闭'
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
         } finally {
@@ -88,6 +89,7 @@
     }
 
     async function savePatch (patch: {
+        port?: number
         scopes?: string[]
         sftpRoot?: string | null
         auditLogEnabled?: boolean
@@ -99,6 +101,11 @@
         notice = ''
         try {
             status = await agentBridgeConfigure(patch)
+            if (patch.port !== undefined) {
+                portInput = status.port
+                testResult = ''
+                notice = `端口已保存为 ${status.port}，请手动开启 Bridge`
+            }
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
         } finally {
@@ -142,7 +149,7 @@
         error = ''
         testResult = ''
         try {
-            const response = await fetch(`http://127.0.0.1:${PORT}/rpc`, {
+            const response = await fetch(`http://127.0.0.1:${status.port}/rpc`, {
                 method: 'POST',
                 headers: {
                     'content-type': 'application/json',
@@ -201,7 +208,7 @@
     <div class="settings-field">
         <div class="settings-field-title">Agent Bridge（外部 AI Agent 接入）</div>
         <p class="settings-hint">把当前 issh 的终端会话通过本地 HTTP 暴露给 Codex、Cursor、Claude Desktop 等外部 agent，由 agent 安全地读取上下文、执行命令和管理 SFTP 文件。</p>
-        <p class="settings-hint"><strong>安全语义</strong>：开关不会持久化，每次使用需手动开启；完全退出 issh 时自动关闭；最小化到托盘保持运行。端口固定为 {PORT}，仅监听本机 127.0.0.1。</p>
+        <p class="settings-hint"><strong>安全语义</strong>：开关不会持久化，每次使用需手动开启；完全退出 issh 时自动关闭；最小化到托盘保持运行。默认端口 59688，可在关闭时修改；仅监听本机 127.0.0.1。</p>
     </div>
 
     {#if error}<div class="settings-error">{error}</div>{/if}
@@ -226,7 +233,13 @@
                     <button type="button" disabled={busy} onclick={() => void toggle(true)}>开启 Agent Bridge</button>
                 {/if}
             </div>
-            <p class="settings-hint">监听地址：127.0.0.1:{PORT}（固定端口，启动失败说明端口被占用）</p>
+            <div class="sudo-actions">
+                <label>监听端口 <input type="number" min="1" max="65535" step="1" bind:value={portInput} disabled={busy || status.enabled} /></label>
+                <button type="button" disabled={busy || status.enabled || !Number.isInteger(portInput) || !portInput || portInput < 1 || portInput > 65535 || portInput === status.port}
+                    onclick={() => void savePatch({ port: portInput })}>保存端口</button>
+            </div>
+            <p class="settings-hint">先关闭 Bridge 再修改端口，保存后手动开启。若 59688 被系统保留，可尝试 39688；外部客户端需刷新连接信息。</p>
+            <p class="settings-hint">监听地址：127.0.0.1:{status.port}</p>
         </div>
 
         <div class="settings-field">

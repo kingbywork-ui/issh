@@ -1,7 +1,7 @@
 //! CLI / MCP Agent Bridge：把 issh 终端会话暴露给外部 agent（Codex / Cursor / Claude Desktop）。
 //!
 //! 对齐 issh 分支 issh-llm AgentBridgeService 的能力面：
-//! - localhost-only HTTP + Bearer token 认证，端口固定 59688（R-045）
+//! - localhost-only HTTP + Bearer token 认证，默认端口 59688，可手动配置（R-073）
 //! - 工具面：session list/select、context/buffer read、command preview/insert/run、
 //!   SSH exec、SFTP read/write、批量 exec、audit log
 //! - 危险命令确认、SFTP root 限制、单次写入上限、审计日志（JSONL）
@@ -23,7 +23,7 @@ use tokio::net::TcpListener;
 use crate::agent_bridge_config::PermissionMode;
 use crate::RuntimeManager;
 
-/// Agent Bridge 固定监听端口（R-045：不再自动选择）。
+/// Agent Bridge 默认监听端口。
 pub const AGENT_BRIDGE_PORT: u16 = 59688;
 
 const MAX_BODY_BYTES: usize = 16 * 1024 * 1024;
@@ -151,6 +151,7 @@ const TOOLS: &[ToolDef] = &[
 
 /// Agent Bridge 运行期状态：token、审计、输出缓存、scope 授权。
 pub struct AgentBridgeState {
+    port: u16,
     token_sha256: [u8; 32],
     audit_path: PathBuf,
     audit_seq: AtomicU64,
@@ -202,28 +203,31 @@ impl AgentBridgeHandle {
     }
 }
 
-/// 启动 Agent Bridge HTTP server（固定端口 59688）。
+/// 启动 Agent Bridge HTTP server（仅监听 IPv4 loopback）。
 pub async fn start(
     runtime: Arc<RuntimeManager>,
     user_data: PathBuf,
     token: String,
+    port: u16,
     allowed_scopes: HashSet<ToolScope>,
     sftp_root: Option<String>,
     public_discovery: bool,
     audit_enabled: bool,
     permission_mode: PermissionMode,
 ) -> Result<AgentBridgeHandle, String> {
-    let listener = TcpListener::bind(("127.0.0.1", AGENT_BRIDGE_PORT))
+    if port == 0 {
+        return Err("端口必须为 1–65535 的整数".to_string());
+    }
+    let listener = TcpListener::bind(("127.0.0.1", port))
         .await
-        .map_err(|error| {
-            format!("Agent Bridge 无法绑定 127.0.0.1:{AGENT_BRIDGE_PORT}：{error}（端口可能已被占用）")
-        })?;
+        .map_err(|error| bind_error(port, &error))?;
 
     let token_sha256: [u8; 32] = Sha256::digest(token.as_bytes()).into();
     let audit_path = user_data.join("agent-bridge-audit.jsonl");
     let (sse_tx, _) = tokio::sync::broadcast::channel::<String>(64);
 
     let state = Arc::new(AgentBridgeState {
+        port,
         token_sha256,
         audit_path,
         audit_seq: AtomicU64::new(0),
@@ -239,7 +243,7 @@ pub async fn start(
     });
 
     if public_discovery {
-        write_discovery_file(&user_data, &token);
+        write_discovery_file(&user_data, &token, port);
     }
 
     let shutdown = Arc::new(AtomicBool::new(false));
@@ -275,12 +279,21 @@ pub async fn start(
     Ok(AgentBridgeHandle { shutdown })
 }
 
+fn bind_error(port: u16, error: &std::io::Error) -> String {
+    let hint = match error.kind() {
+        std::io::ErrorKind::PermissionDenied => "系统拒绝绑定：可能是 Windows TCP 排除端口、安全策略或独占监听；可用 netsh interface ipv4 show excludedportrange protocol=tcp 检查，并在设置中选择未被排除的端口",
+        std::io::ErrorKind::AddrInUse => "端口已被占用；请关闭占用程序或在设置中选择其它端口",
+        _ => "请检查系统网络状态及监听地址",
+    };
+    format!("Agent Bridge 无法绑定 127.0.0.1:{port}：{error}（{hint}）")
+}
+
 /// 写 agent 可读 discovery file（对齐 issh-llm agentBridgePublicDiscoveryEnabled）。
-fn write_discovery_file(user_data: &PathBuf, token: &str) {
+fn write_discovery_file(user_data: &PathBuf, token: &str, port: u16) {
     let discovery = json!({
-        "rpcUrl": format!("http://127.0.0.1:{AGENT_BRIDGE_PORT}/rpc"),
+        "rpcUrl": format!("http://127.0.0.1:{port}/rpc"),
         "host": "127.0.0.1",
-        "port": AGENT_BRIDGE_PORT,
+        "port": port,
         "token": token,
     });
     let path = user_data.join("issh-agent-bridge.json");
@@ -578,7 +591,7 @@ async fn dispatch_tool(
     match tool.name {
         "issh_health" => Ok(json!({
             "ok": true,
-            "port": AGENT_BRIDGE_PORT,
+            "port": state.port,
             "protocolVersion": "1.5.0",
             "publicDiscovery": state.public_discovery,
             "permissionMode": state.permission_mode.as_str(),
@@ -1465,6 +1478,54 @@ async fn resolve_tab(params: &Value) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn custom_port_serves_authenticated_health_and_matches_discovery() {
+        let reservation = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let port = reservation.local_addr().unwrap().port();
+        let user_data = std::env::temp_dir().join(format!("issh-bridge-port-test-{}-{port}", std::process::id()));
+        std::fs::create_dir_all(&user_data).unwrap();
+        let runtime = Arc::new(RuntimeManager {
+            pipe_name: String::new(),
+            database_path: user_data.join("unused.sqlite3"),
+            binary_path: PathBuf::new(),
+            auth_token: String::new(),
+            child: std::sync::Mutex::new(None),
+            startup: tokio::sync::Mutex::new(()),
+            hosts: crate::host_profiles::HostProfileStore::new(&user_data),
+        });
+        drop(reservation);
+        let handle = start(runtime, user_data.clone(), "test-token".into(), port,
+            parse_scopes(&["read".into()]), None, true, false, PermissionMode::Confirm).await.unwrap();
+        let url = format!("http://127.0.0.1:{port}/rpc");
+        let discovery: Value = serde_json::from_slice(&std::fs::read(user_data.join("issh-agent-bridge.json")).unwrap()).unwrap();
+        assert_eq!(discovery["port"], port);
+        assert_eq!(discovery["rpcUrl"], url);
+        let client = reqwest::Client::builder().no_proxy().timeout(std::time::Duration::from_secs(3)).build().unwrap();
+        let request = json!({"id":"port-test", "method":"issh_health", "params":{}});
+        let denied = client.post(&url).json(&request).send().await.unwrap();
+        assert_eq!(denied.status(), reqwest::StatusCode::UNAUTHORIZED);
+        let response: Value = client.post(&url).bearer_auth("test-token").json(&request)
+            .send().await.unwrap().json().await.unwrap();
+        assert_eq!(response["result"]["ok"], true);
+        assert_eq!(response["result"]["port"], port);
+        handle.stop();
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        assert!(TcpListener::bind(("127.0.0.1", port)).await.is_ok());
+        std::fs::remove_file(user_data.join("issh-agent-bridge.json")).unwrap();
+        std::fs::remove_dir(user_data).unwrap();
+    }
+
+    #[test]
+    fn bind_errors_distinguish_access_denied_from_address_in_use() {
+        let denied = bind_error(59688, &std::io::Error::from(std::io::ErrorKind::PermissionDenied));
+        assert!(denied.contains("排除端口"));
+        assert!(!denied.contains("端口已被占用"));
+        let occupied = bind_error(39688, &std::io::Error::from(std::io::ErrorKind::AddrInUse));
+        assert!(occupied.contains("端口已被占用"));
+        assert!(occupied.contains("39688"));
+    }
+
 
     #[test]
     fn parse_scopes_handles_full_and_partial_lists() {

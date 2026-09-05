@@ -1,7 +1,7 @@
-//! Agent Bridge 持久化配置（R-045 安全语义：enabled 与端口永不持久化）。
+//! Agent Bridge 持久化配置（R-073：端口可配置；enabled 永不持久化）。
 //!
-//! - 持久化：token / allowedScopes / sftpRoot / auditLogEnabled / publicDiscovery
-//! - 不持久化：enabled（每次必须手动开启）、端口（固定 59688）
+//! - 持久化：port / token / allowedScopes / sftpRoot / auditLogEnabled / publicDiscovery
+//! - 不持久化：enabled（每次必须手动开启）
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -47,6 +47,9 @@ impl Default for PermissionMode {
 pub struct AgentBridgeConfig {
     /// Bearer token；首次启动自动生成 256 位 hex，轮换时持久化。
     pub token: String,
+    /// 默认 59688；用户可在关闭 Bridge 时指定其它非零端口。
+    #[serde(deserialize_with = "deserialize_port")]
+    pub port: u16,
     /// 已授权工具 scope 列表：read / write / exec / sftp。
     pub allowed_scopes: Vec<String>,
     /// SFTP 路径限制根目录；None = 不限制。
@@ -63,6 +66,7 @@ impl Default for AgentBridgeConfig {
     fn default() -> Self {
         Self {
             token: generate_token(),
+            port: crate::agent_bridge::AGENT_BRIDGE_PORT,
             allowed_scopes: vec![
                 "read".to_string(),
                 "write".to_string(),
@@ -110,4 +114,43 @@ pub fn audit_log_path(user_data: &Path) -> PathBuf {
 
 fn config_path(user_data: &Path) -> PathBuf {
     user_data.join("agent-bridge.json")
+}
+
+fn deserialize_port<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<u16, D::Error> {
+    let port = u16::deserialize(deserializer)?;
+    if port == 0 {
+        return Err(serde::de::Error::custom("端口必须为 1–65535 的整数"));
+    }
+    Ok(port)
+}
+
+pub fn parse_port(value: &serde_json::Value) -> Result<u16, String> {
+    value.as_u64().filter(|port| (1..=65535).contains(port))
+        .map(|port| port as u16)
+        .ok_or_else(|| "端口必须为 1–65535 的整数".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_config_defaults_to_original_port_and_does_not_persist_enabled() {
+        let config: AgentBridgeConfig = serde_json::from_str(r#"{"token":"test","enabled":true}"#).unwrap();
+        assert_eq!(config.port, 59688);
+        let value = serde_json::to_value(config).unwrap();
+        assert!(value.get("enabled").is_none());
+    }
+
+    #[test]
+    fn custom_port_roundtrips_and_invalid_ports_are_rejected() {
+        let config = AgentBridgeConfig { port: 39688, ..Default::default() };
+        let raw = serde_json::to_string(&config).unwrap();
+        assert_eq!(serde_json::from_str::<AgentBridgeConfig>(&raw).unwrap().port, 39688);
+        for value in [serde_json::json!(0), serde_json::json!(65536), serde_json::json!(-1), serde_json::json!(1.5), serde_json::json!("39688"), serde_json::Value::Null] {
+            assert!(parse_port(&value).is_err());
+            assert!(serde_json::from_value::<AgentBridgeConfig>(serde_json::json!({"port": value})).is_err());
+        }
+        assert_eq!(parse_port(&serde_json::json!(39688)).unwrap(), 39688);
+    }
 }
