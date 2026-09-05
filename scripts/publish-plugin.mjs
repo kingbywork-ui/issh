@@ -147,4 +147,15 @@ run('git', ['remote', 'add', 'registry-remote', REGISTRY_REPO_URL])
 run('git', ['push', 'registry-remote', `${registrySplit}:main`, '--force'])
 run('git', ['branch', '-D', registrySplit])
 run('git', ['remote', 'remove', 'registry-remote'])
+
+// 6. purge jsDelivr 缓存（商城 raw 请求失败时会 fallback 到 jsDelivr，
+//    其 @main 分支永久缓存不自动刷新，需主动 purge 避免国内用户看到旧版本）
+const purgeUrl = `https://purge.jsdelivr.net/gh/${GITHUB_ORG}/issh-plugin-registry@main/index.json`
+try {
+    const res = await fetch(purgeUrl)
+    const purgeResult = await res.json()
+    console.log(`jsDelivr purge：${purgeResult.status ?? res.status}（${purgeUrl}）`)
+} catch (cause) {
+    console.warn(`jsDelivr purge 失败（不影响发布）：${cause instanceof Error ? cause.message : String(cause)}`)
+}
 console.log('发布完成。')
