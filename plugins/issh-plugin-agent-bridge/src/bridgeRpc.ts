@@ -104,3 +104,7 @@ export function listAgents (workspaceId: string): Promise<Agent[]> {
 export function registerAgent (params: { workspaceId: string; name: string; adapter?: string; sessionId?: string; scopes?: string[] }): Promise<Agent> {
     return runtimeRequest<Agent>('agent.register', params)
 }
+
+export function unregisterAgent (workspaceId: string, agentId: string): Promise<void> {
+    return runtimeRequest<void>('agent.unregister', { workspaceId, agentId })
+}

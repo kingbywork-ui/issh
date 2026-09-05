@@ -10,6 +10,7 @@
         probeRemoteAgents,
         listWorkspaces,
         registerAgent,
+        unregisterAgent,
         unbindSession,
         type Agent,
         type SessionInfo,
@@ -203,6 +204,22 @@
             busy = false
         }
     }
+
+    async function removeAgent (agent: Agent): Promise<void> {
+        if (!selectedWorkspaceId) return
+        if (!window.confirm(`确定注销 ${agent.name}？该 Agent 及其关联任务记录将被删除。`)) return
+        busy = true
+        error = ''
+        try {
+            await unregisterAgent(selectedWorkspaceId, agent.id)
+            await refreshAgents()
+        } catch (cause) {
+            error = cause instanceof Error ? cause.message : String(cause)
+        } finally {
+            busy = false
+        }
+    }
+
     function timeLabel (unixMs: number): string {
         return new Date(unixMs).toLocaleString()
     }
@@ -315,6 +332,9 @@
                         {#if agent.sessionId}
                             <span>会话：{agent.sessionId}</span>
                         {/if}
+                    </div>
+                    <div class="bridge-agent-actions">
+                        <button type="button" disabled={busy} onclick={() => void removeAgent(agent)}>注销</button>
                     </div>
                 </div>
             {/each}
