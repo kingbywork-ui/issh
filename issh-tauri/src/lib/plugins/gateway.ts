@@ -77,6 +77,7 @@ const METHOD_PERMISSIONS: Record<string, string> = {
     'workspace.unbind': 'workspace.write',
     'agent.list': 'agent.read',
     'agent.register': 'agent.write',
+    'agent.unregister': 'agent.write',
     'agent.authorize': 'agent.write',
     'network.fetch': 'network.fetch',
     'http.postJson': 'network.postJson',

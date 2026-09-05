@@ -150,7 +150,7 @@ fn required_permission(method: &str) -> Option<&'static str> {
         "workspace.list" => Some("workspace.read"),
         "workspace.create" | "workspace.bind" | "workspace.unbind" => Some("workspace.write"),
         "agent.list" => Some("agent.read"),
-        "agent.register" | "agent.authorize" => Some("agent.write"),
+        "agent.register" | "agent.unregister" | "agent.authorize" => Some("agent.write"),
         "sftp.open" | "sftp.list" | "sftp.read" | "sftp.stat" | "sftp.close" => Some("sftp.read"),
         "sftp.write" | "sftp.mkdir" | "sftp.remove" | "sftp.removeDir" | "sftp.rename" | "sftp.chmod" => Some("sftp.write"),
         "fs.userPaths" | "fs.readLocalText" => Some("fs.read"),
@@ -195,7 +195,7 @@ fn runtime_method(method: &str) -> Option<(&str, Option<&'static str>)> {
         "workspace.list" => Some((method, Some("workspace.read"))),
         "workspace.create" | "workspace.bind" | "workspace.unbind" => Some((method, Some("workspace.write"))),
         "agent.list" => Some((method, Some("agent.read"))),
-        "agent.register" | "agent.authorize" => Some((method, Some("agent.write"))),
+        "agent.register" | "agent.unregister" | "agent.authorize" => Some((method, Some("agent.write"))),
         _ => None,
     }
 }
@@ -246,6 +246,15 @@ mod tests {
         let mut forged = request("profiles.read", &["forged.permission"]);
         forged.plugin_id = "issh-plugin-serial".to_string();
         assert!(!permission_allowed(&forged, "profiles.read"));
+    }
+
+    #[test]
+    fn agent_unregister_is_a_write_gateway_method() {
+        assert_eq!(required_permission("agent.unregister"), Some("agent.write"));
+        assert_eq!(runtime_method("agent.unregister"), Some(("agent.unregister", Some("agent.write"))));
+        let mut request = request("agent.unregister", &[]);
+        request.plugin_id = "issh-plugin-agent-bridge".to_string();
+        assert!(permission_allowed(&request, "agent.write"));
     }
 
     #[test]
