@@ -38,7 +38,16 @@ export interface RemoteAgentProbeResult {
 export function probeRemoteAgents (sessionId: string): Promise<RemoteAgentProbeResult> {
     return runtimeRequest<RemoteAgentProbeResult>('ssh.execReadonly', {
         sessionId,
-        command: 'sh -lc \'for name in pi omp codex claude opencode hermes hermes-agent; do path="$(command -v "$name" 2>/dev/null)" && printf "%s\t%s\n" "$name" "$path"; done\'',
+        command: `sh -lc 'for name in pi omp codex claude opencode hermes hermes-agent; do
+            path="$(command -v "$name" 2>/dev/null)"
+            if [ ! -f "$path" ] || [ ! -x "$path" ]; then
+                path=""
+                for dir in "$HOME/.local/bin" "$HOME/.npm-global/bin" "$HOME/.npm/bin" "$HOME/.bun/bin" "$HOME/.cargo/bin" "$HOME/.opencode/bin" "$HOME/.hermes/venv/bin" "\${NVM_DIR:-$HOME/.nvm}"/versions/node/*/bin "$HOME/.local/share/fnm/node-versions"/*/installation/bin "$HOME/.volta/bin"; do
+                    if [ -f "$dir/$name" ] && [ -x "$dir/$name" ]; then path="$dir/$name"; break; fi
+                done
+            fi
+            if [ -n "$path" ]; then printf "%s\t%s\n" "$name" "$path"; fi
+        done'`,
         timeoutMs: 10000,
         maxOutputBytes: 16 * 1024,
     })

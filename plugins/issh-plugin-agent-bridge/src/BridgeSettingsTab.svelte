@@ -8,7 +8,6 @@
         listAgents,
         listSessions,
         probeRemoteAgents,
-        readSessionOutput,
         listWorkspaces,
         registerAgent,
         unbindSession,
@@ -29,6 +28,9 @@
     let health = $state<{ runtimeVersion: string; capabilities: string[] } | null>(null)
     let busy = $state(false)
     let error = $state('')
+    let scanning = $state(false)
+    let scanStatus = $state('')
+    let scanErrors = $state<string[]>([])
 
     interface DetectedAgent {
         name: string
@@ -64,28 +66,12 @@
                 for (const line of remote.output.split(/\r?\n/)) {
                     const [command, path] = line.trim().split(/\t+/, 2)
                     const candidate = REMOTE_AGENT_COMMANDS.find((item) => item.command === command)
-                    if (candidate && path && !detected.some((agent) => agent.name === candidate.name)) {
+                    if (candidate && path?.startsWith('/') && !detected.some((agent) => agent.name === candidate.name)) {
                         detected.push({ name: candidate.name, command, path, sessionId: session.id, evidence: session.title, source: 'remote' })
                     }
                 }
-            } catch {
-                // SSH exec 不可用时继续用终端输出作为降级识别。
-            }
-            try {
-                const output = await readSessionOutput(session.id)
-                const marker = [
-                    { name: 'Hermes Agent', pattern: /hermes\s+agent/i },
-                    { name: 'Codex', pattern: /(?:openai\s+)?codex(?:\s+cli)?/i },
-                    { name: 'Claude Code', pattern: /claude\s+code/i },
-                    { name: 'OpenCode', pattern: /open\s*code/i },
-                    { name: 'Pi', pattern: /(?:pi\s+(?:coding\s+)?agent|welcome\s+to\s+pi\b|pi\s+v?\d+\b|(?:^|\n)[^\r\n]{0,80}(?:[$>#❯➜]\s*)pi(?:\s|$))/im },
-                    { name: 'OMP', pattern: /(?:omp\s+agent|oh[- ]my[- ]prompt|welcome\s+to\s+omp\b|omp\s+v?\d+\b|(?:^|\n)[^\r\n]{0,80}(?:[$>#❯➜]\s*)omp(?:\s|$))/im },
-                ].find((candidate) => candidate.pattern.test(output))
-                if (marker && !detected.some((agent) => agent.name === marker.name)) {
-                    detected.push({ name: marker.name, sessionId: session.id, evidence: session.title, source: 'terminal' })
-                }
-            } catch {
-                // 远端探测已成功时，读取终端输出失败不影响结果。
+            } catch (cause) {
+                scanErrors = [...scanErrors, `${session.title}: ${cause instanceof Error ? cause.message : String(cause)}`]
             }
             return detected
         }))
@@ -93,6 +79,11 @@
     }
 
     async function refresh (): Promise<void> {
+        if (scanning) return
+        scanning = true
+        scanStatus = '正在探测…'
+        scanErrors = []
+        detectedAgents = []
         busy = true
         error = ''
         try {
@@ -105,10 +96,16 @@
             }
             const workspace = workspaces.find((candidate) => candidate.id === selectedWorkspaceId) ?? null
             detectedAgents = await detectAgents(ss, workspace)
+            const scannedCount = ss.filter((session) => session.connected && session.profileType === 'ssh' && workspace?.bindings.some((binding) => binding.sessionId === session.id)).length
+            scanStatus = scannedCount === 0
+                ? '没有可扫描的 SSH 会话，请先绑定并连接会话。'
+                : `探测完成：${scannedCount} 个 SSH 会话，发现 ${detectedAgents.length} 个 Agent，${scanErrors.length} 个会话失败（${new Date().toLocaleTimeString()}）。`
             agents = selectedWorkspaceId ? await listAgents(selectedWorkspaceId) : []
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
+            scanStatus = '探测失败，请查看错误信息后重试。'
         } finally {
+            scanning = false
             busy = false
         }
     }
@@ -272,11 +269,15 @@
         <div class="bridge-section">
             <div class="bridge-row">
                 <div class="settings-field-title">Agent（{agents.length}）</div>
-                <button type="button" disabled={busy} onclick={() => void refresh()}>重新探测</button>
+                <button type="button" disabled={busy || scanning} onclick={() => void refresh()}>{scanning ? '正在探测…' : '重新探测'}</button>
             </div>
+            <div class="settings-hint" role="status" aria-live="polite">{scanStatus}</div>
+            {#each scanErrors as scanError}
+                <div class="settings-hint" role="alert">{scanError}</div>
+            {/each}
             {#if unregisteredDetectedAgents.length > 0}
                 <div class="bridge-section">
-                    <div class="settings-hint">检测到当前 SSH 登录账号中的 Agent（点击注册到当前工作区）</div>
+                    <div class="settings-hint">检测到已绑定 SSH 账号下的 Agent 可执行文件（不代表正在运行，点击注册到当前工作区）</div>
                     {#each unregisteredDetectedAgents as detected (detected.sessionId + ':' + detected.name + ':' + (detected.command ?? 'terminal'))}
                         <div class="bridge-row">
                             <span class="bridge-session-title">{detected.name} · {detected.evidence}{#if detected.path} · {detected.path}{/if}</span>

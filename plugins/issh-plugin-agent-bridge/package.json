@@ -1,12 +1,13 @@
 {
     "name": "issh-plugin-agent-bridge",
-    "version": "0.2.3",
+    "version": "0.2.4",
     "description": "Herdr/Workspace 与 Agent 统一管理插件（issh Tauri 客户端）",
     "type": "module",
     "main": "index.ts",
     "scripts": {
         "build": "vite build",
-        "package": "node scripts/package.mjs"
+        "package": "node scripts/package.mjs",
+        "test:agent-scan": "node --test tests/agent-scan-regression.mjs"
     },
     "devDependencies": {
         "@sveltejs/vite-plugin-svelte": "^6.0.0",
