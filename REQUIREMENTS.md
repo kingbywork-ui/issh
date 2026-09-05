@@ -638,3 +638,42 @@
 **验证**：修改前最小回归测试 3 项失败；增强后的定向回归 4/4 通过，包括实际 Git Bash 运行探测命令并发现临时 nvm 目录下的 Codex。插件 build/package 成功。真实 SSH 账号与已安装客户端界面验证由用户后续确认。小功能仅做定向验证，未运行全功能 smoke_test.py。
 
 **发布**：版本 bump 0.2.3 → **0.2.4**（避免覆盖已发布 0.2.3 造成哈希漂移）。完整发布流水线（build → package → subtree split → push 独立仓库 → tag v0.2.4 → gh release → 更新 registry → push registry）。注意：首次跑流水线时源码改动尚未 commit，导致 subtree split 不含新代码（main push 返回 "Everything up-to-date"），已补 commit `36856a8` 后重跑 split/push/tag 修复，release/registry 的 tgz 内容本就正确（package 读工作区文件）。
+
+### R-066 Agent 桥接卸载后 v0.2.4 无法重新安装的原因核查（2026-09-05，已完成）
+
+**来源**：用户需求。更新插件后「重新扫描」仍无反应，卸载插件后重新安装 v0.2.4 失败，要求定位问题。
+
+**结论**：v0.2.4 的 GitHub Release、tag、tgz 资产和 registry URL 均存在且一致；客户端截图中的 `error sending request for url` 发生在 HTTP 响应、sha256 校验和解包之前，属于宿主 `reqwest + rustls` 发起 HTTPS 请求阶段的网络/TLS 瞬时失败，非 URL/包内容错误。当前同一 Rust 下载器请求该 URL 已返回 200，Release 资产大小 31,899 字节、sha256 与 registry `09d447f2...` 一致。
+
+**兼容性边界**：Agent 桥接 0.2.3/0.2.4 使用宿主 `ssh.execReadonly`；该能力由宿主提交 `9b10757` 拆出并随 issh 0.0.2 安装包生效。插件 `minAppVersion` 仍为 0.0.1，旧宿主可能允许安装但扫描请求会被拒绝，这是“只更新插件仍扫描失败”的版本兼容风险。
+
+**数据保留**：卸载只删除 `%APPDATA%\\issh\\plugins\\issh-plugin-agent-bridge`，不删除 runtime SQLite。当前数据库仍有 workspace `ai-work`、3 条 SSH binding 和 3 条已注册 Hermes Agent 记录；重新安装后可继续使用这些数据，但只有当前仍连接的会话才会参与扫描。
+
+### R-067 Agent 注册记录的 sessionId 被合并为 ssh-1（2026-09-05，已定位）
+
+**来源**：用户需求。Agent 桥接设置页的已注册会话列表出现 3 个 `ssh-1`。
+
+**结论**：扫描结果本身不是根因。数据库事件显示前三个 Hermes 注册时分别绑定 `ssh-1`、`ssh-2`、`ssh-3`，随后 `workspace.sync_sessions` 更新了 agent 记录，使三者当前都变成 `ssh-1`；OMP 当前仍为 `ssh-4`。`SessionStore` 每次 runtime 进程都从 `ssh-1` 重新编号，`sync_sessions` 却优先按旧 `session_id` 精确匹配，再按 `profile_id` 重连，并执行 `UPDATE agents ... WHERE session_id = previous_session_id`，没有按绑定的稳定 profile 身份隔离更新，因此在重启、重连或 tab 顺序变化时会串号/批量改写。
+
+**当前数据**：workspace `ai-work` 的 binding 已是 dedirock=`ssh-1`、BFC-DE=`ssh-3`、TY-ubuntu-pub=`ssh-4`；前三个 Hermes 均为 `ssh-1`，与截图一致。按注册事件和当前 binding 可推断原本应分别回到 TY=`ssh-4`、BFC-DE=`ssh-3`、dedirock=`ssh-1`，但 agents 表没有 profile_id，不能仅凭当前行安全自动修复。
+
+**状态**：已完成（详见 R-068）。
+
+### R-068 修复 Agent 会话 ID 串号与旧数据库迁移（2026-09-05，已完成）
+
+**来源**（用户需求）：修复已注册 Agent 的会话列表出现多个 `ssh-1`，并保留前述扫描与注册数据。
+
+**修复**：`workspace.sync_sessions` 现在优先使用稳定的 SSH `profile_id`，并通过一次事务按绑定身份定向更新 Agent；旧版没有 `profile_id` 的 Agent 会从注册/绑定事件回填身份，避免按复用的进程内 `ssh-*` ID 批量改写。新增 `agents.profile_id` 迁移列与 `Agent.profileId` 字段，注册事件同时记录 profile 身份。
+
+**验证**：先运行最小回归测试确认原实现失败，修复后同一测试通过；工作区 7/7 测试、isshd 10/10 测试通过，`cargo check -p isshd` 通过。回归覆盖 runtime 重启后 `ssh-1`/`ssh-2`/`ssh-3` 重用，以及旧注册事件回填 profile 身份。已按 Tauri 流程构建 `issh_0.0.2_x64-setup.exe`（5,200,989 字节，SHA-256 `95192494E7894CEC62C381213B0A44DDF16D66FBBDBB17E3FAED546A3825FCD8`），安装包内 `isshd.exe` 与 release runtime SHA-256 均为 `DAA582AC6BD14F95F1DF6289D0D9A98BA3A14CF66C308DB7CAD7EF2CDB9CB2D5`。
+当前用户数据库（含 WAL）的副本迁移冒烟也成功：旧表新增 `profile_id`，4 条 Agent 均回填出正确 profile；原数据库未改动。
+
+### R-069 Agent 注销入口（2026-09-05，已完成）
+
+**来源**（用户需求）：询问已注册 Agent 如何取消注册。
+
+**修复**：新增 `agent.unregister` RPC、runtime 删除事务和审计事件；补齐 Tauri 插件网关的权限映射；Agent Bridge v0.2.5 的每条 Agent 记录增加“注销”按钮，确认后删除 Agent 及其关联任务记录。解绑会话的语义保持不变。
+
+**验证**：注销回归测试先失败后通过；网关回归测试先失败后通过；workspace 8/8、isshd 10/10 测试通过；插件 build/package、Tauri build 成功。插件包 `issh-plugin-agent-bridge-0.2.5.tgz`（32,077 字节，SHA-256 `566D18E85A8565BDEA8640BB4705E2741837820332F9AE2E804B96E26BFCFF17`）；Tauri 安装包 `issh_0.0.2_x64-setup.exe`（5,192,350 字节，SHA-256 `FAC04459DD6CB979A6DA1E1E2254677E3D43A1B3E345C3FBD1BDFA6AE7DA01E5`）。
+
+**发布**：版本 0.2.4 → **0.2.5**。完整发布流水线（build → package → subtree split → push 独立仓库 → tag v0.2.5 → gh release → 更新 registry → push registry）。因脚本重新 build（vite 非确定性），最终发布 tgz SHA-256 为 `6944D41712C29BD1DC086D7F4529CDBB24BBFD71D14676F24B3EF1ED0E66FC8C`（registry 与 release 一致）。独立仓库 main `939d8fe..c209208`、tag `v0.2.5`、registry 独立仓库 main `286c1b8..4cdaf03`。issh 本身保持 0.0.2 版本，仅 runtime/宿主源码随本次提交发布（已重新打包安装包，见上 Tauri 安装包哈希）。
