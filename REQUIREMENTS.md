@@ -12,7 +12,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| 待办 | 6 |
+| 待办 | 7 |
 | 进行中 | 1 |
 | 已完成 | 48 |
 | 已放弃 | 0 |
@@ -677,3 +677,40 @@
 **验证**：注销回归测试先失败后通过；网关回归测试先失败后通过；workspace 8/8、isshd 10/10 测试通过；插件 build/package、Tauri build 成功。插件包 `issh-plugin-agent-bridge-0.2.5.tgz`（32,077 字节，SHA-256 `566D18E85A8565BDEA8640BB4705E2741837820332F9AE2E804B96E26BFCFF17`）；Tauri 安装包 `issh_0.0.2_x64-setup.exe`（5,192,350 字节，SHA-256 `FAC04459DD6CB979A6DA1E1E2254677E3D43A1B3E345C3FBD1BDFA6AE7DA01E5`）。
 
 **发布**：版本 0.2.4 → **0.2.5**。完整发布流水线（build → package → subtree split → push 独立仓库 → tag v0.2.5 → gh release → 更新 registry → push registry）。因脚本重新 build（vite 非确定性），最终发布 tgz SHA-256 为 `6944D41712C29BD1DC086D7F4529CDBB24BBFD71D14676F24B3EF1ED0E66FC8C`（registry 与 release 一致）。独立仓库 main `939d8fe..c209208`、tag `v0.2.5`、registry 独立仓库 main `286c1b8..4cdaf03`。issh 本身保持 0.0.2 版本，仅 runtime/宿主源码随本次提交发布（已重新打包安装包，见上 Tauri 安装包哈希）。
+
+### R-070 清理旧 Agent 注册记录（2026-09-05，已完成）
+
+**来源**（用户需求）：旧版已注册 Agent 仍没有“注销”入口，要求直接删除已有注册会话。
+
+**处理**：在当前用户 runtime 数据库中删除 workspace `ai-work` 的 4 条旧 Agent 记录（Hermes Agent×3、OMP×1），为每条记录写入 `agent.unregistered` 审计事件；未删除工作区、SSH 配置或会话绑定。
+
+**验证**：删除前已创建 SQLite 快照 `C:\Users\yanglu\AppData\Local\Temp\issh-runtime-agent-cleanup-backup.sqlite3`；删除后 `agents` 表为空、`bindings` 表为空，4 条注销审计事件存在。
+
+### R-071 Agent 跨会话互通（2026-09-04，进行中）
+
+**来源**（用户需求）：绑定并注册后，希望不同 SSH 会话中的 Agent 能够互相发送消息、协作处理任务。
+
+**实施进度（2026-09-05）**：用户已批准按复评方案实施。新增 Codex App Server/Hermes ACP 流式适配器、进程封装及显式指定两个 Agent 的 A→B→A 验收脚本；先运行缺失模块测试复现，再实现后同组协议测试 6/6 通过。本机 Codex 0.153.0 真实 initialize 握手通过，尚未验证模型回复。当前本机 Bridge 127.0.0.1:59688 拒绝连接，等待开启 Bridge、连接测试 SSH 会话并明确 Hermes/Codex 所在主机；真实远端闭环未通过，持久化中转、SSH exec 流及桌面 UI 尚未实现，不代表绑定注册后已可互通。
+
+**当前结论**：现有绑定/注册只建立工作区归属和可选的 `sessionId`，不会自动共享终端输入输出。当前 Hermes、Codex CLI、OMP 等扫描结果只是可执行文件识别，没有统一的进程间 Agent 协议；现有 `task.prompt` 主要服务于宿主 LLM，不能直接把提示投递给这些 CLI 进程。
+
+**建议实现**：优先增加持久化 Workspace 消息信箱（发送、收件箱、确认、回复、审计事件），再通过 Agent Bridge/MCP 暴露消息工具；终端注入作为可选的 Agent 适配器，并使用 pane 输入所有权和危险操作确认，避免直接把多个 Agent 的输入混在同一终端。
+
+**方案复评（2026-09-05）**：消息信箱只能保证存储和路由，MCP 工具不能单独保证唤醒空闲 Agent。优先验证两个真实 CLI 的接收/回复适配器，再接入 isshd 持久化中转；区分已发现、已注册、已连接状态。以稳定 agentId + conversationId 标识目标，SSH sessionId 仅为传输关联；通过现有 SSH 连接承载远端 stdio 适配器，避免要求远端访问 Windows localhost。消息与命令执行分别授权，身份由凭据绑定而非信任调用参数；实现去重、断线重投、逐 Agent 队列和自动回复轮数上限。验收必须覆盖同一目标对话的 A→B→A 闭环；若只能启动新对话，应明确标为能力限制。本次仅评估，未实现。
+
+### R-072 指令与技能执行规则优化（2026-09-05，已完成）
+
+**来源**（用户需求）：用户接受全部指令审阅建议并授权修改。
+
+**结果**：明确范围内自主执行、复现展示不等待审批、局部阻塞继续独立工作、按影响验证、sol 回退、只读文档例外和建议不等于授权；更新 runtime/Tauri 架构及打包宿主选择，修订 review/ponytail/canvas 技能并维护重复副本。保留明确批准要求。仅文档一致性检查，无产品代码或打包变更；R-071 仍进行中。
+
+
+### R-073 Bridge 启动失败诊断与可配置端口（2026-09-05，进行中：源码完成，桌面验收待办）
+
+**来源**（用户需求）：Bridge 开启出现 os error 10013，要求定位并修复；用户随后明确同意默认 59688、允许手动配置其它端口，更新 R-045 的固定端口要求。
+
+**复现与根因**：本机 `netsh interface ipv4 show excludedportrange protocol=tcp` 显示 59680–59779 被系统排除，包含 59688；没有 59688 TCP 监听记录，直接 loopback bind 复现访问拒绝。原代码绑定固定端口且将全部失败提示为占用。对照本机 39688 bind 成功。
+
+**实现**：新增持久化 port，旧配置缺失时默认 59688；前后端校验 1–65535 整数，拒绝 0/随机端口。关闭 Bridge 时可修改保存端口，运行时禁止修改；启用/配置重启、状态、health、discovery、前端连接测试统一使用配置端口。10013/PermissionDenied 提示系统排除端口等原因，AddrInUse 单独提示占用。enabled 仍不持久化，保留手动开启、localhost-only、token/scope/危险命令/SFTP 安全限制。
+
+**验证与边界**：原生 cargo test 47/47 通过，其中 Bridge 相关 10/10（含真实 HTTP 鉴权/health/discovery/端口释放、旧配置兼容和非法端口）；前端 check/build 通过。严格 Clippy 被原有 build.rs:10 redundant_closure 阻挡；cargo fmt --check 有仓库既有格式差异，未扩大范围格式化。已重新打包并静默安装验证：安装包 `issh_0.0.2_x64-setup.exe`（5,194,767 字节，02:21），注册表 DisplayVersion=0.0.2，launch test 窗口标题 issh、isshd 从 `%LOCALAPPDATA%\issh\issh-runtime\isshd.exe` 拉起、数据目录 `%APPDATA%\issh` 复用（config.yaml 08/31 未改动）。原生桌面操作工具不可用，端口持久化 GUI 实机点击（关闭 Bridge→保存 39688→手动开启→连接测试→关闭重开应用确认端口保留）仍待桌面验收。39688 当前可用，不保证未来不被其它程序占用。

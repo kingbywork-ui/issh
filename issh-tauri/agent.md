@@ -21,6 +21,8 @@ process from the shipped application.
 
 ## Verification
 
+Select checks by impact: documentation-only edits need documentation checks; frontend-only changes need frontend checks; native changes need native checks. GUI behavior changes require the live GUI slice. Full checks apply to cross-cutting changes or explicitly requested packaging. Report missing tools with targeted alternatives; do not fix unrelated failures.
+
 - Frontend: `npm run check` and `npm run build`.
 - Native: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and
   `cargo test` from `src-tauri`.
