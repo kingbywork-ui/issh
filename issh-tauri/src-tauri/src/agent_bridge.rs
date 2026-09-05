@@ -152,6 +152,7 @@ const TOOLS: &[ToolDef] = &[
 /// Agent Bridge 运行期状态：token、审计、输出缓存、scope 授权。
 pub struct AgentBridgeState {
     port: u16,
+    shutdown: Arc<AtomicBool>,
     token_sha256: [u8; 32],
     audit_path: PathBuf,
     audit_seq: AtomicU64,
@@ -171,6 +172,8 @@ pub struct AgentBridgeState {
     jobs: std::sync::Mutex<Vec<JobRecord>>,
     /// SSE 事件广播（R-055）：job 状态变化等推送给已连接客户端。
     sse_tx: tokio::sync::broadcast::Sender<String>,
+    /// 外部 Agent 连接断开通知；每次主动断开都会递增 generation。
+    disconnect_rx: tokio::sync::watch::Receiver<u64>,
 }
 
 /// 长命令异步 job（R-054）：状态机 running -> done/failed。
@@ -192,14 +195,22 @@ struct CachedOutput {
     created_seq: u64,
 }
 
-/// 已启动的 Agent Bridge server 句柄：stop() 关闭 accept loop。
+/// 已启动的 Agent Bridge server 句柄：支持停止监听和主动断开现有 Agent 连接。
 pub struct AgentBridgeHandle {
     shutdown: Arc<AtomicBool>,
+    disconnect_tx: tokio::sync::watch::Sender<u64>,
 }
 
 impl AgentBridgeHandle {
     pub fn stop(&self) {
         self.shutdown.store(true, Ordering::SeqCst);
+        self.disconnect_clients();
+    }
+
+    /// 断开已经建立的 SSE Agent 连接，但保留 Bridge 监听，允许客户端重新连接。
+    pub fn disconnect_clients(&self) {
+        self.disconnect_tx
+            .send_modify(|generation| *generation = generation.saturating_add(1));
     }
 }
 
@@ -225,9 +236,12 @@ pub async fn start(
     let token_sha256: [u8; 32] = Sha256::digest(token.as_bytes()).into();
     let audit_path = user_data.join("agent-bridge-audit.jsonl");
     let (sse_tx, _) = tokio::sync::broadcast::channel::<String>(64);
+    let (disconnect_tx, disconnect_rx) = tokio::sync::watch::channel(0u64);
+    let shutdown = Arc::new(AtomicBool::new(false));
 
     let state = Arc::new(AgentBridgeState {
         port,
+        shutdown: Arc::clone(&shutdown),
         token_sha256,
         audit_path,
         audit_seq: AtomicU64::new(0),
@@ -240,13 +254,13 @@ pub async fn start(
         permission_mode,
         jobs: std::sync::Mutex::new(Vec::new()),
         sse_tx,
+        disconnect_rx,
     });
 
     if public_discovery {
         write_discovery_file(&user_data, &token, port);
     }
 
-    let shutdown = Arc::new(AtomicBool::new(false));
     {
         let state = Arc::clone(&state);
         let shutdown = Arc::clone(&shutdown);
@@ -276,7 +290,10 @@ pub async fn start(
         });
     }
 
-    Ok(AgentBridgeHandle { shutdown })
+    Ok(AgentBridgeHandle {
+        shutdown,
+        disconnect_tx,
+    })
 }
 
 fn bind_error(port: u16, error: &std::io::Error) -> String {
@@ -306,6 +323,7 @@ async fn handle_connection(
     stream: tokio::net::TcpStream,
     state: Arc<AgentBridgeState>,
 ) -> Result<(), String> {
+    let connection_generation = *state.disconnect_rx.borrow();
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
 
@@ -365,7 +383,7 @@ async fn handle_connection(
 
     // R-055 SSE MCP transport：GET /sse 建立事件流；POST /messages 与 /rpc 走同一 JSON-RPC 处理
     if method == "GET" && path == "/sse" {
-        return handle_sse(writer, state).await;
+        return handle_sse(writer, state, connection_generation).await;
     }
     if method != "POST" || (path != "/rpc" && path != "/messages") {
         write_response(&mut writer, 404, &json!({
@@ -407,7 +425,14 @@ async fn handle_connection(
     };
 
     let started = std::time::Instant::now();
-    let result = dispatch_tool(&state, tool, &params).await;
+    let mut disconnect_rx = state.disconnect_rx.clone();
+    let result = tokio::select! {
+        result = dispatch_tool(&state, tool, &params) => result,
+        changed = disconnect_rx.changed() => {
+            let _ = changed;
+            Err("Agent connection disconnected by issh".to_string())
+        }
+    };
     let elapsed_ms = started.elapsed().as_millis() as u64;
 
     match result {
@@ -432,8 +457,14 @@ async fn handle_connection(
 async fn handle_sse(
     mut writer: tokio::net::tcp::OwnedWriteHalf,
     state: Arc<AgentBridgeState>,
+    connection_generation: u64,
 ) -> Result<(), String> {
     use tokio::io::AsyncWriteExt;
+    if state.shutdown.load(Ordering::SeqCst)
+        || *state.disconnect_rx.borrow() != connection_generation
+    {
+        return Ok(());
+    }
     let headers = concat!(
         "HTTP/1.1 200 OK\r\n",
         "Content-Type: text/event-stream\r\n",
@@ -452,10 +483,15 @@ async fn handle_sse(
     writer.flush().await.map_err(|e| e.to_string())?;
 
     let mut rx = state.sse_tx.subscribe();
+    let mut disconnect_rx = state.disconnect_rx.clone();
     let mut heartbeat = tokio::time::interval(std::time::Duration::from_secs(15));
     heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         tokio::select! {
+            changed = disconnect_rx.changed() => {
+                let _ = changed;
+                return Ok(());
+            }
             event = rx.recv() => {
                 match event {
                     Ok(payload) => {
@@ -1478,6 +1514,7 @@ async fn resolve_tab(params: &Value) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::net::TcpStream;
 
     #[tokio::test]
     async fn custom_port_serves_authenticated_health_and_matches_discovery() {
@@ -1513,6 +1550,90 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         assert!(TcpListener::bind(("127.0.0.1", port)).await.is_ok());
         std::fs::remove_file(user_data.join("issh-agent-bridge.json")).unwrap();
+        std::fs::remove_dir(user_data).unwrap();
+    }
+
+    #[tokio::test]
+    async fn disconnect_clients_closes_sse_stream_but_keeps_bridge_available() {
+        let reservation = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let port = reservation.local_addr().unwrap().port();
+        let user_data = std::env::temp_dir().join(format!(
+            "issh-bridge-disconnect-test-{}-{port}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&user_data).unwrap();
+        let runtime = Arc::new(RuntimeManager {
+            pipe_name: String::new(),
+            database_path: user_data.join("unused.sqlite3"),
+            binary_path: PathBuf::new(),
+            auth_token: String::new(),
+            child: std::sync::Mutex::new(None),
+            startup: tokio::sync::Mutex::new(()),
+            hosts: crate::host_profiles::HostProfileStore::new(&user_data),
+        });
+        drop(reservation);
+        let handle = start(
+            runtime,
+            user_data.clone(),
+            "test-token".into(),
+            port,
+            parse_scopes(&["read".into()]),
+            None,
+            false,
+            false,
+            PermissionMode::Confirm,
+        )
+        .await
+        .unwrap();
+
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+        stream
+            .write_all(
+                b"GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer test-token\r\nConnection: keep-alive\r\n\r\n",
+            )
+            .await
+            .unwrap();
+        let mut initial = Vec::new();
+        while !initial.windows(4).any(|window| window == b"\r\n\r\n") {
+            let mut chunk = [0u8; 512];
+            let read = tokio::time::timeout(
+                std::time::Duration::from_secs(2),
+                stream.read(&mut chunk),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+            assert!(read > 0, "SSE connection closed before headers");
+            initial.extend_from_slice(&chunk[..read]);
+        }
+        assert!(String::from_utf8_lossy(&initial).contains("text/event-stream"));
+
+        handle.disconnect_clients();
+        let mut tail = Vec::new();
+        tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            stream.read_to_end(&mut tail),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .timeout(std::time::Duration::from_secs(3))
+            .build()
+            .unwrap();
+        let response = client
+            .post(format!("http://127.0.0.1:{port}/rpc"))
+            .bearer_auth("test-token")
+            .json(&json!({ "id": "after-disconnect", "method": "issh_health", "params": {} }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::OK);
+
+        handle.stop();
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         std::fs::remove_dir(user_data).unwrap();
     }
 

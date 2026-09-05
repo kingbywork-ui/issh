@@ -646,6 +646,10 @@ export function agentBridgeDisable (): Promise<AgentBridgeStatus> {
     return invoke<AgentBridgeStatus>('agent_bridge_disable')
 }
 
+export function agentBridgeDisconnect (): Promise<AgentBridgeStatus> {
+    return invoke<AgentBridgeStatus>('agent_bridge_disconnect')
+}
+
 export function agentBridgeStatus (): Promise<AgentBridgeStatus> {
     return invoke<AgentBridgeStatus>('agent_bridge_status')
 }

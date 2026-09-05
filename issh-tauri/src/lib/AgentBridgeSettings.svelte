@@ -4,6 +4,7 @@
         agentBridgeAuditClear,
         agentBridgeAuditRead,
         agentBridgeConfigure,
+        agentBridgeDisconnect,
         agentBridgeDisable,
         agentBridgeEnable,
         agentBridgeRotateToken,
@@ -81,6 +82,20 @@
         try {
             status = await agentBridgeRotateToken()
             notice = 'token 已轮换'
+        } catch (cause) {
+            error = cause instanceof Error ? cause.message : String(cause)
+        } finally {
+            busy = false
+        }
+    }
+
+    async function disconnectAgents (): Promise<void> {
+        busy = true
+        error = ''
+        notice = ''
+        try {
+            status = await agentBridgeDisconnect()
+            notice = status.enabled ? '已断开现有 Agent 连接，Bridge 仍在监听' : 'Agent Bridge 未开启'
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
         } finally {
@@ -228,6 +243,7 @@
             </div>
             <div class="sudo-actions">
                 {#if status.enabled}
+                    <button type="button" disabled={busy} onclick={() => void disconnectAgents()}>断开 Agent 连接</button>
                     <button class="plugin-remove" type="button" disabled={busy} onclick={() => void toggle(false)}>关闭</button>
                 {:else}
                     <button type="button" disabled={busy} onclick={() => void toggle(true)}>开启 Agent Bridge</button>
@@ -238,7 +254,7 @@
                 <button type="button" disabled={busy || status.enabled || !Number.isInteger(portInput) || !portInput || portInput < 1 || portInput > 65535 || portInput === status.port}
                     onclick={() => void savePatch({ port: portInput })}>保存端口</button>
             </div>
-            <p class="settings-hint">先关闭 Bridge 再修改端口，保存后手动开启。若 59688 被系统保留，可尝试 39688；外部客户端需刷新连接信息。</p>
+            <p class="settings-hint">“断开 Agent 连接”会关闭已有 SSE 长连接但保留 Bridge 监听；外部客户端可重新连接。先关闭 Bridge 再修改端口，保存后手动开启。若 59688 被系统保留，可尝试 39688。</p>
             <p class="settings-hint">监听地址：127.0.0.1:{status.port}</p>
         </div>
 

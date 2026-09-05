@@ -589,6 +589,7 @@ pub fn run() {
             relaunch_elevated,
             agent_bridge_enable,
             agent_bridge_disable,
+            agent_bridge_disconnect,
             agent_bridge_status,
             agent_bridge_configure,
             agent_bridge_rotate_token,
@@ -758,6 +759,19 @@ fn agent_bridge_disable(state: State<'_, AgentBridgeRuntime>) -> Result<Value, S
         handle.stop();
     }
     agent_bridge_status_snapshot(&state, false)
+}
+
+/// 主动断开所有已经建立的外部 Agent 长连接，但保持 Bridge 继续监听。
+#[tauri::command]
+fn agent_bridge_disconnect(state: State<'_, AgentBridgeRuntime>) -> Result<Value, String> {
+    let bridge = state
+        .bridge
+        .lock()
+        .map_err(|_| "Agent Bridge 状态不可用".to_string())?;
+    if let Some(handle) = bridge.as_ref() {
+        handle.disconnect_clients();
+    }
+    agent_bridge_status_snapshot(&state, bridge.is_some())
 }
 
 #[tauri::command]
