@@ -182,6 +182,13 @@ struct AgentRegisterParams {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct AgentUnregisterParams {
+    workspace_id: String,
+    agent_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct AgentAuthorizeParams {
     agent_id: String,
     scope: String,
@@ -945,6 +952,7 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                     "workspace.bind",
                     "workspace.unbind",
                     "agent.register",
+                    "agent.unregister",
                     "agent.list",
                     "agent.authorize",
                     "task.prompt",
@@ -1512,6 +1520,15 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                     params.scopes,
                     now_unix_ms(),
                 )
+            })
+        }
+        "agent.unregister" => {
+            let params = match parse_params::<AgentUnregisterParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_workspace(state, id, |workspace| {
+                workspace.unregister_agent(&params.workspace_id, &params.agent_id, now_unix_ms())
             })
         }
         "agent.list" => {

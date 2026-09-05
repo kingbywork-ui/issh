@@ -1,7 +1,7 @@
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::path::Path;
 
@@ -60,6 +60,7 @@ pub struct Agent {
     pub workspace_id: String,
     pub name: String,
     pub adapter: String,
+    pub profile_id: Option<String>,
     pub session_id: Option<String>,
     pub scopes: Vec<String>,
     pub status: String,
@@ -227,6 +228,7 @@ impl WorkspaceStore {
                  workspace_id TEXT NOT NULL,
                  name TEXT NOT NULL,
                  adapter TEXT NOT NULL,
+                 profile_id TEXT,
                  session_id TEXT,
                  scopes_json TEXT NOT NULL DEFAULT '["context.read","llm.prompt","command.propose"]',
                  status TEXT NOT NULL,
@@ -271,6 +273,10 @@ impl WorkspaceStore {
                 [],
             )?;
         }
+        if !table_has_column(&connection, "agents", "profile_id")? {
+            connection.execute("ALTER TABLE agents ADD COLUMN profile_id TEXT", [])?;
+        }
+        backfill_agent_profile_ids(&connection)?;
 
         let interrupted = {
             let mut statement = connection.prepare(
@@ -315,6 +321,7 @@ impl WorkspaceStore {
         sessions: Vec<SessionSnapshot>,
         now_unix_ms: i64,
     ) -> Result<SessionSyncResult, WorkspaceError> {
+        backfill_agent_profile_ids(&self.connection)?;
         let mut synchronized = BTreeMap::new();
         for mut session in sessions {
             session.id = session.id.trim().to_string();
@@ -330,66 +337,74 @@ impl WorkspaceStore {
         let bindings = self.load_all_binding_rows()?;
         let mut reconnected_bindings = 0;
         let mut disconnected_bindings = 0;
-        for binding in bindings {
-            let exact = binding
-                .session_id
-                .as_ref()
-                .and_then(|id| synchronized.get(id));
-            let matched = exact.or_else(|| {
-                binding.profile_id.as_ref().and_then(|profile_id| {
-                    synchronized
-                        .values()
-                        .find(|session| session.profile_id.as_ref() == Some(profile_id))
+        let mut used_session_ids = BTreeSet::new();
+        let mut matched_bindings = Vec::new();
+        for binding in bindings.iter().cloned() {
+            // SSH session ids are process-local and are reused after a runtime restart.
+            // A stable profile id must therefore win over an old id that may now belong
+            // to another tab. Bindings without a profile id (legacy/local) can still use
+            // their exact session id.
+            let matched = if let Some(profile_id) = binding.profile_id.as_ref() {
+                synchronized.values().find(|session| {
+                    !used_session_ids.contains(&session.id)
+                        && session.profile_id.as_ref() == Some(profile_id)
                 })
-            });
-            if let Some(session) = matched {
-                let status = if session.connected {
-                    "connected"
-                } else {
-                    "disconnected"
-                };
+            } else {
+                binding.session_id.as_ref().and_then(|id| {
+                    synchronized
+                        .get(id)
+                        .filter(|session| !used_session_ids.contains(&session.id))
+                })
+            };
+            if let Some(session) = matched.cloned() {
+                used_session_ids.insert(session.id.clone());
                 if binding.session_id.as_deref() != Some(session.id.as_str()) {
                     reconnected_bindings += 1;
-                    if let Some(previous_session_id) = binding.session_id.as_ref() {
-                        self.connection.execute(
-                            "UPDATE agents SET session_id = ?1, updated_at_unix_ms = ?2
-                             WHERE workspace_id = ?3 AND session_id = ?4",
-                            params![
-                                session.id,
-                                now_unix_ms,
-                                binding.workspace_id,
-                                previous_session_id,
-                            ],
-                        )?;
-                    }
                 }
-                self.connection.execute(
-                    "UPDATE bindings
-                     SET session_id = ?1, profile_id = ?2, host = ?3, user = ?4,
-                         status = ?5, last_seen_at_unix_ms = ?6
-                     WHERE workspace_id = ?7 AND binding_key = ?8",
-                    params![
-                        session.id,
-                        session.profile_id,
-                        session.host,
-                        session.user,
-                        status,
-                        now_unix_ms,
-                        binding.workspace_id,
-                        binding.binding_key,
-                    ],
-                )?;
+                matched_bindings.push(MatchedBinding { binding, session });
+            } else if binding.status != "disconnected" {
+                disconnected_bindings += 1;
+            }
+        }
+
+        let transaction = self.connection.transaction()?;
+        update_agent_sessions(&transaction, &matched_bindings, now_unix_ms)?;
+        for matched in &matched_bindings {
+            let status = if matched.session.connected {
+                "connected"
             } else {
-                if binding.status != "disconnected" {
-                    disconnected_bindings += 1;
-                }
-                self.connection.execute(
+                "disconnected"
+            };
+            transaction.execute(
+                "UPDATE bindings
+                 SET session_id = ?1, profile_id = ?2, host = ?3, user = ?4,
+                     status = ?5, last_seen_at_unix_ms = ?6
+                 WHERE workspace_id = ?7 AND binding_key = ?8",
+                params![
+                    matched.session.id,
+                    matched.session.profile_id,
+                    matched.session.host,
+                    matched.session.user,
+                    status,
+                    now_unix_ms,
+                    matched.binding.workspace_id,
+                    matched.binding.binding_key,
+                ],
+            )?;
+        }
+        for binding in &bindings {
+            if !matched_bindings.iter().any(|matched| {
+                matched.binding.workspace_id == binding.workspace_id
+                    && matched.binding.binding_key == binding.binding_key
+            }) {
+                transaction.execute(
                     "UPDATE bindings SET status = 'disconnected'
                      WHERE workspace_id = ?1 AND binding_key = ?2",
                     params![binding.workspace_id, binding.binding_key],
                 )?;
             }
         }
+        transaction.commit()?;
         self.sessions = synchronized;
 
         Ok(SessionSyncResult {
@@ -610,6 +625,10 @@ impl WorkspaceStore {
             return Err(WorkspaceError::InvalidAdapter(adapter.to_string()));
         }
         let scopes = normalize_agent_scopes(scopes)?;
+        let profile_id = session_id
+            .as_ref()
+            .and_then(|id| self.sessions.get(id))
+            .and_then(|session| session.profile_id.clone());
         if let Some(session_id) = session_id.as_ref() {
             if !self.sessions.contains_key(session_id) {
                 return Err(WorkspaceError::SessionNotFound(session_id.clone()));
@@ -641,13 +660,14 @@ impl WorkspaceStore {
         let transaction = self.connection.transaction()?;
         transaction.execute(
             "INSERT INTO agents(
-                 public_id, workspace_id, name, adapter, session_id, scopes_json, status,
+                 public_id, workspace_id, name, adapter, profile_id, session_id, scopes_json, status,
                  created_at_unix_ms, updated_at_unix_ms
-             ) VALUES('', ?1, ?2, ?3, ?4, ?5, 'idle', ?6, ?6)",
+             ) VALUES('', ?1, ?2, ?3, ?4, ?5, ?6, 'idle', ?7, ?7)",
             params![
                 workspace_id,
                 name,
                 adapter,
+                profile_id,
                 session_id,
                 scopes_json,
                 now_unix_ms
@@ -667,6 +687,7 @@ impl WorkspaceStore {
             &json!({
                 "name": name,
                 "adapter": adapter,
+                "profileId": profile_id,
                 "sessionId": session_id,
                 "scopes": scopes,
             }),
@@ -676,11 +697,48 @@ impl WorkspaceStore {
         self.get_agent(&id)
     }
 
+    pub fn unregister_agent(
+        &mut self,
+        workspace_id: &str,
+        agent_id: &str,
+        now_unix_ms: i64,
+    ) -> Result<(), WorkspaceError> {
+        self.ensure_workspace(workspace_id)?;
+        let agent = self.get_agent(agent_id)?;
+        if agent.workspace_id != workspace_id {
+            return Err(WorkspaceError::AgentNotFound(agent_id.to_string()));
+        }
+        let transaction = self.connection.transaction()?;
+        let deleted = transaction.execute(
+            "DELETE FROM agents WHERE public_id = ?1 AND workspace_id = ?2",
+            params![agent_id, workspace_id],
+        )?;
+        if deleted == 0 {
+            return Err(WorkspaceError::AgentNotFound(agent_id.to_string()));
+        }
+        insert_event(
+            &transaction,
+            workspace_id,
+            "agent",
+            agent_id,
+            "agent.unregistered",
+            &json!({
+                "name": agent.name,
+                "adapter": agent.adapter,
+                "profileId": agent.profile_id,
+                "sessionId": agent.session_id,
+            }),
+            now_unix_ms,
+        )?;
+        transaction.commit()?;
+        Ok(())
+    }
+
     pub fn list_agents(&self, workspace_id: &str) -> Result<Vec<Agent>, WorkspaceError> {
         self.ensure_workspace(workspace_id)?;
         let mut statement = self.connection.prepare(
-            "SELECT public_id, workspace_id, name, adapter, session_id, scopes_json, status,
-                    created_at_unix_ms, updated_at_unix_ms
+            "SELECT public_id, workspace_id, name, adapter, profile_id, session_id, scopes_json,
+                    status, created_at_unix_ms, updated_at_unix_ms
              FROM agents WHERE workspace_id = ?1 ORDER BY row_id",
         )?;
         let rows = statement.query_map(params![workspace_id], map_agent)?;
@@ -690,8 +748,8 @@ impl WorkspaceStore {
     pub fn get_agent(&self, agent_id: &str) -> Result<Agent, WorkspaceError> {
         self.connection
             .query_row(
-                "SELECT public_id, workspace_id, name, adapter, session_id, scopes_json, status,
-                        created_at_unix_ms, updated_at_unix_ms
+                "SELECT public_id, workspace_id, name, adapter, profile_id, session_id, scopes_json,
+                        status, created_at_unix_ms, updated_at_unix_ms
                  FROM agents WHERE public_id = ?1",
                 params![agent_id],
                 map_agent,
@@ -1010,6 +1068,7 @@ impl WorkspaceStore {
     }
 }
 
+#[derive(Clone)]
 struct BindingRow {
     workspace_id: String,
     binding_key: String,
@@ -1018,24 +1077,197 @@ struct BindingRow {
     status: String,
 }
 
+struct MatchedBinding {
+    binding: BindingRow,
+    session: SessionSnapshot,
+}
+
 fn map_agent(row: &rusqlite::Row<'_>) -> rusqlite::Result<Agent> {
-    let scopes_json: String = row.get(5)?;
+    let scopes_json: String = row.get(6)?;
     Ok(Agent {
         id: row.get(0)?,
         workspace_id: row.get(1)?,
         name: row.get(2)?,
         adapter: row.get(3)?,
-        session_id: row.get(4)?,
+        profile_id: row.get(4)?,
+        session_id: row.get(5)?,
         scopes: serde_json::from_str(&scopes_json).unwrap_or_else(|_| {
             DEFAULT_AGENT_SCOPES
                 .iter()
                 .map(|scope| (*scope).to_string())
                 .collect()
         }),
-        status: row.get(6)?,
-        created_at_unix_ms: row.get(7)?,
-        updated_at_unix_ms: row.get(8)?,
+        status: row.get(7)?,
+        created_at_unix_ms: row.get(8)?,
+        updated_at_unix_ms: row.get(9)?,
     })
+}
+
+fn backfill_agent_profile_ids(connection: &Connection) -> Result<(), WorkspaceError> {
+    let candidates = {
+        let mut statement = connection.prepare(
+            "SELECT public_id, workspace_id, session_id, created_at_unix_ms
+             FROM agents WHERE profile_id IS NULL AND session_id IS NOT NULL",
+        )?;
+        let rows = statement.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)?,
+            ))
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()?
+    };
+
+    for (agent_id, workspace_id, session_id, created_at_unix_ms) in candidates {
+        if let Some(profile_id) = find_legacy_agent_profile_id(
+            connection,
+            &agent_id,
+            &workspace_id,
+            &session_id,
+            created_at_unix_ms,
+        )? {
+            connection.execute(
+                "UPDATE agents SET profile_id = ?1
+                 WHERE public_id = ?2 AND profile_id IS NULL",
+                params![profile_id, agent_id],
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn find_legacy_agent_profile_id(
+    connection: &Connection,
+    agent_id: &str,
+    workspace_id: &str,
+    session_id: &str,
+    created_at_unix_ms: i64,
+) -> Result<Option<String>, WorkspaceError> {
+    let mut registered_session_id = session_id.to_string();
+    let registration_payload = connection
+        .query_row(
+            "SELECT payload_json FROM events
+             WHERE workspace_id = ?1 AND entity_type = 'agent' AND entity_id = ?2
+               AND kind = 'agent.registered'
+             ORDER BY sequence DESC LIMIT 1",
+            params![workspace_id, agent_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?;
+    if let Some(payload) = registration_payload {
+        if let Ok(payload) = serde_json::from_str::<Value>(&payload) {
+            if let Some(profile_id) = payload.get("profileId").and_then(Value::as_str) {
+                return Ok(Some(profile_id.to_string()));
+            }
+            if let Some(session_id) = payload.get("sessionId").and_then(Value::as_str) {
+                registered_session_id = session_id.to_string();
+            }
+        }
+    }
+
+    let mut statement = connection.prepare(
+        "SELECT payload_json, created_at_unix_ms FROM events
+         WHERE workspace_id = ?1 AND entity_type = 'binding' AND kind = 'binding.connected'
+         ORDER BY sequence",
+    )?;
+    let rows = statement.query_map(params![workspace_id], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+    })?;
+    let mut profile_id = None;
+    for row in rows {
+        let (payload, event_time) = row?;
+        if event_time <= created_at_unix_ms {
+            if let Some(candidate) = profile_id_from_payload(&payload, &registered_session_id) {
+                profile_id = Some(candidate);
+            }
+        }
+    }
+    Ok(profile_id)
+}
+
+fn profile_id_from_payload(payload_json: &str, session_id: &str) -> Option<String> {
+    let payload: Value = serde_json::from_str(payload_json).ok()?;
+    if payload.get("sessionId").and_then(Value::as_str) != Some(session_id) {
+        return None;
+    }
+    payload
+        .get("profileId")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+}
+
+fn update_agent_sessions(
+    transaction: &Transaction<'_>,
+    matched_bindings: &[MatchedBinding],
+    now_unix_ms: i64,
+) -> Result<(), WorkspaceError> {
+    let mut legacy_migrations = BTreeMap::new();
+    for matched in matched_bindings {
+        let old_session_id = matched.binding.session_id.as_deref();
+        let new_session_id = matched.session.id.as_str();
+        if old_session_id == Some(new_session_id) {
+            continue;
+        }
+        if let Some(profile_id) = matched.binding.profile_id.as_ref() {
+            transaction.execute(
+                "UPDATE agents SET session_id = ?1, profile_id = ?2, updated_at_unix_ms = ?3
+                 WHERE workspace_id = ?4 AND profile_id = ?2",
+                params![
+                    new_session_id,
+                    profile_id,
+                    now_unix_ms,
+                    matched.binding.workspace_id
+                ],
+            )?;
+        } else if let Some(old_session_id) = old_session_id {
+            let key = (
+                matched.binding.workspace_id.clone(),
+                old_session_id.to_string(),
+            );
+            match legacy_migrations.get(&key) {
+                Some(existing) if existing != new_session_id => continue,
+                _ => {
+                    legacy_migrations.insert(key, new_session_id.to_string());
+                }
+            }
+        }
+    }
+
+    if legacy_migrations.is_empty() {
+        return Ok(());
+    }
+    transaction.execute_batch(
+        "CREATE TEMP TABLE IF NOT EXISTS issh_session_migrations (
+             workspace_id TEXT NOT NULL,
+             old_session_id TEXT NOT NULL,
+             new_session_id TEXT NOT NULL,
+             PRIMARY KEY(workspace_id, old_session_id)
+         )",
+    )?;
+    transaction.execute("DELETE FROM issh_session_migrations", [])?;
+    for ((workspace_id, old_session_id), new_session_id) in legacy_migrations {
+        transaction.execute(
+            "INSERT INTO issh_session_migrations(workspace_id, old_session_id, new_session_id)
+             VALUES(?1, ?2, ?3)",
+            params![workspace_id, old_session_id, new_session_id],
+        )?;
+    }
+    transaction.execute(
+        "UPDATE agents
+         SET session_id = (
+             SELECT new_session_id FROM issh_session_migrations
+             WHERE workspace_id = agents.workspace_id AND old_session_id = agents.session_id
+         ), updated_at_unix_ms = ?1
+         WHERE profile_id IS NULL AND EXISTS (
+             SELECT 1 FROM issh_session_migrations
+             WHERE workspace_id = agents.workspace_id AND old_session_id = agents.session_id
+         )",
+        params![now_unix_ms],
+    )?;
+    transaction.execute("DELETE FROM issh_session_migrations", [])?;
+    Ok(())
 }
 
 fn normalize_agent_scopes(scopes: Option<Vec<String>>) -> Result<Vec<String>, WorkspaceError> {
@@ -1186,6 +1418,43 @@ mod tests {
     }
 
     #[test]
+    fn unregister_agent_removes_registration_and_records_event() {
+        let mut store = WorkspaceStore::open_in_memory(1).expect("store should open");
+        store
+            .sync_sessions(vec![session("tab-1", "profile-1")], 2)
+            .unwrap();
+        let workspace = store.create_workspace("Ops".to_string(), 3).unwrap();
+        store.bind(&workspace.id, "tab-1", 4).unwrap();
+        let agent = store
+            .register_agent(
+                &workspace.id,
+                "Operator".to_string(),
+                "llm".to_string(),
+                Some("tab-1".to_string()),
+                None,
+                5,
+            )
+            .unwrap();
+
+        store.unregister_agent(&workspace.id, &agent.id, 6).unwrap();
+
+        assert!(store.list_agents(&workspace.id).unwrap().is_empty());
+        assert!(matches!(
+            store.get_agent(&agent.id),
+            Err(WorkspaceError::AgentNotFound(id)) if id == agent.id
+        ));
+        assert_eq!(
+            store
+                .list_events(&workspace.id, 0, 100)
+                .unwrap()
+                .last()
+                .unwrap()
+                .kind,
+            "agent.unregistered"
+        );
+    }
+
+    #[test]
     fn reconnects_binding_by_profile_identity() {
         let mut store = WorkspaceStore::open_in_memory(1).expect("store should open");
         store
@@ -1228,6 +1497,104 @@ mod tests {
             Some("tab-9")
         );
         assert_eq!(agent.session_id.as_deref(), Some("tab-1"));
+    }
+
+    #[test]
+    fn session_id_reuse_does_not_merge_agents_or_bindings() {
+        let mut store = WorkspaceStore::open_in_memory(1).expect("store should open");
+        store
+            .sync_sessions(
+                vec![
+                    session("ssh-1", "profile-a"),
+                    session("ssh-2", "profile-b"),
+                    session("ssh-3", "profile-c"),
+                ],
+                2,
+            )
+            .unwrap();
+        let workspace = store.create_workspace("Ops".to_string(), 3).unwrap();
+        for id in ["ssh-1", "ssh-2", "ssh-3"] {
+            store.bind(&workspace.id, id, 4).unwrap();
+        }
+        for (name, id) in [("A", "ssh-1"), ("B", "ssh-2"), ("C", "ssh-3")] {
+            store
+                .register_agent(
+                    &workspace.id,
+                    name.to_string(),
+                    "llm".to_string(),
+                    Some(id.to_string()),
+                    None,
+                    5,
+                )
+                .unwrap();
+        }
+
+        // Simulate rows written by the pre-profile-id schema after a corrupted sync.
+        store
+            .connection
+            .execute(
+                "UPDATE agents SET profile_id = NULL, session_id = 'ssh-1'",
+                [],
+            )
+            .unwrap();
+        let registrations = {
+            let mut statement = store
+                .connection
+                .prepare(
+                    "SELECT sequence, payload_json FROM events WHERE kind = 'agent.registered'",
+                )
+                .unwrap();
+            let rows = statement
+                .query_map([], |row| {
+                    Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+                })
+                .unwrap();
+            rows.collect::<Result<Vec<_>, _>>().unwrap()
+        };
+        for (sequence, payload_json) in registrations {
+            let mut payload: Value = serde_json::from_str(&payload_json).unwrap();
+            payload.as_object_mut().unwrap().remove("profileId");
+            store
+                .connection
+                .execute(
+                    "UPDATE events SET payload_json = ?1 WHERE sequence = ?2",
+                    params![serde_json::to_string(&payload).unwrap(), sequence],
+                )
+                .unwrap();
+        }
+
+        // Runtime restarted and reopened profiles in a different order. Session ids are reused.
+        store
+            .sync_sessions(
+                vec![
+                    session("ssh-2", "profile-a"),
+                    session("ssh-3", "profile-b"),
+                    session("ssh-4", "profile-c"),
+                ],
+                6,
+            )
+            .unwrap();
+
+        let bindings = store.get_workspace(&workspace.id).unwrap().bindings;
+        assert_eq!(
+            bindings
+                .iter()
+                .map(|binding| (binding.profile_id.as_deref(), binding.session_id.as_deref()))
+                .collect::<Vec<_>>(),
+            vec![
+                (Some("profile-a"), Some("ssh-2")),
+                (Some("profile-b"), Some("ssh-3")),
+                (Some("profile-c"), Some("ssh-4")),
+            ]
+        );
+        let agents = store.list_agents(&workspace.id).unwrap();
+        assert_eq!(
+            agents
+                .iter()
+                .map(|agent| agent.session_id.as_deref())
+                .collect::<Vec<_>>(),
+            vec![Some("ssh-2"), Some("ssh-3"), Some("ssh-4")]
+        );
     }
 
     #[test]
