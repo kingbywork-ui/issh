@@ -724,3 +724,13 @@
 **实现**：增加可递增的连接断开 generation 与 watch 通知；每条 SSE 连接监听断开事件并在收到通知时关闭 socket，进行中的 RPC 请求也会被取消等待并返回断开错误。新增 Tauri `agent_bridge_disconnect` 命令、前端 `agentBridgeDisconnect()` 和“断开 Agent 连接”按钮；该操作断开已有 Agent 长连接，Bridge 继续监听，外部 Agent 可重新连接；关闭 Bridge 同时断开连接并停止监听。保留 token、scope、危险命令确认和 localhost-only 边界。
 
 **验证与边界**：原生 `cargo test` 48/48 通过，其中新增测试验证 SSE 连接被主动关闭且 Bridge 仍可进行 health 请求；前端 `svelte-check` 0 errors / 0 warnings，Vite build 通过。已重新打包并静默安装验证：安装包 `issh_0.0.2_x64-setup.exe`（5,197,557 字节，03:18），注册表 DisplayVersion=0.0.2，launch test 窗口标题 issh、isshd 从 `%LOCALAPPDATA%\issh\issh-runtime\isshd.exe` 拉起。当前无原生桌面自动化工具，「断开 Agent 连接」按钮的实机点击验收仍待桌面验证。该修复针对 Bridge HTTP/SSE 外部 Agent 连接，不会终止远端 SSH 中运行的 Hermes 进程；远端进程生命周期仍由 SSH 会话/Agent 自身管理。
+
+### R-075 Tauri 安装包补齐 issh-agent MCP 运行时（2026-09-05，已完成）
+
+**来源**（用户需求）：复核新机器安装 Tauri 版 issh 后缺少 `%APPDATA%\issh\agent-bridge\`，导致 MCP 无法启动；真实存在则修复并重新打包发布。
+
+**复核结论**：问题真实存在。旧 Tauri 版本的 `stage-runtime.mjs` 只暂存 `isshd.exe` 与 `SKILL.md`，`tauri.conf.json` 没有 `issh-agent` 资源；宿主启动也没有初始化 `agent-bridge` 目录。使用旧安装包在临时 `ISSH_CONFIG_DIRECTORY` 启动后，目录未生成；系统 PATH 中也没有 `issh-agent`，而设置页生成的 `issh-agent mcp` 配置因此依赖旧 Electron 残留目录或外部 PATH。
+
+**修复**：`stage-runtime.mjs` 按生产运行文件清单暂存 `issh-agent` 到 `src-tauri/bin/agent-bridge`；Tauri bundle 增加 `agent-bridge` 资源；宿主启动时将资源中的 9 个 CLI/MCP 文件复制到 `<数据目录>/agent-bridge`，覆盖受安装包管理的文件并保留旧目录其它文件；Claude Desktop/Codex 配置改为调用 `node` 与该目录下的绝对 `issh-mcp-server.mjs`，不再依赖 PATH。
+
+**验证**：`cargo test --manifest-path issh-tauri/src-tauri/Cargo.toml --lib` 48/48、`npm.cmd run check` 0 errors/0 warnings、`node --test issh-agent/test/*.test.mjs` 39/39；Tauri Vite 构建通过。NSIS 安装包 `issh-tauri/src-tauri/target/release/bundle/nsis/issh_0.0.2_x64-setup.exe` 为 5,214,068 字节，SHA-256 `C8B9A34AE4046C35095DF1E5AF6EFD851EAE4287B24E8D9B7874B53533BAA13C`。隔离安装目录包含 9 个 `agent-bridge` 资源文件；使用全新配置目录启动已安装程序后自动生成 9 个运行文件，MCP `initialize` 握手与 `issh-agent --help` 均成功。确认无旧进程后，当前 `%LOCALAPPDATA%\issh` 也已同步新宿主与 9 个资源文件，原 `%APPDATA%\issh` 配置保持不变。无关 Vite chunk/dynamic-import 警告保留，未影响构建。
