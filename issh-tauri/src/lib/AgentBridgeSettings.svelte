@@ -144,17 +144,21 @@
 
     async function copyMcpConfig (kind: 'claude' | 'codex'): Promise<void> {
         const discovery = status?.publicDiscovery ? status.discoveryPath ?? '<数据目录>/issh-agent-bridge.json' : '<数据目录>/issh-agent-bridge.json'
+        const separatorIndex = Math.max(discovery.lastIndexOf('/'), discovery.lastIndexOf('\\'))
+        const separator = discovery.includes('\\') ? '\\' : '/'
+        const configDir = separatorIndex >= 0 ? discovery.slice(0, separatorIndex) : discovery
+        const mcpScript = `${configDir}${separator}agent-bridge${separator}bin${separator}issh-mcp-server.mjs`
         const text = kind === 'claude'
             ? JSON.stringify({
                 mcpServers: {
                     issh: {
-                        command: 'issh-agent',
-                        args: ['mcp'],
+                        command: 'node',
+                        args: [mcpScript],
                         env: { ISSH_AGENT_BRIDGE_FILE: discovery },
                     },
                 },
             }, null, 2)
-            : `[mcp_servers.issh]\ncommand = "issh-agent"\nargs = ["mcp"]\nenv = { ISSH_AGENT_BRIDGE_FILE = "${discovery}" }`
+            : `[mcp_servers.issh]\ncommand = "node"\nargs = [${JSON.stringify(mcpScript)}]\nenv = { ISSH_AGENT_BRIDGE_FILE = ${JSON.stringify(discovery)} }`
         await copyText(text)
     }
 
@@ -367,7 +371,7 @@
 
         <div class="settings-field">
             <div class="settings-field-title">接入外部 agent</div>
-            <p class="settings-hint">建议先开启上方「连接文件」开关，然后复制对应配置。issh-agent 的 CLI 与 stdio MCP server 已随安装包发布。</p>
+            <p class="settings-hint">建议先开启上方「连接文件」开关，然后复制对应配置。issh-agent 的 CLI 与 stdio MCP server 会在 issh 启动时安装到数据目录的 <code>agent-bridge</code> 子目录。</p>
             <div class="sudo-actions">
                 <button type="button" onclick={() => void copyMcpConfig('claude')}>复制 Claude Desktop 配置</button>
                 <button type="button" onclick={() => void copyMcpConfig('codex')}>复制 Codex 配置</button>

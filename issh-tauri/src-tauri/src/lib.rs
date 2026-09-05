@@ -38,6 +38,65 @@ fn resolve_user_data<R: Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, S
     }
 }
 
+const AGENT_BRIDGE_RUNTIME_FILES: &[&str] = &[
+    "package.json",
+    "bin/issh-agent.mjs",
+    "bin/issh-mcp-server.mjs",
+    "bin/tabby-agent.mjs",
+    "bin/tabby-mcp-server.mjs",
+    "src/client.mjs",
+    "src/cli.mjs",
+    "src/mcp-server.mjs",
+    "src/protocol.js",
+];
+
+/// 将安装包资源中的 issh-agent 运行文件同步到用户配置目录。
+/// 只覆盖由安装包管理的文件，保留旧版本目录中的其它用户文件。
+fn copy_agent_bridge_runtime(source_dir: &Path, target_dir: &Path) -> Result<(), String> {
+    if !source_dir.is_dir() {
+        return Err(format!(
+            "找不到 Agent Bridge 运行时资源：{}",
+            source_dir.display()
+        ));
+    }
+    for relative_path in AGENT_BRIDGE_RUNTIME_FILES {
+        let source = source_dir.join(relative_path);
+        if !source.is_file() {
+            return Err(format!(
+                "Agent Bridge 运行时文件缺失：{}",
+                source.display()
+            ));
+        }
+        let target = target_dir.join(relative_path);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|error| format!("无法创建 Agent Bridge 目录 {}：{error}", parent.display()))?;
+        }
+        std::fs::copy(&source, &target).map_err(|error| {
+            format!(
+                "无法安装 Agent Bridge 文件 {} → {}：{error}",
+                source.display(),
+                target.display()
+            )
+        })?;
+    }
+    Ok(())
+}
+
+fn install_agent_bridge_runtime<R: Runtime>(
+    app: &tauri::AppHandle<R>,
+    user_data: &Path,
+) -> Result<(), String> {
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|error| format!("无法定位 Agent Bridge 资源目录：{error}"))?;
+    copy_agent_bridge_runtime(
+        &resource_dir.join("agent-bridge"),
+        &user_data.join("agent-bridge"),
+    )
+}
+
 pub struct RuntimeManager {
     pipe_name: String,
     database_path: PathBuf,
@@ -502,9 +561,14 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
+            let user_data = resolve_user_data(app.handle())?;
+            if let Err(error) = install_agent_bridge_runtime(app.handle(), &user_data) {
+                // 开发模式可能没有 bundle resources；生产包会在构建检查中强制确认资源存在。
+                eprintln!("[agent-bridge] {error}");
+            }
             app.manage(Arc::new(RuntimeManager::new(app.handle())?));
             app.manage(PluginGatewayState::default());
-            app.manage(AgentBridgeRuntime::new(resolve_user_data(app.handle())?));
+            app.manage(AgentBridgeRuntime::new(user_data));
             setup_tray(app.handle())?;
             // 深链：启动时（含冷启动带 ssh:// 参数）与运行期事件都转发给前端
             {

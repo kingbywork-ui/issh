@@ -26,3 +26,31 @@ if (existsSync(skillSource)) {
 } else {
     console.warn(`SKILL.md not found at ${skillSource}; SKILL.md will not be bundled`)
 }
+
+// Agent Bridge 的 stdio CLI/MCP 运行时必须随 Tauri 安装包发布。
+// 只暂存运行所需文件，避免把测试、文档和未完成的实验性适配器带进发布包。
+const agentSourceDir = path.join(repositoryRoot, 'issh-agent')
+const agentDestinationDir = path.join(tauriDir, 'src-tauri', 'bin', 'agent-bridge')
+const agentRuntimeFiles = [
+    'package.json',
+    path.join('bin', 'issh-agent.mjs'),
+    path.join('bin', 'issh-mcp-server.mjs'),
+    path.join('bin', 'tabby-agent.mjs'),
+    path.join('bin', 'tabby-mcp-server.mjs'),
+    path.join('src', 'client.mjs'),
+    path.join('src', 'cli.mjs'),
+    path.join('src', 'mcp-server.mjs'),
+    path.join('src', 'protocol.js'),
+]
+
+for (const relativePath of agentRuntimeFiles) {
+    const sourcePath = path.join(agentSourceDir, relativePath)
+    if (!existsSync(sourcePath)) {
+        console.error(`issh-agent runtime file not found at ${sourcePath}`)
+        process.exit(1)
+    }
+    const destinationPath = path.join(agentDestinationDir, relativePath)
+    mkdirSync(path.dirname(destinationPath), { recursive: true })
+    copyFileSync(sourcePath, destinationPath)
+}
+console.log(`staged issh-agent runtime -> ${path.relative(repositoryRoot, agentDestinationDir)} (${agentRuntimeFiles.length} files)`)
