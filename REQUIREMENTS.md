@@ -627,3 +627,14 @@
 **发布**：agent-bridge 独立仓库 main `121051f..939d8fe`、tag `v0.2.3`、gh release（复用用户已 package 的 tgz，不重新 build，避免 vite 非确定性哈希变化）、registry main `fd74a48..6d0698b`。release tgz 哈希 `802194fc…` 与 registry 声明 **MATCH**（远程已核对）。
 
 **提交**：`9b10757`（feat(host): ssh.execReadonly 独立权限）、`5bc693a`（feat(agent-bridge): 0.2.3 远端 SSH Agent 探测）、`4a256e3`（chore(registry): publish v0.2.3）。主仓库 github/dev `377eeb1..4a256e3`（补齐此前 21 个未推送提交）。
+
+
+### R-065 Agent 桥接重新探测反馈与扫描准确性（2026-09-05，已完成）
+
+**来源**：用户需求。重新扫描点击后没有反应；除 Hermes 外扫描结果不准确，Codex CLI 漏检。
+
+**范围**：仅修复 Agent 桥接扫描。重新探测显示进行中、完成统计及各会话错误；不再用终端历史文字作为已安装 Agent 的证据；在 SSH 登录 PATH 外检查用户常见 CLI 安装目录（包括 nvm/fnm）。仅扫描当前工作区已绑定、已连接的 SSH 账号，可执行文件存在不等于 Agent 正在运行。
+
+**验证**：修改前最小回归测试 3 项失败；增强后的定向回归 4/4 通过，包括实际 Git Bash 运行探测命令并发现临时 nvm 目录下的 Codex。插件 build/package 成功。真实 SSH 账号与已安装客户端界面验证由用户后续确认。小功能仅做定向验证，未运行全功能 smoke_test.py。
+
+**发布**：版本 bump 0.2.3 → **0.2.4**（避免覆盖已发布 0.2.3 造成哈希漂移）。完整发布流水线（build → package → subtree split → push 独立仓库 → tag v0.2.4 → gh release → 更新 registry → push registry）。注意：首次跑流水线时源码改动尚未 commit，导致 subtree split 不含新代码（main push 返回 "Everything up-to-date"），已补 commit `36856a8` 后重跑 split/push/tag 修复，release/registry 的 tgz 内容本就正确（package 读工作区文件）。
