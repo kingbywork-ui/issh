@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { SshHostGroup, SshHostProfile } from './runtime'
+    import { saveHostCredential, type SshHostGroup, type SshHostProfile } from './runtime'
 
     let { profile, groups, onconnect, oncancel }: { profile: SshHostProfile, groups: SshHostGroup[], onconnect: (profile: SshHostProfile) => void, oncancel: () => void } = $props()
     // svelte-ignore state_referenced_locally
@@ -7,6 +7,7 @@
     let tags = $state(draft.tags.join(', '))
     let forwardedPortsText = $state(JSON.stringify(draft.forwardedPorts, null, 2))
     let forwardingError = $state('')
+    let authPassword = $state('')
     let activeTab = $state<'general' | 'advanced' | 'security'>('general')
     const isNew = $derived(!profile.id)
 
@@ -22,7 +23,12 @@
             forwardingError = cause instanceof Error ? `端口转发配置无效：${cause.message}` : '端口转发配置无效'
             return
         }
-        onconnect({ ...draft, id: draft.id || `profile-${Date.now().toString(36)}`, name: draft.name.trim(), host: draft.host.trim(), user: draft.user.trim(), port: Number(draft.port) || 22, group: draft.group || '', tags: tags.split(',').map((tag) => tag.trim()).filter(Boolean), loginScript: draft.loginScript.trim() || null, jumpHost: draft.jumpHost.trim() || null, proxyCommand: draft.proxyCommand.trim() || null, socksProxyHost: draft.socksProxyHost.trim() || null, httpProxyHost: draft.httpProxyHost.trim() || null, socksProxyPort: Number(draft.socksProxyPort) || null, httpProxyPort: Number(draft.httpProxyPort) || null, forwardedPorts })
+        const next: SshHostProfile = { ...draft, id: draft.id || `profile-${Date.now().toString(36)}`, name: draft.name.trim(), host: draft.host.trim(), user: draft.user.trim(), port: Number(draft.port) || 22, group: draft.group || '', tags: tags.split(',').map((tag) => tag.trim()).filter(Boolean), loginScript: draft.loginScript.trim() || null, jumpHost: draft.jumpHost.trim() || null, proxyCommand: draft.proxyCommand.trim() || null, socksProxyHost: draft.socksProxyHost.trim() || null, httpProxyHost: draft.httpProxyHost.trim() || null, socksProxyPort: Number(draft.socksProxyPort) || null, httpProxyPort: Number(draft.httpProxyPort) || null, forwardedPorts }
+        onconnect(next)
+        if ((draft.auth === 'password' || draft.auth === 'keyboardInteractive') && authPassword.trim()) {
+            // 密码认证：把输入的密码保存到保险库凭据，连接时由 resolveSshPassword 取用；失败不影响主机配置保存。
+            void saveHostCredential({ user: next.user, host: next.host, port: next.port, password: authPassword }).catch(() => {})
+        }
     }
 </script>
 
@@ -43,7 +49,13 @@
                     <label>端口<input type="number" bind:value={draft.port} min="1" max="65535" required /></label>
                     <label>用户名<input bind:value={draft.user} required /></label>
                     <label>认证方式<select bind:value={draft.auth}><option value="">自动</option><option value="password">密码</option><option value="publicKey">私钥</option><option value="agent">Agent</option><option value="keyboardInteractive">交互式</option></select></label>
-                    <label>私钥路径<input bind:value={draft.privateKeys[0]} placeholder="C:\\Users\\me\\.ssh\\id_ed25519" /></label>
+                    {#if draft.auth === 'password' || draft.auth === 'keyboardInteractive'}
+                        <label>密码<input type="password" bind:value={authPassword} autocomplete="off" placeholder={draft.auth === 'keyboardInteractive' ? '键盘交互式认证密码（可选）' : '留空则连接时手动输入'} /></label>
+                    {:else if draft.auth === 'publicKey' || !draft.auth}
+                        <label>私钥路径<input bind:value={draft.privateKeys[0]} placeholder="C:\\Users\\me\\.ssh\\id_ed25519" /></label>
+                    {:else if draft.auth === 'agent'}
+                        <p class="settings-hint">使用本机 SSH Agent 认证，无需在此填写凭据。</p>
+                    {/if}
                     <label>环境<input bind:value={draft.environment} placeholder="prod / test / dev" /></label>
                 </div>
                 <label>标签<input bind:value={tags} placeholder="使用逗号分隔" /></label>

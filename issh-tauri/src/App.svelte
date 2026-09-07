@@ -854,70 +854,81 @@
         window.addEventListener('pointerup', onUp, { once: true })
     }
 
+    // 应用级快捷键统一在 window 捕获阶段处理，先于 xterm textarea 收到按键。
+    // 焦点在终端内时仅拦截与终端输入无冲突的应用快捷键（Ctrl+0 Home、Ctrl+Shift+T/S/D/F/B、Ctrl+,、Ctrl+Tab、Ctrl+W），
+    // Ctrl+C、Alt+方向键等保留给 shell，避免破坏终端语义。
     function handleGlobalHotkeys (event: KeyboardEvent): void {
         if (localStorage.getItem('issh.globalHotkey') === 'false') return
         const target = event.target as HTMLElement | null
-        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return
-        // xterm 终端内按键不拦截（Ctrl+W 等已在 xterm 内处理，避免浏览器关闭标签页）
-        if (target && target.classList.contains('xterm-helper-textarea')) return
+        const inTerminal = !!target && (target.classList.contains('xterm-helper-textarea') || !!target.closest('.xterm-helper-textarea'))
+        if (!inTerminal && target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return
         const ctrl = event.ctrlKey || event.metaKey
         if (!ctrl) return
         const key = event.key.toLowerCase()
-        if (event.altKey && !event.shiftKey && key === 'arrowright') {
-            event.preventDefault()
+        if (inTerminal && !(event.key === 'Tab' || (event.shiftKey && (key === 't' || key === 's' || key === 'f' || key === 'd' || key === 'b')) || (!event.shiftKey && (key === 'w' || key === ',' || key === '0')))) return
+        let handled = false
+        if (!inTerminal && event.altKey && !event.shiftKey && key === 'arrowright') {
+            handled = true
             void splitActive('vertical')
-            return
-        }
-        if (event.altKey && !event.shiftKey && key === 'arrowdown') {
-            event.preventDefault()
+        } else if (!inTerminal && event.altKey && !event.shiftKey && key === 'arrowdown') {
+            handled = true
             void splitActive('horizontal')
-            return
-        }
-        if (event.altKey && (key === '0' || key === 'escape')) {
-            event.preventDefault()
+        } else if (!inTerminal && event.altKey && (key === '0' || key === 'escape')) {
+            handled = true
             closeSplit()
-            return
-        }
-        if (event.altKey && key === 'enter') {
-            event.preventDefault()
+        } else if (!inTerminal && event.altKey && key === 'enter') {
+            handled = true
             togglePaneMaximize()
-            return
-        }
-        if (event.altKey && event.shiftKey && (key === 'arrowleft' || key === 'arrowup')) {
-            event.preventDefault()
+        } else if (!inTerminal && event.altKey && event.shiftKey && (key === 'arrowleft' || key === 'arrowup')) {
+            handled = true
             navigatePane(-1)
-            return
-        }
-        if (event.altKey && event.shiftKey && (key === 'arrowright' || key === 'arrowdown')) {
-            event.preventDefault()
+        } else if (!inTerminal && event.altKey && event.shiftKey && (key === 'arrowright' || key === 'arrowdown')) {
+            handled = true
             navigatePane(1)
-            return
-        }
-        if (event.shiftKey && key === 't') {
-            event.preventDefault()
+        } else if (event.shiftKey && key === 't') {
+            handled = true
             void addLocalTab()
         } else if (event.shiftKey && key === 's') {
-            event.preventDefault()
+            // 左右分屏
+            handled = true
+            void splitActive('vertical')
+        } else if (event.shiftKey && key === 'd') {
+            // 上下分屏
+            handled = true
+            void splitActive('horizontal')
+        } else if (event.shiftKey && key === 'b') {
+            // 批量输入（由原 Ctrl+Shift+S 迁移，Ctrl+Shift+S 已让位给左右分屏）
+            handled = true
             showSend = !showSend
+        } else if (event.shiftKey && key === 'f') {
+            // A6 终端内搜索：终端焦点下同样生效
+            handled = true
+            searchOpen = !searchOpen
+        } else if (event.key === 'Tab') {
+            handled = true
+            if (tabs.length > 0) {
+                const index = tabs.findIndex((candidate) => candidate.session.id === activeId)
+                const next = event.shiftKey
+                    ? (index - 1 + tabs.length) % tabs.length
+                    : (index + 1) % tabs.length
+                activeId = tabs[next]?.session.id ?? activeId
+            }
         } else if (!event.shiftKey && key === 'w') {
-            event.preventDefault()
+            handled = true
             const tab = tabs.find((candidate) => candidate.session.id === activeId)
             if (tab) void closeTab(tab)
-        } else if (event.key === 'Tab') {
-            event.preventDefault()
-            if (tabs.length === 0) return
-            const index = tabs.findIndex((candidate) => candidate.session.id === activeId)
-            const next = event.shiftKey
-                ? (index - 1 + tabs.length) % tabs.length
-                : (index + 1) % tabs.length
-            activeId = tabs[next]?.session.id ?? activeId
         } else if (!event.shiftKey && key === ',') {
-            event.preventDefault()
+            handled = true
             showSettings = true
-        } else if (event.shiftKey && key === 'f') {
-            // A6 终端内搜索
+        } else if (!event.shiftKey && key === '0') {
+            // Home：返回首页（保留已打开的标签）
+            handled = true
+            showHomePage()
+        }
+        if (handled) {
             event.preventDefault()
-            searchOpen = !searchOpen
+            // 捕获阶段截断传播：xterm textarea 收不到按键，组合键不会转发给 shell
+            event.stopPropagation()
         }
     }
 
@@ -961,6 +972,15 @@
         return p.replace(/%h/g, host).replace(/%r/g, user)
     }
 
+    // 认证方式决定连接时使用的凭据组合：密码/交互式不使用私钥，私钥不使用密码，其余（自动/Agent）两者都尝试。
+    function credentialPolicy (profile: SshHostProfile): { useKey: boolean, usePassword: boolean } {
+        const auth = profile.auth ?? ''
+        return {
+            useKey: auth !== 'password' && auth !== 'keyboardInteractive',
+            usePassword: auth !== 'publicKey',
+        }
+    }
+
     async function resolveJumpProfile (profile: SshHostProfile, profiles: SshHostProfile[], seen = new Set<string>()): Promise<OpenSshSessionOptions | undefined> {
         const jumpId = profile.jumpHost?.trim()
         if (!jumpId) return undefined
@@ -969,12 +989,13 @@
         if (!jump) throw new Error(`未找到跳板机配置“${jumpId}”`)
         const expectedHostKey = localStorage.getItem(`issh.trustedHostKey.${jump.host}:${jump.port}`)
         if (!expectedHostKey) throw new Error(`请先单独连接跳板机“${jump.name}”并确认其主机密钥`)
-        const keyPath = jump.privateKeys[0] ? normalizeKeyPath(jump.privateKeys[0], jump.host, jump.user) : ''
+        const policy = credentialPolicy(jump)
+        const keyPath = policy.useKey && jump.privateKeys[0] ? normalizeKeyPath(jump.privateKeys[0], jump.host, jump.user) : ''
         let password = ''
         let privateKeyPassphrase = ''
         try {
-            password = (await resolveSshPassword(jump.user, jump.host, jump.port)) ?? ''
-            privateKeyPassphrase = (await resolveKeyPassphrase(jump.user, jump.host, jump.port, keyPath || undefined)) ?? ''
+            password = policy.usePassword ? (await resolveSshPassword(jump.user, jump.host, jump.port)) ?? '' : ''
+            privateKeyPassphrase = policy.useKey ? (await resolveKeyPassphrase(jump.user, jump.host, jump.port, keyPath || undefined)) ?? '' : ''
         } catch {}
         const nextSeen = new Set(seen)
         nextSeen.add(profile.id)
@@ -1000,7 +1021,8 @@
         connectError = ''
         connecting = true
         try {
-            const keyPath = profile.privateKeys[0] ?? ''
+            const policy = credentialPolicy(profile)
+            const keyPath = policy.useKey ? (profile.privateKeys[0] ?? '') : ''
             const expandedKeyPath = keyPath ? normalizeKeyPath(keyPath, profile.host, profile.user) : ''
             // 从已解锁的 vault 解析保存的密码/口令
             let password = ''
@@ -1008,8 +1030,8 @@
             const profiles = (await hostProfiles()).profiles
             const jump = await resolveJumpProfile(profile, profiles)
             try {
-                password = (await resolveSshPassword(profile.user, profile.host, profile.port)) ?? ''
-                keyPassphrase = (await resolveKeyPassphrase(profile.user, profile.host, profile.port, expandedKeyPath || undefined)) ?? ''
+                password = policy.usePassword ? (await resolveSshPassword(profile.user, profile.host, profile.port)) ?? '' : ''
+                keyPassphrase = policy.useKey ? (await resolveKeyPassphrase(profile.user, profile.host, profile.port, expandedKeyPath || undefined)) ?? '' : ''
             } catch {
                 // vault 未解锁时忽略，走指纹确认流程手动输入
             }
@@ -1144,12 +1166,13 @@
             } catch {
                 // 会话可能已关闭
             }
+            const policy = info.profile ? credentialPolicy(info.profile) : { useKey: true, usePassword: true }
             let password = ''
             let keyPassphrase = ''
             const jump = info.profile ? await resolveJumpProfile(info.profile, (await hostProfiles()).profiles) : undefined
             try {
-                password = (await resolveSshPassword(info.user, info.host, info.port)) ?? ''
-                keyPassphrase = (await resolveKeyPassphrase(info.user, info.host, info.port, info.keyPath || undefined)) ?? ''
+                password = policy.usePassword ? (await resolveSshPassword(info.user, info.host, info.port)) ?? '' : ''
+                keyPassphrase = policy.useKey ? (await resolveKeyPassphrase(info.user, info.host, info.port, info.keyPath || undefined)) ?? '' : ''
             } catch {
                 // vault 未解锁时忽略
             }
@@ -1456,6 +1479,8 @@
             if (pollHandle) clearInterval(pollHandle)
             deepLinkUnlisten?.()
             closeUnlisten?.()
+            window.removeEventListener('keydown', handleGlobalHotkeys, true)
+            window.removeEventListener('keydown', handleGlobalHotkeys, true)
             window.removeEventListener('storage', schemeChangeHandler)
             window.removeEventListener('issh:terminal-scheme-change', schemeChangeHandler)
             for (const tab of tabs) {
@@ -1464,9 +1489,16 @@
             }
         }
     })
+    // 全局快捷键监听用 $effect 注册：HMR 热更新会重跑 effect 并重建监听器，
+    // 避免 onMount 一次性注册在函数体更新后仍持有旧函数引用（旧快捷键失效）。
+    $effect(() => {
+        window.removeEventListener('keydown', handleGlobalHotkeys, true)
+        window.addEventListener('keydown', handleGlobalHotkeys, true)
+        return () => {
+            window.removeEventListener('keydown', handleGlobalHotkeys, true)
+        }
+    })
 </script>
-
-<svelte:window onkeydown={handleGlobalHotkeys} />
 
 <div class="app-root">
     {#if pluginUpdates.length > 0}
@@ -1583,23 +1615,23 @@
                                     ⌂ <span>Home</span>
                                 </button>
                                 {#if tab.ssh}
-                                    <button class="toolbar-btn" type="button" onclick={() => void reconnectTab(tab)} disabled={connecting} title="重新连接">
+                                    <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); void reconnectTab(tab) }} disabled={connecting} title="重新连接">
                                         ↻ <span>Reconnect</span>
                                     </button>
-                                    <button class="toolbar-btn" type="button" onclick={() => { if (showSftp) showSftp = false; else openSftpForTab(tab) }} title="SFTP 文件浏览">
+                                    <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); if (showSftp) showSftp = false; else openSftpForTab(tab) }} title="SFTP 文件浏览">
                                         🗀 <span>SFTP</span>
                                     </button>
                                 {/if}
-                                <button class="toolbar-btn" type="button" onclick={() => void exportTerminal(tab)} title="导出终端内容">⇩ <span>Export</span></button>
+                                <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); void exportTerminal(tab) }} title="导出终端内容">⇩ <span>Export</span></button>
                                 {#if !splitDirection}
-                                    <button class="toolbar-btn" type="button" onclick={() => void splitActive('vertical')} title="左右分屏">◫ <span>Split</span></button>
-                                    <button class="toolbar-btn" type="button" onclick={() => void splitActive('horizontal')} title="上下分屏">▤ <span>Split</span></button>
+                                    <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); void splitActive('vertical') }} title="左右分屏">◫ <span>Split</span></button>
+                                    <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); void splitActive('horizontal') }} title="上下分屏">▤ <span>Split</span></button>
                                 {:else}
-                                    <button class="toolbar-btn" type="button" onclick={() => void splitActive(splitDirection ?? 'vertical')} title="新增窗格">＋ <span>Pane</span></button>
-                                    <button class="toolbar-btn" type="button" onclick={togglePaneMaximize} title="最大化当前窗格">□ <span>{maximizedPaneId === tab.session.id ? 'Restore' : 'Maximize'}</span></button>
-                                    <button class="toolbar-btn" type="button" onclick={closeSplit} title="关闭分屏">▣ <span>Unsplit</span></button>
+                                    <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); void splitActive(splitDirection ?? 'vertical') }} title="新增窗格">＋ <span>Pane</span></button>
+                                    <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); togglePaneMaximize() }} title="最大化当前窗格">□ <span>{maximizedPaneId === tab.session.id ? 'Restore' : 'Maximize'}</span></button>
+                                    <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); closeSplit() }} title="关闭分屏">▣ <span>Unsplit</span></button>
                                 {/if}
-                                <button class="toolbar-btn" type="button" onclick={() => { showSend = !showSend }} title="向多个标签发送输入">
+                                <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); showSend = !showSend }} title="向多个标签发送输入">
                                     ✈ <span>Send</span>
                                 </button>
                             </div>

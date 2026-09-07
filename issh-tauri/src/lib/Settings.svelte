@@ -646,11 +646,14 @@
                         <div class="settings-field">
                             <div class="settings-field-title">快捷键</div>
                             <div class="hotkey-list">
+                                <div class="hotkey-row"><span>返回首页（Home）</span><kbd>Ctrl+0</kbd></div>
                                 <div class="hotkey-row"><span>新建本地终端</span><kbd>Ctrl+Shift+T</kbd></div>
+                                <div class="hotkey-row"><span>左右分屏</span><kbd>Ctrl+Shift+S</kbd></div>
+                                <div class="hotkey-row"><span>上下分屏</span><kbd>Ctrl+Shift+D</kbd></div>
                                 <div class="hotkey-row"><span>关闭当前标签</span><kbd>Ctrl+W</kbd></div>
                                 <div class="hotkey-row"><span>下一个标签</span><kbd>Ctrl+Tab</kbd></div>
                                 <div class="hotkey-row"><span>上一个标签</span><kbd>Ctrl+Shift+Tab</kbd></div>
-                                <div class="hotkey-row"><span>批量输入</span><kbd>Ctrl+Shift+S</kbd></div>
+                                <div class="hotkey-row"><span>批量输入</span><kbd>Ctrl+Shift+B</kbd></div>
                                 <div class="hotkey-row"><span>打开设置</span><kbd>Ctrl+,</kbd></div>
                             </div>
                         </div>
