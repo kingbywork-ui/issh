@@ -734,3 +734,115 @@
 **修复**：`stage-runtime.mjs` 按生产运行文件清单暂存 `issh-agent` 到 `src-tauri/bin/agent-bridge`；Tauri bundle 增加 `agent-bridge` 资源；宿主启动时将资源中的 9 个 CLI/MCP 文件复制到 `<数据目录>/agent-bridge`，覆盖受安装包管理的文件并保留旧目录其它文件；Claude Desktop/Codex 配置改为调用 `node` 与该目录下的绝对 `issh-mcp-server.mjs`，不再依赖 PATH。
 
 **验证**：`cargo test --manifest-path issh-tauri/src-tauri/Cargo.toml --lib` 48/48、`npm.cmd run check` 0 errors/0 warnings、`node --test issh-agent/test/*.test.mjs` 39/39；Tauri Vite 构建通过。NSIS 安装包 `issh-tauri/src-tauri/target/release/bundle/nsis/issh_0.0.2_x64-setup.exe` 为 5,214,068 字节，SHA-256 `C8B9A34AE4046C35095DF1E5AF6EFD851EAE4287B24E8D9B7874B53533BAA13C`。隔离安装目录包含 9 个 `agent-bridge` 资源文件；使用全新配置目录启动已安装程序后自动生成 9 个运行文件，MCP `initialize` 握手与 `issh-agent --help` 均成功。确认无旧进程后，当前 `%LOCALAPPDATA%\issh` 也已同步新宿主与 9 个资源文件，原 `%APPDATA%\issh` 配置保持不变。无关 Vite chunk/dynamic-import 警告保留，未影响构建。
+
+### R-076 Agent Bridge 补齐 task.start/task.complete MCP 工具（2026-09-05，已完成）
+
+**来源**（用户需求）：把本会话 OpsClaw 与 WSL 中的 Pi coding agent 都注册为 workspace agent，测试 agent 互通；发现任务派发停在 `queued` 无法推进，用户选择「方案 A」补齐闭环。
+
+**复核结论**：isshd 后端 RPC `task.start`（main.rs:1561）与 `task.complete`（main.rs:1590）早已实现，且 workspace crate 有 `task.started`/`task.completed` 事件；但 Agent Bridge 的 38 工具清单与 `protocol.js` 的 `AGENT_BRIDGE_TOOLS`/`IMPLEMENTED_AGENT_BRIDGE_TOOLS` 白名单都没有这两个工具，导致 MCP 客户端只能 `task.prompt`（排队）而无法推进状态机。
+
+**修复**：`issh-agent/src/protocol.js` 新增 `issh_task_start`（入参 `taskId`）与 `issh_task_complete`（入参 `taskId`+`output`）两个工具 schema，并加入 `IMPLEMENTED_AGENT_BRIDGE_TOOLS` 白名单，工具总数 38→40；`issh-tauri/src-tauri/src/agent_bridge.rs` 的 `TOOLS` 常量与 dispatch 分别追加 `issh_task_start`→`task.start`、`issh_task_complete`→`task.complete`（`ToolScope::Exec`，非危险确认）。isshd 参数均 `#[serde(rename_all = "camelCase")]`，MCP camelCase 参数可纯透传，无需额外映射。
+
+**验证**：`node --input-type=module` 加载 `issh-agent/src/protocol.js` 与暂存副本 `issh-tauri/src-tauri/bin/agent-bridge/src/protocol.js` 均返回 40 工具（含 6 个 `issh_task_*`）；`node issh-tauri/scripts/stage-runtime.mjs` 重新暂存成功；`cargo check --manifest-path issh-tauri/src-tauri/Cargo.toml` 无 error。注意：运行中的 issh 需重新构建 Tauri 应用并重启，`install_agent_bridge_runtime` 才会把 40 工具 protocol.js 同步到 `%APPDATA%\issh\agent-bridge`，MCP 客户端新会话才可见新工具；Pi 侧仍无 issh 任务队列轮询集成，`task.start`/`task.complete` 现可由任一持有 bridge token 的 MCP 客户端手动推进（用于演示/编排闭环）。
+
+### R-077 裸 cargo build 导致 issh 打不开（ERR_CONNECTION_REFUSED）（2026-09-05，已完成）
+
+**来源**（对话衍生，修复 R-076 生效过程中引入）：为让 40 工具生效，误用 `cargo build --release` 单独构建并替换安装目录 `issh-tauri.exe`，重启后 issh 界面报「无法访问此页面 127.0.0.1 拒绝连接 ERR_CONNECTION_REFUSED」。
+
+**复核结论**：`tauri.conf.json` 的 `build.devUrl=http://127.0.0.1:1420`。裸 `cargo build --release` 不传 `tauri/custom-protocol` feature，`tauri_build::build()` 据此判定为 dev 构建，运行时前端走 `devUrl`（Vite dev server 未运行）而非嵌入资源，WebView 加载 `127.0.0.1:1420` 失败。裸构建 exe 仅 5.3MB，且 `findstr "127.0.0.1:1420"` 命中；正确构建后 5.46MB。
+
+**修复**：改用 `npm.cmd --prefix issh-tauri run tauri -- build --no-bundle`（自动跑 Vite build + 传 custom-protocol feature + 跳过 NSIS 打包），并清理强杀 issh 遗留的 `isshd.exe`（PID 21276）后替换 exe 重启。
+
+**验证**：`tauri build --no-bundle` 成功（Vite 2.31s + cargo release 3m 22s，无 error）；新 exe 5.46MB（时间戳 7:06）；重启后 `isshd.exe`（PID 24684）正常、WebView2 主进程 ~147MB + 多渲染进程，前端正常加载（错误页时 WebView2 内存极低）。**教训**：issh-tauri 绝不可裸 cargo build 替换 exe，必须走 `tauri build`。
+
+### R-078 Pi conversation adapter（R-071 扩展：kind='pi'）（2026-09-06，已完成）
+
+**来源**（用户需求）：用户选「方案 C」，给 issh-agent 加 pi adapter，让 OpsClaw 能与 WSL 里的 Pi coding agent 结构化对话。
+
+**复核结论**：
+- Pi 实际是 standalone 0.85.1，运行在 WSL（Ubuntu）里，私有 node 在 `~/.local/share/pi-node/node-v22.23.2-linux-x64/bin/`，`.bashrc` 里 export PATH；非交互 shell（`wsl.exe bash -c`）没有这个 PATH。
+- Pi 四种模式：interactive、`-p`/`--print`（一次性）、`--mode json`、`--mode rpc`（进程集成，自定义 JSON 协议走 stdin/stdout，非 JSON-RPC 2.0）。
+- Pi 模型配置在 `~/.pi/agent/models.json`：自定义 provider `9router`（`http://125.91.32.192:19990/v1`，openai-completions，apiKey 字面量 + `authHeader: true`，模型 `ha`/`oc/big-pickle`）；`settings.json` 的 `defaultProvider` 仍是已失效的 `mistral`，headless 必须显式 `--provider 9router --model ha`。
+- **三大坑**（实测确认）：① `bash -c` 字符串里的 `$PATH` 会被 wsl.exe 在 Windows 侧展开成含空格的 Windows PATH，导致 bash 语法错误——必须硬编码绝对 pi-node bin 路径；② `--offline` 会让 pi 跳过 apiKey 解析，provider 返回 401——绝不能带；③ `-p` 模式读 stdin 合并进 prompt，stdin 不 EOF 就挂住——rpc 模式 stdin 关闭即退出，spawn 必须保持 stdin 打开。
+
+**修复**：`issh-agent/src/conversation-adapters.mjs` 新增 `PiRpcPeer`（JSONL 分帧 + `command(type, fields)` 带 id 关联 + id-less 事件 emit 'notification'）；`ConversationAdapter` 支持 `kind='pi'`（connect 用 `get_state` 取 sessionId，conversationId 不符报「different conversation」；prompt 发 `prompt` 命令 → 等 `agent_end` 事件 → `get_last_assistant_text` 取文本）。`conversation-process.mjs` 的 `startConversationProcess` 对 pi 用 `PiRpcPeer`。`issh-llm/src/services/agentBridge.service.ts` 补 `issh_task_start`→`runtime.call('task.start')`、`issh_task_complete`→`runtime.call('task.complete')`（R-076 遗留测试缺口）。测试补 pi 两例 + 修正 38→40/52→54 计数（R-076 遗留），全量 41/41 通过；`tsc -p issh-llm` 无 error。
+
+**验证**：真实 WSL Pi 端到端——spawn `wsl.exe -d Ubuntu -- bash -c "env PATH=<pi-node绝对路径>:/usr/bin:/bin pi --mode rpc --provider 9router --model ha"`，connect 拿到真实 session id，prompt 返回模型回复且精确匹配 marker `PI_MARKER_7749`（`PI_ADAPTER_OK`）。
+
+### R-079 Pi ↔ hermes 真实往返验证：conversation hub 双 agent 验收（2026-09-06，已完成）
+
+**来源**（用户需求）：用户选「1」，用已实现的 hub 做 Pi ↔ hermes 真实往返验证（A→B→A marker 检查）。
+
+**关键突破——hermes 远程接入**：`startConversationProcess` 只 spawn 本地进程，hermes 在远程 ssh-1（125.91.32.192，SSH 端口 20000）。解法是本地 `ssh.exe` 做 stdio 隧道：`executable:'ssh'`，args=`['-i','C:\\Users\\yanglu\\.ssh\\gccb','-T','-p','20000','-o','BatchMode=yes','root@125.91.32.192','/usr/local/lib/hermes-agent/venv/bin/hermes','acp']`。本机 `gccb` 私钥 = ssh-1 authorized_keys 里注释 `alvin` 的 key（此前 ssh 失败只因默认只试 id_rsa；sshd 已禁密码登录 PasswordAuthentication no）。hermes ACP 的 stdio 用 asyncio 管道，stdin/stdout 必须是真 pipe（文件重定向报 `Pipe transport is for pipes/sockets only`），Node spawn 的 pipe 天然满足。
+
+**修复两处模型配置损坏**：
+- hermes 的 9router key 之前 401（`API key required for remote API access`）→ 从 9router 容器 sqlite（`docker cp 9router:/app/datata/db/data.sqlite`，`apiKeys` 表 active 行 name='ai'，35 字符 sk-5 开头）取真实 key 写入 `~/.hermes/config.yaml` 的 `model.api_key` + `custom_providers[9router].api_key`（备份 `config.yaml.bak-9rfix`）。修复后 ACP 全链路 + 真实模型调用 `MARKER-HIT: True`（model=ha，15237 tokens）。
+- Pi 的 `~/.pi/agent/models.json` 被改坏：baseUrl 变成公网 `https://acy.alvinagent.ccwu.cc/v1`（与本地 19990 是**两个不同 9router 实例**，模型列表不同）+ apiKey 占位符 + 模型 `ha` 公网不存在 → chat 502，Pi TUI 卡 Working 数分钟。修复：baseUrl 改回 `http://125.91.32.192:19990/v1` + 真实 key（sqlite key 对「远程访问」125.91.32.192 验证有效），Pi 单轮 `PI_SINGLE_MARKER` HIT。
+
+**验证**：`node issh-agent/bin/issh-conversation-check.mjs` 配 pi（wsl.exe）+ hermes（ssh 隧道）两 agent，输出 `{"event":"roundtrip_completed","conversations":[...],"marker":"issh-1788664457507"}`——marker 经 Pi→hermes→Pi 两跳无损，双方 conversation 保持。这是 R-071/R-078 之后 conversation hub 的首个真实双 agent 验收。
+
+### R-080 A2A/MCP 互通评估与实测（2026-09-06，已完成，评估类）
+
+**来源**（用户需求）：用户问「A2A功能是否能解决这个问题（两个桥接会话无法互相通讯）？」并要求实测「hermes mcp serve + Pi MCP 互通」。
+
+**结论**：
+- **Pi 0.85.1 无任何 MCP/A2A 能力**（help 无 mcp 命令、`--mode` 仅 text/json/rpc、find 无 mcp 模块、settings.json 无 mcp 字段）；hermes v0.18.2 有 `acp`/`mcp`/`serve`，源码 grep `a2a` 零命中。**双方都不原生支持 A2A**，走 A2A 需两边各写 adapter，成本不低于已有 conversation hub。
+- `hermes mcp serve` 实测：stdio MCP server，握手成功（serverInfo hermes v1.26.0），返回 10 工具（conversations_list/messages_read/messages_send/events_poll/events_wait/channels_list/permissions_* 等），instructions 明说是「消息平台桥」（Telegram/Discord/Slack/WhatsApp 等），**不是 agent 对话桥**。
+- A2A 解决协议异构但不解决 NAT 单向隔离（ssh-1→WSL 172.20.x.x 不可达是网络层问题）。当前 Pi↔hermes 互通以 conversation hub 为准（R-079 已验证）；A2A 留待 issh 需接入外部第三方 agent（生态互操作）时再做，可作后续需求。
+- 附带发现：hermes 的 MCP server 实测可用，未来可作为新 adapter 纳入 conversation hub（让 issh 操作 hermes 接的消息平台）。
+
+### R-081 本地终端 Pi Agent 探测（2026-09-06，进行中）
+- 来源：用户需求（本地终端中的 pi agent 检测不到，要求修复）。
+- 已实现：扫描已绑定且在线的 SSH / local 会话；新增固定只读 session.probeAgents RPC，按会话启动 shell 探测 WSL / Git Bash / Windows 可执行文件，不向 PTY 注入输入；补 Pi standalone 的 ~/.local/share/pi-node/*/bin；WSL 使用 --exec 保留脚本参数；本地来源标签与失败提示。
+- 验证：旧逻辑最小复现失败（local-1 未探测）；修复后插件回归 6/6、构建通过；session 8/8、gateway 10/10；真实 WSL Pi 及打开本地会话后的 RPC 探测通过（probe 4/4）；runtime Clippy 通过。
+- 最新复报（2026-09-06，用户需求）：Windows/WSL 绑定后仍检测不到。已安装主程序更新但 APPDATA 插件仍旧版只扫描 SSH；实际 GUI 已复现。已备份并更新该插件 index.js，哈希与新 dist 一致。另发现 Windows Get-Command 对最后一个缺失 Agent 留失败退出状态，丢弃已发现 Pi；追加正常退出并补 Windows 测试。
+- 最新验证：真实 Windows/WSL 探测 4/4，前端 6/6，Clippy 通过；release 编译后同一隔离 RPC 复现返回 Windows npm/pi.ps1 和 WSL /mnt/c/.../npm/pi。旧安装 runtime 同一复现报 Local agent probe failed。
+- 生效边界：新插件已写磁盘但当前窗口缓存旧代码；新 release runtime 尚未替换正在使用的旧文件。已请求重启许可（会关闭两个现有本地终端），等待用户回答；最终 GUI 修复后验收未完成，不宣称已生效。
+
+### R-082 issh MCP 技能审查问题修复（2026-09-06，已完成）
+- 来源：用户需求；只读审查后用户明确要求“修复”。
+- 修复：个人 issh-mcp-tools、issh-mcp-cursor 及 .codex 对接副本，随包 issh-agent/SKILL.md。更正 tab/sessionId、40 工具清单、Codex TOML、Tauri bin/src 安装布局、RPC 毫秒超时、outputId、Job/Task/Pi 边界；移除旧 RAG 能力和固定宿主权限接口假设。
+- 脚本：安装器显式选择 Codex/Cursor 与单一作用域，保留其它配置/服务器并备份，保守处理 TOML；RPC 通用入口覆盖任务工具，保留危险操作和 SFTP 路径授权；旧 setup-tabby 入口委托新安装器。
+- 验证：已落盘脚本在 Windows PowerShell 5.1 下 20 项隔离断言通过（配置保留、备份、幂等、复杂 TOML 拒绝、作用域、完整运行时安装、MCP initialize/tools/list 40 项、超时及 RPC 参数）；3 个技能 quick_validate 通过；.agents/.codex 对接说明、两个脚本和测试四文件哈希一致；文档包含当前全部 40 工具；git diff --check 通过。
+- 范围：未重写真实 Codex/Cursor/OpsClaw MCP 配置，未开启 Bridge、执行远程命令或启动 Agent；未打包。随包技能仅更新源码，下次发布纳入。共享 protocol.js 的 exec 本地能力描述与 Tauri 实现不一致作为范围外问题保留，技能明确按实际宿主限制操作。
+
+### R-083 SSH 会话 Agent 探测修复（2026-09-06，进行中）
+- 来源：用户需求（“本地终端的可以检测出来了，但是ssh的探测不出来了”）。
+- 需求：Agent Bridge 对已绑定且在线的 SSH 会话执行只读 Agent 可执行文件探测；Pi standalone 安装在远端用户 `~/.local/share/pi-node/*/bin` 时应被发现，并与本地探测保持一致。
+- 实现：远端 `probeRemoteAgents()` fallback 增加 `$HOME/.local/share/pi-node/*/bin`；新增远端 Pi 安装目录回归测试。
+- 验证：插件扫描回归 8/8、Vite build 通过；已部署 `%APPDATA%` 插件并重启桌面程序；已配置 ssh-1 的只读实际验证返回 OMP/Hermes。真实目标 SSH 会话的插件页面点击验收待用户重新连接/绑定后完成；该主机 root 账号当前未安装 Pi。
+
+### R-084 主机编辑界面认证方式动态字段（2026-09-07，已完成）
+- 来源：用户需求（“home 页的主机编辑界面，认证方式切换时红色区域没有随着变化，没办法使用其他认证方式”）。
+- 需求：编辑/新建 SSH 主机的“常规”页中，认证方式切换时应动态显示对应的凭据字段；连接流程需尊重认证方式选择，使用户能真正使用密码/私钥等方式。
+- 实现：`HostProfileEditor.svelte` 按 `draft.auth` 条件渲染——`password`/`keyboardInteractive` 显示密码输入框（保存时通过 `saveHostCredential` 写入 vault 凭据），`publicKey`/自动 显示私钥路径，`agent` 显示提示；`App.svelte` 新增 `credentialPolicy` 并门控 `connectHost`/`resolveJumpProfile`/`reconnectTab`，密码/交互式不发送私钥、私钥不发送密码，其余（自动/Agent）保持既有行为。
+- 验证：`npm --prefix issh-tauri run check`（svelte-check）0 errors / 0 warnings。
+- 边界：运行时（russh 未启用 agent feature）未实现 SSH Agent 认证，选择 agent 时仍回退到已保存的私钥/密码；如需真正 Agent 认证需单独扩展 issh-runtime 的 SSH 连接层。
+
+### R-085 SFTP 按钮打不开面板（事件冒泡，2026-09-07，已完成）
+- 来源：用户需求（“sftp按钮打不开sftp界面了，修复下”）。
+- 需求：点击终端工具栏 SFTP 按钮后应打开 SFTP 面板。
+- 根因：`App.svelte` 终端 toolbar 的 SFTP 按钮 `onclick` 缺少 `event.stopPropagation()`，点击后事件冒泡到父级 `terminal-pane` 的 `onclick`，触发 `activateTab(tab)`；而 `activateTab` 无条件执行 `showSftp = false`（为“切换 tab 关闭 SFTP”设计），把 `openSftpForTab` 刚置为 `true` 的 `showSftp` 又重置为 `false`，导致面板完全不出现。同组 toolbar 的 Home / sudo-action 按钮早已加 `stopPropagation()`，SFTP 按钮是漏网项。
+- 实现：给 SFTP 按钮 `onclick` 补上 `event.stopPropagation()`；随后用户确认后，同组 toolbar 的 Reconnect / Export / Split×2 / Pane / Maximize / Unsplit / Send 按钮也统一补上 `event.stopPropagation()`，避免点击时冒泡触发 `activateTab` 意外关闭 SFTP 面板。
+- 验证：`npm --prefix issh-tauri run check`（svelte-check）0 errors / 0 warnings；`npm --prefix issh-tauri run build`（vite build）通过。
+
+### R-086 终端焦点下应用级快捷键失效（2026-09-07，已完成）
+- 来源：用户需求（“快捷键在打开三个tab后失效，修复这个问题”，澄清后确认：连 3 个 SSH 主机后 Ctrl+W / Ctrl+Tab 等应用级快捷键失效，终端内打字正常）。
+- 根因：`App.svelte` 的 `handleGlobalHotkeys` 对焦点在 xterm 的 `xterm-helper-textarea` 上的按键整体跳过（“终端内不拦截”），而 SSH 连接后 `mountTerminal` 末尾 `terminal.focus()` 使焦点常驻终端 textarea，导致所有应用级快捷键（Ctrl+W / Ctrl+Tab / Ctrl+Shift+T 等）失效。窗口级 `onkeydown` 为冒泡阶段监听，即使拦截也无法阻止 xterm 先一步把组合键转发给 shell。
+- 实现：全局快捷键改在 **window 捕获阶段** 注册（`addEventListener('keydown', handleGlobalHotkeys, true)`，onMount 注册、组件卸载时移除），删除 `<svelte:window onkeydown>` 绑定。焦点在终端内时仅拦截与终端输入无冲突的应用快捷键白名单：**Ctrl+Shift+T（新建本地终端）/ Ctrl+Shift+S（批量输入）/ Ctrl+Shift+F（终端内搜索）/ Ctrl+,（设置）/ Ctrl+Tab、Ctrl+Shift+Tab（切换标签）/ Ctrl+W（关闭当前标签）**；命中后 `preventDefault()` + `stopPropagation()` 阻断 xterm 转发。Alt 系分屏/窗格快捷键与 Ctrl+C 等保留给 shell（终端语义优先，避免破坏 Alt+方向键词跳转等）。autoSudo 的 `attachCustomKeyEventHandler`（Ctrl+Enter 填充）不受影响（非白名单键正常到达 xterm）。
+- 验证：`npm --prefix issh-tauri run check`（svelte-check）0 errors / 0 warnings；`npm --prefix issh-tauri run build`（vite build）通过。
+- 取舍说明：终端焦点下 Ctrl+W 改为关闭标签页（与 Windows Terminal / Tabby 行为一致），bash/zsh 中 Ctrl+W 删除前一单词的 readline 语义让位，可用 Alt+Backspace 替代；如需恢复终端语义可加设置项。
+- 待办/范围外：Alt+方向键分屏、Alt+0 关闭分屏、Alt+Enter 最大化、Alt+Shift+方向键切换窗格在终端焦点下仍保留 shell 语义（不生效）；若用户期望分屏快捷键在终端焦点下也生效，需另评估与终端词跳转的冲突并加配置开关。
+
+### R-087 新增 Home / 上下分屏 / 左右分屏快捷键（2026-09-07，已完成）
+- 来源：用户需求（“增加home、上下分屏和左右分屏的快捷方式，对应ctrl+0、ctrl+shift+d、ctrl+shift+s”）。
+- 实现（`issh-tauri/src/App.svelte` `handleGlobalHotkeys`）：
+  - **Ctrl+0**：返回首页（调用 `showHomePage()`，保留已打开标签）。
+  - **Ctrl+Shift+D**：上下分屏（`splitActive('horizontal')`）。
+  - **Ctrl+Shift+S**：左右分屏（`splitActive('vertical')`）。
+  - 三个组合键均加入 R-086 的终端焦点白名单，焦点在 xterm 内同样生效。
+  - 冲突处理：Ctrl+Shift+S 原为批量输入快捷键，按用户指定让位给左右分屏；批量输入迁移至 **Ctrl+Shift+B**（同步加入白名单）。
+  - 设置页（`issh-tauri/src/lib/Settings.svelte`）快捷键列表同步更新：新增返回首页 Ctrl+0、左右分屏 Ctrl+Shift+S、上下分屏 Ctrl+Shift+D，批量输入改为 Ctrl+Shift+B。
+- 验证：`npm --prefix issh-tauri run check`（svelte-check）0 errors / 0 warnings；`npm --prefix issh-tauri run build`（vite build）通过。
+- 边界：终端焦点下 Ctrl+Shift+D 被拦截分屏，Ctrl+D（EOF）不受影响（非白名单）；小键盘 Ctrl+NumPad0 与主键盘 Ctrl+0 一致触发 Home。
+- 补充（用户反馈“Ctrl+Shift+B 打不开send窗口”后处理）：源码逻辑核对无误（白名单含 b、分支正确），判定为 dev 模式 HMR 热更新后 `onMount` 一次性注册的 keydown 监听器持有旧函数引用（旧 handleGlobalHotkeys 无 b 分支）所致。加固：全局快捷键监听从 onMount 注册改为 `$effect` 注册（幂等 remove+add，HMR 热更新会重跑 effect 重建监听器）。用户需完全重启 dev（关闭 `npm run tauri dev` 后重新启动）后验证。验证：svelte-check 0 errors / 0 warnings，vite build 通过。
