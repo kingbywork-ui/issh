@@ -84,6 +84,14 @@
 - 验证：cargo check 通过、plugin_gateway 测试 11/11；安装后 GET / 200（内嵌 Dashboard）、hub.health/hub.bootstrap/provider.list 全部 200、无 token 401、过期 bootstrap 401。已提交 `74d59f5`。
 - 说明：独立 Agent Hub 产品仍待后续独立交付；当前以内置服务充当本地 Agent Hub，agentHub 网关能力保持只读（`agentHub.status`/`agentHub.open`）。
 
+### R-092 Dashboard 死锁与 bootstrap 令牌共享状态修复（对话衍生，2026-09-07，已完成）
+
+- 现象：Agent Hub Web 界面「只能看、无法使用」——管理服务显示「已暂停」、工作区/Agent 0/0、能力 0 项、「本地受保护连接」，所有操作按钮点击后报错无响应。
+- 根因一（前端 `agent-dashboard/src/App.svelte`）：`!token && bootstrap` 短路——sessionStorage 旧令牌（issh 重启后 sessions 内存态失效）导致不再 bootstrap 交换，RPC 全部 401 且无恢复机制，页面死锁。
+- 根因二（后端 `management_server.rs`）：`hub.bootstrap` 在 `shared_rpc` 的临时 runtime 上执行，一次性引导令牌写进临时私有状态，监听器侧 `exchange_bootstrap` 找不到 → 「引导地址已失效」；插件「打开 Agent Hub Web」链路同样受影响。
+- 修复：前端 401 清令牌 + `exchangeBootstrap()` 自动重交换（exchanged 防重）+ `reconnect()` 重试按钮 + 三态文案（运行中/已暂停/未连接）；后端 `shared_rpc` 拦截 `hub.bootstrap` 直接写监听器共享状态（`open_url_shared`），删除 `open_url` 实例方法与 rpc 分支死代码。
+- 验证：cargo check 0 警告、svelte-check 0 errors；端到端模拟（bootstrap 交换 → session 调 status/health/workspace.list 全 200，无效令牌 401）；重打包安装 0.0.4 通过。已提交 `3da148c`。
+
 ### R-058 外置 Agent 桥接设置页点击后空白（2026-09-03，已完成）
 
 **需求**：用户反馈内置 Agent Bridge 设置页正常，但商城安装的「Agent 桥接」点击菜单后右侧没有内容。
