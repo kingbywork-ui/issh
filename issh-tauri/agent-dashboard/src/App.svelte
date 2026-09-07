@@ -87,9 +87,9 @@
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ bootstrap }),
     }).then(async (response) => {
-      const body = await response.json() as RpcResponse<{ token?: string }>
-      if (!response.ok || body.error || !body.result?.token) throw new Error(body.error?.message ?? '引导地址已失效，请重新打开 Web')
-      token = body.result.token
+      const body = await response.json() as { token?: string; error?: { message?: string } }
+      if (!response.ok || body.error || !body.token) throw new Error(body.error?.message ?? '引导地址已失效，请重新打开 Web')
+      token = body.token
       sessionStorage.setItem('issh-management-token', token)
       history.replaceState(null, '', location.pathname)
       await refresh()
