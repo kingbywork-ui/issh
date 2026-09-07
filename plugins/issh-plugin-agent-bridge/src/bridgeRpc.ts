@@ -5,34 +5,26 @@ let gateway: IsshPluginContext['gateway'] | null = null
 
 export function setGateway (value: IsshPluginContext['gateway']): void { gateway = value }
 
-export async function runtimeRequest<T> (method: string, params?: unknown): Promise<T> {
+async function request<T> (method: string): Promise<T> {
     requestId += 1
-    if (!gateway) throw new Error('Agent Bridge 网关尚未初始化')
-    return gateway.request<T>(method, params === undefined ? {} : params as Record<string, unknown>, { requestId: `bridge-${requestId}` })
+    if (!gateway) throw new Error('Agent Hub 网关尚未初始化')
+    return gateway.request<T>(method, {}, { requestId: `agent-hub-${requestId}` })
 }
 
-export interface ManagementStatus {
-    enabled: boolean
+export interface AgentHubStatus {
+    installed: boolean
     running: boolean
-    port: number
+    compatible: boolean
     url: string
-    tokenConfigured: boolean
+    version?: string | null
+    providerStatus?: string | null
     lastError?: string | null
 }
 
-export interface RuntimeHealth {
-    runtimeVersion: string
-    capabilities: string[]
+export function agentHubStatus (): Promise<AgentHubStatus> {
+    return request<AgentHubStatus>('agentHub.status')
 }
 
-export function managementStatus (): Promise<ManagementStatus> {
-    return runtimeRequest<ManagementStatus>('management.status')
-}
-
-export function openManagement (): Promise<{ opened: boolean }> {
-    return runtimeRequest<{ opened: boolean }>('management.open')
-}
-
-export function runtimeHealth (): Promise<RuntimeHealth> {
-    return runtimeRequest<RuntimeHealth>('runtime.health')
+export function openAgentHub (): Promise<{ opened: boolean }> {
+    return request<{ opened: boolean }>('agentHub.open')
 }

@@ -42,6 +42,8 @@ sentry-symbols.js
 
 crowdin.yml
 .crowdin.env
+.env
+.env.*
 
 # Build & Cache
 .electron-builder-cache/
@@ -56,6 +58,9 @@ __pycache__/
 # Smoke test / debug
 .issh-smoke/
 .tabby-smoke/
+.agent-hub-smoke/
+.agent-hub-smoke2/
+.agent-hub-staging/
 .cursor/
 .workbuddy/
 

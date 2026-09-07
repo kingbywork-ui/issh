@@ -951,6 +951,7 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                     "workspace.create",
                     "workspace.list",
                     "workspace.delete",
+                    "workspace.exportAll",
                     "workspace.bind",
                     "workspace.unbind",
                     "agent.register",
@@ -1519,6 +1520,7 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                 workspace.delete_workspace(&workspace_id)
             })
         }
+        "workspace.exportAll" => with_workspace(state, id, |workspace| workspace.export_all()),
         "workspace.bind" => {
             let params = match parse_params::<WorkspaceBindingParams>(request.params) {
                 Ok(params) => params,

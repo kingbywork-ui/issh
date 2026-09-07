@@ -61,6 +61,14 @@
 - Web 管理工作区、会话绑定、Agent 探测/注册/授权和 runtime 健康；新增 `workspace.delete` RPC 与级联删除。
 - 宿主版本 `0.0.3`、商城插件版本 `0.3.0`，registry 元数据同步。
 
+### R-089 Agent Hub 外部化迁移（用户需求，2026-09-07，进行中）
+
+- 移除 R-088 的内置 `management_server.rs` 与 `agent-dashboard`（含 `embed`/`sync-dashboard-embed.mjs`），改为只读连接独立运行的 Agent Hub（`issh-tauri/src-tauri/src/agent_hub.rs`）。
+- Agent Hub 通过 `%APPDATA%\agent-hub\agent-hub.json` 发现文件定位，强制校验回环地址、端口 `33555`、token ≥ 32 字符；仅暴露 `agentHub.status` / `agentHub.open` 两个只读网关能力。
+- 新增 `workspace.exportAll` RPC 与 `issh_workspace_export` 工具（`WorkspaceExportV1` 一次性迁移快照），贯通 isshd → workspace crate → Agent Bridge → issh-agent MCP。
+- 宿主与商城插件版本升至 `0.0.4`；`issh-plugin-agent-bridge` 改名「Agent Hub Connector」，权限从 `management.read` 改为 `agentHub.read`。
+- 待办：发布 0.4.0 插件并同步 registry `index.json`（当前仍指向 v0.3.0），提交本迁移并更新 HANDOFF。
+
 ### R-058 外置 Agent 桥接设置页点击后空白（2026-09-03，已完成）
 
 **需求**：用户反馈内置 Agent Bridge 设置页正常，但商城安装的「Agent 桥接」点击菜单后右侧没有内容。

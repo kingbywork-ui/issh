@@ -43,13 +43,13 @@ const LEGACY_PERMISSION_ALIASES: Record<string, string> = {
     'sftp:write': 'sftp.write',
     'fs:read': 'fs.read',
     'network:postJson': 'network.postJson',
-    'management:read': 'management.read',
+    'agentHub:read': 'agentHub.read',
 }
 
 const METHOD_PERMISSIONS: Record<string, string> = {
     'runtime.health': '',
-    'management.status': 'management.read',
-    'management.open': 'management.read',
+    'agentHub.status': 'agentHub.read',
+    'agentHub.open': 'agentHub.read',
     'session.list': 'session.read',
     'session.current': 'session.read',
     'session.read': 'session.read',
@@ -216,9 +216,9 @@ export function createPluginGateway (
             read: (sessionId, lines, options) => request('terminal.read', { sessionId, lines }, options),
             write: (sessionId, data, options) => request('terminal.write', { sessionId, data: typeof data === 'string' ? data : Array.from(data) }, options),
         },
-        management: {
-            status: (options) => request('management.status', {}, options),
-            open: (options) => request('management.open', {}, options),
+        agentHub: {
+            status: (options) => request('agentHub.status', {}, options),
+            open: (options) => request('agentHub.open', {}, options),
         },
         profiles: {
             read: (options) => request('profiles.read', {}, options),

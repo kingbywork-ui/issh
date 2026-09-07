@@ -1,11 +1,10 @@
 {
     "name": "@issh/tauri-client",
-    "version": "0.0.3",
+    "version": "0.0.4",
     "private": true,
     "type": "module",
     "scripts": {
         "dev": "vite",
-        "build:dashboard": "npm run build --prefix agent-dashboard && node scripts/sync-dashboard-embed.mjs",
         "build": "vite build",
         "check": "svelte-check --tsconfig ./tsconfig.json",
         "tauri": "tauri",

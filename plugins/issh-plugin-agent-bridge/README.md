@@ -1,27 +1,11 @@
-# issh-plugin-agent-bridge
+# Agent Hub Connector
 
-issh 桌面客户端（Tauri 版）的 Herdr/Workspace 与 Agent 统一管理插件；原 Herdr 独立插件的功能已合并到这里。
+issh Tauri 客户端的只读 Agent Hub 状态入口。插件显示 Hub 安装、运行、协议兼容和 issh Provider 连接状态，并通过宿主的一次性 bootstrap 地址打开独立 Web Dashboard。
 
-## 功能
-
-- 工作区管理（创建/列表，对接 isshd `workspace.create` / `workspace.list`）
-- 终端会话绑定/解绑（`workspace.bind` / `workspace.unbind`）
-- Agent 注册与授权（`agent.register` / `agent.list` / `agent.authorize`）
-
-## 结构
-
-```
-plugin.json
-index.ts
-src/BridgeSettingsTab.svelte
-src/bridgeRpc.ts
-src/bridge.css
-```
-
-## 开发
+插件不管理 workspace、Agent、task 或令牌，也不启动或停止 Agent Hub。
 
 ```bash
 npm install
-npm run build      # dist/index.js
-npm run package    # issh-plugin-agent-bridge-<version>.tgz + sha256
+npm run build
+npm run package
 ```

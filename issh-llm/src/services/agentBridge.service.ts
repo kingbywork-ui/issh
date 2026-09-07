@@ -850,6 +850,9 @@ export class AgentBridgeService {
                 case 'issh_workspace_list':
                     rpcResponse = { id, result: await this.callWorkspaceRuntime('workspace.list') }
                     break
+                case 'issh_workspace_export':
+                    rpcResponse = { id, result: await this.callWorkspaceRuntime('workspace.exportAll') }
+                    break
                 case 'issh_workspace_create':
                     rpcResponse = { id, result: await this.callWorkspaceRuntime('workspace.create', normalizedRequest.params ?? {}) }
                     break

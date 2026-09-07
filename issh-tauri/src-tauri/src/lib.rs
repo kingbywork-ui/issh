@@ -1,8 +1,8 @@
 mod agent_bridge;
 mod agent_bridge_config;
+mod agent_hub;
 mod clipboard;
 mod host_profiles;
-mod management_server;
 mod plugin_gateway;
 mod plugin_market;
 
@@ -385,43 +385,12 @@ fn resolve_ssh_password(
 async fn plugin_gateway_request(
     manager: State<'_, Arc<RuntimeManager>>,
     state: State<'_, PluginGatewayState>,
-    management: State<'_, management_server::ManagementServerRuntime>,
+    agent_hub: State<'_, agent_hub::AgentHubRuntime>,
     request: Value,
 ) -> Result<PluginGatewayResponse, String> {
     let request: PluginGatewayRequest =
         serde_json::from_value(request).map_err(|error| format!("网关请求格式无效：{error}"))?;
-    Ok(plugin_gateway::handle_request(&manager, &state, &management, request).await)
-}
-
-#[tauri::command]
-fn management_server_status(
-    state: State<'_, management_server::ManagementServerRuntime>,
-) -> Result<Value, String> {
-    serde_json::to_value(state.status()).map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-fn management_server_enable(
-    state: State<'_, management_server::ManagementServerRuntime>,
-) -> Result<Value, String> {
-    state.set_enabled(true);
-    serde_json::to_value(state.status()).map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-fn management_server_disable(
-    state: State<'_, management_server::ManagementServerRuntime>,
-) -> Result<Value, String> {
-    state.set_enabled(false);
-    serde_json::to_value(state.status()).map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-fn management_server_rotate_token(
-    state: State<'_, management_server::ManagementServerRuntime>,
-) -> Result<Value, String> {
-    let token = state.rotate_token()?;
-    Ok(json!({ "token": token, "status": state.status() }))
+    Ok(plugin_gateway::handle_request(&manager, &state, &agent_hub, request).await)
 }
 
 #[tauri::command]
@@ -604,12 +573,7 @@ pub fn run() {
             let runtime_manager = Arc::new(RuntimeManager::new(app.handle())?);
             app.manage(runtime_manager.clone());
             app.manage(PluginGatewayState::default());
-            let management =
-                management_server::ManagementServerRuntime::new(user_data.clone(), runtime_manager);
-            if let Err(error) = tauri::async_runtime::block_on(management.start()) {
-                eprintln!("[management] {error}");
-            }
-            app.manage(management);
+            app.manage(agent_hub::AgentHubRuntime::new());
             app.manage(AgentBridgeRuntime::new(user_data));
             setup_tray(app.handle())?;
             // 深链：启动时（含冷启动带 ssh:// 参数）与运行期事件都转发给前端
@@ -666,10 +630,6 @@ pub fn run() {
             runtime_health,
             runtime_request,
             plugin_gateway_request,
-            management_server_status,
-            management_server_enable,
-            management_server_disable,
-            management_server_rotate_token,
             plugin_gateway_audit_read,
             plugin_gateway_audit_clear,
             host_profiles,
@@ -719,9 +679,6 @@ pub fn run() {
 
     app.run(|handle, event| {
         if matches!(event, tauri::RunEvent::Exit) {
-            handle
-                .state::<management_server::ManagementServerRuntime>()
-                .stop();
             handle.state::<Arc<RuntimeManager>>().stop();
             // R-045：完全退出时自动关闭 Agent Bridge（开关为运行时态，重启默认关）
             if let Ok(mut bridge_guard) = handle.state::<AgentBridgeRuntime>().bridge.lock() {
@@ -1385,7 +1342,8 @@ fn open_external_url(url: String) -> Result<(), String> {
     Ok(())
 }
 
-pub(crate) fn open_management_url(url: String) -> Result<(), String> {
+
+pub(crate) fn open_agent_hub_url(url: String) -> Result<(), String> {
     open_external_url(url)
 }
 

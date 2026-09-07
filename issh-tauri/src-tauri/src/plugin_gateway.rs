@@ -1,5 +1,5 @@
 use crate::host_profiles::HostProfileMutation;
-use crate::management_server::ManagementServerRuntime;
+use crate::agent_hub::AgentHubRuntime;
 use crate::RuntimeManager;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -160,7 +160,7 @@ fn response_error(
 fn required_permission(method: &str) -> Option<&'static str> {
     match method {
         "runtime.health" => None,
-        "management.status" | "management.open" => Some("management.read"),
+        "agentHub.status" | "agentHub.open" => Some("agentHub.read"),
         "session.list" | "session.current" | "session.read" | "session.probeAgents" => {
             Some("session.read")
         }
@@ -199,7 +199,7 @@ fn permission_allowed(request: &PluginGatewayRequest, required: &str) -> bool {
 
 fn static_plugin_capabilities(plugin_id: &str) -> Option<&'static [&'static str]> {
     match plugin_id {
-        "issh-plugin-agent-bridge" => Some(&["ui.settings.register", "management.read"]),
+        "issh-plugin-agent-bridge" => Some(&["ui.settings.register", "agentHub.read"]),
         "issh-plugin-config-sync" => Some(&[
             "ui.settings.register",
             "profiles.read",
@@ -329,15 +329,15 @@ mod tests {
     }
 
     #[test]
-    fn management_status_is_read_only_for_marketplace_bridge() {
+    fn agent_hub_status_is_read_only_for_marketplace_bridge() {
         assert_eq!(
-            required_permission("management.status"),
-            Some("management.read")
+            required_permission("agentHub.status"),
+            Some("agentHub.read")
         );
-        assert_eq!(runtime_method("management.status"), None);
-        let mut request = request("management.status", &[]);
+        assert_eq!(runtime_method("agentHub.status"), None);
+        let mut request = request("agentHub.status", &[]);
         request.plugin_id = "issh-plugin-agent-bridge".to_string();
-        assert!(permission_allowed(&request, "management.read"));
+        assert!(permission_allowed(&request, "agentHub.read"));
     }
 
     #[test]
@@ -657,7 +657,7 @@ fn runtime_args(request: &PluginGatewayRequest, method: &str) -> Value {
 pub async fn handle_request(
     manager: &RuntimeManager,
     state: &PluginGatewayState,
-    management: &ManagementServerRuntime,
+    agent_hub: &AgentHubRuntime,
     request: PluginGatewayRequest,
 ) -> PluginGatewayResponse {
     let request_id = request.request_id.clone();
@@ -716,12 +716,12 @@ pub async fn handle_request(
             );
         }
     }
-    let result = if request.method == "management.status" {
-        serde_json::to_value(management.status()).map_err(|error| error.to_string())
-    } else if request.method == "management.open" {
-        management
-            .open_url()
-            .and_then(crate::open_management_url)
+    let result = if request.method == "agentHub.status" {
+        serde_json::to_value(agent_hub.status().await).map_err(|error| error.to_string())
+    } else if request.method == "agentHub.open" {
+        agent_hub
+            .open_url().await
+            .and_then(crate::open_agent_hub_url)
             .map(|_| json!({ "opened": true }))
     } else if request.method == "network.fetch" {
         network_fetch(&request.args).await

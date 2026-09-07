@@ -245,6 +245,11 @@ const TOOLS: &[ToolDef] = &[
         dangerous_confirm: false,
     },
     ToolDef {
+        name: "issh_workspace_export",
+        scope: ToolScope::Read,
+        dangerous_confirm: false,
+    },
+    ToolDef {
         name: "issh_workspace_create",
         scope: ToolScope::Write,
         dangerous_confirm: false,
@@ -864,6 +869,7 @@ async fn dispatch_tool(
         "issh_pane_write" => rpc(state, "pane.write", params.clone()).await,
         "issh_pane_resize" => rpc(state, "pane.resize", params.clone()).await,
         "issh_workspace_list" => rpc(state, "workspace.list", json!({})).await,
+        "issh_workspace_export" => rpc(state, "workspace.exportAll", json!({})).await,
         "issh_workspace_create" => rpc(state, "workspace.create", params.clone()).await,
         "issh_workspace_bind" => rpc(state, "workspace.bind", params.clone()).await,
         "issh_workspace_unbind" => rpc(state, "workspace.unbind", params.clone()).await,

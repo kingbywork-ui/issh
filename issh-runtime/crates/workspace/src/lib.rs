@@ -115,6 +115,16 @@ pub struct RuntimeEvent {
     pub created_at_unix_ms: i64,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceExportV1 {
+    pub schema_version: u32,
+    pub workspaces: Vec<Workspace>,
+    pub agents: Vec<Agent>,
+    pub tasks: Vec<Task>,
+    pub events: Vec<RuntimeEvent>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionSyncResult {
@@ -509,6 +519,39 @@ impl WorkspaceStore {
                 })
             })
             .collect()
+    }
+
+    /// Returns a versioned, read-only snapshot for the one-time Agent Hub
+    /// migration. IDs and event sequences are preserved by the importer.
+    pub fn export_all(&self) -> Result<WorkspaceExportV1, WorkspaceError> {
+        let workspaces = self.list_workspaces()?;
+        let mut agents = Vec::new();
+        let mut tasks = Vec::new();
+        let mut events = Vec::new();
+        for workspace in &workspaces {
+            agents.extend(self.list_agents(&workspace.id)?);
+            tasks.extend(self.list_tasks(&workspace.id)?);
+            let mut after_sequence = 0;
+            loop {
+                let page = self.list_events(&workspace.id, after_sequence, 500)?;
+                if page.is_empty() {
+                    break;
+                }
+                after_sequence = page.last().map(|event| event.sequence).unwrap_or(after_sequence);
+                let complete = page.len() < 500;
+                events.extend(page);
+                if complete {
+                    break;
+                }
+            }
+        }
+        Ok(WorkspaceExportV1 {
+            schema_version: 1,
+            workspaces,
+            agents,
+            tasks,
+            events,
+        })
     }
 
     /// Deletes a workspace and all rows owned by it through the existing

@@ -33,7 +33,7 @@ export interface IsshPluginContext {
     manifest: IsshPluginManifest
     gateway: {
         request<T = unknown> (method: string, args?: Record<string, unknown>, options?: { requestId?: string }): Promise<T>
-        management: { status (): Promise<unknown>; open (): Promise<{ opened: boolean }> }
+        agentHub: { status (): Promise<unknown>; open (): Promise<{ opened: boolean }> }
         ui: { registerSettingsTab (tab: unknown): () => void }
         log (level: 'info' | 'warn' | 'error', message: string): void
     }

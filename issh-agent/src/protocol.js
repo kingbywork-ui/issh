@@ -156,6 +156,16 @@ export const AGENT_BRIDGE_TOOLS = [
         },
     },
     {
+        name: 'issh_workspace_export',
+        scope: 'read',
+        description: 'Export all legacy issh workspace, binding, Agent, task, and event data for one-time Agent Hub migration.',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+            additionalProperties: false,
+        },
+    },
+    {
         name: 'issh_workspace_create',
         scope: 'write',
         description: 'Create an in-memory agent workspace used to group open terminal sessions.',
@@ -747,6 +757,7 @@ export const IMPLEMENTED_AGENT_BRIDGE_TOOLS = Object.freeze([
     'issh_pane_write',
     'issh_pane_resize',
     'issh_workspace_list',
+    'issh_workspace_export',
     'issh_workspace_create',
     'issh_workspace_bind',
     'issh_workspace_unbind',
