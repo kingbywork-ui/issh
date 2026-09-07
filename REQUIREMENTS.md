@@ -77,6 +77,13 @@
 - 修复：删除硬编码，统一改用 `appVersion`（`getVersion()` 返回 tauri.conf.json 真实版本，随构建同步），版本来源唯一；影响 `meetsAppVersion`、`runUpdateCheck`、关于页显示三处。已提交 `c6fd2ba`，重新打包安装包验证。
 - 流程教训：发布脚本只同步 package.json/Cargo.toml/tauri.conf.json，不覆盖 .svelte 内硬编码；已彻底移除该硬编码避免复发。
 
+### R-091 恢复内置管理服务器作为本地 Agent Hub（对话衍生，2026-09-07，已完成）
+
+- 背景：R-089 删除内置管理面板后改为只读连接「独立 Agent Hub」，但该独立产品未打包（本仓库无其源码/安装包/下载地址），插件设置页长期显示「未安装」。经用户确认选择恢复内置版方案。
+- 实现：从 git 历史（`464c691`）恢复 `management_server.rs`（718 行）+ `agent-dashboard/`（含已构建 embed 产物）+ `sync-dashboard-embed.mjs`；`management_server` 增加 `hub.health`/`hub.bootstrap`/`provider.list` 兼容 RPC；`agent_hub.rs` 新增 `write_discovery()`，内置服务启动/令牌轮换时写 `%APPDATA%\agent-hub\agent-hub.json`（rpcUrl=127.0.0.1:33555 + management token），连接器与插件零改动。
+- 验证：cargo check 通过、plugin_gateway 测试 11/11；安装后 GET / 200（内嵌 Dashboard）、hub.health/hub.bootstrap/provider.list 全部 200、无 token 401、过期 bootstrap 401。已提交 `74d59f5`。
+- 说明：独立 Agent Hub 产品仍待后续独立交付；当前以内置服务充当本地 Agent Hub，agentHub 网关能力保持只读（`agentHub.status`/`agentHub.open`）。
+
 ### R-058 外置 Agent 桥接设置页点击后空白（2026-09-03，已完成）
 
 **需求**：用户反馈内置 Agent Bridge 设置页正常，但商城安装的「Agent 桥接」点击菜单后右侧没有内容。
