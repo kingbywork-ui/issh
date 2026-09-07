@@ -1,22 +1,22 @@
 {
   "schema": 1,
-  "updated": "2026-09-07T06:06:11.180Z",
+  "updated": "2026-09-07T12:43:55.005Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
-      "name": "Agent 桥接",
-      "version": "0.3.0",
-      "description": "Agent 桥接运行状态与 Web 管理入口",
+      "name": "Agent Hub Connector",
+      "version": "0.4.0",
+      "description": "显示 Agent Hub 与 issh Provider 状态并打开独立管理界面",
       "kind": "integration",
       "audience": "user",
       "permissions": [
-        "management:read",
+        "agentHub:read",
         "settings:tab"
       ],
-      "minAppVersion": "0.0.3",
-      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge/releases/download/v0.3.0/issh-plugin-agent-bridge-0.3.0.tgz",
-      "sha256": "da545f9ed39762696ff5a211dadc54b68b8c56dbdfed377b557a5c98590746aa",
-      "signature": "QDAmAVBu60rdEUUz9KP7oa1SkUXPrJJbqc5ndb7c4zJ4Ymx4rCP5M46Fk2989VFm8g1k7O594GAP4QhfmCdvAw==",
+      "minAppVersion": "0.0.4",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge/releases/download/v0.4.0/issh-plugin-agent-bridge-0.4.0.tgz",
+      "sha256": "e70daf0d82e7673668b698bc073b274de4fb4f9fc2879e56f115f3f5272cd676",
+      "signature": "wfrK0sEYDvJ2B72IxCFXx7uq/rGdhfdqG/rzEMYtXbwHfhFq8td4rSqc8ixe03gdSGqYrX6LiwxhU367UQJIDA==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge",
       "downloads": 435
