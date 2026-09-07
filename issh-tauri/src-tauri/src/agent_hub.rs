@@ -152,8 +152,9 @@ async fn request(
     method: &str,
     params: Value,
 ) -> Result<Value, String> {
+    let endpoint = format!("{}/rpc", discovery.rpc_url.trim_end_matches('/'));
     let response = reqwest::Client::new()
-        .post(&discovery.rpc_url)
+        .post(&endpoint)
         .bearer_auth(&discovery.token)
         .json(&json!({"jsonrpc":"2.0","id":1,"method":method,"params":params}))
         .send()
