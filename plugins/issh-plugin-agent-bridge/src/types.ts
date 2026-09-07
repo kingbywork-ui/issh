@@ -31,7 +31,12 @@ export interface PluginStorage {
 
 export interface IsshPluginContext {
     manifest: IsshPluginManifest
-    gateway: { request<T = unknown> (method: string, args?: Record<string, unknown>, options?: { requestId?: string }): Promise<T>; ui: { registerSettingsTab (tab: unknown): () => void }; log (level: 'info' | 'warn' | 'error', message: string): void }
+    gateway: {
+        request<T = unknown> (method: string, args?: Record<string, unknown>, options?: { requestId?: string }): Promise<T>
+        management: { status (): Promise<unknown>; open (): Promise<{ opened: boolean }> }
+        ui: { registerSettingsTab (tab: unknown): () => void }
+        log (level: 'info' | 'warn' | 'error', message: string): void
+    }
     registerSettingsTab (tab: SettingsTabDefinition): void
     registerHomeCard (card: { id: string; title: string; order?: number; component: unknown }): void
     registerPanel (panel: { id: string; title: string; placement: 'left' | 'bottom'; component: unknown }): void

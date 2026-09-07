@@ -153,6 +153,7 @@ try {
         'vault.deleteSecret',
         'workspace.create',
         'workspace.list',
+        'workspace.delete',
         'workspace.bind',
         'workspace.unbind',
         'agent.register',

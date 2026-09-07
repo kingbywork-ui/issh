@@ -55,6 +55,16 @@ pub struct Workspace {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct WorkspaceDeleteResult {
+    pub workspace_id: String,
+    pub deleted_bindings: usize,
+    pub deleted_agents: usize,
+    pub deleted_tasks: usize,
+    pub deleted_events: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Agent {
     pub id: String,
     pub workspace_id: String,
@@ -499,6 +509,39 @@ impl WorkspaceStore {
                 })
             })
             .collect()
+    }
+
+    /// Deletes a workspace and all rows owned by it through the existing
+    /// foreign-key cascades.  The counts are collected before the delete so
+    /// callers can show an explicit confirmation/result in management UIs.
+    pub fn delete_workspace(
+        &mut self,
+        workspace_id: &str,
+    ) -> Result<WorkspaceDeleteResult, WorkspaceError> {
+        self.ensure_workspace(workspace_id)?;
+        let transaction = self.connection.transaction()?;
+        let count = |table: &str| -> Result<usize, WorkspaceError> {
+            let query = format!("SELECT COUNT(*) FROM {table} WHERE workspace_id = ?1");
+            Ok(transaction.query_row(&query, params![workspace_id], |row| {
+                row.get::<_, i64>(0)
+            })? as usize)
+        };
+        let deleted_bindings = count("bindings")?;
+        let deleted_agents = count("agents")?;
+        let deleted_tasks = count("tasks")?;
+        let deleted_events = count("events")?;
+        transaction.execute(
+            "DELETE FROM workspaces WHERE public_id = ?1",
+            params![workspace_id],
+        )?;
+        transaction.commit()?;
+        Ok(WorkspaceDeleteResult {
+            workspace_id: workspace_id.to_string(),
+            deleted_bindings,
+            deleted_agents,
+            deleted_tasks,
+            deleted_events,
+        })
     }
 
     pub fn bind(
@@ -1452,6 +1495,44 @@ mod tests {
                 .kind,
             "agent.unregistered"
         );
+    }
+
+    #[test]
+    fn delete_workspace_cascades_owned_rows_and_reports_counts() {
+        let mut store = WorkspaceStore::open_in_memory(1).expect("store should open");
+        store
+            .sync_sessions(vec![session("tab-1", "profile-1")], 2)
+            .unwrap();
+        let workspace = store.create_workspace("Ops".to_string(), 3).unwrap();
+        store.bind(&workspace.id, "tab-1", 4).unwrap();
+        let agent = store
+            .register_agent(
+                &workspace.id,
+                "Operator".to_string(),
+                "llm".to_string(),
+                Some("tab-1".to_string()),
+                None,
+                5,
+            )
+            .unwrap();
+        store.create_task(&agent.id, "Inspect".to_string(), 6).unwrap();
+
+        let deleted = store.delete_workspace(&workspace.id).unwrap();
+
+        assert_eq!(deleted.workspace_id, workspace.id);
+        assert_eq!(deleted.deleted_bindings, 1);
+        assert_eq!(deleted.deleted_agents, 1);
+        assert_eq!(deleted.deleted_tasks, 1);
+        assert!(deleted.deleted_events >= 3);
+        assert!(store.list_workspaces().unwrap().is_empty());
+        assert!(matches!(
+            store.get_workspace(&workspace.id),
+            Err(WorkspaceError::WorkspaceNotFound(_))
+        ));
+        assert!(matches!(
+            store.delete_workspace(&workspace.id),
+            Err(WorkspaceError::WorkspaceNotFound(_))
+        ));
     }
 
     #[test]

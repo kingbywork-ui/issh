@@ -950,6 +950,7 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                     "vault.deleteSecret",
                     "workspace.create",
                     "workspace.list",
+                    "workspace.delete",
                     "workspace.bind",
                     "workspace.unbind",
                     "agent.register",
@@ -1508,6 +1509,16 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
             })
         }
         "workspace.list" => with_workspace(state, id, |workspace| workspace.list_workspaces()),
+        "workspace.delete" => {
+            let params = match parse_params::<WorkspaceIdParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            let workspace_id = params.workspace_id.clone();
+            with_workspace(state, id, |workspace| {
+                workspace.delete_workspace(&workspace_id)
+            })
+        }
         "workspace.bind" => {
             let params = match parse_params::<WorkspaceBindingParams>(request.params) {
                 Ok(params) => params,
@@ -2873,6 +2884,22 @@ mod tests {
         .await;
         let bound: Value = serde_json::from_slice(&bound).expect("bind should return JSON");
         assert_eq!(bound["result"]["bindings"][0]["sessionId"], "tab-1");
+
+        let deleted = dispatch(
+            br#"{"jsonrpc":"2.0","id":4,"method":"workspace.delete","params":{"workspaceId":"workspace-1"}}"#,
+            &state,
+        )
+        .await;
+        let deleted: Value = serde_json::from_slice(&deleted).expect("delete should return JSON");
+        assert_eq!(deleted["result"]["workspaceId"], "workspace-1");
+        assert_eq!(deleted["result"]["deletedBindings"], 1);
+        let missing = dispatch(
+            br#"{"jsonrpc":"2.0","id":5,"method":"workspace.delete","params":{"workspaceId":"workspace-1"}}"#,
+            &state,
+        )
+        .await;
+        let missing: Value = serde_json::from_slice(&missing).expect("missing delete should return JSON");
+        assert_eq!(missing["error"]["code"], INVALID_PARAMS);
     }
 
     #[tokio::test]

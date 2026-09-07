@@ -1,4 +1,5 @@
 use crate::host_profiles::HostProfileMutation;
+use crate::management_server::ManagementServerRuntime;
 use crate::RuntimeManager;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -67,12 +68,18 @@ pub struct PluginGatewayState {
 
 impl PluginGatewayState {
     fn claim_request(&self, id: &str) -> Result<(), String> {
-        let mut seen = self.seen.lock().map_err(|_| "网关请求状态不可用".to_string())?;
+        let mut seen = self
+            .seen
+            .lock()
+            .map_err(|_| "网关请求状态不可用".to_string())?;
         if seen.contains(id) {
             return Err("请求 ID 重复，已拒绝重放请求".to_string());
         }
         seen.insert(id.to_string());
-        let mut order = self.seen_order.lock().map_err(|_| "网关请求状态不可用".to_string())?;
+        let mut order = self
+            .seen_order
+            .lock()
+            .map_err(|_| "网关请求状态不可用".to_string())?;
         order.push_back(id.to_string());
         if order.len() > MAX_SEEN_REQUESTS {
             if let Some(expired) = order.pop_front() {
@@ -124,22 +131,39 @@ fn chrono_like_timestamp() -> String {
 }
 
 fn response_ok(request_id: &str, data: Value) -> PluginGatewayResponse {
-    PluginGatewayResponse { request_id: request_id.to_string(), ok: true, data: Some(data), error: None }
+    PluginGatewayResponse {
+        request_id: request_id.to_string(),
+        ok: true,
+        data: Some(data),
+        error: None,
+    }
 }
 
-fn response_error(request_id: &str, code: &str, message: impl Into<String>, retryable: bool) -> PluginGatewayResponse {
+fn response_error(
+    request_id: &str,
+    code: &str,
+    message: impl Into<String>,
+    retryable: bool,
+) -> PluginGatewayResponse {
     PluginGatewayResponse {
         request_id: request_id.to_string(),
         ok: false,
         data: None,
-        error: Some(PluginGatewayError { code: code.to_string(), message: message.into(), retryable }),
+        error: Some(PluginGatewayError {
+            code: code.to_string(),
+            message: message.into(),
+            retryable,
+        }),
     }
 }
 
 fn required_permission(method: &str) -> Option<&'static str> {
     match method {
         "runtime.health" => None,
-        "session.list" | "session.current" | "session.read" | "session.probeAgents" => Some("session.read"),
+        "management.status" | "management.open" => Some("management.read"),
+        "session.list" | "session.current" | "session.read" | "session.probeAgents" => {
+            Some("session.read")
+        }
         "session.write" | "terminal.write" => Some("terminal.write"),
         "terminal.read" => Some("terminal.read"),
         "profiles.read" => Some("profiles.read"),
@@ -148,11 +172,14 @@ fn required_permission(method: &str) -> Option<&'static str> {
         "ssh.exec" => Some("ssh.exec"),
         "network.fetch" => Some("network.fetch"),
         "workspace.list" => Some("workspace.read"),
-        "workspace.create" | "workspace.bind" | "workspace.unbind" => Some("workspace.write"),
+        "workspace.create" | "workspace.delete" | "workspace.bind" | "workspace.unbind" => {
+            Some("workspace.write")
+        }
         "agent.list" => Some("agent.read"),
         "agent.register" | "agent.unregister" | "agent.authorize" => Some("agent.write"),
         "sftp.open" | "sftp.list" | "sftp.read" | "sftp.stat" | "sftp.close" => Some("sftp.read"),
-        "sftp.write" | "sftp.mkdir" | "sftp.remove" | "sftp.removeDir" | "sftp.rename" | "sftp.chmod" => Some("sftp.write"),
+        "sftp.write" | "sftp.mkdir" | "sftp.remove" | "sftp.removeDir" | "sftp.rename"
+        | "sftp.chmod" => Some("sftp.write"),
         "fs.userPaths" | "fs.readLocalText" => Some("fs.read"),
         "ssh.execReadonly" => Some("ssh.execReadonly"),
         "http.postJson" => Some("network.postJson"),
@@ -162,19 +189,38 @@ fn required_permission(method: &str) -> Option<&'static str> {
 
 fn permission_allowed(request: &PluginGatewayRequest, required: &str) -> bool {
     static_plugin_capabilities(&request.plugin_id)
-        .map(|capabilities| capabilities.iter().any(|permission| *permission == required))
+        .map(|capabilities| {
+            capabilities
+                .iter()
+                .any(|permission| *permission == required)
+        })
         .unwrap_or(false)
 }
 
 fn static_plugin_capabilities(plugin_id: &str) -> Option<&'static [&'static str]> {
     match plugin_id {
-        "issh-plugin-agent-bridge" => Some(&[
-            "ui.settings.register", "workspace.read", "workspace.write", "session.read", "ssh.execReadonly", "agent.read", "agent.write",
+        "issh-plugin-agent-bridge" => Some(&["ui.settings.register", "management.read"]),
+        "issh-plugin-config-sync" => Some(&[
+            "ui.settings.register",
+            "profiles.read",
+            "profiles.write",
+            "network.fetch",
+            "vault.read",
         ]),
-        "issh-plugin-config-sync" => Some(&["ui.settings.register", "profiles.read", "profiles.write", "network.fetch", "vault.read"]),
         "issh-plugin-linkifier" => Some(&["terminal.decorate"]),
-        "issh-plugin-llm" => Some(&["ui.settings.register", "terminal.decorate", "fs.read", "ssh.exec", "network.postJson"]),
-        "issh-plugin-sandbox-demo" => Some(&["ui.panel.register", "terminal.decorate", "profiles.read", "profiles.write"]),
+        "issh-plugin-llm" => Some(&[
+            "ui.settings.register",
+            "terminal.decorate",
+            "fs.read",
+            "ssh.exec",
+            "network.postJson",
+        ]),
+        "issh-plugin-sandbox-demo" => Some(&[
+            "ui.panel.register",
+            "terminal.decorate",
+            "profiles.read",
+            "profiles.write",
+        ]),
         "issh-plugin-serial" => Some(&["ui.panel.register"]),
         _ => None,
     }
@@ -190,13 +236,20 @@ fn runtime_method(method: &str) -> Option<(&str, Option<&'static str>)> {
         "session.write" | "terminal.write" => Some(("session.write", Some("terminal.write"))),
         "ssh.exec" => Some(("ssh.execReadonly", Some("ssh.exec"))),
         "ssh.execReadonly" => Some(("ssh.execReadonly", Some("ssh.execReadonly"))),
-        "sftp.open" | "sftp.list" | "sftp.read" | "sftp.stat" | "sftp.close" => Some((method, Some("sftp.read"))),
-        "sftp.write" | "sftp.mkdir" | "sftp.remove" | "sftp.removeDir" | "sftp.rename" | "sftp.chmod" => Some((method, Some("sftp.write"))),
+        "sftp.open" | "sftp.list" | "sftp.read" | "sftp.stat" | "sftp.close" => {
+            Some((method, Some("sftp.read")))
+        }
+        "sftp.write" | "sftp.mkdir" | "sftp.remove" | "sftp.removeDir" | "sftp.rename"
+        | "sftp.chmod" => Some((method, Some("sftp.write"))),
         "vault.status" | "vault.getSecret" => Some((method, Some("vault.read"))),
         "workspace.list" => Some((method, Some("workspace.read"))),
-        "workspace.create" | "workspace.bind" | "workspace.unbind" => Some((method, Some("workspace.write"))),
+        "workspace.create" | "workspace.delete" | "workspace.bind" | "workspace.unbind" => {
+            Some((method, Some("workspace.write")))
+        }
         "agent.list" => Some((method, Some("agent.read"))),
-        "agent.register" | "agent.unregister" | "agent.authorize" => Some((method, Some("agent.write"))),
+        "agent.register" | "agent.unregister" | "agent.authorize" => {
+            Some((method, Some("agent.write")))
+        }
         _ => None,
     }
 }
@@ -241,11 +294,23 @@ mod tests {
 
     #[test]
     fn session_list_is_a_read_only_gateway_method() {
-        assert_eq!(required_permission("session.probeAgents"), Some("session.read"));
-        assert_eq!(runtime_method("session.probeAgents"), Some(("session.probeAgents", Some("session.read"))));
+        assert_eq!(
+            required_permission("session.probeAgents"),
+            Some("session.read")
+        );
+        assert_eq!(
+            runtime_method("session.probeAgents"),
+            Some(("session.probeAgents", Some("session.read")))
+        );
         assert_eq!(required_permission("session.list"), Some("session.read"));
-        assert_eq!(runtime_method("session.list"), Some(("session.list", Some("session.read"))));
-        assert_eq!(runtime_method("session.current"), Some(("session.list", Some("session.read"))));
+        assert_eq!(
+            runtime_method("session.list"),
+            Some(("session.list", Some("session.read")))
+        );
+        assert_eq!(
+            runtime_method("session.current"),
+            Some(("session.list", Some("session.read")))
+        );
         let mut forged = request("profiles.read", &["forged.permission"]);
         forged.plugin_id = "issh-plugin-serial".to_string();
         assert!(!permission_allowed(&forged, "profiles.read"));
@@ -254,10 +319,25 @@ mod tests {
     #[test]
     fn agent_unregister_is_a_write_gateway_method() {
         assert_eq!(required_permission("agent.unregister"), Some("agent.write"));
-        assert_eq!(runtime_method("agent.unregister"), Some(("agent.unregister", Some("agent.write"))));
+        assert_eq!(
+            runtime_method("agent.unregister"),
+            Some(("agent.unregister", Some("agent.write")))
+        );
         let mut request = request("agent.unregister", &[]);
         request.plugin_id = "issh-plugin-agent-bridge".to_string();
-        assert!(permission_allowed(&request, "agent.write"));
+        assert!(!permission_allowed(&request, "agent.write"));
+    }
+
+    #[test]
+    fn management_status_is_read_only_for_marketplace_bridge() {
+        assert_eq!(
+            required_permission("management.status"),
+            Some("management.read")
+        );
+        assert_eq!(runtime_method("management.status"), None);
+        let mut request = request("management.status", &[]);
+        request.plugin_id = "issh-plugin-agent-bridge".to_string();
+        assert!(permission_allowed(&request, "management.read"));
     }
 
     #[test]
@@ -269,8 +349,14 @@ mod tests {
     fn gateway_permissions_cover_llm_sftp_and_fs_methods() {
         assert_eq!(required_permission("fs.userPaths"), Some("fs.read"));
         assert_eq!(required_permission("fs.readLocalText"), Some("fs.read"));
-        assert_eq!(required_permission("ssh.execReadonly"), Some("ssh.execReadonly"));
-        assert_eq!(required_permission("http.postJson"), Some("network.postJson"));
+        assert_eq!(
+            required_permission("ssh.execReadonly"),
+            Some("ssh.execReadonly")
+        );
+        assert_eq!(
+            required_permission("http.postJson"),
+            Some("network.postJson")
+        );
         assert_eq!(required_permission("sftp.open"), Some("sftp.read"));
         assert_eq!(required_permission("sftp.list"), Some("sftp.read"));
         assert_eq!(required_permission("sftp.stat"), Some("sftp.read"));
@@ -278,21 +364,30 @@ mod tests {
         assert_eq!(required_permission("sftp.mkdir"), Some("sftp.write"));
         assert_eq!(required_permission("sftp.rename"), Some("sftp.write"));
         assert_eq!(required_permission("sftp.chmod"), Some("sftp.write"));
-        assert_eq!(runtime_method("ssh.execReadonly"), Some(("ssh.execReadonly", Some("ssh.execReadonly"))));
+        assert_eq!(
+            runtime_method("ssh.execReadonly"),
+            Some(("ssh.execReadonly", Some("ssh.execReadonly")))
+        );
     }
 
     #[test]
     fn llm_plugin_host_capabilities_cover_gateway_usage() {
         let capabilities = static_plugin_capabilities("issh-plugin-llm").unwrap();
         for required in ["fs.read", "ssh.exec", "network.postJson"] {
-            assert!(capabilities.contains(&required), "llm 插件缺少能力：{required}");
+            assert!(
+                capabilities.contains(&required),
+                "llm 插件缺少能力：{required}"
+            );
         }
     }
 
     #[test]
     fn config_sync_host_capabilities_cover_vault_unlock() {
         let capabilities = static_plugin_capabilities("issh-plugin-config-sync").unwrap();
-        assert!(capabilities.contains(&"vault.read"), "config-sync 插件缺少能力：vault.read");
+        assert!(
+            capabilities.contains(&"vault.read"),
+            "config-sync 插件缺少能力：vault.read"
+        );
         assert_eq!(required_permission("vault.unlock"), Some("vault.read"));
     }
 
@@ -302,11 +397,15 @@ mod tests {
             let home = home.to_string_lossy().into_owned();
             assert!(is_shell_history_path(&format!("{home}\\.bash_history")));
             assert!(is_shell_history_path(&format!("{home}/.zsh_history")));
-            assert!(!is_shell_history_path(&format!("{home}\\Documents\\secrets.txt")));
+            assert!(!is_shell_history_path(&format!(
+                "{home}\\Documents\\secrets.txt"
+            )));
         }
         if let Some(app_data) = std::env::var_os("APPDATA") {
             let app_data = app_data.to_string_lossy().into_owned();
-            assert!(is_shell_history_path(&format!("{app_data}\\Microsoft\\Windows\\PowerShell\\PSReadLine\\ConsoleHost_history.txt")));
+            assert!(is_shell_history_path(&format!(
+                "{app_data}\\Microsoft\\Windows\\PowerShell\\PSReadLine\\ConsoleHost_history.txt"
+            )));
         }
         assert!(!is_shell_history_path("C:\\Windows\\win.ini"));
         assert!(!is_shell_history_path("..\\.bash_history"));
@@ -326,7 +425,10 @@ fn network_host_allowed(url: &str) -> Result<(), String> {
 }
 
 async fn network_fetch(args: &Value) -> Result<Value, String> {
-    let url = args.get("url").and_then(Value::as_str).ok_or_else(|| "network.fetch 需要 url".to_string())?;
+    let url = args
+        .get("url")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "network.fetch 需要 url".to_string())?;
     network_host_allowed(url)?;
     let method = args.get("method").and_then(Value::as_str).unwrap_or("GET");
     if !matches!(method, "GET" | "POST" | "PATCH") {
@@ -341,13 +443,23 @@ async fn network_fetch(args: &Value) -> Result<Value, String> {
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|error| error.to_string())?;
-    let mut request = client.request(reqwest::Method::from_bytes(method.as_bytes()).map_err(|error| error.to_string())?, url).header("User-Agent", "issh-plugin-gateway/1");
+    let mut request = client
+        .request(
+            reqwest::Method::from_bytes(method.as_bytes()).map_err(|error| error.to_string())?,
+            url,
+        )
+        .header("User-Agent", "issh-plugin-gateway/1");
     if let Some(headers) = args.get("headers").and_then(Value::as_object) {
         for (name, value) in headers {
-            if !matches!(name.to_ascii_lowercase().as_str(), "authorization" | "content-type" | "accept") {
+            if !matches!(
+                name.to_ascii_lowercase().as_str(),
+                "authorization" | "content-type" | "accept"
+            ) {
                 return Err(format!("network.fetch 不允许请求头：{name}"));
             }
-            let value = value.as_str().ok_or_else(|| format!("network.fetch 请求头无效：{name}"))?;
+            let value = value
+                .as_str()
+                .ok_or_else(|| format!("network.fetch 请求头无效：{name}"))?;
             request = request.header(name, value);
         }
     }
@@ -361,7 +473,9 @@ async fn network_fetch(args: &Value) -> Result<Value, String> {
     if bytes.len() > 4 * 1024 * 1024 {
         return Err("network.fetch 响应超过 4 MiB 限制".to_string());
     }
-    Ok(json!({ "status": status.as_u16(), "ok": status.is_success(), "body": String::from_utf8_lossy(&bytes) }))
+    Ok(
+        json!({ "status": status.as_u16(), "ok": status.is_success(), "body": String::from_utf8_lossy(&bytes) }),
+    )
 }
 
 const DEFAULT_LOCAL_TEXT_MAX: u64 = 1024 * 1024;
@@ -373,7 +487,10 @@ pub fn user_paths_value() -> Value {
         .or_else(|| std::env::var_os("HOME"))
         .map(|value| value.to_string_lossy().into_owned());
     let app_data = std::env::var_os("APPDATA")
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config").into_os_string()))
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .map(|home| PathBuf::from(home).join(".config").into_os_string())
+        })
         .map(|value| value.to_string_lossy().into_owned());
     json!({ "home": home, "appData": app_data })
 }
@@ -384,7 +501,12 @@ fn shell_history_paths() -> Vec<PathBuf> {
         let home = PathBuf::from(home);
         paths.push(home.join(".bash_history"));
         paths.push(home.join(".zsh_history"));
-        paths.push(home.join(".local").join("share").join("fish").join("fish_history"));
+        paths.push(
+            home.join(".local")
+                .join("share")
+                .join("fish")
+                .join("fish_history"),
+        );
     }
     if let Some(app_data) = std::env::var_os("APPDATA") {
         paths.push(
@@ -406,15 +528,22 @@ fn normalize_path_key(path: &Path) -> String {
 /// 校验目标路径是否属于允许读取的 shell 历史文件（bash/zsh/fish/PSReadLine）。
 pub fn is_shell_history_path(path: &str) -> bool {
     let target = normalize_path_key(Path::new(path));
-    shell_history_paths().iter().any(|candidate| normalize_path_key(candidate) == target)
+    shell_history_paths()
+        .iter()
+        .any(|candidate| normalize_path_key(candidate) == target)
 }
 
 /// 读取本地 shell 历史文件：路径白名单 + 大小上限 + UTF-8，缺失/非 UTF-8 按 None 处理。
-pub fn read_shell_history_file(path: &str, max_bytes: Option<u64>) -> Result<Option<String>, String> {
+pub fn read_shell_history_file(
+    path: &str,
+    max_bytes: Option<u64>,
+) -> Result<Option<String>, String> {
     if !is_shell_history_path(path) {
         return Err(format!("仅允许读取 shell 历史文件：{path}"));
     }
-    let limit = max_bytes.unwrap_or(DEFAULT_LOCAL_TEXT_MAX).min(HARD_LOCAL_TEXT_MAX);
+    let limit = max_bytes
+        .unwrap_or(DEFAULT_LOCAL_TEXT_MAX)
+        .min(HARD_LOCAL_TEXT_MAX);
     let metadata = match std::fs::metadata(path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -436,7 +565,10 @@ pub fn read_shell_history_file(path: &str, max_bytes: Option<u64>) -> Result<Opt
 /// 受控 JSON POST：任意 http/https URL（LLM 端点等用户配置目标），
 /// 限制请求体/响应大小、超时、请求头白名单，并禁止重定向。
 async fn http_post_json(args: &Value) -> Result<Value, String> {
-    let url = args.get("url").and_then(Value::as_str).ok_or_else(|| "http.postJson 需要 url".to_string())?;
+    let url = args
+        .get("url")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "http.postJson 需要 url".to_string())?;
     let parsed = url::Url::parse(url).map_err(|_| "http.postJson URL 无效".to_string())?;
     if !matches!(parsed.scheme(), "http" | "https") {
         return Err("http.postJson 仅允许 http/https".to_string());
@@ -444,7 +576,10 @@ async fn http_post_json(args: &Value) -> Result<Value, String> {
     if parsed.host_str().is_none() {
         return Err("http.postJson 缺少主机名".to_string());
     }
-    let body = args.get("body").and_then(Value::as_str).ok_or_else(|| "http.postJson 需要 body".to_string())?;
+    let body = args
+        .get("body")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "http.postJson 需要 body".to_string())?;
     if body.len() > 256 * 1024 {
         return Err("http.postJson 请求体超过 256 KiB 限制".to_string());
     }
@@ -453,23 +588,36 @@ async fn http_post_json(args: &Value) -> Result<Value, String> {
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|error| error.to_string())?;
-    let mut request = client.post(url).header("User-Agent", "issh-plugin-gateway/1");
+    let mut request = client
+        .post(url)
+        .header("User-Agent", "issh-plugin-gateway/1");
     if let Some(headers) = args.get("headers").and_then(Value::as_object) {
         for (name, value) in headers {
-            if !matches!(name.to_ascii_lowercase().as_str(), "authorization" | "content-type" | "accept") {
+            if !matches!(
+                name.to_ascii_lowercase().as_str(),
+                "authorization" | "content-type" | "accept"
+            ) {
                 return Err(format!("http.postJson 不允许请求头：{name}"));
             }
-            let value = value.as_str().ok_or_else(|| format!("http.postJson 请求头无效：{name}"))?;
+            let value = value
+                .as_str()
+                .ok_or_else(|| format!("http.postJson 请求头无效：{name}"))?;
             request = request.header(name, value);
         }
     }
-    let response = request.body(body.to_string()).send().await.map_err(|error| error.to_string())?;
+    let response = request
+        .body(body.to_string())
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
     let status = response.status();
     let bytes = response.bytes().await.map_err(|error| error.to_string())?;
     if bytes.len() > 4 * 1024 * 1024 {
         return Err("http.postJson 响应超过 4 MiB 限制".to_string());
     }
-    Ok(json!({ "status": status.as_u16(), "ok": status.is_success(), "body": String::from_utf8_lossy(&bytes) }))
+    Ok(
+        json!({ "status": status.as_u16(), "ok": status.is_success(), "body": String::from_utf8_lossy(&bytes) }),
+    )
 }
 
 fn runtime_args(request: &PluginGatewayRequest, method: &str) -> Value {
@@ -479,44 +627,79 @@ fn runtime_args(request: &PluginGatewayRequest, method: &str) -> Value {
     let mut args = request.args.clone();
     if matches!(method, "session.read" | "terminal.read") {
         if let Value::Object(ref mut map) = args {
-            map.entry("afterSequence".to_string()).or_insert(Value::from(0));
-            map.entry("maxEvents".to_string()).or_insert(Value::from(64));
-            map.entry("maxBytes".to_string()).or_insert(Value::from(12288));
+            map.entry("afterSequence".to_string())
+                .or_insert(Value::from(0));
+            map.entry("maxEvents".to_string())
+                .or_insert(Value::from(64));
+            map.entry("maxBytes".to_string())
+                .or_insert(Value::from(12288));
         }
     }
     if matches!(method, "terminal.write" | "session.write") {
         if let Value::Object(ref mut map) = args {
             if let Some(Value::String(data)) = map.get("data").cloned() {
-                map.insert("data".to_string(), Value::Array(data.bytes().map(Value::from).collect()));
+                map.insert(
+                    "data".to_string(),
+                    Value::Array(data.bytes().map(Value::from).collect()),
+                );
             }
         }
     }
     if matches!(method, "ssh.exec" | "ssh.execReadonly") {
         if let Value::Object(ref mut map) = args {
-            map.entry("timeoutMs".to_string()).or_insert(Value::from(60000));
+            map.entry("timeoutMs".to_string())
+                .or_insert(Value::from(60000));
         }
     }
     args
 }
 
-pub async fn handle_request(manager: &RuntimeManager, state: &PluginGatewayState, request: PluginGatewayRequest) -> PluginGatewayResponse {
+pub async fn handle_request(
+    manager: &RuntimeManager,
+    state: &PluginGatewayState,
+    management: &ManagementServerRuntime,
+    request: PluginGatewayRequest,
+) -> PluginGatewayResponse {
     let request_id = request.request_id.clone();
-    let request_size = serde_json::to_vec(&request).map(|bytes| bytes.len()).unwrap_or(MAX_REQUEST_BYTES + 1);
+    let request_size = serde_json::to_vec(&request)
+        .map(|bytes| bytes.len())
+        .unwrap_or(MAX_REQUEST_BYTES + 1);
     if request_size > MAX_REQUEST_BYTES {
         state.audit(&request, false, Some("REQUEST_TOO_LARGE"));
-        return response_error(&request_id, "REQUEST_TOO_LARGE", "网关请求超过大小限制", false);
+        return response_error(
+            &request_id,
+            "REQUEST_TOO_LARGE",
+            "网关请求超过大小限制",
+            false,
+        );
     }
-    if request.plugin_id.is_empty() || request.plugin_id.len() > 128 || !request.plugin_id.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')) {
+    if request.plugin_id.is_empty()
+        || request.plugin_id.len() > 128
+        || !request
+            .plugin_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    {
         state.audit(&request, false, Some("INVALID_PLUGIN"));
         return response_error(&request_id, "INVALID_PLUGIN", "插件 ID 无效", false);
     }
     if static_plugin_capabilities(&request.plugin_id).is_none() {
         state.audit(&request, false, Some("PLUGIN_NOT_REGISTERED"));
-        return response_error(&request_id, "PLUGIN_NOT_REGISTERED", "插件未在宿主网关能力表中注册", false);
+        return response_error(
+            &request_id,
+            "PLUGIN_NOT_REGISTERED",
+            "插件未在宿主网关能力表中注册",
+            false,
+        );
     }
     if request.api_version != API_VERSION {
         state.audit(&request, false, Some("API_VERSION_UNSUPPORTED"));
-        return response_error(&request_id, "API_VERSION_UNSUPPORTED", format!("不支持的网关 API 版本：{}", request.api_version), false);
+        return response_error(
+            &request_id,
+            "API_VERSION_UNSUPPORTED",
+            format!("不支持的网关 API 版本：{}", request.api_version),
+            false,
+        );
     }
     if let Err(error) = state.claim_request(&request.request_id) {
         state.audit(&request, false, Some("DUPLICATE_REQUEST"));
@@ -525,22 +708,51 @@ pub async fn handle_request(manager: &RuntimeManager, state: &PluginGatewayState
     if let Some(required) = required_permission(&request.method) {
         if !permission_allowed(&request, required) {
             state.audit(&request, false, Some("PERMISSION_DENIED"));
-            return response_error(&request_id, "PERMISSION_DENIED", format!("未声明权限：{required}"), false);
+            return response_error(
+                &request_id,
+                "PERMISSION_DENIED",
+                format!("未声明权限：{required}"),
+                false,
+            );
         }
     }
-    let result = if request.method == "network.fetch" {
+    let result = if request.method == "management.status" {
+        serde_json::to_value(management.status()).map_err(|error| error.to_string())
+    } else if request.method == "management.open" {
+        management
+            .open_url()
+            .and_then(crate::open_management_url)
+            .map(|_| json!({ "opened": true }))
+    } else if request.method == "network.fetch" {
         network_fetch(&request.args).await
     } else if request.method == "profiles.read" {
-        manager.hosts.read().and_then(|profiles| serde_json::to_value(profiles).map_err(|error| error.to_string()))
+        manager
+            .hosts
+            .read()
+            .and_then(|profiles| serde_json::to_value(profiles).map_err(|error| error.to_string()))
     } else if request.method == "profiles.mutate" {
-        let mutation = request.args.get("mutation").cloned().unwrap_or_else(|| request.args.clone());
+        let mutation = request
+            .args
+            .get("mutation")
+            .cloned()
+            .unwrap_or_else(|| request.args.clone());
         match serde_json::from_value::<HostProfileMutation>(mutation) {
-            Ok(mutation) => manager.hosts.mutate(mutation).and_then(|profiles| serde_json::to_value(profiles).map_err(|error| error.to_string())),
+            Ok(mutation) => manager.hosts.mutate(mutation).and_then(|profiles| {
+                serde_json::to_value(profiles).map_err(|error| error.to_string())
+            }),
             Err(error) => Err(format!("profiles.mutate 参数无效：{error}")),
         }
     } else if request.method == "vault.unlock" {
-        let passphrase = request.args.get("passphrase").and_then(Value::as_str).ok_or_else(|| "vault.unlock 需要 passphrase".to_string());
-        passphrase.and_then(|value| manager.hosts.unlock(value).and_then(|profiles| serde_json::to_value(profiles).map_err(|error| error.to_string())))
+        let passphrase = request
+            .args
+            .get("passphrase")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "vault.unlock 需要 passphrase".to_string());
+        passphrase.and_then(|value| {
+            manager.hosts.unlock(value).and_then(|profiles| {
+                serde_json::to_value(profiles).map_err(|error| error.to_string())
+            })
+        })
     } else if request.method == "fs.userPaths" {
         Ok(user_paths_value())
     } else if request.method == "fs.readLocalText" {
@@ -556,18 +768,28 @@ pub async fn handle_request(manager: &RuntimeManager, state: &PluginGatewayState
         http_post_json(&request.args).await
     } else if let Some((runtime_method, _method_permission)) = runtime_method(&request.method) {
         let params = runtime_args(&request, &request.method);
-        let mut runtime_request = json!({ "jsonrpc": "2.0", "id": request.request_id, "method": runtime_method });
+        let mut runtime_request =
+            json!({ "jsonrpc": "2.0", "id": request.request_id, "method": runtime_method });
         if !params.is_null() {
             runtime_request["params"] = params;
         }
-        let timeout = Duration::from_millis(request.deadline_ms.unwrap_or(10000).clamp(100, 120000));
+        let timeout =
+            Duration::from_millis(request.deadline_ms.unwrap_or(10000).clamp(100, 120000));
         let response = match tokio::time::timeout(timeout, manager.request(runtime_request)).await {
             Ok(Ok(response)) => response,
             Ok(Err(error)) => return response_error(&request_id, "RUNTIME_ERROR", error, true),
             Err(_) => return response_error(&request_id, "TIMEOUT", "网关 Runtime 请求超时", true),
         };
         if let Some(error) = response.get("error") {
-            return response_error(&request_id, "RUNTIME_ERROR", error.get("message").and_then(Value::as_str).unwrap_or("Runtime 请求失败"), true);
+            return response_error(
+                &request_id,
+                "RUNTIME_ERROR",
+                error
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .unwrap_or("Runtime 请求失败"),
+                true,
+            );
         }
         Ok(response.get("result").cloned().unwrap_or(Value::Null))
     } else {

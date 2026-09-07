@@ -11,46 +11,13 @@ export async function runtimeRequest<T> (method: string, params?: unknown): Prom
     return gateway.request<T>(method, params === undefined ? {} : params as Record<string, unknown>, { requestId: `bridge-${requestId}` })
 }
 
-export interface SessionInfo {
-    id: string
-    title: string
-    profileType: string | null
-    connected: boolean
-}
-
-export function listSessions (): Promise<SessionInfo[]> {
-    return runtimeRequest<SessionInfo[]>('session.list')
-}
-
-export interface SessionReadResult {
-    events?: Array<{ data?: number[] }>
-}
-
-export async function readSessionOutput (sessionId: string, lines = 120): Promise<string> {
-    const result = await runtimeRequest<SessionReadResult>('session.read', { sessionId, lines })
-    const bytes = (result.events ?? []).flatMap((event) => event.data ?? [])
-    return new TextDecoder().decode(Uint8Array.from(bytes))
-}
-export interface RemoteAgentProbeResult {
-    output: string
-}
-
-export function probeRemoteAgents (sessionId: string): Promise<RemoteAgentProbeResult> {
-    return runtimeRequest<RemoteAgentProbeResult>('ssh.execReadonly', {
-        sessionId,
-        command: `sh -lc 'for name in pi omp codex claude opencode hermes hermes-agent; do
-            path="$(command -v "$name" 2>/dev/null)"
-            if [ ! -f "$path" ] || [ ! -x "$path" ]; then
-                path=""
-                for dir in "$HOME/.local/bin" "$HOME/.npm-global/bin" "$HOME/.npm/bin" "$HOME/.bun/bin" "$HOME/.cargo/bin" "$HOME/.opencode/bin" "$HOME/.hermes/venv/bin" "$HOME/.local/share/pi-node"/*/bin "\${NVM_DIR:-$HOME/.nvm}"/versions/node/*/bin "$HOME/.local/share/fnm/node-versions"/*/installation/bin "$HOME/.volta/bin"; do
-                    if [ -f "$dir/$name" ] && [ -x "$dir/$name" ]; then path="$dir/$name"; break; fi
-                done
-            fi
-            if [ -n "$path" ]; then printf "%s\t%s\n" "$name" "$path"; fi
-        done'`,
-        timeoutMs: 10000,
-        maxOutputBytes: 16 * 1024,
-    })
+export interface ManagementStatus {
+    enabled: boolean
+    running: boolean
+    port: number
+    url: string
+    tokenConfigured: boolean
+    lastError?: string | null
 }
 
 export interface RuntimeHealth {
@@ -58,57 +25,14 @@ export interface RuntimeHealth {
     capabilities: string[]
 }
 
+export function managementStatus (): Promise<ManagementStatus> {
+    return runtimeRequest<ManagementStatus>('management.status')
+}
+
+export function openManagement (): Promise<{ opened: boolean }> {
+    return runtimeRequest<{ opened: boolean }>('management.open')
+}
+
 export function runtimeHealth (): Promise<RuntimeHealth> {
     return runtimeRequest<RuntimeHealth>('runtime.health')
-}
-
-export interface Workspace {
-    id: string
-    name: string
-    createdAtUnixMs: number
-    bindings: Array<{ sessionId: string; profileId?: string | null; host?: string | null; user?: string | null; status?: string }>
-}
-
-export function listWorkspaces (): Promise<Workspace[]> {
-    return runtimeRequest<Workspace[]>('workspace.list')
-}
-
-export function createWorkspace (name: string): Promise<Workspace> {
-    return runtimeRequest<Workspace>('workspace.create', { name })
-}
-
-export function bindSession (workspaceId: string, sessionId: string): Promise<unknown> {
-    return runtimeRequest('workspace.bind', { workspaceId, sessionId })
-}
-
-export function unbindSession (workspaceId: string, sessionId: string): Promise<unknown> {
-    return runtimeRequest('workspace.unbind', { workspaceId, sessionId })
-}
-
-export interface Agent {
-    id: string
-    workspaceId: string
-    name: string
-    adapter: string
-    sessionId: string | null
-    scopes: string[]
-    status: string
-    createdAtUnixMs: number
-    updatedAtUnixMs: number
-}
-
-export function listAgents (workspaceId: string): Promise<Agent[]> {
-    return runtimeRequest<Agent[]>('agent.list', { workspaceId })
-}
-
-export function registerAgent (params: { workspaceId: string; name: string; adapter?: string; sessionId?: string; scopes?: string[] }): Promise<Agent> {
-    return runtimeRequest<Agent>('agent.register', params)
-}
-
-export function unregisterAgent (workspaceId: string, agentId: string): Promise<void> {
-    return runtimeRequest<void>('agent.unregister', { workspaceId, agentId })
-}
-
-export function probeLocalAgents (sessionId: string): Promise<RemoteAgentProbeResult> {
-    return runtimeRequest<RemoteAgentProbeResult>('session.probeAgents', { sessionId })
 }

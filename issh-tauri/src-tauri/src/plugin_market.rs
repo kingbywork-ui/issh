@@ -50,8 +50,8 @@ pub fn verify_entry_signature(entry: &PluginRegistryEntry) -> Result<(), String>
     let signature_bytes = base64::engine::general_purpose::STANDARD
         .decode(signature_b64)
         .map_err(|error| format!("插件签名解码失败：{error}"))?;
-    let signature = Signature::from_slice(&signature_bytes)
-        .map_err(|_| "插件签名格式无效".to_string())?;
+    let signature =
+        Signature::from_slice(&signature_bytes).map_err(|_| "插件签名格式无效".to_string())?;
     let public_key_bytes = base64::engine::general_purpose::STANDARD
         .decode(SIGNING_PUBLIC_KEY)
         .map_err(|error| format!("内置公钥无效：{error}"))?;
@@ -113,14 +113,21 @@ fn registry_candidates(url: &str) -> Vec<String> {
     const RAW_PREFIX: &str = "https://raw.githubusercontent.com/";
     if let Some(path) = url.strip_prefix(RAW_PREFIX) {
         let mut parts = path.splitn(4, '/');
-        if let (Some(owner), Some(repo), Some(reference), Some(file)) = (parts.next(), parts.next(), parts.next(), parts.next()) {
-            candidates.push(format!("https://cdn.jsdelivr.net/gh/{owner}/{repo}@{reference}/{file}"));
+        if let (Some(owner), Some(repo), Some(reference), Some(file)) =
+            (parts.next(), parts.next(), parts.next(), parts.next())
+        {
+            candidates.push(format!(
+                "https://cdn.jsdelivr.net/gh/{owner}/{repo}@{reference}/{file}"
+            ));
         }
     }
     candidates
 }
 
-async fn fetch_registry_from(client: &reqwest::Client, url: &str) -> Result<PluginRegistry, String> {
+async fn fetch_registry_from(
+    client: &reqwest::Client,
+    url: &str,
+) -> Result<PluginRegistry, String> {
     let response = client
         .get(url)
         .header("User-Agent", "issh-plugin-market/0.1")
@@ -301,7 +308,8 @@ fn extract_plugin(app_data: &Path, id: &str, bytes: &[u8]) -> Result<InstalledPl
     let _ = std::fs::remove_dir_all(&backup);
     let had_previous = target.exists();
     if had_previous {
-        std::fs::rename(&target, &backup).map_err(|error| format!("无法备份旧版本插件：{error}"))?;
+        std::fs::rename(&target, &backup)
+            .map_err(|error| format!("无法备份旧版本插件：{error}"))?;
     }
     if let Err(error) = std::fs::rename(&staging, &target) {
         // 回滚：恢复备份，避免旧版本丢失
@@ -414,7 +422,14 @@ fn ensure_https_url(url: &str) -> Result<(), String> {
     let parsed = url::Url::parse(url).map_err(|_| format!("URL 无效：{url}"))?;
     match parsed.scheme() {
         "https" => Ok(()),
-        "http" if matches!(parsed.host_str(), Some("127.0.0.1") | Some("localhost") | Some("[::1]")) => Ok(()),
+        "http"
+            if matches!(
+                parsed.host_str(),
+                Some("127.0.0.1") | Some("localhost") | Some("[::1]")
+            ) =>
+        {
+            Ok(())
+        }
         _ => Err(format!("仅允许 https 地址：{url}")),
     }
 }
@@ -590,9 +605,16 @@ mod tests {
 
     #[test]
     fn adds_jsdelivr_fallback_for_github_raw_registry() {
-        let candidates = registry_candidates("https://raw.githubusercontent.com/owner/repo/main/index.json");
-        assert_eq!(candidates[1], "https://cdn.jsdelivr.net/gh/owner/repo@main/index.json");
-        assert_eq!(registry_candidates("https://example.com/index.json").len(), 1);
+        let candidates =
+            registry_candidates("https://raw.githubusercontent.com/owner/repo/main/index.json");
+        assert_eq!(
+            candidates[1],
+            "https://cdn.jsdelivr.net/gh/owner/repo@main/index.json"
+        );
+        assert_eq!(
+            registry_candidates("https://example.com/index.json").len(),
+            1
+        );
     }
 
     fn unsigned_entry() -> PluginRegistryEntry {
@@ -679,7 +701,8 @@ mod tests {
 
     #[test]
     fn fetch_registry_parses_live_camel_case_index() {
-        let url = "https://raw.githubusercontent.com/kingbywork-ui/issh-plugin-registry/main/index.json";
+        let url =
+            "https://raw.githubusercontent.com/kingbywork-ui/issh-plugin-registry/main/index.json";
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -692,7 +715,10 @@ mod tests {
                 return;
             }
         };
-        assert!(!registry.plugins.is_empty(), "live registry must not be empty");
+        assert!(
+            !registry.plugins.is_empty(),
+            "live registry must not be empty"
+        );
         for entry in &registry.plugins {
             assert!(
                 entry.download_url.starts_with("https://"),

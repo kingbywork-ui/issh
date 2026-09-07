@@ -2,14 +2,15 @@ mod agent_bridge;
 mod agent_bridge_config;
 mod clipboard;
 mod host_profiles;
-mod plugin_market;
+mod management_server;
 mod plugin_gateway;
+mod plugin_market;
 
 use host_profiles::{
     CredentialMutation, HostProfileMutation, HostProfileStore, HostProfilesResult,
 };
-use plugin_market::{InstalledPlugin, PluginRegistry};
 use plugin_gateway::{PluginGatewayRequest, PluginGatewayResponse, PluginGatewayState};
+use plugin_market::{InstalledPlugin, PluginRegistry};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -62,15 +63,13 @@ fn copy_agent_bridge_runtime(source_dir: &Path, target_dir: &Path) -> Result<(),
     for relative_path in AGENT_BRIDGE_RUNTIME_FILES {
         let source = source_dir.join(relative_path);
         if !source.is_file() {
-            return Err(format!(
-                "Agent Bridge 运行时文件缺失：{}",
-                source.display()
-            ));
+            return Err(format!("Agent Bridge 运行时文件缺失：{}", source.display()));
         }
         let target = target_dir.join(relative_path);
         if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|error| format!("无法创建 Agent Bridge 目录 {}：{error}", parent.display()))?;
+            std::fs::create_dir_all(parent).map_err(|error| {
+                format!("无法创建 Agent Bridge 目录 {}：{error}", parent.display())
+            })?;
         }
         std::fs::copy(&source, &target).map_err(|error| {
             format!(
@@ -265,16 +264,10 @@ fn relaunch_elevated(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
-        let exe = std::env::current_exe()
-            .map_err(|error| format!("无法定位当前程序：{error}"))?;
+        let exe = std::env::current_exe().map_err(|error| format!("无法定位当前程序：{error}"))?;
         let mut command = std::process::Command::new("powershell");
         command
-            .args([
-                "-NoProfile",
-                "-Command",
-                "Start-Process",
-                "-FilePath",
-            ])
+            .args(["-NoProfile", "-Command", "Start-Process", "-FilePath"])
             .arg(&exe)
             .args(["-Verb", "RunAs"])
             .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
@@ -312,7 +305,9 @@ fn unlock_host_profiles(
 }
 
 #[tauri::command]
-fn lock_host_profiles(manager: State<'_, Arc<RuntimeManager>>) -> Result<HostProfilesResult, String> {
+fn lock_host_profiles(
+    manager: State<'_, Arc<RuntimeManager>>,
+) -> Result<HostProfilesResult, String> {
     manager.hosts.lock();
     manager.hosts.read()
 }
@@ -326,7 +321,9 @@ fn mutate_host_profiles(
 }
 
 #[tauri::command]
-fn host_credentials(manager: State<'_, Arc<RuntimeManager>>) -> Result<host_profiles::HostCredentialsResult, String> {
+fn host_credentials(
+    manager: State<'_, Arc<RuntimeManager>>,
+) -> Result<host_profiles::HostCredentialsResult, String> {
     manager.hosts.list_credentials()
 }
 
@@ -357,7 +354,9 @@ fn enable_host_vault(
 }
 
 #[tauri::command]
-fn disable_host_vault(manager: State<'_, Arc<RuntimeManager>>) -> Result<host_profiles::HostCredentialsResult, String> {
+fn disable_host_vault(
+    manager: State<'_, Arc<RuntimeManager>>,
+) -> Result<host_profiles::HostCredentialsResult, String> {
     manager.hosts.disable_vault()
 }
 
@@ -367,7 +366,9 @@ fn change_host_passphrase(
     old_passphrase: String,
     new_passphrase: String,
 ) -> Result<host_profiles::HostCredentialsResult, String> {
-    manager.hosts.change_passphrase(&old_passphrase, &new_passphrase)
+    manager
+        .hosts
+        .change_passphrase(&old_passphrase, &new_passphrase)
 }
 
 #[tauri::command]
@@ -384,15 +385,49 @@ fn resolve_ssh_password(
 async fn plugin_gateway_request(
     manager: State<'_, Arc<RuntimeManager>>,
     state: State<'_, PluginGatewayState>,
+    management: State<'_, management_server::ManagementServerRuntime>,
     request: Value,
 ) -> Result<PluginGatewayResponse, String> {
-    let request: PluginGatewayRequest = serde_json::from_value(request)
-        .map_err(|error| format!("网关请求格式无效：{error}"))?;
-    Ok(plugin_gateway::handle_request(&manager, &state, request).await)
+    let request: PluginGatewayRequest =
+        serde_json::from_value(request).map_err(|error| format!("网关请求格式无效：{error}"))?;
+    Ok(plugin_gateway::handle_request(&manager, &state, &management, request).await)
 }
 
 #[tauri::command]
-fn plugin_gateway_audit_read(state: State<'_, PluginGatewayState>) -> Result<Vec<plugin_gateway::PluginGatewayAuditEntry>, String> {
+fn management_server_status(
+    state: State<'_, management_server::ManagementServerRuntime>,
+) -> Result<Value, String> {
+    serde_json::to_value(state.status()).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn management_server_enable(
+    state: State<'_, management_server::ManagementServerRuntime>,
+) -> Result<Value, String> {
+    state.set_enabled(true);
+    serde_json::to_value(state.status()).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn management_server_disable(
+    state: State<'_, management_server::ManagementServerRuntime>,
+) -> Result<Value, String> {
+    state.set_enabled(false);
+    serde_json::to_value(state.status()).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn management_server_rotate_token(
+    state: State<'_, management_server::ManagementServerRuntime>,
+) -> Result<Value, String> {
+    let token = state.rotate_token()?;
+    Ok(json!({ "token": token, "status": state.status() }))
+}
+
+#[tauri::command]
+fn plugin_gateway_audit_read(
+    state: State<'_, PluginGatewayState>,
+) -> Result<Vec<plugin_gateway::PluginGatewayAuditEntry>, String> {
     state.read_audit()
 }
 
@@ -566,8 +601,15 @@ pub fn run() {
                 // 开发模式可能没有 bundle resources；生产包会在构建检查中强制确认资源存在。
                 eprintln!("[agent-bridge] {error}");
             }
-            app.manage(Arc::new(RuntimeManager::new(app.handle())?));
+            let runtime_manager = Arc::new(RuntimeManager::new(app.handle())?);
+            app.manage(runtime_manager.clone());
             app.manage(PluginGatewayState::default());
+            let management =
+                management_server::ManagementServerRuntime::new(user_data.clone(), runtime_manager);
+            if let Err(error) = tauri::async_runtime::block_on(management.start()) {
+                eprintln!("[management] {error}");
+            }
+            app.manage(management);
             app.manage(AgentBridgeRuntime::new(user_data));
             setup_tray(app.handle())?;
             // 深链：启动时（含冷启动带 ssh:// 参数）与运行期事件都转发给前端
@@ -624,6 +666,10 @@ pub fn run() {
             runtime_health,
             runtime_request,
             plugin_gateway_request,
+            management_server_status,
+            management_server_enable,
+            management_server_disable,
+            management_server_rotate_token,
             plugin_gateway_audit_read,
             plugin_gateway_audit_clear,
             host_profiles,
@@ -673,6 +719,9 @@ pub fn run() {
 
     app.run(|handle, event| {
         if matches!(event, tauri::RunEvent::Exit) {
+            handle
+                .state::<management_server::ManagementServerRuntime>()
+                .stop();
             handle.state::<Arc<RuntimeManager>>().stop();
             // R-045：完全退出时自动关闭 Agent Bridge（开关为运行时态，重启默认关）
             if let Ok(mut bridge_guard) = handle.state::<AgentBridgeRuntime>().bridge.lock() {
@@ -856,9 +905,17 @@ async fn agent_bridge_configure(
     manager: State<'_, Arc<RuntimeManager>>,
     patch: Value,
 ) -> Result<Value, String> {
-    let port = patch.get("port").map(agent_bridge_config::parse_port).transpose()?;
-    if port.is_some() && state.bridge.lock()
-        .map_err(|_| "Agent Bridge 状态不可用".to_string())?.is_some() {
+    let port = patch
+        .get("port")
+        .map(agent_bridge_config::parse_port)
+        .transpose()?;
+    if port.is_some()
+        && state
+            .bridge
+            .lock()
+            .map_err(|_| "Agent Bridge 状态不可用".to_string())?
+            .is_some()
+    {
         return Err("请先关闭 Agent Bridge 再修改端口".to_string());
     }
     {
@@ -1189,9 +1246,7 @@ fn asset_matches_platform(name: &str, arch: &str, os: &str) -> bool {
                 || lower.contains("macos")
         }
         "linux" => {
-            lower.ends_with(".deb")
-                || lower.ends_with(".rpm")
-                || lower.ends_with(".appimage")
+            lower.ends_with(".deb") || lower.ends_with(".rpm") || lower.ends_with(".appimage")
         }
         _ => false,
     }
@@ -1330,6 +1385,10 @@ fn open_external_url(url: String) -> Result<(), String> {
     Ok(())
 }
 
+pub(crate) fn open_management_url(url: String) -> Result<(), String> {
+    open_external_url(url)
+}
+
 /// A2（R-012）SSH config 导入：读取用户主目录下的 ~/.ssh/config 文本。
 /// 仅返回文本内容，解析在前端完成。
 #[tauri::command]
@@ -1343,7 +1402,6 @@ fn read_ssh_config() -> Result<String, String> {
     }
     std::fs::read_to_string(&path).map_err(|e| format!("读取 ~/.ssh/config 失败：{e}"))
 }
-
 
 fn inject_auth_token(request: &mut Value, token: &str) {
     if let Value::Object(map) = request {
@@ -1384,8 +1442,17 @@ fn request_timeout(request: &Value) -> Duration {
     let method = request.get("method").and_then(Value::as_str).unwrap_or("");
     match method {
         "session.openSsh" => Duration::from_secs(30),
-        "sftp.open" | "sftp.read" | "sftp.write" | "sftp.list" | "sftp.stat" | "sftp.mkdir"
-        | "sftp.remove" | "sftp.removeDir" | "sftp.rename" | "sftp.close" | "ssh.probe"
+        "sftp.open"
+        | "sftp.read"
+        | "sftp.write"
+        | "sftp.list"
+        | "sftp.stat"
+        | "sftp.mkdir"
+        | "sftp.remove"
+        | "sftp.removeDir"
+        | "sftp.rename"
+        | "sftp.close"
+        | "ssh.probe"
         | "ssh.discoverHostKey" => Duration::from_secs(35),
         _ => Duration::from_secs(10),
     }

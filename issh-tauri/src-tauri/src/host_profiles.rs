@@ -443,10 +443,7 @@ impl HostProfileStore {
                 ));
             }
             if password.is_some() || sudo_password.is_some() || key_passphrase.is_some() {
-                let credential_key = format!(
-                    "{}|{}|{}",
-                    profile.user, profile.host, profile.port
-                );
+                let credential_key = format!("{}|{}|{}", profile.user, profile.host, profile.port);
                 if !emitted.insert(credential_key) {
                     continue;
                 }
@@ -468,7 +465,10 @@ impl HostProfileStore {
                 None => continue,
             };
             let kind = secret.get("type").and_then(Value::as_str).unwrap_or("");
-            let value = secret.get("value").and_then(Value::as_str).map(str::to_string);
+            let value = secret
+                .get("value")
+                .and_then(Value::as_str)
+                .map(str::to_string);
             if kind == VAULT_SECRET_TYPE_PASSWORD {
                 let user = key.get("user").and_then(Value::as_str).unwrap_or("");
                 let host = key.get("host").and_then(Value::as_str);
@@ -495,9 +495,7 @@ impl HostProfileStore {
                         value,
                         key_path: Some(format!("sha256:{hash}")),
                     });
-                } else if host.is_none()
-                    && !consumed.contains(&format!("{kind}|{user}||{port}"))
-                {
+                } else if host.is_none() && !consumed.contains(&format!("{kind}|{user}||{port}")) {
                     generic.push(GenericCredential {
                         kind: "keyPassphrase".into(),
                         user: user.to_string(),
@@ -520,13 +518,20 @@ impl HostProfileStore {
     }
 
     /// 保存（或清除）单台主机的密码/私钥口令。
-    pub fn save_credential(&self, mutation: CredentialMutation) -> Result<HostCredentialsResult, String> {
+    pub fn save_credential(
+        &self,
+        mutation: CredentialMutation,
+    ) -> Result<HostCredentialsResult, String> {
         let user = mutation.user.trim();
         let host = mutation.host.trim();
         if user.is_empty() || host.is_empty() {
             return Err("用户名与主机不能为空".to_string());
         }
-        let port = if mutation.port == 0 { 22 } else { mutation.port };
+        let port = if mutation.port == 0 {
+            22
+        } else {
+            mutation.port
+        };
         if mutation.sudo_password.is_some() {
             let state = self.read()?;
             if !state.encrypted {
@@ -543,7 +548,12 @@ impl HostProfileStore {
     }
 
     /// 删除单台主机的登录密码、sudo 密码与私钥口令。
-    pub fn delete_credential(&self, user: &str, host: &str, port: u16) -> Result<HostCredentialsResult, String> {
+    pub fn delete_credential(
+        &self,
+        user: &str,
+        host: &str,
+        port: u16,
+    ) -> Result<HostCredentialsResult, String> {
         let user = user.trim();
         let host = host.trim();
         if user.is_empty() || host.is_empty() {
@@ -558,14 +568,13 @@ impl HostProfileStore {
                     VAULT_SECRET_TYPE_PASSWORD
                         | VAULT_SECRET_TYPE_PASSPHRASE
                         | VAULT_SECRET_TYPE_SUDO_PASSWORD
-                )
-                    && key
-                        .map(|key| {
-                            key.get("user").and_then(Value::as_str) == Some(user)
-                                && key.get("host").and_then(Value::as_str) == Some(host)
-                                && key.get("port").and_then(Value::as_u64) == Some(port as u64)
-                        })
-                        .unwrap_or(false);
+                ) && key
+                    .map(|key| {
+                        key.get("user").and_then(Value::as_str) == Some(user)
+                            && key.get("host").and_then(Value::as_str) == Some(host)
+                            && key.get("port").and_then(Value::as_u64) == Some(port as u64)
+                    })
+                    .unwrap_or(false);
                 !matches
             });
         })?;
@@ -579,7 +588,9 @@ impl HostProfileStore {
         }
         let raw = std::fs::read_to_string(&self.config_path).ok();
         let parsed: serde_yaml::Value = match raw {
-            Some(raw) => serde_yaml::from_str(&raw).map_err(|e| format!("config.yaml 解析失败：{e}"))?,
+            Some(raw) => {
+                serde_yaml::from_str(&raw).map_err(|e| format!("config.yaml 解析失败：{e}"))?
+            }
             None => serde_yaml::Value::Mapping(serde_yaml::Mapping::new()),
         };
         if parsed
@@ -595,7 +606,12 @@ impl HostProfileStore {
             .get("secrets")
             .and_then(|value| value.as_sequence())
             .cloned()
-            .map(|sequence| sequence.into_iter().map(|item| serde_json::to_value(&item).unwrap_or(Value::Null)).collect())
+            .map(|sequence| {
+                sequence
+                    .into_iter()
+                    .map(|item| serde_json::to_value(&item).unwrap_or(Value::Null))
+                    .collect()
+            })
             .unwrap_or_default();
         // vault 内 config 用 Electron 形态（options.host 等），与 unlock() 的 profiles_from_json 对齐
         let mut vault_config = Value::Object(serde_json::Map::new());
@@ -604,14 +620,18 @@ impl HostProfileStore {
             "config": vault_config,
             "secrets": secrets,
         });
-        let plaintext = serde_json::to_string(&vault).map_err(|e| format!("Vault 序列化失败：{e}"))?;
+        let plaintext =
+            serde_json::to_string(&vault).map_err(|e| format!("Vault 序列化失败：{e}"))?;
         let stored = encrypt_json_to_stored(&plaintext, passphrase);
         let mut root = parsed;
         if let serde_yaml::Value::Mapping(map) = &mut root {
             map.remove(serde_yaml::Value::String("profiles".into()));
             map.remove(serde_yaml::Value::String("groups".into()));
             map.remove(serde_yaml::Value::String("secrets".into()));
-            map.insert(serde_yaml::Value::String("encrypted".into()), serde_yaml::Value::Bool(true));
+            map.insert(
+                serde_yaml::Value::String("encrypted".into()),
+                serde_yaml::Value::Bool(true),
+            );
             map.insert(
                 serde_yaml::Value::String("vault".into()),
                 serde_yaml::to_value(stored).map_err(|e| format!("Vault 序列化失败：{e}"))?,
@@ -669,7 +689,8 @@ impl HostProfileStore {
         if unlocked.passphrase.as_str() != old {
             return Err("旧主口令不正确".to_string());
         }
-        let plaintext = serde_json::to_string(&unlocked.vault).map_err(|e| format!("Vault 序列化失败：{e}"))?;
+        let plaintext =
+            serde_json::to_string(&unlocked.vault).map_err(|e| format!("Vault 序列化失败：{e}"))?;
         let stored = encrypt_json_to_stored(&plaintext, new);
         if let serde_yaml::Value::Mapping(map) = &mut unlocked.root {
             map.insert(
@@ -684,10 +705,7 @@ impl HostProfileStore {
     }
 
     /// 在加密/明文两种存储形态下统一修改 secrets 数组并持久化。
-    fn mutate_secret(
-        &self,
-        apply: impl FnOnce(&mut Vec<Value>),
-    ) -> Result<(), String> {
+    fn mutate_secret(&self, apply: impl FnOnce(&mut Vec<Value>)) -> Result<(), String> {
         let raw = std::fs::read_to_string(&self.config_path).ok();
         let encrypted = raw
             .as_deref()
@@ -696,8 +714,13 @@ impl HostProfileStore {
             .unwrap_or(false);
 
         if encrypted {
-            let mut guard = self.unlocked.lock().map_err(|_| "主机配置状态不可用".to_string())?;
-            let unlocked = guard.as_mut().ok_or_else(|| "请先解锁主机配置".to_string())?;
+            let mut guard = self
+                .unlocked
+                .lock()
+                .map_err(|_| "主机配置状态不可用".to_string())?;
+            let unlocked = guard
+                .as_mut()
+                .ok_or_else(|| "请先解锁主机配置".to_string())?;
             let mut secrets = unlocked
                 .vault
                 .get("secrets")
@@ -708,10 +731,14 @@ impl HostProfileStore {
             if let Some(vault_root) = unlocked.vault.as_object_mut() {
                 vault_root.insert("secrets".into(), Value::Array(secrets));
             }
-            let plaintext = serde_json::to_string(&unlocked.vault).map_err(|e| format!("Vault 序列化失败：{e}"))?;
+            let plaintext = serde_json::to_string(&unlocked.vault)
+                .map_err(|e| format!("Vault 序列化失败：{e}"))?;
             let stored = encrypt_json_to_stored(&plaintext, &unlocked.passphrase);
             if let serde_yaml::Value::Mapping(map) = &mut unlocked.root {
-                map.insert(serde_yaml::Value::String("vault".into()), serde_yaml::to_value(stored).map_err(|e| format!("Vault 序列化失败：{e}"))?);
+                map.insert(
+                    serde_yaml::Value::String("vault".into()),
+                    serde_yaml::to_value(stored).map_err(|e| format!("Vault 序列化失败：{e}"))?,
+                );
             }
             persist_yaml(&self.config_path, &unlocked.root)?;
             return Ok(());
@@ -719,13 +746,21 @@ impl HostProfileStore {
 
         let mut parsed = raw
             .ok_or_else(|| "无法读取 config.yaml".to_string())
-            .and_then(|value| serde_yaml::from_str::<serde_yaml::Value>(&value).map_err(|e| format!("config.yaml 解析失败：{e}")))?;
+            .and_then(|value| {
+                serde_yaml::from_str::<serde_yaml::Value>(&value)
+                    .map_err(|e| format!("config.yaml 解析失败：{e}"))
+            })?;
         // 明文形态：secrets 直接位于 config.yaml 顶层
         let mut secrets = parsed
             .get("secrets")
             .and_then(|value| value.as_sequence())
             .cloned()
-            .map(|sequence| sequence.into_iter().map(|item| serde_json::to_value(&item).unwrap_or(Value::Null)).collect())
+            .map(|sequence| {
+                sequence
+                    .into_iter()
+                    .map(|item| serde_json::to_value(&item).unwrap_or(Value::Null))
+                    .collect()
+            })
             .unwrap_or_default();
         apply(&mut secrets);
         if let serde_yaml::Value::Mapping(map) = &mut parsed {
@@ -740,7 +775,10 @@ impl HostProfileStore {
 
     /// 当前解锁状态下 vault 的 secrets 数组（未加密/未解锁时返回空）。
     fn unlocked_secrets(&self) -> Result<Vec<Value>, String> {
-        let guard = self.unlocked.lock().map_err(|_| "主机配置状态不可用".to_string())?;
+        let guard = self
+            .unlocked
+            .lock()
+            .map_err(|_| "主机配置状态不可用".to_string())?;
         if let Some(unlocked) = guard.as_ref() {
             return Ok(unlocked
                 .vault
@@ -752,13 +790,18 @@ impl HostProfileStore {
         // 未加密形态：secrets 位于 config.yaml 顶层
         let raw = std::fs::read_to_string(&self.config_path)
             .map_err(|e| format!("无法读取 config.yaml：{e}"))?;
-        let parsed: serde_yaml::Value = serde_yaml::from_str(&raw)
-            .map_err(|e| format!("config.yaml 解析失败：{e}"))?;
+        let parsed: serde_yaml::Value =
+            serde_yaml::from_str(&raw).map_err(|e| format!("config.yaml 解析失败：{e}"))?;
         Ok(parsed
             .get("secrets")
             .and_then(|value| value.as_sequence())
             .cloned()
-            .map(|sequence| sequence.into_iter().map(|item| serde_json::to_value(&item).unwrap_or(Value::Null)).collect())
+            .map(|sequence| {
+                sequence
+                    .into_iter()
+                    .map(|item| serde_json::to_value(&item).unwrap_or(Value::Null))
+                    .collect()
+            })
             .unwrap_or_default())
     }
 
@@ -775,15 +818,27 @@ impl HostProfileStore {
             .unwrap_or(false);
 
         if encrypted {
-            let mut guard = self.unlocked.lock().map_err(|_| "主机配置状态不可用".to_string())?;
-            let unlocked = guard.as_mut().ok_or_else(|| "请先解锁主机配置".to_string())?;
+            let mut guard = self
+                .unlocked
+                .lock()
+                .map_err(|_| "主机配置状态不可用".to_string())?;
+            let unlocked = guard
+                .as_mut()
+                .ok_or_else(|| "请先解锁主机配置".to_string())?;
             apply_mutation(&mut unlocked.profiles, &mut unlocked.groups, &mutation)?;
-            let config = unlocked.vault.get_mut("config").ok_or_else(|| "Vault 配置缺少 config".to_string())?;
+            let config = unlocked
+                .vault
+                .get_mut("config")
+                .ok_or_else(|| "Vault 配置缺少 config".to_string())?;
             write_model_to_json(config, &unlocked.profiles, &unlocked.groups);
-            let plaintext = serde_json::to_string(&unlocked.vault).map_err(|e| format!("Vault 序列化失败：{e}"))?;
+            let plaintext = serde_json::to_string(&unlocked.vault)
+                .map_err(|e| format!("Vault 序列化失败：{e}"))?;
             let stored = encrypt_json_to_stored(&plaintext, &unlocked.passphrase);
             if let serde_yaml::Value::Mapping(map) = &mut unlocked.root {
-                map.insert(serde_yaml::Value::String("vault".into()), serde_yaml::to_value(stored).map_err(|e| format!("Vault 序列化失败：{e}"))?);
+                map.insert(
+                    serde_yaml::Value::String("vault".into()),
+                    serde_yaml::to_value(stored).map_err(|e| format!("Vault 序列化失败：{e}"))?,
+                );
             }
             persist_yaml(&self.config_path, &unlocked.root)?;
             return Ok(result_from_unlocked(unlocked));
@@ -791,13 +846,21 @@ impl HostProfileStore {
 
         let mut parsed = raw
             .ok_or_else(|| "无法读取 config.yaml".to_string())
-            .and_then(|value| serde_yaml::from_str::<serde_yaml::Value>(&value).map_err(|e| format!("config.yaml 解析失败：{e}")))?;
+            .and_then(|value| {
+                serde_yaml::from_str::<serde_yaml::Value>(&value)
+                    .map_err(|e| format!("config.yaml 解析失败：{e}"))
+            })?;
         let mut profiles = profiles_from_config(&parsed);
         let mut groups = groups_from_config(&parsed);
         apply_mutation(&mut profiles, &mut groups, &mutation)?;
         write_model_to_yaml(&mut parsed, &profiles, &groups);
         persist_yaml(&self.config_path, &parsed)?;
-        Ok(HostProfilesResult { encrypted: false, unlocked: true, profiles, groups })
+        Ok(HostProfilesResult {
+            encrypted: false,
+            unlocked: true,
+            profiles,
+            groups,
+        })
     }
 
     fn read_cache_only(&self) -> Result<HostProfilesResult, String> {
@@ -826,40 +889,76 @@ impl HostProfileStore {
 }
 
 fn result_from_unlocked(unlocked: &UnlockedConfig) -> HostProfilesResult {
-    HostProfilesResult { encrypted: true, unlocked: true, profiles: unlocked.profiles.clone(), groups: unlocked.groups.clone() }
+    HostProfilesResult {
+        encrypted: true,
+        unlocked: true,
+        profiles: unlocked.profiles.clone(),
+        groups: unlocked.groups.clone(),
+    }
 }
 
-fn apply_mutation(profiles: &mut Vec<SshHostProfile>, groups: &mut Vec<SshHostGroup>, mutation: &HostProfileMutation) -> Result<(), String> {
+fn apply_mutation(
+    profiles: &mut Vec<SshHostProfile>,
+    groups: &mut Vec<SshHostGroup>,
+    mutation: &HostProfileMutation,
+) -> Result<(), String> {
     match mutation.action.as_str() {
         "createProfile" => {
-            let profile = mutation.profile.clone().ok_or_else(|| "缺少主机数据".to_string())?;
+            let profile = mutation
+                .profile
+                .clone()
+                .ok_or_else(|| "缺少主机数据".to_string())?;
             validate_profile(&profile, profiles, groups, None)?;
             profiles.push(profile);
         }
         "updateProfile" => {
-            let profile = mutation.profile.clone().ok_or_else(|| "缺少主机数据".to_string())?;
+            let profile = mutation
+                .profile
+                .clone()
+                .ok_or_else(|| "缺少主机数据".to_string())?;
             validate_profile(&profile, profiles, groups, Some(&profile.id))?;
-            let target = profiles.iter_mut().find(|item| item.id == profile.id).ok_or_else(|| "主机不存在".to_string())?;
+            let target = profiles
+                .iter_mut()
+                .find(|item| item.id == profile.id)
+                .ok_or_else(|| "主机不存在".to_string())?;
             *target = profile;
         }
         "deleteProfile" => {
-            let id = mutation.profile_id.as_deref().ok_or_else(|| "缺少主机 ID".to_string())?;
+            let id = mutation
+                .profile_id
+                .as_deref()
+                .ok_or_else(|| "缺少主机 ID".to_string())?;
             profiles.retain(|item| item.id != id);
         }
         "createGroup" => {
-            let group = mutation.group.clone().ok_or_else(|| "缺少分组数据".to_string())?;
+            let group = mutation
+                .group
+                .clone()
+                .ok_or_else(|| "缺少分组数据".to_string())?;
             validate_group(&group, groups, None)?;
             groups.push(group);
         }
         "updateGroup" => {
-            let group = mutation.group.clone().ok_or_else(|| "缺少分组数据".to_string())?;
+            let group = mutation
+                .group
+                .clone()
+                .ok_or_else(|| "缺少分组数据".to_string())?;
             validate_group(&group, groups, Some(&group.id))?;
-            let target = groups.iter_mut().find(|item| item.id == group.id).ok_or_else(|| "分组不存在".to_string())?;
+            let target = groups
+                .iter_mut()
+                .find(|item| item.id == group.id)
+                .ok_or_else(|| "分组不存在".to_string())?;
             *target = group;
         }
         "deleteGroup" => {
-            let id = mutation.group_id.as_deref().ok_or_else(|| "缺少分组 ID".to_string())?;
-            if groups.iter().any(|item| item.parent_group_id.as_deref() == Some(id)) {
+            let id = mutation
+                .group_id
+                .as_deref()
+                .ok_or_else(|| "缺少分组 ID".to_string())?;
+            if groups
+                .iter()
+                .any(|item| item.parent_group_id.as_deref() == Some(id))
+            {
                 return Err("请先处理子分组后再删除".to_string());
             }
             if profiles.iter().any(|item| item.group == id) {
@@ -870,81 +969,154 @@ fn apply_mutation(profiles: &mut Vec<SshHostProfile>, groups: &mut Vec<SshHostGr
         "moveProfiles" => {
             let ids = mutation.profile_ids.as_deref().unwrap_or_default();
             let target = mutation.group_id.as_deref().unwrap_or("");
-            if !target.is_empty() && !groups.iter().any(|item| item.id == target) { return Err("目标分组不存在".to_string()); }
-            for profile in profiles.iter_mut().filter(|item| ids.contains(&item.id)) { profile.group = target.to_string(); }
+            if !target.is_empty() && !groups.iter().any(|item| item.id == target) {
+                return Err("目标分组不存在".to_string());
+            }
+            for profile in profiles.iter_mut().filter(|item| ids.contains(&item.id)) {
+                profile.group = target.to_string();
+            }
         }
         "toggleFavorite" => {
-            let id = mutation.profile_id.as_deref().ok_or_else(|| "缺少主机 ID".to_string())?;
-            let profile = profiles.iter_mut().find(|item| item.id == id).ok_or_else(|| "主机不存在".to_string())?;
+            let id = mutation
+                .profile_id
+                .as_deref()
+                .ok_or_else(|| "缺少主机 ID".to_string())?;
+            let profile = profiles
+                .iter_mut()
+                .find(|item| item.id == id)
+                .ok_or_else(|| "主机不存在".to_string())?;
             profile.favorite = !profile.favorite;
         }
-        _ => return Err(format!("不支持的配置变更动作：{action}", action = mutation.action)),
+        _ => {
+            return Err(format!(
+                "不支持的配置变更动作：{action}",
+                action = mutation.action
+            ))
+        }
     }
     Ok(())
 }
 
-fn validate_profile(profile: &SshHostProfile, profiles: &[SshHostProfile], groups: &[SshHostGroup], current: Option<&str>) -> Result<(), String> {
-    if profile.id.trim().is_empty() || profile.name.trim().is_empty() || profile.host.trim().is_empty() || profile.user.trim().is_empty() { return Err("主机名称、地址、用户名和 ID 不能为空".to_string()); }
-    if profiles.iter().any(|item| Some(item.id.as_str()) != current && item.id == profile.id) { return Err("主机 ID 已存在".to_string()); }
-    if !profile.group.is_empty() && !groups.iter().any(|item| item.id == profile.group) { return Err("主机所属分组不存在".to_string()); }
+fn validate_profile(
+    profile: &SshHostProfile,
+    profiles: &[SshHostProfile],
+    groups: &[SshHostGroup],
+    current: Option<&str>,
+) -> Result<(), String> {
+    if profile.id.trim().is_empty()
+        || profile.name.trim().is_empty()
+        || profile.host.trim().is_empty()
+        || profile.user.trim().is_empty()
+    {
+        return Err("主机名称、地址、用户名和 ID 不能为空".to_string());
+    }
+    if profiles
+        .iter()
+        .any(|item| Some(item.id.as_str()) != current && item.id == profile.id)
+    {
+        return Err("主机 ID 已存在".to_string());
+    }
+    if !profile.group.is_empty() && !groups.iter().any(|item| item.id == profile.group) {
+        return Err("主机所属分组不存在".to_string());
+    }
     Ok(())
 }
 
-fn validate_group(group: &SshHostGroup, groups: &[SshHostGroup], current: Option<&str>) -> Result<(), String> {
-    if group.id.trim().is_empty() || group.name.trim().is_empty() { return Err("分组名称和 ID 不能为空".to_string()); }
-    if groups.iter().any(|item| Some(item.id.as_str()) != current && item.id == group.id) { return Err("分组 ID 已存在".to_string()); }
-    if group.parent_group_id.as_deref() == Some(&group.id) { return Err("分组不能成为自己的父分组".to_string()); }
-    if let Some(parent) = group.parent_group_id.as_deref() { if !groups.iter().any(|item| item.id == parent) { return Err("父分组不存在".to_string()); } }
+fn validate_group(
+    group: &SshHostGroup,
+    groups: &[SshHostGroup],
+    current: Option<&str>,
+) -> Result<(), String> {
+    if group.id.trim().is_empty() || group.name.trim().is_empty() {
+        return Err("分组名称和 ID 不能为空".to_string());
+    }
+    if groups
+        .iter()
+        .any(|item| Some(item.id.as_str()) != current && item.id == group.id)
+    {
+        return Err("分组 ID 已存在".to_string());
+    }
+    if group.parent_group_id.as_deref() == Some(&group.id) {
+        return Err("分组不能成为自己的父分组".to_string());
+    }
+    if let Some(parent) = group.parent_group_id.as_deref() {
+        if !groups.iter().any(|item| item.id == parent) {
+            return Err("父分组不存在".to_string());
+        }
+    }
     if let Some(current_id) = current {
         let mut cursor = group.parent_group_id.as_deref();
         let mut seen = std::collections::HashSet::new();
         while let Some(id) = cursor {
-            if id == current_id || !seen.insert(id) { return Err("分组层级不能形成循环".to_string()); }
-            cursor = groups.iter().find(|item| item.id == id).and_then(|item| item.parent_group_id.as_deref());
+            if id == current_id || !seen.insert(id) {
+                return Err("分组层级不能形成循环".to_string());
+            }
+            cursor = groups
+                .iter()
+                .find(|item| item.id == id)
+                .and_then(|item| item.parent_group_id.as_deref());
         }
     }
     Ok(())
 }
 
-fn write_model_to_yaml(config: &mut serde_yaml::Value, profiles: &[SshHostProfile], groups: &[SshHostGroup]) {
+fn write_model_to_yaml(
+    config: &mut serde_yaml::Value,
+    profiles: &[SshHostProfile],
+    groups: &[SshHostGroup],
+) {
     if let serde_yaml::Value::Mapping(map) = config {
-        map.insert(serde_yaml::Value::String("profiles".into()), serde_yaml::to_value(profiles).unwrap_or_default());
-        map.insert(serde_yaml::Value::String("groups".into()), serde_yaml::to_value(groups).unwrap_or_default());
+        map.insert(
+            serde_yaml::Value::String("profiles".into()),
+            serde_yaml::to_value(profiles).unwrap_or_default(),
+        );
+        map.insert(
+            serde_yaml::Value::String("groups".into()),
+            serde_yaml::to_value(groups).unwrap_or_default(),
+        );
     }
 }
 
 fn write_model_to_json(config: &mut Value, profiles: &[SshHostProfile], groups: &[SshHostGroup]) {
     if let Value::Object(map) = config {
-        let entries = profiles.iter().map(|profile| serde_json::json!({
-            "id": profile.id,
-            "name": profile.name,
-            "type": "ssh",
-            "group": profile.group,
-            "favorite": profile.favorite,
-            "environment": profile.environment,
-            "remark": profile.remark,
-            "tags": profile.tags,
-            "loginScript": profile.login_script,
-            "options": {
-                "host": profile.host,
-                "port": profile.port,
-                "user": profile.user,
-                "auth": profile.auth,
-                "privateKeys": profile.private_keys,
-                "x11": profile.x11,
-                "agentForward": profile.agent_forward,
-                "jumpHost": profile.jump_host,
-                "proxyCommand": profile.proxy_command,
-                "forwardedPorts": profile.forwarded_ports,
-                "socksProxyHost": profile.socks_proxy_host,
-                "socksProxyPort": profile.socks_proxy_port,
-                "httpProxyHost": profile.http_proxy_host,
-                "httpProxyPort": profile.http_proxy_port,
-                "reuseSession": profile.reuse_session,
-            },
-        })).collect::<Vec<_>>();
+        let entries = profiles
+            .iter()
+            .map(|profile| {
+                serde_json::json!({
+                    "id": profile.id,
+                    "name": profile.name,
+                    "type": "ssh",
+                    "group": profile.group,
+                    "favorite": profile.favorite,
+                    "environment": profile.environment,
+                    "remark": profile.remark,
+                    "tags": profile.tags,
+                    "loginScript": profile.login_script,
+                    "options": {
+                        "host": profile.host,
+                        "port": profile.port,
+                        "user": profile.user,
+                        "auth": profile.auth,
+                        "privateKeys": profile.private_keys,
+                        "x11": profile.x11,
+                        "agentForward": profile.agent_forward,
+                        "jumpHost": profile.jump_host,
+                        "proxyCommand": profile.proxy_command,
+                        "forwardedPorts": profile.forwarded_ports,
+                        "socksProxyHost": profile.socks_proxy_host,
+                        "socksProxyPort": profile.socks_proxy_port,
+                        "httpProxyHost": profile.http_proxy_host,
+                        "httpProxyPort": profile.http_proxy_port,
+                        "reuseSession": profile.reuse_session,
+                    },
+                })
+            })
+            .collect::<Vec<_>>();
         map.insert("profiles".into(), Value::Array(entries));
-        map.insert("groups".into(), serde_json::to_value(groups).unwrap_or(Value::Array(Vec::new())));
+        map.insert(
+            "groups".into(),
+            serde_json::to_value(groups).unwrap_or(Value::Array(Vec::new())),
+        );
     }
 }
 
@@ -954,7 +1126,6 @@ fn persist_yaml(path: &Path, value: &serde_yaml::Value) -> Result<(), String> {
     std::fs::write(&tmp, payload).map_err(|e| format!("配置写入失败：{e}"))?;
     std::fs::rename(&tmp, path).map_err(|e| format!("配置替换失败：{e}"))
 }
-
 
 fn profiles_from_config(parsed: &serde_yaml::Value) -> Vec<SshHostProfile> {
     parsed
@@ -1045,9 +1216,7 @@ fn profile_from_json(entry: &Value) -> Option<SshHostProfile> {
                         if let Some(path) = key.as_str() {
                             Some(path.to_string())
                         } else {
-                            key.get("name")
-                                .and_then(Value::as_str)
-                                .map(str::to_string)
+                            key.get("name").and_then(Value::as_str).map(str::to_string)
                         }
                     })
                     .collect()
@@ -1079,19 +1248,43 @@ fn profile_from_json(entry: &Value) -> Option<SshHostProfile> {
             .and_then(Value::as_str)
             .map(str::to_string),
         x11: options.get("x11").and_then(Value::as_bool).unwrap_or(false),
-        agent_forward: options.get("agentForward").and_then(Value::as_bool).unwrap_or(false),
-        jump_host: options.get("jumpHost").and_then(Value::as_str).map(str::to_string),
-        proxy_command: options.get("proxyCommand").and_then(Value::as_str).map(str::to_string),
+        agent_forward: options
+            .get("agentForward")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        jump_host: options
+            .get("jumpHost")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        proxy_command: options
+            .get("proxyCommand")
+            .and_then(Value::as_str)
+            .map(str::to_string),
         forwarded_ports: options
             .get("forwardedPorts")
             .cloned()
             .and_then(|value| serde_json::from_value(value).ok())
             .unwrap_or_default(),
-        socks_proxy_host: options.get("socksProxyHost").and_then(Value::as_str).map(str::to_string),
-        socks_proxy_port: options.get("socksProxyPort").and_then(Value::as_u64).and_then(|value| u16::try_from(value).ok()),
-        http_proxy_host: options.get("httpProxyHost").and_then(Value::as_str).map(str::to_string),
-        http_proxy_port: options.get("httpProxyPort").and_then(Value::as_u64).and_then(|value| u16::try_from(value).ok()),
-        reuse_session: options.get("reuseSession").and_then(Value::as_bool).unwrap_or(false),
+        socks_proxy_host: options
+            .get("socksProxyHost")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        socks_proxy_port: options
+            .get("socksProxyPort")
+            .and_then(Value::as_u64)
+            .and_then(|value| u16::try_from(value).ok()),
+        http_proxy_host: options
+            .get("httpProxyHost")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        http_proxy_port: options
+            .get("httpProxyPort")
+            .and_then(Value::as_u64)
+            .and_then(|value| u16::try_from(value).ok()),
+        reuse_session: options
+            .get("reuseSession")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
     })
 }
 
@@ -1188,11 +1381,7 @@ fn find_exact_connection_secret(
 }
 
 /// Electron 存密钥口令用 key = { hash: sha512(key contents) }。
-fn find_secret_by_hash(
-    secrets: &[Value],
-    secret_type: &str,
-    hash: &str,
-) -> Option<String> {
+fn find_secret_by_hash(secrets: &[Value], secret_type: &str, hash: &str) -> Option<String> {
     secrets
         .iter()
         .find(|secret| {
@@ -1211,11 +1400,18 @@ fn find_secret_by_hash(
 /// 且支持 %h（host）/%r（user）模板；连接时归一化为纯文件路径。
 fn expand_key_path(path: &str, user: &str, host: &str) -> String {
     let mut p = path.trim().to_string();
-    if let Some(stripped) = p.strip_prefix("file://").or_else(|| p.strip_prefix("FILE://")) {
+    if let Some(stripped) = p
+        .strip_prefix("file://")
+        .or_else(|| p.strip_prefix("FILE://"))
+    {
         p = stripped.to_string();
         // file:///c:/... → c:/...（剥掉盘符前的多余斜杠）；Linux 绝对路径保留
         let bytes = p.as_bytes();
-        if bytes.len() >= 3 && bytes[0] == b'/' && bytes[1].is_ascii_alphabetic() && bytes[2] == b':' {
+        if bytes.len() >= 3
+            && bytes[0] == b'/'
+            && bytes[1].is_ascii_alphabetic()
+            && bytes[2] == b':'
+        {
             p = p[1..].to_string();
         }
     }
@@ -1384,7 +1580,8 @@ mod tests {
 
     #[test]
     fn finds_passphrase_by_key_content_hash() {
-        let contents = "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----";
+        let contents =
+            "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----";
         let digest = Sha512::digest(contents.as_bytes());
         let hash = hex_encode(&digest);
         let secrets = vec![serde_json::json!({
@@ -1425,7 +1622,13 @@ mod tests {
             Some("new-pass".to_string())
         );
         assert_eq!(
-            find_connection_secret(&secrets, VAULT_SECRET_TYPE_PASSPHRASE, "root", "10.0.0.1", 22),
+            find_connection_secret(
+                &secrets,
+                VAULT_SECRET_TYPE_PASSPHRASE,
+                "root",
+                "10.0.0.1",
+                22
+            ),
             Some("phrase".to_string())
         );
         assert_eq!(
@@ -1544,16 +1747,11 @@ mod tests {
     }
 
     fn temp_store(tag: &str) -> (HostProfileStore, std::path::PathBuf) {
-        let dir = std::env::temp_dir().join(format!(
-            "issh-vault-test-{}-{tag}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("issh-vault-test-{}-{tag}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("create temp dir");
-        (
-            HostProfileStore::new(&dir),
-            dir.join("config.yaml"),
-        )
+        (HostProfileStore::new(&dir), dir.join("config.yaml"))
     }
 
     fn sample_config() -> String {
@@ -1585,7 +1783,9 @@ mod tests {
         let (store, path) = temp_store("enable");
         std::fs::write(&path, sample_config()).expect("write config");
 
-        let result = store.enable_vault("master-pass").expect("enable should succeed");
+        let result = store
+            .enable_vault("master-pass")
+            .expect("enable should succeed");
         assert!(result.encrypted && result.unlocked);
         assert_eq!(result.profiles.len(), 1);
         assert_eq!(result.groups.len(), 1);
@@ -1593,7 +1793,10 @@ mod tests {
         // 明文段已移除，加密标志已写入
         let raw = std::fs::read_to_string(&path).expect("read config");
         let parsed: serde_yaml::Value = serde_yaml::from_str(&raw).expect("parse config");
-        assert!(parsed.get("encrypted").and_then(|v| v.as_bool()).unwrap_or(false));
+        assert!(parsed
+            .get("encrypted")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false));
         assert!(parsed.get("vault").is_some());
         assert!(parsed.get("profiles").is_none());
         assert!(parsed.get("secrets").is_none());
@@ -1607,7 +1810,9 @@ mod tests {
         assert_eq!(unlocked.profiles[0].user, "root");
         assert_eq!(unlocked.groups[0].name, "Prod");
         assert_eq!(
-            store.resolve_ssh_password("root", "10.0.0.1", 22).expect("resolve"),
+            store
+                .resolve_ssh_password("root", "10.0.0.1", 22)
+                .expect("resolve"),
             Some("old-pass".to_string())
         );
 
@@ -1627,24 +1832,35 @@ mod tests {
         // 旧口令错误 → 拒绝且数据不变
         assert!(store.change_passphrase("bad-old", "new-pass").is_err());
         assert_eq!(
-            store.resolve_ssh_password("root", "10.0.0.1", 22).expect("resolve"),
+            store
+                .resolve_ssh_password("root", "10.0.0.1", 22)
+                .expect("resolve"),
             Some("old-pass".to_string())
         );
 
         // 正确旧口令 → 重加密成功，旧口令失效、新口令可用
-        let result = store.change_passphrase("old-pass", "new-pass").expect("change");
+        let result = store
+            .change_passphrase("old-pass", "new-pass")
+            .expect("change");
         assert!(result.unlocked);
         assert_eq!(
-            store.resolve_ssh_password("root", "10.0.0.1", 22).expect("resolve"),
+            store
+                .resolve_ssh_password("root", "10.0.0.1", 22)
+                .expect("resolve"),
             Some("old-pass".to_string())
         );
 
         store.lock();
-        assert!(store.unlock("old-pass").is_err(), "old passphrase must stop working");
+        assert!(
+            store.unlock("old-pass").is_err(),
+            "old passphrase must stop working"
+        );
         let unlocked = store.unlock("new-pass").expect("new passphrase works");
         assert_eq!(unlocked.profiles.len(), 1);
         assert_eq!(
-            store.resolve_ssh_password("root", "10.0.0.1", 22).expect("resolve"),
+            store
+                .resolve_ssh_password("root", "10.0.0.1", 22)
+                .expect("resolve"),
             Some("old-pass".to_string())
         );
 
@@ -1659,7 +1875,10 @@ mod tests {
 
         let result = store.disable_vault().expect("disable");
         assert!(!result.encrypted);
-        assert!(result.profiles.is_empty(), "profiles must be erased with the vault");
+        assert!(
+            result.profiles.is_empty(),
+            "profiles must be erased with the vault"
+        );
         assert!(result.groups.is_empty());
 
         let raw = std::fs::read_to_string(&path).expect("read config");

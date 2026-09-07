@@ -13,8 +13,7 @@ fn main() {
 
     // 分支切换（.git/HEAD 变化）或环境变量变化时重跑本脚本，保证嵌入值正确。
     if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-        let git_head = std::path::Path::new(&manifest_dir)
-            .join("../../.git/HEAD");
+        let git_head = std::path::Path::new(&manifest_dir).join("../../.git/HEAD");
         println!("cargo:rerun-if-changed={}", git_head.display());
     }
     println!("cargo:rerun-if-env-changed=ISSH_BUILD_BRANCH");

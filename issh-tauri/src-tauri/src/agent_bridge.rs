@@ -108,47 +108,207 @@ struct ToolDef {
 }
 
 const TOOLS: &[ToolDef] = &[
-    ToolDef { name: "issh_health", scope: ToolScope::Read, dangerous_confirm: false },
-    ToolDef { name: "issh_list_sessions", scope: ToolScope::Read, dangerous_confirm: false },
-    ToolDef { name: "issh_list_profiles", scope: ToolScope::Read, dangerous_confirm: false },
-    ToolDef { name: "issh_connect_profile", scope: ToolScope::Write, dangerous_confirm: false },
-    ToolDef { name: "issh_disconnect_session", scope: ToolScope::Write, dangerous_confirm: false },
-    ToolDef { name: "issh_select_session", scope: ToolScope::Write, dangerous_confirm: false },
-    ToolDef { name: "issh_get_context", scope: ToolScope::Read, dangerous_confirm: false },
-    ToolDef { name: "issh_read_buffer", scope: ToolScope::Read, dangerous_confirm: false },
-    ToolDef { name: "issh_preview_command", scope: ToolScope::Read, dangerous_confirm: false },
-    ToolDef { name: "issh_insert_command", scope: ToolScope::Exec, dangerous_confirm: false },
-    ToolDef { name: "issh_run_command", scope: ToolScope::Exec, dangerous_confirm: true },
-    ToolDef { name: "issh_exec_command", scope: ToolScope::Exec, dangerous_confirm: true },
-    ToolDef { name: "issh_get_output", scope: ToolScope::Read, dangerous_confirm: false },
-    ToolDef { name: "issh_batch_exec", scope: ToolScope::Exec, dangerous_confirm: true },
-    ToolDef { name: "issh_sftp_list", scope: ToolScope::Sftp, dangerous_confirm: false },
-    ToolDef { name: "issh_sftp_read", scope: ToolScope::Sftp, dangerous_confirm: false },
-    ToolDef { name: "issh_sftp_write", scope: ToolScope::Sftp, dangerous_confirm: true },
-    ToolDef { name: "issh_list_jobs", scope: ToolScope::Read, dangerous_confirm: false },
-    ToolDef { name: "issh_get_job", scope: ToolScope::Read, dangerous_confirm: false },
+    ToolDef {
+        name: "issh_health",
+        scope: ToolScope::Read,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_list_sessions",
+        scope: ToolScope::Read,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_list_profiles",
+        scope: ToolScope::Read,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_connect_profile",
+        scope: ToolScope::Write,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_disconnect_session",
+        scope: ToolScope::Write,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_select_session",
+        scope: ToolScope::Write,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_get_context",
+        scope: ToolScope::Read,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_read_buffer",
+        scope: ToolScope::Read,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_preview_command",
+        scope: ToolScope::Read,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_insert_command",
+        scope: ToolScope::Exec,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_run_command",
+        scope: ToolScope::Exec,
+        dangerous_confirm: true,
+    },
+    ToolDef {
+        name: "issh_exec_command",
+        scope: ToolScope::Exec,
+        dangerous_confirm: true,
+    },
+    ToolDef {
+        name: "issh_get_output",
+        scope: ToolScope::Read,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_batch_exec",
+        scope: ToolScope::Exec,
+        dangerous_confirm: true,
+    },
+    ToolDef {
+        name: "issh_sftp_list",
+        scope: ToolScope::Sftp,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_sftp_read",
+        scope: ToolScope::Sftp,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_sftp_write",
+        scope: ToolScope::Sftp,
+        dangerous_confirm: true,
+    },
+    ToolDef {
+        name: "issh_list_jobs",
+        scope: ToolScope::Read,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_get_job",
+        scope: ToolScope::Read,
+        dangerous_confirm: false,
+    },
     // Wave 3（C1/C2/C3/C4/C5）：isshd 已接线的 workspace/agent/task/event/pane 服务端能力。
-    ToolDef { name: "issh_pane_list", scope: ToolScope::Read, dangerous_confirm: false },
-    ToolDef { name: "issh_pane_snapshot", scope: ToolScope::Read, dangerous_confirm: false },
-    ToolDef { name: "issh_pane_subscribe", scope: ToolScope::Read, dangerous_confirm: false },
-    ToolDef { name: "issh_pane_claim_input", scope: ToolScope::Write, dangerous_confirm: false },
-    ToolDef { name: "issh_pane_release_input", scope: ToolScope::Write, dangerous_confirm: false },
-    ToolDef { name: "issh_pane_write", scope: ToolScope::Exec, dangerous_confirm: false },
-    ToolDef { name: "issh_pane_resize", scope: ToolScope::Write, dangerous_confirm: false },
-    ToolDef { name: "issh_workspace_list", scope: ToolScope::Read, dangerous_confirm: false },
-    ToolDef { name: "issh_workspace_create", scope: ToolScope::Write, dangerous_confirm: false },
-    ToolDef { name: "issh_workspace_bind", scope: ToolScope::Write, dangerous_confirm: false },
-    ToolDef { name: "issh_workspace_unbind", scope: ToolScope::Write, dangerous_confirm: false },
-    ToolDef { name: "issh_agent_register", scope: ToolScope::Write, dangerous_confirm: false },
-    ToolDef { name: "issh_agent_list", scope: ToolScope::Read, dangerous_confirm: false },
-    ToolDef { name: "issh_agent_prompt", scope: ToolScope::Exec, dangerous_confirm: false },
-    ToolDef { name: "issh_task_wait", scope: ToolScope::Read, dangerous_confirm: false },
-    ToolDef { name: "issh_task_read", scope: ToolScope::Read, dangerous_confirm: false },
-    ToolDef { name: "issh_task_list", scope: ToolScope::Read, dangerous_confirm: false },
-    ToolDef { name: "issh_task_cancel", scope: ToolScope::Exec, dangerous_confirm: false },
-    ToolDef { name: "issh_task_start", scope: ToolScope::Exec, dangerous_confirm: false },
-    ToolDef { name: "issh_task_complete", scope: ToolScope::Exec, dangerous_confirm: false },
-    ToolDef { name: "issh_workspace_events", scope: ToolScope::Read, dangerous_confirm: false },
+    ToolDef {
+        name: "issh_pane_list",
+        scope: ToolScope::Read,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_pane_snapshot",
+        scope: ToolScope::Read,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_pane_subscribe",
+        scope: ToolScope::Read,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_pane_claim_input",
+        scope: ToolScope::Write,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_pane_release_input",
+        scope: ToolScope::Write,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_pane_write",
+        scope: ToolScope::Exec,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_pane_resize",
+        scope: ToolScope::Write,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_workspace_list",
+        scope: ToolScope::Read,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_workspace_create",
+        scope: ToolScope::Write,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_workspace_bind",
+        scope: ToolScope::Write,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_workspace_unbind",
+        scope: ToolScope::Write,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_agent_register",
+        scope: ToolScope::Write,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_agent_list",
+        scope: ToolScope::Read,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_agent_prompt",
+        scope: ToolScope::Exec,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_task_wait",
+        scope: ToolScope::Read,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_task_read",
+        scope: ToolScope::Read,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_task_list",
+        scope: ToolScope::Read,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_task_cancel",
+        scope: ToolScope::Exec,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_task_start",
+        scope: ToolScope::Exec,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_task_complete",
+        scope: ToolScope::Exec,
+        dangerous_confirm: false,
+    },
+    ToolDef {
+        name: "issh_workspace_events",
+        scope: ToolScope::Read,
+        dangerous_confirm: false,
+    },
 ];
 
 /// Agent Bridge 运行期状态：token、审计、输出缓存、scope 授权。
@@ -272,11 +432,8 @@ pub async fn start(
                     break;
                 }
                 // 轮询式 accept：每 200ms 检查一次 shutdown 标志（避免额外 tokio features）
-                match tokio::time::timeout(
-                    std::time::Duration::from_millis(200),
-                    listener.accept(),
-                )
-                .await
+                match tokio::time::timeout(std::time::Duration::from_millis(200), listener.accept())
+                    .await
                 {
                     Ok(Ok((stream, _peer))) => {
                         let state = Arc::clone(&state);
@@ -330,7 +487,10 @@ async fn handle_connection(
     let mut reader = BufReader::new(reader);
 
     let mut request_line = String::new();
-    reader.read_line(&mut request_line).await.map_err(|e| e.to_string())?;
+    reader
+        .read_line(&mut request_line)
+        .await
+        .map_err(|e| e.to_string())?;
     let mut parts = request_line.split_whitespace();
     let method = parts.next().unwrap_or("").to_string();
     let path = parts.next().unwrap_or("").to_string();
@@ -339,7 +499,10 @@ async fn handle_connection(
     let mut authorization = String::new();
     loop {
         let mut line = String::new();
-        reader.read_line(&mut line).await.map_err(|e| e.to_string())?;
+        reader
+            .read_line(&mut line)
+            .await
+            .map_err(|e| e.to_string())?;
         let trimmed = line.trim_end();
         if trimmed.is_empty() {
             break;
@@ -356,16 +519,23 @@ async fn handle_connection(
     }
 
     if content_length > MAX_BODY_BYTES {
-        write_response(&mut writer, 413, &json!({
-            "error": { "code": -32600, "message": "Request body too large" }
-        }))
+        write_response(
+            &mut writer,
+            413,
+            &json!({
+                "error": { "code": -32600, "message": "Request body too large" }
+            }),
+        )
         .await?;
         return Ok(());
     }
 
     let mut body = vec![0u8; content_length];
     if content_length > 0 {
-        reader.read_exact(&mut body).await.map_err(|e| e.to_string())?;
+        reader
+            .read_exact(&mut body)
+            .await
+            .map_err(|e| e.to_string())?;
     }
 
     // token 校验：Authorization: Bearer <token>，sha256 常量时间比较
@@ -376,9 +546,13 @@ async fn handle_connection(
     let provided_hash: [u8; 32] = Sha256::digest(provided.as_bytes()).into();
     if provided_hash != state.token_sha256 {
         audit(&state, "auth", "rejected", json!({ "path": path }));
-        write_response(&mut writer, 401, &json!({
-            "error": { "code": -32000, "message": "Unauthorized: invalid or missing token" }
-        }))
+        write_response(
+            &mut writer,
+            401,
+            &json!({
+                "error": { "code": -32000, "message": "Unauthorized: invalid or missing token" }
+            }),
+        )
         .await?;
         return Ok(());
     }
@@ -398,9 +572,13 @@ async fn handle_connection(
     let request: Value = match serde_json::from_slice(&body) {
         Ok(value) => value,
         Err(error) => {
-            write_response(&mut writer, 400, &json!({
-                "error": { "code": -32700, "message": format!("Invalid JSON: {error}") }
-            }))
+            write_response(
+                &mut writer,
+                400,
+                &json!({
+                    "error": { "code": -32700, "message": format!("Invalid JSON: {error}") }
+                }),
+            )
             .await?;
             return Ok(());
         }
@@ -408,9 +586,13 @@ async fn handle_connection(
 
     let id = request.get("id").cloned().unwrap_or(Value::Null);
     let Some(tool_name) = request.get("method").and_then(Value::as_str) else {
-        write_response(&mut writer, 400, &json!({
-            "id": id, "error": { "code": -32600, "message": "method is required" }
-        }))
+        write_response(
+            &mut writer,
+            400,
+            &json!({
+                "id": id, "error": { "code": -32600, "message": "method is required" }
+            }),
+        )
         .await?;
         return Ok(());
     };
@@ -418,10 +600,14 @@ async fn handle_connection(
 
     let Some(tool) = TOOLS.iter().find(|tool| tool.name == tool_name) else {
         audit(&state, tool_name, "unknown-tool", json!({}));
-        write_response(&mut writer, 200, &json!({
-            "id": id,
-            "error": { "code": -32601, "message": format!("Unknown tool: {tool_name}") }
-        }))
+        write_response(
+            &mut writer,
+            200,
+            &json!({
+                "id": id,
+                "error": { "code": -32601, "message": format!("Unknown tool: {tool_name}") }
+            }),
+        )
         .await?;
         return Ok(());
     };
@@ -444,11 +630,20 @@ async fn handle_connection(
         }
         Err(error) => {
             let message = error.to_string();
-            audit(&state, tool_name, "error", json!({ "elapsedMs": elapsed_ms, "message": message }));
-            write_response(&mut writer, 200, &json!({
-                "id": id,
-                "error": { "code": -32000, "message": message }
-            }))
+            audit(
+                &state,
+                tool_name,
+                "error",
+                json!({ "elapsedMs": elapsed_ms, "message": message }),
+            );
+            write_response(
+                &mut writer,
+                200,
+                &json!({
+                    "id": id,
+                    "error": { "code": -32000, "message": message }
+                }),
+            )
             .await
         }
     }
@@ -549,7 +744,10 @@ async fn raw_response(
         if status == 200 { "OK" } else { "Error" },
         body.len()
     );
-    writer.write_all(head.as_bytes()).await.map_err(|e| e.to_string())?;
+    writer
+        .write_all(head.as_bytes())
+        .await
+        .map_err(|e| e.to_string())?;
     writer.write_all(body).await.map_err(|e| e.to_string())?;
     writer.flush().await.map_err(|e| e.to_string())?;
     Ok(())
@@ -748,7 +946,12 @@ fn register_job(state: &Arc<AgentBridgeState>, id: &str, session: &str, command:
     });
 }
 
-fn finish_job(state: &Arc<AgentBridgeState>, id: &str, status: &str, result: Option<Value>) -> Value {
+fn finish_job(
+    state: &Arc<AgentBridgeState>,
+    id: &str,
+    status: &str,
+    result: Option<Value>,
+) -> Value {
     let record = {
         let mut jobs = state
             .jobs
@@ -795,10 +998,9 @@ fn get_job(state: &Arc<AgentBridgeState>, params: &Value) -> Result<Value, Strin
         .jobs
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let job = jobs
-        .iter()
-        .find(|job| job.id == job_id)
-        .ok_or_else(|| format!("Job not found: {job_id}（job 表上限 {MAX_JOB_ENTRIES} 条，最旧记录会被淘汰）"))?;
+    let job = jobs.iter().find(|job| job.id == job_id).ok_or_else(|| {
+        format!("Job not found: {job_id}（job 表上限 {MAX_JOB_ENTRIES} 条，最旧记录会被淘汰）")
+    })?;
     Ok(job_to_json(job))
 }
 
@@ -840,7 +1042,11 @@ async fn list_sessions(state: &AgentBridgeState) -> Result<Value, String> {
                 .and_then(|candidate| candidate.get("customTitle"))
                 .filter(|value| !value.is_null())
                 .cloned()
-                .or_else(|| metadata.and_then(|candidate| candidate.get("title")).cloned())
+                .or_else(|| {
+                    metadata
+                        .and_then(|candidate| candidate.get("title"))
+                        .cloned()
+                })
                 .or_else(|| item.get("title").cloned())
                 .unwrap_or(Value::Null);
             let kind = item.get("kind").cloned().unwrap_or(Value::Null);
@@ -893,23 +1099,27 @@ async fn list_profiles(state: &AgentBridgeState) -> Result<Value, String> {
 async fn connect_profile(state: &AgentBridgeState, params: &Value) -> Result<Value, String> {
     let profile_id = params_str(params, "id");
     let profile_name = params_str(params, "name");
-    let timeout_ms = params_u64(params, "timeoutMs").unwrap_or(30_000).min(MAX_EXEC_TIMEOUT_MS);
+    let timeout_ms = params_u64(params, "timeoutMs")
+        .unwrap_or(30_000)
+        .min(MAX_EXEC_TIMEOUT_MS);
     let hosts = state.runtime.hosts.read()?;
     let profile = hosts
         .profiles
         .iter()
         .find(|profile| Some(profile.id.as_str()) == profile_id)
         .or_else(|| {
-            hosts.profiles.iter().find(|profile| {
-                profile_name.is_some_and(|name| profile.name == name)
-            })
+            hosts
+                .profiles
+                .iter()
+                .find(|profile| profile_name.is_some_and(|name| profile.name == name))
         })
         .ok_or_else(|| "未找到匹配的 SSH 主机档案".to_string())?;
 
-    let password = state
-        .runtime
-        .hosts
-        .resolve_ssh_password(&profile.user, &profile.host, profile.port)?;
+    let password =
+        state
+            .runtime
+            .hosts
+            .resolve_ssh_password(&profile.user, &profile.host, profile.port)?;
     let key_passphrase = state.runtime.hosts.resolve_key_passphrase(
         &profile.user,
         &profile.host,
@@ -941,20 +1151,11 @@ async fn connect_profile(state: &AgentBridgeState, params: &Value) -> Result<Val
     Ok(result)
 }
 
-async fn with_timeout<F>(
-    future: F,
-    timeout_ms: u64,
-    message: &str,
-) -> Result<Value, String>
+async fn with_timeout<F>(future: F, timeout_ms: u64, message: &str) -> Result<Value, String>
 where
     F: std::future::Future<Output = Result<Value, String>>,
 {
-    match tokio::time::timeout(
-        std::time::Duration::from_millis(timeout_ms),
-        future,
-    )
-    .await
-    {
+    match tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), future).await {
         Ok(result) => result,
         Err(_) => Err(format!("{message} after {timeout_ms}ms")),
     }
@@ -974,7 +1175,12 @@ async fn select_session(params: &Value) -> Result<Value, String> {
 
 async fn get_context(state: &AgentBridgeState, params: &Value) -> Result<Value, String> {
     let session_id = resolve_tab(params).await?;
-    let snapshot = rpc(state, "session.snapshot", json!({ "sessionId": session_id })).await?;
+    let snapshot = rpc(
+        state,
+        "session.snapshot",
+        json!({ "sessionId": session_id }),
+    )
+    .await?;
     let buffer = read_buffer_text(state, &session_id, 20).await?;
     Ok(json!({
         "session": snapshot,
@@ -985,7 +1191,9 @@ async fn get_context(state: &AgentBridgeState, params: &Value) -> Result<Value, 
 
 async fn read_buffer(state: &AgentBridgeState, params: &Value) -> Result<Value, String> {
     let session_id = resolve_tab(params).await?;
-    let lines = params_u64(params, "lines").unwrap_or(50).min(MAX_BUFFER_LINES as u64) as usize;
+    let lines = params_u64(params, "lines")
+        .unwrap_or(50)
+        .min(MAX_BUFFER_LINES as u64) as usize;
     let text = read_buffer_text(state, &session_id, lines).await?;
     Ok(json!({ "session": session_id, "lines": text }))
 }
@@ -1116,7 +1324,11 @@ async fn run_command(state: &AgentBridgeState, params: &Value) -> Result<Value, 
     let session_id = resolve_tab(params).await?;
     let command = params_str(params, "command").ok_or("command is required")?;
     let normalized = normalize_command(command);
-    require_confirm_flag(state.permission_mode, params, is_dangerous_command(&normalized))?;
+    require_confirm_flag(
+        state.permission_mode,
+        params,
+        is_dangerous_command(&normalized),
+    )?;
     let mut payload: Vec<u8> = normalized.bytes().collect();
     payload.push(b'\r');
     let result = rpc(
@@ -1132,17 +1344,28 @@ async fn exec_command(state: &Arc<AgentBridgeState>, params: &Value) -> Result<V
     let session_id = resolve_tab(params).await?;
     let command = params_str(params, "command").ok_or("command is required")?;
     let normalized = normalize_command(command);
-    require_confirm_flag(state.permission_mode, params, is_dangerous_command(&normalized))?;
+    require_confirm_flag(
+        state.permission_mode,
+        params,
+        is_dangerous_command(&normalized),
+    )?;
     let timeout_ms = params_u64(params, "timeoutMs")
         .unwrap_or(DEFAULT_EXEC_TIMEOUT_MS)
         .clamp(1, MAX_EXEC_TIMEOUT_MS);
     let max_output_bytes = 1024 * 1024;
 
     // 确认会话 kind：SSH 用 ssh.execReadonly，本地会话暂不支持隔离 exec
-    let snapshot = rpc(state, "session.snapshot", json!({ "sessionId": session_id })).await?;
+    let snapshot = rpc(
+        state,
+        "session.snapshot",
+        json!({ "sessionId": session_id }),
+    )
+    .await?;
     let kind = snapshot.get("kind").and_then(Value::as_str).unwrap_or("");
     if kind != "ssh" {
-        return Err(format!("issh_exec_command 仅支持 SSH 会话（当前 kind={kind}）"));
+        return Err(format!(
+            "issh_exec_command 仅支持 SSH 会话（当前 kind={kind}）"
+        ));
     }
 
     // R-054 长命令 job 化：执行放到后台任务，主路径等 timeout；
@@ -1178,7 +1401,11 @@ async fn exec_command(state: &Arc<AgentBridgeState>, params: &Value) -> Result<V
                     .to_string();
                 let output_id = cache_output(&job_state, &output).unwrap_or_default();
                 let truncated = output.len() > 64 * 1024;
-                let visible = if truncated { &output[..64 * 1024] } else { output.as_str() };
+                let visible = if truncated {
+                    &output[..64 * 1024]
+                } else {
+                    output.as_str()
+                };
                 finish_job(
                     &job_state,
                     &spawn_job_id,
@@ -1267,10 +1494,13 @@ fn cache_output(state: &AgentBridgeState, text: &str) -> Result<String, String> 
             cache.remove(&oldest);
         }
     }
-    cache.insert(output_id.clone(), CachedOutput {
-        text: text.to_string(),
-        created_seq: seq,
-    });
+    cache.insert(
+        output_id.clone(),
+        CachedOutput {
+            text: text.to_string(),
+            created_seq: seq,
+        },
+    );
     Ok(output_id)
 }
 
@@ -1302,7 +1532,11 @@ fn get_output(state: &AgentBridgeState, params: &Value) -> Result<Value, String>
 async fn batch_exec(state: &Arc<AgentBridgeState>, params: &Value) -> Result<Value, String> {
     let command = params_str(params, "command").ok_or("command is required")?;
     let normalized = normalize_command(command);
-    require_confirm_flag(state.permission_mode, params, is_dangerous_command(&normalized))?;
+    require_confirm_flag(
+        state.permission_mode,
+        params,
+        is_dangerous_command(&normalized),
+    )?;
     let timeout_ms = params_u64(params, "timeoutMs")
         .unwrap_or(DEFAULT_EXEC_TIMEOUT_MS)
         .clamp(1, MAX_EXEC_TIMEOUT_MS);
@@ -1329,7 +1563,10 @@ async fn batch_exec(state: &Arc<AgentBridgeState>, params: &Value) -> Result<Val
         _ => return Err("tabs is required（tab id / \"all-ssh\" / 数组）".to_string()),
     };
 
-    let parallel = params.get("parallel").and_then(Value::as_bool).unwrap_or(false);
+    let parallel = params
+        .get("parallel")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let mut results = Vec::new();
     if parallel {
         let mut handles = Vec::new();
@@ -1358,7 +1595,12 @@ async fn exec_on_session(
     command: &str,
     timeout_ms: u64,
 ) -> Result<Value, String> {
-    let snapshot = rpc(state, "session.snapshot", json!({ "sessionId": session_id })).await?;
+    let snapshot = rpc(
+        state,
+        "session.snapshot",
+        json!({ "sessionId": session_id }),
+    )
+    .await?;
     let kind = snapshot.get("kind").and_then(Value::as_str).unwrap_or("");
     if kind != "ssh" {
         return Ok(json!({
@@ -1423,7 +1665,9 @@ async fn sftp_read(state: &AgentBridgeState, params: &Value) -> Result<Value, St
     let path = params_str(params, "path").ok_or("path is required")?;
     ensure_sftp_root(state, path)?;
     let encoding = params_str(params, "encoding").unwrap_or("utf8");
-    let max_bytes = params_u64(params, "maxBytes").unwrap_or(MAX_SFTP_WRITE_BYTES).min(MAX_SFTP_WRITE_BYTES);
+    let max_bytes = params_u64(params, "maxBytes")
+        .unwrap_or(MAX_SFTP_WRITE_BYTES)
+        .min(MAX_SFTP_WRITE_BYTES);
     let _ = ensure_sftp_open(state, &session_id).await?;
 
     let mut collected: Vec<u8> = Vec::new();
@@ -1435,7 +1679,10 @@ async fn sftp_read(state: &AgentBridgeState, params: &Value) -> Result<Value, St
             json!({ "sessionId": session_id, "path": path, "offset": offset, "length": 1024 * 1024 }),
         )
         .await?;
-        let data_b64 = chunk.get("dataBase64").and_then(Value::as_str).unwrap_or("");
+        let data_b64 = chunk
+            .get("dataBase64")
+            .and_then(Value::as_str)
+            .unwrap_or("");
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(data_b64)
             .map_err(|error| format!("SFTP 数据 base64 解码失败：{error}"))?;
@@ -1507,7 +1754,10 @@ async fn resolve_tab(params: &Value) -> Result<String, String> {
         Some("active") | None => {
             let active = active_session_id();
             if active.is_null() {
-                return Err("当前无 active 会话；请先用 issh_list_sessions / issh_select_session".to_string());
+                return Err(
+                    "当前无 active 会话；请先用 issh_list_sessions / issh_select_session"
+                        .to_string(),
+                );
             }
             Ok(active.as_str().unwrap_or_default().to_string())
         }
@@ -1524,7 +1774,10 @@ mod tests {
     async fn custom_port_serves_authenticated_health_and_matches_discovery() {
         let reservation = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
         let port = reservation.local_addr().unwrap().port();
-        let user_data = std::env::temp_dir().join(format!("issh-bridge-port-test-{}-{port}", std::process::id()));
+        let user_data = std::env::temp_dir().join(format!(
+            "issh-bridge-port-test-{}-{port}",
+            std::process::id()
+        ));
         std::fs::create_dir_all(&user_data).unwrap();
         let runtime = Arc::new(RuntimeManager {
             pipe_name: String::new(),
@@ -1536,18 +1789,44 @@ mod tests {
             hosts: crate::host_profiles::HostProfileStore::new(&user_data),
         });
         drop(reservation);
-        let handle = start(runtime, user_data.clone(), "test-token".into(), port,
-            parse_scopes(&["read".into()]), None, true, false, PermissionMode::Confirm).await.unwrap();
+        let handle = start(
+            runtime,
+            user_data.clone(),
+            "test-token".into(),
+            port,
+            parse_scopes(&["read".into()]),
+            None,
+            true,
+            false,
+            PermissionMode::Confirm,
+        )
+        .await
+        .unwrap();
         let url = format!("http://127.0.0.1:{port}/rpc");
-        let discovery: Value = serde_json::from_slice(&std::fs::read(user_data.join("issh-agent-bridge.json")).unwrap()).unwrap();
+        let discovery: Value = serde_json::from_slice(
+            &std::fs::read(user_data.join("issh-agent-bridge.json")).unwrap(),
+        )
+        .unwrap();
         assert_eq!(discovery["port"], port);
         assert_eq!(discovery["rpcUrl"], url);
-        let client = reqwest::Client::builder().no_proxy().timeout(std::time::Duration::from_secs(3)).build().unwrap();
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .timeout(std::time::Duration::from_secs(3))
+            .build()
+            .unwrap();
         let request = json!({"id":"port-test", "method":"issh_health", "params":{}});
         let denied = client.post(&url).json(&request).send().await.unwrap();
         assert_eq!(denied.status(), reqwest::StatusCode::UNAUTHORIZED);
-        let response: Value = client.post(&url).bearer_auth("test-token").json(&request)
-            .send().await.unwrap().json().await.unwrap();
+        let response: Value = client
+            .post(&url)
+            .bearer_auth("test-token")
+            .json(&request)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
         assert_eq!(response["result"]["ok"], true);
         assert_eq!(response["result"]["port"], port);
         handle.stop();
@@ -1600,13 +1879,11 @@ mod tests {
         let mut initial = Vec::new();
         while !initial.windows(4).any(|window| window == b"\r\n\r\n") {
             let mut chunk = [0u8; 512];
-            let read = tokio::time::timeout(
-                std::time::Duration::from_secs(2),
-                stream.read(&mut chunk),
-            )
-            .await
-            .unwrap()
-            .unwrap();
+            let read =
+                tokio::time::timeout(std::time::Duration::from_secs(2), stream.read(&mut chunk))
+                    .await
+                    .unwrap()
+                    .unwrap();
             assert!(read > 0, "SSE connection closed before headers");
             initial.extend_from_slice(&chunk[..read]);
         }
@@ -1643,14 +1920,16 @@ mod tests {
 
     #[test]
     fn bind_errors_distinguish_access_denied_from_address_in_use() {
-        let denied = bind_error(59688, &std::io::Error::from(std::io::ErrorKind::PermissionDenied));
+        let denied = bind_error(
+            59688,
+            &std::io::Error::from(std::io::ErrorKind::PermissionDenied),
+        );
         assert!(denied.contains("排除端口"));
         assert!(!denied.contains("端口已被占用"));
         let occupied = bind_error(39688, &std::io::Error::from(std::io::ErrorKind::AddrInUse));
         assert!(occupied.contains("端口已被占用"));
         assert!(occupied.contains("39688"));
     }
-
 
     #[test]
     fn parse_scopes_handles_full_and_partial_lists() {
@@ -1679,7 +1958,10 @@ mod tests {
     fn normalize_command_strips_inline_comments() {
         assert_eq!(normalize_command("echo hi # hello"), "echo hi");
         assert_eq!(normalize_command("  ls -la  "), "ls -la");
-        assert_eq!(normalize_command("echo '#not a comment'"), "echo '#not a comment'");
+        assert_eq!(
+            normalize_command("echo '#not a comment'"),
+            "echo '#not a comment'"
+        );
     }
 
     #[test]

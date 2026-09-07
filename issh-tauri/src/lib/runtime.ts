@@ -670,6 +670,31 @@ export function agentBridgeAuditClear (): Promise<void> {
     return invoke<void>('agent_bridge_audit_clear')
 }
 
+export interface ManagementServerStatus {
+    enabled: boolean
+    running: boolean
+    port: number
+    url: string
+    tokenConfigured: boolean
+    lastError?: string | null
+}
+
+export function managementServerStatus (): Promise<ManagementServerStatus> {
+    return invoke<ManagementServerStatus>('management_server_status')
+}
+
+export function managementServerEnable (): Promise<ManagementServerStatus> {
+    return invoke<ManagementServerStatus>('management_server_enable')
+}
+
+export function managementServerDisable (): Promise<ManagementServerStatus> {
+    return invoke<ManagementServerStatus>('management_server_disable')
+}
+
+export function managementServerRotateToken (): Promise<{ token: string; status: ManagementServerStatus }> {
+    return invoke<{ token: string; status: ManagementServerStatus }>('management_server_rotate_token')
+}
+
 export function setActiveSession (id: string | null): Promise<void> {
     return invoke<void>('set_active_session', { id })
 }

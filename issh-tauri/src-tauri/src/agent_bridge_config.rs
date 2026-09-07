@@ -96,8 +96,7 @@ pub fn load(user_data: &Path) -> Result<AgentBridgeConfig, String> {
 pub fn save(user_data: &Path, config: &AgentBridgeConfig) -> Result<(), String> {
     let path = config_path(user_data);
     let raw = serde_json::to_vec_pretty(config).map_err(|error| error.to_string())?;
-    std::fs::write(&path, raw)
-        .map_err(|error| format!("无法写入 agent-bridge.json：{error}"))
+    std::fs::write(&path, raw).map_err(|error| format!("无法写入 agent-bridge.json：{error}"))
 }
 
 /// 生成 256 位随机 hex token。
@@ -125,7 +124,9 @@ fn deserialize_port<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result
 }
 
 pub fn parse_port(value: &serde_json::Value) -> Result<u16, String> {
-    value.as_u64().filter(|port| (1..=65535).contains(port))
+    value
+        .as_u64()
+        .filter(|port| (1..=65535).contains(port))
         .map(|port| port as u16)
         .ok_or_else(|| "端口必须为 1–65535 的整数".to_string())
 }
@@ -136,7 +137,8 @@ mod tests {
 
     #[test]
     fn old_config_defaults_to_original_port_and_does_not_persist_enabled() {
-        let config: AgentBridgeConfig = serde_json::from_str(r#"{"token":"test","enabled":true}"#).unwrap();
+        let config: AgentBridgeConfig =
+            serde_json::from_str(r#"{"token":"test","enabled":true}"#).unwrap();
         assert_eq!(config.port, 59688);
         let value = serde_json::to_value(config).unwrap();
         assert!(value.get("enabled").is_none());
@@ -144,12 +146,30 @@ mod tests {
 
     #[test]
     fn custom_port_roundtrips_and_invalid_ports_are_rejected() {
-        let config = AgentBridgeConfig { port: 39688, ..Default::default() };
+        let config = AgentBridgeConfig {
+            port: 39688,
+            ..Default::default()
+        };
         let raw = serde_json::to_string(&config).unwrap();
-        assert_eq!(serde_json::from_str::<AgentBridgeConfig>(&raw).unwrap().port, 39688);
-        for value in [serde_json::json!(0), serde_json::json!(65536), serde_json::json!(-1), serde_json::json!(1.5), serde_json::json!("39688"), serde_json::Value::Null] {
+        assert_eq!(
+            serde_json::from_str::<AgentBridgeConfig>(&raw)
+                .unwrap()
+                .port,
+            39688
+        );
+        for value in [
+            serde_json::json!(0),
+            serde_json::json!(65536),
+            serde_json::json!(-1),
+            serde_json::json!(1.5),
+            serde_json::json!("39688"),
+            serde_json::Value::Null,
+        ] {
             assert!(parse_port(&value).is_err());
-            assert!(serde_json::from_value::<AgentBridgeConfig>(serde_json::json!({"port": value})).is_err());
+            assert!(serde_json::from_value::<AgentBridgeConfig>(
+                serde_json::json!({"port": value})
+            )
+            .is_err());
         }
         assert_eq!(parse_port(&serde_json::json!(39688)).unwrap(), 39688);
     }
