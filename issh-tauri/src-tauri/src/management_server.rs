@@ -177,9 +177,9 @@ impl ManagementServerRuntime {
         Ok(token)
     }
 
-    pub fn open_url(&self) -> Result<String, String> {
+    fn open_url_shared(shared: &ManagementShared) -> Result<String, String> {
         let bootstrap = generate_token();
-        self.shared
+        shared
             .bootstrap
             .lock()
             .map_err(|_| "管理服务器引导状态不可用".to_string())?
@@ -231,7 +231,6 @@ impl ManagementServerRuntime {
         }
         match method {
             "hub.health" => Ok(json!({ "version": "0.4.0", "protocolVersion": "1" })),
-            "hub.bootstrap" => Ok(json!({ "url": self.open_url()? })),
             "provider.list" => Ok(json!([{ "kind": "issh", "status": "connected" }])),
             "management.status" => {
                 serde_json::to_value(self.status()).map_err(|error| error.to_string())
@@ -570,6 +569,11 @@ async fn shared_rpc(
     method: &str,
     params: Value,
 ) -> Result<Value, String> {
+    // hub.bootstrap 必须把一次性引导令牌写进监听器共享状态（而非临时 runtime 的
+    // 私有状态），否则 exchange_bootstrap 在监听器侧找不到该令牌。
+    if method == "hub.bootstrap" {
+        return ManagementServerRuntime::open_url_shared(shared).map(|url| json!({ "url": url }));
+    }
     // A temporary runtime wrapper keeps all request handling in one place while
     // sharing the listener's state and avoiding a second data store.
     let runtime = ManagementServerRuntime {
