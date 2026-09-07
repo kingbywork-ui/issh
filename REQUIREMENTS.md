@@ -70,6 +70,13 @@
 - 已发布 `issh-plugin-agent-bridge` v0.4.0（tgz sha256 `e70daf0d…`，gh release + registry `index.json` 同步 + jsDelivr purge 完成），源码迁移已提交（`daba5fc`）。
 - 安全清理：`.env` 移出版本控制并加入 `.gitignore`。
 
+### R-090 插件安装版本校验误报修复（对话衍生，2026-09-07，已完成）
+
+- 现象：issh 0.0.4 安装 Agent Hub Connector v0.4.0 时误报「需要 issh 0.0.4 及以上版本（当前 0.0.4）」，自相矛盾。
+- 根因：`Settings.svelte` 硬编码 `const productVersion = '0.0.2'`（0.0.3/0.0.4 发布时均未同步），`meetsAppVersion()` 用它与 `min_app_version` 比较。
+- 修复：删除硬编码，统一改用 `appVersion`（`getVersion()` 返回 tauri.conf.json 真实版本，随构建同步），版本来源唯一；影响 `meetsAppVersion`、`runUpdateCheck`、关于页显示三处。已提交 `c6fd2ba`，重新打包安装包验证。
+- 流程教训：发布脚本只同步 package.json/Cargo.toml/tauri.conf.json，不覆盖 .svelte 内硬编码；已彻底移除该硬编码避免复发。
+
 ### R-058 外置 Agent 桥接设置页点击后空白（2026-09-03，已完成）
 
 **需求**：用户反馈内置 Agent Bridge 设置页正常，但商城安装的「Agent 桥接」点击菜单后右侧没有内容。
