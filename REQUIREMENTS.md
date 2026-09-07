@@ -92,6 +92,13 @@
 - 修复：前端 401 清令牌 + `exchangeBootstrap()` 自动重交换（exchanged 防重）+ `reconnect()` 重试按钮 + 三态文案（运行中/已暂停/未连接）；后端 `shared_rpc` 拦截 `hub.bootstrap` 直接写监听器共享状态（`open_url_shared`），删除 `open_url` 实例方法与 rpc 分支死代码。
 - 验证：cargo check 0 警告、svelte-check 0 errors；端到端模拟（bootstrap 交换 → session 调 status/health/workspace.list 全 200，无效令牌 401）；重打包安装 0.0.4 通过。已提交 `3da148c`。
 
+### R-093 agent_hub 请求路径缺 /rpc 修复（对话衍生，2026-09-07，已完成）
+
+- 现象：用户「卡在输入令牌界面过不去」；插件「打开 Agent Hub Web」从未成功打开浏览器，Agent Hub 状态查询报错。
+- 根因：`agent_hub.rs::request()` POST 到 `discovery.rpc_url` 根路径（`http://127.0.0.1:33555`），而管理服务器仅接受 `POST /rpc`，所有请求 404（R-089 引入）。
+- 修复：`request()` 改为 POST `{rpc_url}/rpc`（`trim_end_matches('/')` 后拼接）。影响 `agentHub.status`（hub.health/provider.list）与 `agentHub.open`（hub.bootstrap）两条链路。
+- 验证：cargo check 通过；端到端模拟 hub.health/provider.list/hub.bootstrap 全 200、bootstrap 交换成功、session 调 management.status running:true；重打包安装 0.0.4 通过。已提交 `cd89cd1`。
+
 ### R-058 外置 Agent 桥接设置页点击后空白（2026-09-03，已完成）
 
 **需求**：用户反馈内置 Agent Bridge 设置页正常，但商城安装的「Agent 桥接」点击菜单后右侧没有内容。
