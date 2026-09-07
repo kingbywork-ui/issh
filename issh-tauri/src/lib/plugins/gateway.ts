@@ -50,6 +50,7 @@ const METHOD_PERMISSIONS: Record<string, string> = {
     'session.list': 'session.read',
     'session.current': 'session.read',
     'session.read': 'session.read',
+    'session.probeAgents': 'session.read',
     'session.write': 'terminal.write',
     'terminal.read': 'terminal.read',
     'terminal.write': 'terminal.write',

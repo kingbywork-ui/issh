@@ -146,6 +146,8 @@ const TOOLS: &[ToolDef] = &[
     ToolDef { name: "issh_task_read", scope: ToolScope::Read, dangerous_confirm: false },
     ToolDef { name: "issh_task_list", scope: ToolScope::Read, dangerous_confirm: false },
     ToolDef { name: "issh_task_cancel", scope: ToolScope::Exec, dangerous_confirm: false },
+    ToolDef { name: "issh_task_start", scope: ToolScope::Exec, dangerous_confirm: false },
+    ToolDef { name: "issh_task_complete", scope: ToolScope::Exec, dangerous_confirm: false },
     ToolDef { name: "issh_workspace_events", scope: ToolScope::Read, dangerous_confirm: false },
 ];
 
@@ -674,6 +676,8 @@ async fn dispatch_tool(
         "issh_task_read" => rpc(state, "task.read", params.clone()).await,
         "issh_task_list" => rpc(state, "task.list", params.clone()).await,
         "issh_task_cancel" => rpc(state, "task.cancel", params.clone()).await,
+        "issh_task_start" => rpc(state, "task.start", params.clone()).await,
+        "issh_task_complete" => rpc(state, "task.complete", params.clone()).await,
         "issh_workspace_events" => rpc(state, "event.list", params.clone()).await,
         _ => Err(format!("Unknown tool: {}", tool.name)),
     }

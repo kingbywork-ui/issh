@@ -180,6 +180,7 @@ impl OutputState {
 }
 
 struct LocalSession {
+    shell: Option<String>,
     id: String,
     title: String,
     columns: u16,
@@ -326,6 +327,18 @@ impl SessionStore {
         Ok(snapshots)
     }
 
+    pub fn local_shell(&mut self, session_id: &str) -> Result<Option<String>, SessionError> {
+        match self.session_mut(session_id)? {
+            SessionEntry::Local(session) => {
+                if session.snapshot()?.state != "running" {
+                    return Err(SessionError::SessionNotFound(session_id.to_string()));
+                }
+                Ok(session.shell.clone())
+            }
+            _ => Err(SessionError::SessionNotFound(session_id.to_string())),
+        }
+    }
+
     pub fn open_local(&mut self, spec: LocalSessionSpec) -> Result<SessionSnapshot, SessionError> {
         validate_title(&spec.title)?;
         validate_dimensions(spec.columns, spec.rows)?;
@@ -405,6 +418,7 @@ impl SessionStore {
         let id = format!("local-{}", self.next_local_id);
         self.next_local_id = self.next_local_id.saturating_add(1);
         let mut session = LocalSession {
+            shell: spec.shell,
             id: id.clone(),
             title: spec.title.trim().to_string(),
             columns: spec.columns,

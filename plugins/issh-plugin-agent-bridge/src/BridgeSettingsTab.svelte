@@ -8,6 +8,7 @@
         listAgents,
         listSessions,
         probeRemoteAgents,
+        probeLocalAgents,
         listWorkspaces,
         registerAgent,
         unregisterAgent,
@@ -39,7 +40,7 @@
         evidence: string
         command?: string
         path?: string
-        source: 'remote' | 'terminal'
+        source: 'remote' | 'local'
     }
 
     const REMOTE_AGENT_COMMANDS = [
@@ -60,15 +61,15 @@
 
     async function detectAgents (candidates: SessionInfo[], workspace: Workspace | null): Promise<DetectedAgent[]> {
         const boundSessionIds = new Set(workspace?.bindings.map((binding) => binding.sessionId) ?? [])
-        const results = await Promise.all(candidates.filter((session) => session.connected && session.profileType === 'ssh' && boundSessionIds.has(session.id)).map(async (session) => {
+        const results = await Promise.all(candidates.filter((session) => session.connected && (session.profileType === 'ssh' || session.profileType === 'local') && boundSessionIds.has(session.id)).map(async (session) => {
             const detected: DetectedAgent[] = []
             try {
-                const remote = await probeRemoteAgents(session.id)
+                const remote = await (session.profileType === 'ssh' ? probeRemoteAgents(session.id) : probeLocalAgents(session.id))
                 for (const line of remote.output.split(/\r?\n/)) {
                     const [command, path] = line.trim().split(/\t+/, 2)
                     const candidate = REMOTE_AGENT_COMMANDS.find((item) => item.command === command)
-                    if (candidate && path?.startsWith('/') && !detected.some((agent) => agent.name === candidate.name)) {
-                        detected.push({ name: candidate.name, command, path, sessionId: session.id, evidence: session.title, source: 'remote' })
+                    if (candidate && path && (path.startsWith('/') || /^[A-Za-z]:[\\/]/.test(path)) && !detected.some((agent) => agent.name === candidate.name)) {
+                        detected.push({ name: candidate.name, command, path, sessionId: session.id, evidence: session.title, source: session.profileType === 'ssh' ? 'remote' : 'local' })
                     }
                 }
             } catch (cause) {
@@ -97,10 +98,10 @@
             }
             const workspace = workspaces.find((candidate) => candidate.id === selectedWorkspaceId) ?? null
             detectedAgents = await detectAgents(ss, workspace)
-            const scannedCount = ss.filter((session) => session.connected && session.profileType === 'ssh' && workspace?.bindings.some((binding) => binding.sessionId === session.id)).length
+            const scannedCount = ss.filter((session) => session.connected && (session.profileType === 'ssh' || session.profileType === 'local') && workspace?.bindings.some((binding) => binding.sessionId === session.id)).length
             scanStatus = scannedCount === 0
-                ? '没有可扫描的 SSH 会话，请先绑定并连接会话。'
-                : `探测完成：${scannedCount} 个 SSH 会话，发现 ${detectedAgents.length} 个 Agent，${scanErrors.length} 个会话失败（${new Date().toLocaleTimeString()}）。`
+                ? '没有可扫描的会话，请先绑定并连接会话。'
+                : `探测完成：${scannedCount} 个会话（SSH / 本地），发现 ${detectedAgents.length} 个 Agent，${scanErrors.length} 个会话失败（${new Date().toLocaleTimeString()}）。`
             agents = selectedWorkspaceId ? await listAgents(selectedWorkspaceId) : []
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
@@ -294,11 +295,11 @@
             {/each}
             {#if unregisteredDetectedAgents.length > 0}
                 <div class="bridge-section">
-                    <div class="settings-hint">检测到已绑定 SSH 账号下的 Agent 可执行文件（不代表正在运行，点击注册到当前工作区）</div>
+                    <div class="settings-hint">检测到已绑定会话环境中的 Agent 可执行文件（不代表正在运行，点击注册到当前工作区）</div>
                     {#each unregisteredDetectedAgents as detected (detected.sessionId + ':' + detected.name + ':' + (detected.command ?? 'terminal'))}
                         <div class="bridge-row">
                             <span class="bridge-session-title">{detected.name} · {detected.evidence}{#if detected.path} · {detected.path}{/if}</span>
-                            <span class="bridge-session-kind">{detected.source === 'remote' ? '远端命令' : '终端输出'}</span>
+                            <span class="bridge-session-kind">{detected.source === 'remote' ? '远端命令' : '本地命令'}</span>
                             <button type="button" disabled={busy} onclick={() => void registerDetectedAgent(detected)}>注册</button>
                         </div>
                     {/each}

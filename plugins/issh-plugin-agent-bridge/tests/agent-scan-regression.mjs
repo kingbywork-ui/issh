@@ -26,12 +26,12 @@ function extractBlock (source, startText) {
     throw new Error(`unterminated source block: ${startText}`)
 }
 
-function loadDetectAgents ({ probeRemoteAgents, readSessionOutput }) {
+function loadDetectAgents ({ probeRemoteAgents, probeLocalAgents, readSessionOutput }) {
     const commandsStart = component.indexOf('const REMOTE_AGENT_COMMANDS')
     const commandsEnd = component.indexOf('] as const', commandsStart) + '] as const'.length
     const source = `${component.slice(commandsStart, commandsEnd)}\n${extractBlock(component, 'async function detectAgents')}\nglobalThis.detectAgents = detectAgents`
     const javascript = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText
-    const context = { probeRemoteAgents, readSessionOutput, console, scanErrors: [] }
+    const context = { probeRemoteAgents, probeLocalAgents, readSessionOutput, console, scanErrors: [] }
     vm.createContext(context)
     vm.runInContext(javascript, context)
     return { detectAgents: context.detectAgents, context }
@@ -100,4 +100,70 @@ test('actual remote probe command finds Codex installed under an nvm user direct
     } finally {
         await rm(fixtureHome, { recursive: true, force: true })
     }
+})
+
+test('actual remote probe command finds Pi installed under pi-node user directory', async () => {
+    const command = await captureProbeCommand()
+    const fixtureHome = await mkdtemp(join(tmpdir(), 'issh-agent-scan-'))
+    try {
+        const bin = join(fixtureHome, '.local', 'share', 'pi-node', 'node-v22.23.2-linux-x64', 'bin')
+        await mkdir(bin, { recursive: true })
+        await writeFile(join(bin, 'pi'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+        const output = execFileSync('C:\\Program Files\\Git\\bin\\bash.exe', ['-c', command], {
+            encoding: 'utf8',
+            env: { ...process.env, HOME: fixtureHome.replaceAll('\\\\', '/'), PATH: '/usr/bin:/bin' },
+        })
+        assert.match(output, /^pi\t.+\/\.local\/share\/pi-node\/node-v22\.23\.2-linux-x64\/bin\/pi$/m)
+    } finally {
+        await rm(fixtureHome, { recursive: true, force: true })
+    }
+})
+
+ test('bound local WSL Pi is detected without probing SSH or reading scrollback', async () => {
+    const calls = []
+    const { detectAgents } = loadDetectAgents({
+        probeRemoteAgents: async () => { throw new Error('unexpected SSH probe') },
+        probeLocalAgents: async (id) => { calls.push(id); return { output: 'pi\t/home/user/.local/bin/pi\n' } },
+    })
+    const result = await detectAgents([
+        { id: 'local-1', title: 'WSL', profileType: 'local', connected: true },
+        { id: 'local-2', title: 'unbound', profileType: 'local', connected: true },
+        { id: 'local-3', title: 'closed', profileType: 'local', connected: false },
+    ], { bindings: [{ sessionId: 'local-1' }, { sessionId: 'local-3' }] })
+    assert.deepEqual(calls, ['local-1'])
+    assert.equal(result.length, 1)
+    assert.equal(result[0].name, 'Pi')
+    assert.equal(result[0].source, 'local')
+ })
+
+test('Windows paths are accepted and local failures stay visible', async () => {
+    const { detectAgents, context } = loadDetectAgents({
+        probeLocalAgents: async (id) => {
+            if (id === 'local-2') throw new Error('local probe timed out')
+            return { output: 'pi\tC:\\Users\\test\\pi.cmd\n' }
+        },
+    })
+    const result = await detectAgents([
+        { id: 'local-1', title: 'Windows', profileType: 'local', connected: true },
+        { id: 'local-2', title: 'WSL', profileType: 'local', connected: true },
+    ], { bindings: [{ sessionId: 'local-1' }, { sessionId: 'local-2' }] })
+    assert.equal(result.length, 1)
+    assert.equal(result[0].path, 'C:\\Users\\test\\pi.cmd')
+    assert.equal(context.scanErrors.length, 1)
+})
+
+test('local probe passes the real frontend gateway and requires session.read', async () => {
+    const source = await readFile(new URL('../../../issh-tauri/src/lib/plugins/gateway.ts', import.meta.url), 'utf8')
+    const calls = []
+    const context = { exports: {}, setTimeout, clearTimeout, console, require: () => ({ invoke: async (_, {request}) => { calls.push(request); return {ok: true, data: {output: 'pi\tC:/pi.cmd'}} } }) }
+    vm.createContext(context)
+    vm.runInContext(ts.transpileModule(source, {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,context)
+    const hooks = {hasPermission: () => false, audit: () => {}}
+    const gateway = context.exports.createPluginGateway({id:'issh-plugin-agent-bridge',permissions:['session:read']},{},hooks)
+    await gateway.request('session.probeAgents',{sessionId:'local-1'})
+    assert.equal(calls[0].method,'session.probeAgents')
+    assert.equal(calls[0].args.sessionId,'local-1')
+    const denied = context.exports.createPluginGateway({id:'unprivileged',permissions:[]},{},hooks)
+    await assert.rejects(denied.request('session.probeAgents',{sessionId:'local-1'}), /session.read/)
+    assert.equal(calls.length,1)
 })

@@ -880,6 +880,12 @@ export class AgentBridgeService {
                 case 'issh_task_cancel':
                     rpcResponse = { id, result: await this.cancelWorkspaceTask(normalizedRequest.params ?? {}) }
                     break
+                case 'issh_task_start':
+                    rpcResponse = { id, result: await this.runtime.call('task.start', normalizedRequest.params ?? {}) }
+                    break
+                case 'issh_task_complete':
+                    rpcResponse = { id, result: await this.runtime.call('task.complete', normalizedRequest.params ?? {}) }
+                    break
                 case 'issh_workspace_events':
                     rpcResponse = { id, result: await this.runtime.call('event.list', normalizedRequest.params ?? {}) }
                     break

@@ -290,6 +290,31 @@ export const AGENT_BRIDGE_TOOLS = [
         },
     },
     {
+        name: 'issh_task_start',
+        scope: 'exec',
+        description: 'Transition a queued agent task to the running state and persist a task.started event.',
+        inputSchema: {
+            type: 'object',
+            required: ['taskId'],
+            properties: { taskId: { type: 'string', minLength: 1 } },
+            additionalProperties: false,
+        },
+    },
+    {
+        name: 'issh_task_complete',
+        scope: 'exec',
+        description: 'Mark a running agent task as completed with output and persist a task.completed event.',
+        inputSchema: {
+            type: 'object',
+            required: ['taskId', 'output'],
+            properties: {
+                taskId: { type: 'string', minLength: 1 },
+                output: { type: 'string' },
+            },
+            additionalProperties: false,
+        },
+    },
+    {
         name: 'issh_workspace_events',
         scope: 'read',
         description: 'Read ordered persistent Workspace events after a sequence number.',
@@ -732,6 +757,8 @@ export const IMPLEMENTED_AGENT_BRIDGE_TOOLS = Object.freeze([
     'issh_task_read',
     'issh_task_list',
     'issh_task_cancel',
+    'issh_task_start',
+    'issh_task_complete',
     'issh_workspace_events',
 ])
 

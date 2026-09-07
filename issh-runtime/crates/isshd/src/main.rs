@@ -1,3 +1,4 @@
+mod local_agent_probe;
 use issh_runtime_pane::{PaneOpenSpec, PaneStore, MAX_PANE_BATCH_BYTES};
 use issh_runtime_protocol::{
     HealthResult, RpcError, RpcErrorResponse, RpcRequest, RpcResponse, INVALID_PARAMS,
@@ -1015,6 +1016,25 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                 Ok(snapshot) => serde_json::to_vec(&RpcResponse::new(id, snapshot))
                     .expect("session snapshot serialization cannot fail"),
                 Err(error) => serialize_error(id, error.code, error.message),
+            }
+        }
+        "session.probeAgents" => {
+            let params = match parse_params::<SessionIdParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            let shell = match state.sessions.lock() {
+                Ok(mut sessions) => sessions.local_shell(&params.session_id),
+                Err(_) => return serialize_error(id, -32603, "Session state is unavailable"),
+            };
+            let shell = match shell {
+                Ok(shell) => shell,
+                Err(error) => return serialize_error(id, INVALID_PARAMS, error.to_string()),
+            };
+            match local_agent_probe::probe(shell.as_deref()).await {
+                Ok(output) => serde_json::to_vec(&RpcResponse::new(id, serde_json::json!({ "output": output })))
+                    .expect("probe response serialization cannot fail"),
+                Err(error) => serialize_error(id, -32002, error),
             }
         }
         "session.snapshot" => {
@@ -2803,6 +2823,28 @@ mod tests {
         .await;
         let deleted: Value = serde_json::from_slice(&deleted).expect("deleteSecret should be JSON");
         assert_eq!(deleted["result"]["deleted"], true);
+    }
+
+    #[tokio::test]
+    async fn local_probe_rejects_missing_session() {
+        let state = state();
+        let result = dispatch(br#"{"jsonrpc":"2.0","id":1,"method":"session.probeAgents","params":{"sessionId":"missing"}}"#, &state).await;
+        let result: Value = serde_json::from_slice(&result).unwrap();
+        assert_eq!(result["error"]["code"], INVALID_PARAMS);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires local WSL with Pi installed"]
+    async fn live_local_probe_rpc() {
+        let state = state();
+        let opened = dispatch(br#"{"jsonrpc":"2.0","id":1,"method":"session.openLocal","params":{"title":"Pi probe test","shell":"wsl"}}"#, &state).await;
+        let opened: Value = serde_json::from_slice(&opened).unwrap();
+        let session_id = opened["result"]["id"].as_str().expect("WSL session opens");
+        let request = serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session.probeAgents","params":{"sessionId":session_id}});
+        let result = dispatch(&serde_json::to_vec(&request).unwrap(), &state).await;
+        state.sessions.lock().unwrap().close(session_id).unwrap();
+        let result: Value = serde_json::from_slice(&result).unwrap();
+        assert!(result["result"]["output"].as_str().expect("probe output").lines().any(|line| line.starts_with("pi\t/")), "{result}");
     }
 
     #[tokio::test]

@@ -1,100 +1,101 @@
 ---
 name: issh
-description: 通过 issh Agent Bridge 安全操作本地与 SSH 终端会话——列出会话/主机、读取终端上下文与输出缓冲、预览/插入/执行 shell 命令、批量执行、SFTP 文件读写。Use when the user asks to run commands in their issh terminal, inspect terminal context or output, or transfer files over SFTP.
+description: Operate issh Agent Bridge sessions, commands, SFTP and workspace tasks with explicit session targeting and execution verification.
 ---
 
-# issh Agent Bridge
+# issh MCP 操作
 
-issh 终端通过本地 HTTP RPC（默认 `127.0.0.1:59688`）把终端会话暴露给外部 agent。连接需 Bearer token；所有写/执行/SFTP 操作受 scope 限制并记录审计日志。
+## 发现与连接
 
-## 连接
+先搜索当前宿主可调用的 issh MCP 工具或延迟工具目录，再调用 issh_health。不要假设存在 mcps/、CallMcpTool 或某种权限参数；没有原生 MCP 工具时可用下述 RPC 脚本回退。配置存在、RPC 健康、MCP tools/list 可见是三个不同验证层级。
 
-- 端点：优先读取 discovery 文件中的 `rpcUrl`；默认 `http://127.0.0.1:59688/rpc`（JSON-RPC 2.0）。Bridge 设置页可改用其它端口。
-- 认证：请求头 `Authorization: Bearer <token>`，token 在 issh 设置页「Agent Bridge」中查看/轮换
-- 手动开启：Agent Bridge 开关每次启动默认关闭，必须在 issh 设置页手动开启；完全退出 issh 时自动关闭
+连接配置见 issh-mcp-cursor 技能。Bridge 必须由用户手动开启；已有任务授权在范围内持续有效，不重复申请。连接失败先看文件、进程、端口和实际错误，只有明确沙箱拒绝时才使用当前宿主提供的提权机制，不默认请求全权限。
 
-## 工具清单（38 个）
+读取 discovery 文件时只提取必要字段，不输出 token。优先 ISSH_AGENT_BRIDGE_FILE，其次 ISSH_CONFIG_DIRECTORY，再查 APPDATA/LOCALAPPDATA 下 issh 及 ~/.config/issh；旧 TABBY_* 与 tabby 文件仅作兼容。端口以 rpcUrl 为准，支持固定或动态配置。轮换 token/端口可重新读取连接文件；工具代码或清单更新需要重启 MCP server 并刷新客户端，不能只看旧缓存。
 
-### 健康与会话发现
-| 工具 | 用途 |
-|------|------|
-| `issh_health` | 返回服务端能力与协议版本 |
-| `issh_list_sessions` | 列出当前终端会话（id/kind/title/cwd） |
-| `issh_list_profiles` | 列出已保存的 SSH 主机 profile |
-| `issh_connect_profile` | 按 profile 建立 SSH 会话 |
-| `issh_disconnect_session` | 断开指定会话 |
-| `issh_select_session` | 设置活动会话（后续命令默认目标） |
+## 会话与命令
 
-### 上下文读取
-| 工具 | 用途 |
-|------|------|
-| `issh_get_context` | 读取会话上下文（cwd/shell/os/部分输入/最近输出） |
-| `issh_read_buffer` | 读取终端输出缓冲（支持翻页 offset/limit） |
+1. health → list_sessions；按用户指定主机、profile 身份确认目标。不要猜 session id，重连后重新查。
+2. get_context/read_buffer/preview/insert/run/exec/SFTP 使用 **tab**；workspace.bind/unbind 和 agent.register 使用 **sessionId**，不能互换。始终显式传 tab 可避免多 Agent 切换 active 的竞态。
+3. Tauri 当前 exec 仅支持 SSH，返回隔离输出；本地 Pi 的探测接口不等于本地 shell exec。交互终端用 run（回车、不等待）或 insert（不回车）；先确认终端处于 shell，不能把 shell 命令注入 Pi 等 TUI。
+4. preview 只归一化和检查危险性，不返回插入后的缓冲。危险操作须有用户授权，并遵守宿主确认；confirmDangerous 不能作为自行授权。
+5. exec 返回 jobId/status=running 时，查询 get_job，必要时 list_jobs；不可因等待超时重跑原命令。截断输出用 get_output 的 outputId/offset/limit 获取。exitCode=null 表示退出码未知，不能仅凭 stdout 判成功。
+6. read_buffer 用 lines，不支持 offset/limit。SFTP read 用 maxBytes/encoding，不能假定分页读取。SFTP write 仅限用户批准路径，遵守 root/字节限制。
 
-### 命令执行
-| 工具 | 用途 |
-|------|------|
-| `issh_preview_command` | 预览命令但不执行（返回插入后的缓冲区预览） |
-| `issh_insert_command` | 把命令插入终端输入行（不回车） |
-| `issh_run_command` | 插入命令并执行 |
-| `issh_exec_command` | 后台执行命令，返回 stdout/stderr/exitCode |
-| `issh_get_output` | 按 outputId 拉取后台执行输出 |
-| `issh_batch_exec` | 跨多个会话批量执行命令 |
-
-### SFTP 文件操作
-| 工具 | 用途 |
-|------|------|
-| `issh_sftp_list` | 列出远程目录 |
-| `issh_sftp_read` | 读取远程文件（分块） |
-| `issh_sftp_write` | 写入远程文件（受单次字节上限限制） |
-
-### 长命令 Job
-| 工具 | 用途 |
-|------|------|
-| `issh_list_jobs` | 列出 `issh_exec_command` 超时后转入后台的长命令 job |
-| `issh_get_job` | 按 jobId 查询长命令 job 的状态与输出 |
-
-### Pane 代理
-| 工具 | 用途 |
-|------|------|
-| `issh_pane_list` | 列出附加到 issh Runtime 的原生 pane 代理会话 |
-| `issh_pane_snapshot` | 读取单个 pane 的尺寸、生产者、输入属主与输出游标 |
-| `issh_pane_subscribe` | 从游标轮询原始 pane 输出事件（不持久化终端字节） |
-| `issh_pane_claim_input` | 在发送终端字节前声明 pane 的独占输入所有权 |
-| `issh_pane_release_input` | 释放调用方持有的 pane 输入所有权 token |
-| `issh_pane_write` | 仅在持有输入所有权时向 pane 写入原始终端字节 |
-| `issh_pane_resize` | 调整 pane 尺寸（需持有输入所有权或作为其生产者） |
-
-### Workspace / Agent / Task / Event
-| 工具 | 用途 |
-|------|------|
-| `issh_workspace_list` | 列出内存 agent workspace 及其到已打开终端会话的绑定 |
-| `issh_workspace_create` | 创建用于分组终端会话的内存 workspace |
-| `issh_workspace_bind` | 把已打开终端会话绑定到 workspace |
-| `issh_workspace_unbind` | 解除 workspace 中的终端会话绑定 |
-| `issh_agent_register` | 在持久化 workspace 中注册一个 LLM 驱动的 agent |
-| `issh_agent_list` | 列出 workspace 中已注册 agent 及持久化状态 |
-| `issh_agent_prompt` | 给已注册 agent 投递 prompt，返回 task id（配合 issh_task_wait/read 取结果） |
-| `issh_task_wait` | 等待 agent task 到达终态或超时 |
-| `issh_task_read` | 读取单个 task 的 prompt/状态/结果/错误 |
-| `issh_task_list` | 列出 workspace 的持久化 task（最新在前） |
-| `issh_task_cancel` | 取消排队或运行中的 task 并持久化终态 |
-| `issh_workspace_events` | 读取指定序列号之后的有序 workspace 事件 |
-
-## 使用示例
-
-```
-1. 列出会话：    issh_list_sessions
-2. 读取上下文：  issh_get_context { sessionId: "..." }
-3. 只读执行：    issh_exec_command { sessionId: "...", command: "ls -la" }
-4. 预览再执行：  issh_preview_command { command: "git status" } → issh_run_command
-5. 读取文件：    issh_sftp_read { path: "/etc/hosts" }
+示例（id 必须来自本次列表）：
+```json
+{"tool":"issh_get_context","arguments":{"tab":"ssh-1"}}
+{"tool":"issh_exec_command","arguments":{"tab":"ssh-1","command":"hostname","timeoutMs":30000}}
+{"tool":"issh_get_job","arguments":{"jobId":"实际返回的 jobId"}}
+{"tool":"issh_get_output","arguments":{"outputId":"实际返回的 outputId","offset":0,"limit":8000}}
 ```
 
-## 安全边界
+## Workspace / Agent 协作边界
 
-- 只监听 `127.0.0.1`，默认端口 `59688`；每次启动默认关闭，需手动开启。设置页的“断开 Agent 连接”会关闭现有 SSE 长连接但保留 Bridge 监听。
-- 危险命令（`rm -rf`、`dd`、`mkfs` 等）执行前在 issh 界面弹确认框，agent 无法绕过
-- SFTP 根目录与单次写入字节上限由用户配置，越界直接拒绝
-- 所有操作写入本地审计日志（`agent-bridge-audit.jsonl`）
-- 密码/令牌等敏感输入不进入 agent 可读的上下文（敏感输入检测自动停止补全）
+workspace 和任务状态已持久化。先 list workspace/agents，再按用户意图 create/bind/register，避免重复注册。
+- agent_prompt 仅入队并返回 task id；task_wait/read/list 查看状态，workspace_events 用 afterSequence 增量读。没有消费者时任务会停 queued，注册 Agent 不会自动控制 TUI 或唤醒 Codex/OpsClaw 当前聊天。
+- task_start/complete 是状态接口：执行者实际开始后 start，工作确实完成后 complete 并提交 output；不能用这两个接口伪造完成，不能假定它们实现原子领取或自动执行。多人调度需指定唯一执行者。
+- task_cancel 更新任务状态；不保证已启动的外部 Agent/进程已经终止，需执行器确认。
+- Pi adapter 在源码 issh-agent/src/conversation-adapters.mjs，使用 pi --mode rpc；当前属于实验性独立对话链，未接生产 workspace relay 或安装包。会话恢复不代表接管运行中的 TUI。真实验收须检查同一 conversationId 上的请求→回复，不以握手为完成。
+- Codex 与 OpsClaw 可作为同一 Bridge 的 MCP 客户端，但自动任务领取、转发 Pi、回写结果和聊天唤醒仍需明确实现；技能不提供这些产品功能。
+- Pane 原始输入必须先 claim_input，写入携带其返回的所有权凭据，完成后 release_input。普通终端命令不是 pane 协议。
+- 未列入实际 tools/list 的工具不可调用：当前不包含 issh_search_rag 或 issh_agent_unregister；UI 注销能力不等于已暴露同名 MCP 工具。
+
+## 工具参考
+
+以下为当前源码 getMcpTools() 的 40 项快照；调用前以运行中服务器的 schema 和宿主实现为准。`?` 表示可选。共享 schema 对 exec 的旧本地执行描述与 Tauri 实现不一致，遵循上面的 SSH 限制，不据此扩大能力。
+
+| 工具 | 参数 |
+|---|---|
+| `issh_health` |  |
+| `issh_list_sessions` |  |
+| `issh_pane_list` |  |
+| `issh_pane_snapshot` | `paneId` |
+| `issh_pane_subscribe` | `paneId`, `afterSequence?`, `maxEvents?`, `maxBytes?` |
+| `issh_pane_claim_input` | `paneId`, `ownerId` |
+| `issh_pane_release_input` | `paneId`, `ownerId` |
+| `issh_pane_write` | `paneId`, `ownerId`, `data` |
+| `issh_pane_resize` | `paneId`, `actorId`, `columns`, `rows` |
+| `issh_workspace_list` |  |
+| `issh_workspace_create` | `name` |
+| `issh_workspace_bind` | `workspaceId`, `sessionId` |
+| `issh_workspace_unbind` | `workspaceId`, `sessionId` |
+| `issh_agent_register` | `workspaceId`, `name`, `sessionId?`, `scopes?` |
+| `issh_agent_list` | `workspaceId` |
+| `issh_agent_prompt` | `agentId`, `prompt` |
+| `issh_task_wait` | `taskId`, `timeoutMs?` |
+| `issh_task_read` | `taskId` |
+| `issh_task_list` | `workspaceId` |
+| `issh_task_cancel` | `taskId` |
+| `issh_task_start` | `taskId` |
+| `issh_task_complete` | `taskId`, `output` |
+| `issh_workspace_events` | `workspaceId`, `afterSequence?`, `limit?` |
+| `issh_list_profiles` |  |
+| `issh_connect_profile` | `id?`, `name?`, `timeoutMs?` |
+| `issh_disconnect_session` | `tab?` |
+| `issh_get_context` | `tab?` |
+| `issh_read_buffer` | `tab?`, `lines?` |
+| `issh_select_session` | `tab?` |
+| `issh_preview_command` | `tab?`, `command` |
+| `issh_insert_command` | `tab?`, `command` |
+| `issh_run_command` | `tab?`, `command`, `confirmDangerous?` |
+| `issh_exec_command` | `tab?`, `command`, `timeoutMs?`, `cwd?`, `confirmDangerous?` |
+| `issh_get_output` | `outputId`, `offset?`, `limit?` |
+| `issh_batch_exec` | `tabs?`, `command`, `timeoutMs?`, `cwd?`, `parallel?`, `confirmDangerous?` |
+| `issh_sftp_list` | `tab?`, `path` |
+| `issh_sftp_read` | `tab?`, `path`, `encoding?`, `maxBytes?` |
+| `issh_sftp_write` | `tab?`, `path`, `content`, `encoding?` |
+| `issh_list_jobs` |  |
+| `issh_get_job` | `jobId` |
+
+## RPC 回退与故障
+
+个人技能附带 scripts/issh-rpc.ps1；随包技能未附此脚本时，使用 issh-agent/bin/issh-agent.mjs 支持的命令，或用已安装 client.mjs 的 loadConnection/rpc 对照 schema 调用，勿猜测本地文件存在。
+```powershell
+& "$env:USERPROFILE/.agents/skills/issh-mcp-tools/scripts/issh-rpc.ps1" health
+& "$env:USERPROFILE/.agents/skills/issh-mcp-tools/scripts/issh-rpc.ps1" exec -Tab ssh-1 -Command 'hostname' -TimeoutMs 30000
+& "$env:USERPROFILE/.agents/skills/issh-mcp-tools/scripts/issh-rpc.ps1" rpc -Method issh_task_read -ParamsJson '{"taskId":"task-1"}'
+```
+RPC 通用入口支持已授权工具，不改变权限边界。超时单位为毫秒，health 5000、普通 15000、SFTP 35000；connect/exec/batch/task_wait 使用 timeoutMs 加 5000 毫秒余量。
+
+No active session：显式传本次查询的 tab。Unknown tool：对照源码、已安装 MCP 和运行中宿主清单，更新后刷新进程。敏感输入出现时停止 context/buffer 读取；不能假定所有历史输出都已脱敏。排障读取最少审计信息，避免输出 token、密码、密钥或无关终端内容。

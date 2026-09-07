@@ -8,11 +8,13 @@ import { buildCall, parseAgentArgs } from '../src/cli.mjs'
 
 test('protocol exposes the complete current bridge surface without removed RAG tools', () => {
     const names = AGENT_BRIDGE_TOOLS.map(tool => tool.name)
-    assert.equal(names.length, 52)
+    assert.equal(names.length, 54)
     assert(names.includes('issh_get_output'))
     assert(names.includes('issh_workspace_bind'))
     assert(names.includes('issh_agent_prompt'))
     assert(names.includes('issh_task_cancel'))
+    assert(names.includes('issh_task_start'))
+    assert(names.includes('issh_task_complete'))
     assert(names.includes('issh_herdr_sync'))
     assert(names.includes('issh_pane_subscribe'))
     assert(names.includes('issh_pane_write'))
@@ -24,7 +26,7 @@ test('protocol exposes the complete current bridge surface without removed RAG t
 
 test('MCP tools expose only the implemented core surface with operation-specific schemas', () => {
     const tools = getMcpTools()
-    assert.equal(tools.length, 38)
+    assert.equal(tools.length, 40)
     const exec = tools.find(tool => tool.name === 'issh_exec_command')
     assert.deepEqual(exec.inputSchema.required, ['command'])
     assert.equal(exec.inputSchema.properties.timeoutMs.maximum, 3600000)

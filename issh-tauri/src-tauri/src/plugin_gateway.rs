@@ -139,7 +139,7 @@ fn response_error(request_id: &str, code: &str, message: impl Into<String>, retr
 fn required_permission(method: &str) -> Option<&'static str> {
     match method {
         "runtime.health" => None,
-        "session.list" | "session.current" | "session.read" => Some("session.read"),
+        "session.list" | "session.current" | "session.read" | "session.probeAgents" => Some("session.read"),
         "session.write" | "terminal.write" => Some("terminal.write"),
         "terminal.read" => Some("terminal.read"),
         "profiles.read" => Some("profiles.read"),
@@ -185,6 +185,7 @@ fn runtime_method(method: &str) -> Option<(&str, Option<&'static str>)> {
         "runtime.health" => Some(("runtime.health", None)),
         "session.list" => Some(("session.list", Some("session.read"))),
         "session.current" => Some(("session.list", Some("session.read"))),
+        "session.probeAgents" => Some((method, Some("session.read"))),
         "session.read" | "terminal.read" => Some(("session.subscribe", Some("session.read"))),
         "session.write" | "terminal.write" => Some(("session.write", Some("terminal.write"))),
         "ssh.exec" => Some(("ssh.execReadonly", Some("ssh.exec"))),
@@ -240,6 +241,8 @@ mod tests {
 
     #[test]
     fn session_list_is_a_read_only_gateway_method() {
+        assert_eq!(required_permission("session.probeAgents"), Some("session.read"));
+        assert_eq!(runtime_method("session.probeAgents"), Some(("session.probeAgents", Some("session.read"))));
         assert_eq!(required_permission("session.list"), Some("session.read"));
         assert_eq!(runtime_method("session.list"), Some(("session.list", Some("session.read"))));
         assert_eq!(runtime_method("session.current"), Some(("session.list", Some("session.read"))));

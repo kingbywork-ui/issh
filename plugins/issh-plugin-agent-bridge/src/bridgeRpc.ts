@@ -42,7 +42,7 @@ export function probeRemoteAgents (sessionId: string): Promise<RemoteAgentProbeR
             path="$(command -v "$name" 2>/dev/null)"
             if [ ! -f "$path" ] || [ ! -x "$path" ]; then
                 path=""
-                for dir in "$HOME/.local/bin" "$HOME/.npm-global/bin" "$HOME/.npm/bin" "$HOME/.bun/bin" "$HOME/.cargo/bin" "$HOME/.opencode/bin" "$HOME/.hermes/venv/bin" "\${NVM_DIR:-$HOME/.nvm}"/versions/node/*/bin "$HOME/.local/share/fnm/node-versions"/*/installation/bin "$HOME/.volta/bin"; do
+                for dir in "$HOME/.local/bin" "$HOME/.npm-global/bin" "$HOME/.npm/bin" "$HOME/.bun/bin" "$HOME/.cargo/bin" "$HOME/.opencode/bin" "$HOME/.hermes/venv/bin" "$HOME/.local/share/pi-node"/*/bin "\${NVM_DIR:-$HOME/.nvm}"/versions/node/*/bin "$HOME/.local/share/fnm/node-versions"/*/installation/bin "$HOME/.volta/bin"; do
                     if [ -f "$dir/$name" ] && [ -x "$dir/$name" ]; then path="$dir/$name"; break; fi
                 done
             fi
@@ -107,4 +107,8 @@ export function registerAgent (params: { workspaceId: string; name: string; adap
 
 export function unregisterAgent (workspaceId: string, agentId: string): Promise<void> {
     return runtimeRequest<void>('agent.unregister', { workspaceId, agentId })
+}
+
+export function probeLocalAgents (sessionId: string): Promise<RemoteAgentProbeResult> {
+    return runtimeRequest<RemoteAgentProbeResult>('session.probeAgents', { sessionId })
 }
