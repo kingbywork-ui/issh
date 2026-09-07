@@ -3,6 +3,7 @@ mod agent_bridge_config;
 mod agent_hub;
 mod clipboard;
 mod host_profiles;
+mod management_server;
 mod plugin_gateway;
 mod plugin_market;
 
@@ -574,6 +575,14 @@ pub fn run() {
             app.manage(runtime_manager.clone());
             app.manage(PluginGatewayState::default());
             app.manage(agent_hub::AgentHubRuntime::new());
+            let management = management_server::ManagementServerRuntime::new(
+                user_data.clone(),
+                runtime_manager.clone(),
+            );
+            if let Err(error) = tauri::async_runtime::block_on(management.start()) {
+                eprintln!("[management] {error}");
+            }
+            app.manage(management);
             app.manage(AgentBridgeRuntime::new(user_data));
             setup_tray(app.handle())?;
             // 深链：启动时（含冷启动带 ssh:// 参数）与运行期事件都转发给前端
@@ -679,6 +688,9 @@ pub fn run() {
 
     app.run(|handle, event| {
         if matches!(event, tauri::RunEvent::Exit) {
+            handle
+                .state::<management_server::ManagementServerRuntime>()
+                .stop();
             handle.state::<Arc<RuntimeManager>>().stop();
             // R-045：完全退出时自动关闭 Agent Bridge（开关为运行时态，重启默认关）
             if let Ok(mut bridge_guard) = handle.state::<AgentBridgeRuntime>().bridge.lock() {

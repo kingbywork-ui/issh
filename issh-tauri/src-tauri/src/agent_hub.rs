@@ -111,6 +111,22 @@ fn discovery_path() -> PathBuf {
         .join("agent-hub.json")
 }
 
+/// 内置管理服务器启动时写入发现文件，使本模块（及 Agent Hub Connector 插件）
+/// 将内置服务视为本地 Agent Hub。
+pub fn write_discovery(token: &str) -> Result<(), String> {
+    let path = discovery_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("无法创建 Agent Hub 发现目录：{error}"))?;
+    }
+    let payload = serde_json::json!({
+        "rpcUrl": "http://127.0.0.1:33555",
+        "token": token,
+    });
+    std::fs::write(&path, serde_json::to_string_pretty(&payload).unwrap_or_default())
+        .map_err(|error| format!("无法写入 Agent Hub 发现文件：{error}"))
+}
+
 fn read_discovery() -> Result<AgentHubDiscovery, String> {
     let path = discovery_path();
     let raw = std::fs::read_to_string(&path)
