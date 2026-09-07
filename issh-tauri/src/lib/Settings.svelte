@@ -172,7 +172,6 @@
     let elevateBusy = $state(false)
     let elevateError = $state('')
 
-    const productVersion = '0.0.2'
     let tauriVersion = $state('')
     let webviewVersion = $state('')
     let updateChecking = $state(false)
@@ -437,7 +436,8 @@
         updateError = ''
         updateResult = null
         try {
-            updateResult = await checkUpdate(productVersion)
+            if (!appVersion) await loadAbout()
+            updateResult = await checkUpdate(appVersion || '0.0.0')
         } catch (cause) {
             // AC3：网络失败静默降级，仅提示、不阻塞设置页
             updateError = cause instanceof Error ? cause.message : String(cause)
@@ -532,7 +532,7 @@
 
     function meetsAppVersion (minAppVersion?: string | null): boolean {
         if (!minAppVersion) return true
-        return compareVersions(productVersion, minAppVersion) >= 0
+        return compareVersions(appVersion || '0.0.0', minAppVersion) >= 0
     }
 
     async function confirmInstall (): Promise<void> {
@@ -880,7 +880,7 @@
                     </section>
                 {:else if section === 'about'}
                     <section aria-label="关于">
-                        <div class="about-row"><span>issh 版本</span><strong>{productVersion || '未知'}</strong></div>
+                        <div class="about-row"><span>issh 版本</span><strong>{appVersion || '未知'}</strong></div>
                         <div class="about-row"><span>构建版本</span><strong>{appVersion || '未知'}</strong></div>
                         <div class="about-row"><span>Tauri 版本</span><strong>{tauriVersion || '未知'}</strong></div>
                         <div class="about-row"><span>WebView2 版本</span><strong>{webviewVersion || '未知'}</strong></div>
