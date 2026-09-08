@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-09-08T05:10:36.936Z",
+  "updated": "2026-09-08T05:13:13.228Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
@@ -160,7 +160,7 @@
     {
       "id": "issh-plugin-theme-phosphor",
       "name": "Phosphor — 荧光粉",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "极深绿黑 + CRT 荧光绿晕与扫描线：向 VT220 致敬的夜间专用皮肤，贯穿 chrome 与 xterm 16 色",
       "kind": "appearance",
       "permissions": [
@@ -168,9 +168,9 @@
         "terminal:decorate"
       ],
       "minAppVersion": "0.0.1",
-      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-theme-phosphor/releases/download/v0.1.0/issh-plugin-theme-phosphor-0.1.0.tgz",
-      "sha256": "920bdd9df765d1a8d77ec31800f4ae26ab7c3601c131c7eed13d37b247caf000",
-      "signature": "D6QlxwQ1F0rXoDlmRNMckjWTFZeLnvfWsJRf6hKY/wxPZWXOcbesNZjpJ4FtB/XCBalAiBfl3c0C45qRgMM8Aw==",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-theme-phosphor/releases/download/v0.1.1/issh-plugin-theme-phosphor-0.1.1.tgz",
+      "sha256": "281fed7b464ad84edc3bab85c2d7a5a87648bf2fb3d8d8e827748e606128adbb",
+      "signature": "RAbbW6C9S0Lv51mx0b+5ktA5NnF9flvL3fbKD7exMHP+Zm3CDuGekt0WnFHKA/zMoTEq6id4qUSAWoC4/vgtDA==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-theme-phosphor",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-theme-phosphor",
       "downloads": 0
