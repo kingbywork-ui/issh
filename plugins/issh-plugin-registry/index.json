@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-09-08T04:12:11.900Z",
+  "updated": "2026-09-08T05:08:02.392Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
@@ -142,7 +142,7 @@
     {
       "id": "issh-plugin-theme-foundry",
       "name": "Foundry — 铸造车间",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "深海军蓝哑光钢 + 琥珀信号橙：为日常运维而生的暗色常驻皮肤，贯穿 WebView2 chrome 与 xterm 16 色",
       "kind": "appearance",
       "permissions": [
@@ -150,9 +150,9 @@
         "terminal:decorate"
       ],
       "minAppVersion": "0.0.1",
-      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-theme-foundry/releases/download/v0.1.0/issh-plugin-theme-foundry-0.1.0.tgz",
-      "sha256": "3d54e0cf3b51374877af4eeb7bd0a475393da3d7bebca1853c957604abfeb439",
-      "signature": "j0QvkWlKKP+DwRVuEFbdUYM76S1zp6TI0rxo20Z7Ikwh9rzHEs6a6UkWxQXJtMkxH4P12O893zs6ThLYMfUHDQ==",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-theme-foundry/releases/download/v0.1.1/issh-plugin-theme-foundry-0.1.1.tgz",
+      "sha256": "f8ef9f49a2edcb7932ff04a937cf62499be881012baf85fef1cd47f5555a2f9b",
+      "signature": "6dHDk2uUoeVYds/PXc5crbkRPvXZx117jW0onfK/T+70lWxkKNg80RhJ71/Mbjm1c0m8Z5FNwdnuWeYLYlyZAw==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-theme-foundry",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-theme-foundry",
       "downloads": 0
