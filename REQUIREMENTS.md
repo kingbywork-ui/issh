@@ -111,6 +111,19 @@
 - 根因：插件安装校验已使用运行时版本 0.0.4，但插件加载器仍硬编码宿主版本 `0.0.2`，导致最低版本为 0.0.4 的 Connector 在启动激活阶段被拒绝，无法注册设置页。
 - 修复：插件加载器从 Tauri `getVersion()` 读取真实版本后再加载商城插件；内置 Agent Bridge 设置页增加独立的「Agent Hub 管理面板」区块，显示运行状态、管理地址和默认隐藏的管理 token，并提供复制与自动 bootstrap 打开入口。商城插件仍只持有 `agentHub.read`，不会获得管理 token。
 
+### R-096 Agent Dashboard 陈旧 isshd 退出提示诊断（用户需求，2026-09-08，已完成）
+
+- 现象：主程序窗口仍打开，Agent Dashboard 顶部显示「isshd 在启动期间退出：exit code: 1」。
+- 诊断：现场存在两个安装版 `issh-tauri.exe`。无窗口 PID `42292` 持有管理端口 `127.0.0.1:33555` 且没有 `isshd` 子进程；可见 PID `50152` 的子 PID `46756` 正在运行 `isshd.exe`。Dashboard 连接的是前者，因此管理服务状态可显示「运行中」，同时保留旧 Runtime 启动错误。
+- 代码原因：Dashboard `refresh()` 先读取 `management.status`、再读取 `runtime.health`；后者失败会保留前者状态并显示错误。Runtime 启动时 stdout/stderr 被丢弃，所以页面只有 exit code，无法从当前提示确定最初的 IO/数据库/管道/安全软件原因。
+- 处理建议：退出所有 `issh-tauri.exe`/`isshd.exe` 后只启动一个实例，再从设置页重新打开 Agent Hub Web 或点击刷新；若单实例干净重启后仍复现，再补 Runtime 启动日志。未修改源码。
+
+### R-097 Agent Dashboard 工作区创建后不显示诊断（用户需求，2026-09-08，已完成）
+
+- 现象：创建工作区后列表仍为空。
+- 诊断：`workspace.create` 与 `workspace.list` 均由管理服务器转发到 `isshd`；当前 Dashboard 连接的无窗口旧实例 PID `42292` 没有 `isshd` 子进程，页面同时显示 Runtime `—`、0 项能力和退出提示。因此创建/刷新请求无法落到正常 Runtime，并非前端列表过滤问题。
+- 处理建议：退出所有 `issh-tauri.exe`/`isshd.exe` 后只启动一个实例，再重新打开 Dashboard；本轮未修改源码。
+
 ### R-058 外置 Agent 桥接设置页点击后空白（2026-09-03，已完成）
 
 **需求**：用户反馈内置 Agent Bridge 设置页正常，但商城安装的「Agent 桥接」点击菜单后右侧没有内容。
