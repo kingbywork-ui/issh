@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-09-08T04:07:31.276Z",
+  "updated": "2026-09-08T04:12:11.900Z",
   "plugins": [
     {
       "id": "issh-plugin-agent-bridge",
@@ -173,6 +173,24 @@
       "signature": "D6QlxwQ1F0rXoDlmRNMckjWTFZeLnvfWsJRf6hKY/wxPZWXOcbesNZjpJ4FtB/XCBalAiBfl3c0C45qRgMM8Aw==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-theme-phosphor",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-theme-phosphor",
+      "downloads": 0
+    },
+    {
+      "id": "issh-plugin-theme-void",
+      "name": "Void — 虚空暮色",
+      "version": "0.1.0",
+      "description": "深靛紫暮色 + 光纤微光：让人在危险操作前慢下来的夜间专注皮肤，贯穿 chrome 与 xterm 16 色",
+      "kind": "appearance",
+      "permissions": [
+        "settings:tab",
+        "terminal:decorate"
+      ],
+      "minAppVersion": "0.0.1",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-theme-void/releases/download/v0.1.0/issh-plugin-theme-void-0.1.0.tgz",
+      "sha256": "79a1e228ab84bf3eed98d8391d8260f68733d8d56d829d5b923169e93538fd06",
+      "signature": "9tJOlPs1R7w1F+cSr5N7iGn6bgMtPnRgDEwKtZQeIiBL5F/pPSaOVXD9DAeA7BbszYlb/SYbV+bJByu+LZAgDg==",
+      "homepage": "https://github.com/kingbywork-ui/issh-plugin-theme-void",
+      "repository": "https://github.com/kingbywork-ui/issh-plugin-theme-void",
       "downloads": 0
     }
   ]
