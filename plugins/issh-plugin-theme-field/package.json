@@ -1,6 +1,6 @@
 {
     "name": "issh-plugin-theme-field",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Field — 现场纸与蓝图：浅色低对比长阅读主题（issh appearance）",
     "type": "module",
     "main": "index.ts",

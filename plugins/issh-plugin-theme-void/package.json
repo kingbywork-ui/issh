@@ -1,6 +1,6 @@
 {
     "name": "issh-plugin-theme-void",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Void — 虚空暮色：夜间专注与危险确认主题（issh appearance）",
     "type": "module",
     "main": "index.ts",

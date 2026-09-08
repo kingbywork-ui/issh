@@ -6,7 +6,7 @@ import type { IsshPlugin, IsshPluginContext, IsshPluginManifest } from './src/ty
 export const manifest: IsshPluginManifest = {
     id: 'issh-plugin-theme-void',
     name: 'Void — 虚空暮色',
-    version: '0.1.0',
+    version: '0.1.1',
     description: '深靛紫暮色 + 光纤微光：让人在危险操作前慢下来的夜间专注皮肤，贯穿 chrome 与 xterm 16 色',
     kind: 'appearance',
     entry: 'index.js',

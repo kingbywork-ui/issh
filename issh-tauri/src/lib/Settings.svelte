@@ -41,6 +41,19 @@
         audience?: 'user' | 'developer' | null
     }
 
+    // 外观皮肤商城预览：纯 CSS mock 小窗，一图胜千言；复用 6 锚点 bg/fg/cursor/accent/chrome/selection
+    type ThemePreview = { bg: string; fg: string; cursor: string; accent: string; chrome: string; selection: string; title: string }
+    const THEME_PREVIEWS: Record<string, ThemePreview> = {
+        'issh-plugin-theme-foundry': { bg: '#0F1A26', fg: '#E8E0C8', cursor: '#FF7A45', accent: '#5DA9F6', chrome: '#132132', selection: 'rgba(255,122,69,.18)', title: 'ssh root@prod-01 — Foundry' },
+        'issh-plugin-theme-field': { bg: '#F6F1E7', fg: '#2A2F36', cursor: '#2E7CF6', accent: '#C82829', chrome: '#FFFFFF', selection: 'rgba(46,124,246,.14)', title: 'ssh dev@field — Field' },
+        'issh-plugin-theme-phosphor': { bg: '#07140F', fg: '#B8E8C8', cursor: '#00FF88', accent: '#00E676', chrome: '#0D2218', selection: 'rgba(0,255,136,.16)', title: 'ssh root@vt220 — Phosphor' },
+        'issh-plugin-theme-void': { bg: '#13122A', fg: '#E0D8FF', cursor: '#FF4D6A', accent: '#7A6CFF', chrome: '#1B1A3A', selection: 'rgba(163,140,255,.18)', title: 'ssh root@void — Void' },
+    }
+    function themePreviewOf (entry: MarketEntry): ThemePreview | null {
+        if (entry.kind !== 'appearance') return null
+        return THEME_PREVIEWS[entry.id] ?? null
+    }
+
     interface InstalledRecord {
         id: string
         name: string
@@ -796,6 +809,21 @@
                                     {/if}
                                 </div>
                                 <div class="plugin-card-desc">{detailEntry.description}</div>
+                                {#if themePreviewOf(detailEntry)}
+                                    {@const preview = themePreviewOf(detailEntry)!}
+                                    <div class="market-preview market-preview--detail" style="background:{preview.bg}; color:{preview.fg}">
+                                        <div class="market-preview-bar" style="background:{preview.chrome}; border-bottom: 1px solid {preview.bg}">
+                                            <span class="market-preview-dot" style="background:#FF5F56"></span><span class="market-preview-dot" style="background:#FFBD2E"></span><span class="market-preview-dot" style="background:#27C93F"></span>
+                                            <span class="market-preview-title">{preview.title}</span>
+                                            <span class="market-preview-cursor" style="background:{preview.cursor}"></span>
+                                        </div>
+                                        <div class="market-preview-body">
+                                            <div><span style="opacity:.45">$</span> kubectl get pods -n prod <span style="color:{preview.accent}">| grep api</span></div>
+                                            <div><span style="color:{preview.cursor}">api-7d9f8-2xk4p</span> <span style="opacity:.6">Running</span> <span style="color:{preview.accent}">12 restarts</span></div>
+                                            <div><span style="opacity:.45">$</span> tail -f /var/log/app.log <span style="background:{preview.selection}; padding:0 3px; border-radius:2px">ERROR</span></div>
+                                        </div>
+                                    </div>
+                                {/if}
                                 {#if dependencyStatusLabel(detailEntry)}
                                     <div class="plugin-dep-warning">⚠ {dependencyStatusLabel(detailEntry)}</div>
                                 {/if}
@@ -861,6 +889,19 @@
                                     {/if}
                                 </div>
                                 <div class="plugin-card-desc">{entry.description}</div>
+                                {#if themePreviewOf(entry)}
+                                    {@const preview = themePreviewOf(entry)!}
+                                    <div class="market-preview market-preview--card" style="background:{preview.bg}; color:{preview.fg}">
+                                        <div class="market-preview-bar" style="background:{preview.chrome}">
+                                            <span class="market-preview-dot" style="background:#FF5F56"></span><span class="market-preview-dot" style="background:#FFBD2E"></span><span class="market-preview-dot" style="background:#27C93F"></span>
+                                            <span class="market-preview-title">{preview.title}</span>
+                                        </div>
+                                        <div class="market-preview-body">
+                                            <div><span style="opacity:.45">$</span> kubectl get pods <span style="color:{preview.accent}">| grep api</span></div>
+                                            <div><span style="color:{preview.cursor}">api-7d9f8</span> <span style="opacity:.6">Running</span></div>
+                                        </div>
+                                    </div>
+                                {/if}
                                 {#if dependencyStatusLabel(entry)}
                                     <div class="plugin-dep-warning">⚠ {dependencyStatusLabel(entry)}</div>
                                 {/if}

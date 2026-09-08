@@ -6,7 +6,7 @@ import type { IsshPlugin, IsshPluginContext, IsshPluginManifest } from './src/ty
 export const manifest: IsshPluginManifest = {
     id: 'issh-plugin-theme-foundry',
     name: 'Foundry — 铸造车间',
-    version: '0.1.0',
+    version: '0.1.1',
     description: '深海军蓝哑光钢 + 信号橙：日常运维的暗色常驻皮肤，贯穿 WebView2 chrome 与 xterm 16 色',
     kind: 'appearance',
     entry: 'index.js',

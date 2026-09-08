@@ -6,7 +6,7 @@ import type { IsshPlugin, IsshPluginContext, IsshPluginManifest } from './src/ty
 export const manifest: IsshPluginManifest = {
     id: 'issh-plugin-theme-field',
     name: 'Field — 现场纸与蓝图',
-    version: '0.1.0',
+    version: '0.1.1',
     description: '暖纸低对比 + 蓝图蓝选中：白天与投屏的浅色皮肤，贯穿 chrome 与 xterm 16 色',
     kind: 'appearance',
     entry: 'index.js',
