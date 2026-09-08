@@ -6,7 +6,7 @@ import type { IsshPlugin, IsshPluginContext, IsshPluginManifest } from './src/ty
 export const manifest: IsshPluginManifest = {
     id: 'issh-plugin-theme-phosphor',
     name: 'Phosphor — 荧光粉',
-    version: '0.1.1',
+    version: '0.1.2',
     description: '极深绿黑 + 荧光绿晕与扫描线：向 VT220 致敬的夜间皮肤，贯穿 chrome 与 xterm 16 色',
     kind: 'appearance',
     entry: 'index.js',

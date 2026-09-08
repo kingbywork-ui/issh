@@ -41,13 +41,13 @@
         audience?: 'user' | 'developer' | null
     }
 
-    // 外观皮肤商城预览：纯 CSS mock 小窗，一图胜千言；复用 6 锚点 bg/fg/cursor/accent/chrome/selection
-    type ThemePreview = { bg: string; fg: string; cursor: string; accent: string; chrome: string; selection: string; title: string }
+    // 外观皮肤商城预览：与装后 Settings.svelte 1:1 所见即所得（标题/窗口点/终端行均复刻插件内真实介绍）
+    type ThemePreview = { bg: string; fg: string; cursor: string; accent: string; chrome: string; selection: string; title: string; dots: string[]; hint: string; eyebrow: string }
     const THEME_PREVIEWS: Record<string, ThemePreview> = {
-        'issh-plugin-theme-foundry': { bg: '#0F1A26', fg: '#E8E0C8', cursor: '#FF7A45', accent: '#5DA9F6', chrome: '#132132', selection: 'rgba(255,122,69,.18)', title: 'ssh root@prod-01 — Foundry' },
-        'issh-plugin-theme-field': { bg: '#F6F1E7', fg: '#2A2F36', cursor: '#2E7CF6', accent: '#C82829', chrome: '#FFFFFF', selection: 'rgba(46,124,246,.14)', title: 'ssh dev@field — Field' },
-        'issh-plugin-theme-phosphor': { bg: '#07140F', fg: '#B8E8C8', cursor: '#00FF88', accent: '#00E676', chrome: '#0D2218', selection: 'rgba(0,255,136,.16)', title: 'ssh root@vt220 — Phosphor' },
-        'issh-plugin-theme-void': { bg: '#13122A', fg: '#E0D8FF', cursor: '#FF4D6A', accent: '#7A6CFF', chrome: '#1B1A3A', selection: 'rgba(163,140,255,.18)', title: 'ssh root@void — Void' },
+        'issh-plugin-theme-foundry': { bg: '#0F1A26', fg: '#E8E0C8', cursor: '#FF7A45', accent: '#5DA9F6', chrome: '#132132', selection: 'rgba(255,122,69,.18)', title: 'ssh root@prod-01 — issh · Foundry', dots: ['#FF5F56','#FFBD2E','#27C93F'], hint: '深海军蓝哑光钢基底，信号橙仅用于活动标签 / 光标 / 选中 — 为全天运维而设的克制暗色常驻。', eyebrow: 'Skin 01 · Appearance' },
+        'issh-plugin-theme-field': { bg: '#F6F1E7', fg: '#2A2F36', cursor: '#2E7CF6', accent: '#C82829', chrome: '#FFFFFF', selection: 'rgba(46,124,246,.14)', title: 'ssh field@edge-03 — issh · Field', dots: ['#D9CFC0','#D9CFC0','#D9CFC0'], hint: '暖纸低对比 + 蓝图蓝选中：白天、投屏与长阅读的浅色皮肤。', eyebrow: 'Skin 02 · Appearance · Light' },
+        'issh-plugin-theme-phosphor': { bg: '#07140F', fg: '#B8E8C8', cursor: '#00FF88', accent: '#00E676', chrome: '#0D2218', selection: 'rgba(0,255,136,.16)', title: 'ssh root@vault — issh · Phosphor', dots: ['#0A3D2A','#0A3D2A','#0A3D2A'], hint: '极深绿黑 + 荧光绿晕与扫描线：向 VT220 致敬的夜间皮肤。', eyebrow: 'Skin 03 · Appearance' },
+        'issh-plugin-theme-void': { bg: '#13122A', fg: '#E0D8FF', cursor: '#FF4D6A', accent: '#7A6CFF', chrome: '#1B1A3A', selection: 'rgba(163,140,255,.18)', title: 'ssh deploy@hk-1 — issh · Void', dots: ['#2A2850','#2A2850','#2A2850'], hint: '深靛紫暮色 + 光纤微光：让人在危险操作前慢下来的夜间专注皮肤。', eyebrow: 'Skin 04 · Appearance' },
     }
     function themePreviewOf (entry: MarketEntry): ThemePreview | null {
         if (entry.kind !== 'appearance') return null
@@ -811,16 +811,29 @@
                                 <div class="plugin-card-desc">{detailEntry.description}</div>
                                 {#if themePreviewOf(detailEntry)}
                                     {@const preview = themePreviewOf(detailEntry)!}
+                                    <div class="market-preview-eyebrow" style="color:{preview.cursor}">{preview.eyebrow}</div>
                                     <div class="market-preview market-preview--detail" style="background:{preview.bg}; color:{preview.fg}; border-color:{preview.chrome}">
                                         <div class="market-preview-bar" style="background:{preview.chrome}; border-bottom-color: color-mix(in srgb, {preview.bg} 88%, transparent)">
-                                            <span class="market-preview-dot" style="background:#FF5F56"></span><span class="market-preview-dot" style="background:#FFBD2E"></span><span class="market-preview-dot" style="background:#27C93F"></span>
+                                            {#each preview.dots as dot}<span class="market-preview-dot" style="background:{dot}"></span>{/each}
                                             <span class="market-preview-title">{preview.title}</span>
                                             <span class="market-preview-meta"><span class="market-preview-tag" style="border-color: color-mix(in srgb, {preview.fg} 14%, transparent); background: color-mix(in srgb, {preview.fg} 8%, transparent)">live preview</span><span class="market-preview-cursor" style="background:{preview.cursor}"></span></span>
                                         </div>
-                                        <div class="market-preview-body">
-                                            <div><span style="opacity:.46">$</span> kubectl get pods -n prod <span style="color:{preview.accent}">| grep api</span></div>
-                                            <div><span style="color:{preview.cursor}">api-7d9f8-2xk4p</span> <span style="opacity:.58">Running</span> <span style="color:{preview.accent}">12 restarts</span></div>
-                                            <div><span style="opacity:.46">$</span> tail -f /var/log/app.log <span style="background:{preview.selection}; padding:0 4px; border-radius:3px">ERROR</span> <span style="opacity:.55">· 14:32:07</span></div>
+                                        <div class="market-preview-body" style={detailEntry.id === 'issh-plugin-theme-phosphor' ? 'text-shadow:0 0 7px rgba(0,255,136,.28)' : undefined}>
+                                            {#if detailEntry.id === 'issh-plugin-theme-foundry'}
+                                                <div><span style="opacity:.5">$</span> kubectl get pods -n prod <span style="color:{preview.accent}">| grep api</span></div>
+                                                <div><span style="color:{preview.cursor}">api-7d9f8-2xk4p</span> <span style="color:#B1E969">Running</span> <span style="opacity:.6">-- 12 restarts</span></div>
+                                                <div><span style="opacity:.5">$</span> tail -f /var/log/app.log <span style="color:{preview.accent}">| grep ERROR</span></div>
+                                            {:else if detailEntry.id === 'issh-plugin-theme-field'}
+                                                <div><span style="opacity:.45">$</span> cat /etc/issh/profiles.yaml</div>
+                                                <div><span style="color:{preview.cursor}">hosts:</span> edge-03: <span style="color:#718C00">192.168.10.31</span></div>
+                                            {:else if detailEntry.id === 'issh-plugin-theme-phosphor'}
+                                                <div><span style="opacity:.5">$</span> htop</div>
+                                                <div><span style="color:{preview.cursor}">CPU</span> [||||||||<span style="opacity:.3">····</span>] 42%</div>
+                                            {:else if detailEntry.id === 'issh-plugin-theme-void'}
+                                                <div><span style="opacity:.5">$</span> git log --oneline -3</div>
+                                                <div><span style="color:{preview.cursor}">8dab80c</span> docs: issh 0.0.4</div>
+                                                <div><span style="opacity:.5">$</span> <span style="color:{preview.cursor}">rm -rf ./dist</span> <span style="opacity:.55">-- guarded: press Ctrl+Y</span></div>
+                                            {/if}
                                         </div>
                                         <div class="market-preview-palette" aria-hidden="true">
                                             <span class="market-preview-swatch" style="background:{preview.chrome}" title="chrome"></span>
@@ -831,6 +844,7 @@
                                             <span class="market-preview-tag" style="margin-left:auto; border-color: color-mix(in srgb, {preview.fg} 14%, transparent)">chrome + terminal</span>
                                         </div>
                                     </div>
+                                    <div class="market-preview-hint">{preview.hint}</div>
                                 {/if}
                                 {#if dependencyStatusLabel(detailEntry)}
                                     <div class="plugin-dep-warning">⚠ {dependencyStatusLabel(detailEntry)}</div>
@@ -901,19 +915,30 @@
                                     {@const preview = themePreviewOf(entry)!}
                                     <div class="market-preview market-preview--card" style="background:{preview.bg}; color:{preview.fg}; border-color:{preview.chrome}">
                                         <div class="market-preview-bar" style="background:{preview.chrome}">
-                                            <span class="market-preview-dot" style="background:#FF5F56"></span><span class="market-preview-dot" style="background:#FFBD2E"></span><span class="market-preview-dot" style="background:#27C93F"></span>
+                                            {#each preview.dots as dot}<span class="market-preview-dot" style="background:{dot}"></span>{/each}
                                             <span class="market-preview-title">{preview.title}</span>
                                             <span class="market-preview-cursor" style="background:{preview.cursor}; margin-left:auto"></span>
                                         </div>
-                                        <div class="market-preview-body">
-                                            <div><span style="opacity:.46">$</span> kubectl get pods <span style="color:{preview.accent}">| grep api</span></div>
-                                            <div><span style="color:{preview.cursor}">api-7d9f8</span> <span style="opacity:.58">Running</span> <span style="background:{preview.selection}; padding:0 3px; border-radius:2px; color:{preview.fg}">2 err</span></div>
+                                        <div class="market-preview-body" style={entry.id === 'issh-plugin-theme-phosphor' ? 'text-shadow:0 0 6px rgba(0,255,136,.20)' : undefined}>
+                                            {#if entry.id === 'issh-plugin-theme-foundry'}
+                                                <div><span style="opacity:.5">$</span> kubectl get pods <span style="color:{preview.accent}">| grep api</span></div>
+                                                <div><span style="color:{preview.cursor}">api-7d9f8</span> <span style="color:#B1E969">Running</span></div>
+                                            {:else if entry.id === 'issh-plugin-theme-field'}
+                                                <div><span style="opacity:.45">$</span> cat /etc/issh/…</div>
+                                                <div><span style="color:{preview.cursor}">hosts:</span> <span style="color:#718C00">192.168.10.31</span></div>
+                                            {:else if entry.id === 'issh-plugin-theme-phosphor'}
+                                                <div><span style="opacity:.5">$</span> htop</div>
+                                                <div><span style="color:{preview.cursor}">CPU</span> [||||<span style="opacity:.3">····</span>] 42%</div>
+                                            {:else if entry.id === 'issh-plugin-theme-void'}
+                                                <div><span style="opacity:.5">$</span> git log -3</div>
+                                                <div><span style="color:{preview.cursor}">rm -rf ./dist</span> <span style="opacity:.55">guarded</span></div>
+                                            {/if}
                                         </div>
                                         <div class="market-preview-palette" aria-hidden="true">
                                             <span class="market-preview-swatch" style="background:{preview.bg}"></span>
                                             <span class="market-preview-swatch" style="background:{preview.accent}"></span>
                                             <span class="market-preview-swatch" style="background:{preview.cursor}"></span>
-                                            <span class="market-preview-tag" style="margin-left:auto; border-color: color-mix(in srgb, {preview.fg} 12%, transparent)">一图胜千言</span>
+                                            <span class="market-preview-tag" style="margin-left:auto; border-color: color-mix(in srgb, {preview.fg} 12%, transparent)">{preview.eyebrow}</span>
                                         </div>
                                     </div>
                                 {/if}

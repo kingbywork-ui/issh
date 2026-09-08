@@ -1,6 +1,6 @@
 {
     "name": "issh-plugin-theme-foundry",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "description": "Foundry — 铸造车间：深海军蓝哑光钢 + 琥珀信号橙暗色主题（issh appearance）",
     "type": "module",
     "main": "index.ts",

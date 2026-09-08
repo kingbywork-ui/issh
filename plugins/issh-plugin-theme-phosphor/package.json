@@ -1,6 +1,6 @@
 {
     "name": "issh-plugin-theme-phosphor",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "description": "Phosphor — 荧光粉：VT220 夜间致敬主题（issh appearance）",
     "type": "module",
     "main": "index.ts",

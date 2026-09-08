@@ -1,7 +1,7 @@
 {
     "id": "issh-plugin-theme-field",
     "name": "Field — 现场纸与蓝图",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "description": "暖纸色低对比 + 蓝图蓝选中：为白天、投屏与长时间阅读而设的浅色皮肤，贯穿 chrome 与 xterm 16 色",
     "kind": "appearance",
     "minAppVersion": "0.0.1",

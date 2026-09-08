@@ -1,7 +1,7 @@
 {
     "id": "issh-plugin-theme-void",
     "name": "Void — 虚空暮色",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "description": "深靛紫暮色 + 光纤微光：让人在危险操作前慢下来的夜间专注皮肤，贯穿 chrome 与 xterm 16 色",
     "kind": "appearance",
     "minAppVersion": "0.0.1",
