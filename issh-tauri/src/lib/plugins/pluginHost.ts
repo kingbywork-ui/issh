@@ -46,7 +46,7 @@ const pluginDirectories = new Map<string, string>()
 
 const listeners = new Set<Listener>()
 const pluginAudit: Array<{ timestamp: string; pluginId: string; method: string; ok: boolean; error?: string }> = []
-const HOST_VERSION = '0.0.2'
+let hostVersion = ''
 
 function notify (): void {
     for (const listener of listeners) listener()
@@ -192,7 +192,8 @@ function checkManifestCompatibility (manifest: IsshPluginManifest): string | nul
     if (manifest.gatewayApiVersion && manifest.gatewayApiVersion !== '1') {
         return `插件需要不兼容的网关 API 版本：${manifest.gatewayApiVersion}`
     }
-    if (manifest.minAppVersion && compareVersions(HOST_VERSION, manifest.minAppVersion) < 0) {
+    if (manifest.minAppVersion && (!hostVersion || compareVersions(hostVersion, manifest.minAppVersion) < 0)) {
+        if (!hostVersion) return '无法读取当前 issh 版本，不能验证插件兼容性'
         return `插件需要 issh ${manifest.minAppVersion} 或更高版本`
     }
     return null
@@ -328,6 +329,12 @@ export async function initPluginHost (): Promise<void> {
     for (const entry of listEntries()) {
         if (!entry.enabled) continue
         await activatePlugin(entry.manifest.id).catch(() => {})
+    }
+    try {
+        const { getVersion } = await import('@tauri-apps/api/app')
+        hostVersion = await getVersion()
+    } catch (cause) {
+        console.warn('[plugins] 无法读取当前 issh 版本：', cause)
     }
     await loadInstalledMarketplacePlugins().catch(() => {})
 }

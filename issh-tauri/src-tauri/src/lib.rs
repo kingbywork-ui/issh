@@ -670,6 +670,8 @@ pub fn run() {
             agent_bridge_disable,
             agent_bridge_disconnect,
             agent_bridge_status,
+            agent_hub_management_status,
+            agent_hub_management_open,
             agent_bridge_configure,
             agent_bridge_rotate_token,
             agent_bridge_audit_read,
@@ -864,6 +866,28 @@ fn agent_bridge_status(state: State<'_, AgentBridgeRuntime>) -> Result<Value, St
         .map_err(|_| "Agent Bridge 状态不可用".to_string())?
         .is_some();
     agent_bridge_status_snapshot(&state, running)
+}
+
+#[tauri::command]
+fn agent_hub_management_status(
+    state: State<'_, management_server::ManagementServerRuntime>,
+) -> Result<Value, String> {
+    let status = state.status();
+    Ok(json!({
+        "enabled": status.enabled,
+        "running": status.running,
+        "port": status.port,
+        "url": status.url,
+        "token": state.access_token()?,
+        "lastError": status.last_error,
+    }))
+}
+
+#[tauri::command]
+fn agent_hub_management_open(
+    state: State<'_, management_server::ManagementServerRuntime>,
+) -> Result<(), String> {
+    open_agent_hub_url(state.open_url()?)
 }
 
 /// 更新 port / scope / sftpRoot / auditLogEnabled / publicDiscovery（token 与 enabled 不可经此修改）。

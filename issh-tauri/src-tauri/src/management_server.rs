@@ -177,6 +177,20 @@ impl ManagementServerRuntime {
         Ok(token)
     }
 
+    /// 仅供受信任的内置设置页显示/复制管理令牌；商城插件仍只能通过
+    /// agentHub.read 获取不含凭据的状态与一次性 bootstrap URL。
+    pub fn access_token(&self) -> Result<String, String> {
+        self.shared
+            .token
+            .lock()
+            .map(|token| token.clone())
+            .map_err(|_| "管理服务器令牌状态不可用".to_string())
+    }
+
+    pub fn open_url(&self) -> Result<String, String> {
+        Self::open_url_shared(&self.shared)
+    }
+
     fn open_url_shared(shared: &ManagementShared) -> Result<String, String> {
         let bootstrap = generate_token();
         shared

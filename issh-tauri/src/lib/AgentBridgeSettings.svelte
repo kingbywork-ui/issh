@@ -9,8 +9,11 @@
         agentBridgeEnable,
         agentBridgeRotateToken,
         agentBridgeStatus,
+        agentHubManagementOpen,
+        agentHubManagementStatus,
         agentProcesses,
         type AgentBridgeStatus,
+        type AgentHubManagementStatus,
         type AgentProcessInfo,
     } from './runtime'
 
@@ -24,11 +27,15 @@
     ]
 
     let status = $state<AgentBridgeStatus | null>(null)
+    let hubStatus = $state<AgentHubManagementStatus | null>(null)
     let busy = $state(false)
     let loading = $state(true)
     let error = $state('')
     let notice = $state('')
     let showToken = $state(false)
+    let showHubToken = $state(false)
+    let hubError = $state('')
+    let hubBusy = $state(false)
     let auditText = $state('')
     let showAudit = $state(false)
     let auditBusy = $state(false)
@@ -50,14 +57,16 @@
     async function refresh (): Promise<void> {
         loading = true
         error = ''
+        hubError = ''
         try {
             status = await agentBridgeStatus()
             portInput = status.port
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
-        } finally {
-            loading = false
         }
+        try { hubStatus = await agentHubManagementStatus() }
+        catch (cause) { hubError = cause instanceof Error ? cause.message : String(cause) }
+        finally { loading = false }
     }
 
     async function toggle (value: boolean): Promise<void> {
@@ -140,6 +149,14 @@
         } catch {
             error = '复制失败：当前环境不支持剪贴板访问'
         }
+    }
+
+    async function openHubWeb (): Promise<void> {
+        hubBusy = true
+        hubError = ''
+        try { await agentHubManagementOpen() }
+        catch (cause) { hubError = cause instanceof Error ? cause.message : String(cause) }
+        finally { hubBusy = false }
     }
 
     async function copyMcpConfig (kind: 'claude' | 'codex'): Promise<void> {
@@ -236,6 +253,25 @@
     {#if loading}
         <div class="settings-empty">正在读取 Agent Bridge 状态…</div>
     {:else if status}
+        <div class="settings-field">
+            <div class="settings-field-title">
+                Agent Hub 管理面板
+                {#if hubStatus?.running}<span class="host-badge recent">运行中</span>{:else}<span class="host-badge">未运行</span>{/if}
+            </div>
+            <p class="settings-hint">用于工作区与 Agent 管理，和下方外部 Agent Bridge 是两个独立服务、两套不同 token。</p>
+            <p class="settings-hint">管理地址：<code>{hubStatus?.url ?? 'http://127.0.0.1:33555'}</code></p>
+            {#if hubError}<div class="settings-error">{hubError}</div>{/if}
+            {#if hubStatus}
+                <div class="sudo-actions">
+                    <input class="agent-token" type={showHubToken ? 'text' : 'password'} readonly value={hubStatus.token} aria-label="Agent Hub 管理令牌" />
+                    <button type="button" onclick={() => { showHubToken = !showHubToken }}>{showHubToken ? '隐藏' : '显示'}</button>
+                    <button type="button" onclick={() => void copyText(hubStatus?.token ?? '')}>复制管理 token</button>
+                    <button class="market-install" type="button" disabled={!hubStatus.running || hubBusy} onclick={() => void openHubWeb()}>{hubBusy ? '正在打开…' : '打开 Agent Hub Web'}</button>
+                </div>
+            {/if}
+            {#if hubStatus?.lastError}<div class="settings-hint" role="alert">{hubStatus.lastError}</div>{/if}
+        </div>
+
         <div class="settings-field">
             <div class="settings-field-title">
                 运行状态
