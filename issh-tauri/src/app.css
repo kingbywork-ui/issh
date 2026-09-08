@@ -1726,14 +1726,22 @@ button { font: inherit; color: inherit; }
 .market-page-btn:disabled { opacity: 0.4; cursor: default; }
 .market-page-info { color: var(--ops-fg-muted); font-size: 12px; }
 
-.market-preview { border: 1px solid var(--ops-line); border-radius: var(--ops-radius); overflow: hidden; margin: 8px 0 10px; font-family: var(--ops-font-mono); font-size: 11px; line-height: 1.5; }
-.market-preview--card { margin-top: 8px; }
-.market-preview--detail { margin: 4px 0 6px; font-size: 12px; }
-.market-preview-bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 11px; border-bottom: 1px solid rgba(0,0,0,.08); }
-.market-preview-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.market-preview-title { opacity: .7; font-size: 11px; margin-left: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.market-preview-cursor { width: 8px; height: 10px; border-radius: 1px; display: inline-block; margin-left: auto; opacity: .9; }
-.market-preview-body { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+/* === 插件商城 · 外观皮肤可视预览（装前可见 / 所见即所得）— 列表即展厅 === */
+.market-preview { border: 1px solid var(--ops-line); border-radius: 10px; overflow: hidden; margin: 10px 0 12px; font-family: var(--ops-font-mono); font-size: 11px; line-height: 1.55; box-shadow: 0 8px 24px rgba(0,0,0,.14), 0 1px 0 rgba(0,0,0,.06); position: relative; }
+.market-preview--card { margin-top: 10px; }
+.market-preview--card .market-preview-body { min-height: 74px; }
+.market-preview--detail { margin: 8px 0 10px; font-size: 12px; border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.18), 0 1px 0 rgba(0,0,0,.06); }
+.market-preview--detail .market-preview-body { min-height: 86px; }
+.market-preview-bar { display: flex; align-items: center; gap: 6px; padding: 7px 10px; font-size: 11px; border-bottom: 1px solid rgba(0,0,0,.10); letter-spacing: .01em; }
+.market-preview-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; box-shadow: inset 0 1px 0 rgba(255,255,255,.18); border: 1px solid rgba(0,0,0,.10); }
+.market-preview-title { opacity: .72; font-size: 11px; margin-left: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.market-preview-meta { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 10px; opacity: .62; }
+.market-preview-cursor { width: 9px; height: 13px; border-radius: 1px; display: inline-block; opacity: .92; box-shadow: 0 0 0 1px rgba(0,0,0,.06); animation: market-cursor 1.05s step-end infinite; }
+@keyframes market-cursor { 50% { opacity: 0; } }
+.market-preview-body { padding: 10px 11px 8px; display: flex; flex-direction: column; gap: 3px; }
+.market-preview-palette { display: flex; gap: 4px; padding: 0 11px 9px; align-items: center; }
+.market-preview-swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0,0,0,.10); box-shadow: inset 0 1px 0 rgba(255,255,255,.18); flex-shrink: 0; }
+.market-preview-tag { display: inline-flex; align-items: center; min-height: 16px; padding: 0 6px; border-radius: 999px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.10); color: inherit; font-size: 9px; letter-spacing: .06em; text-transform: uppercase; opacity: .72; }
 
 .sandbox-panel { display: flex; flex-direction: column; border-top: 1px solid var(--ops-line); background: var(--ops-base); }
 .sandbox-panel-title { font-size: 11px; color: var(--ops-fg-muted); padding: 4px 12px; border-bottom: 1px solid var(--ops-line); }

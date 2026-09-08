@@ -811,16 +811,24 @@
                                 <div class="plugin-card-desc">{detailEntry.description}</div>
                                 {#if themePreviewOf(detailEntry)}
                                     {@const preview = themePreviewOf(detailEntry)!}
-                                    <div class="market-preview market-preview--detail" style="background:{preview.bg}; color:{preview.fg}">
-                                        <div class="market-preview-bar" style="background:{preview.chrome}; border-bottom: 1px solid {preview.bg}">
+                                    <div class="market-preview market-preview--detail" style="background:{preview.bg}; color:{preview.fg}; border-color:{preview.chrome}">
+                                        <div class="market-preview-bar" style="background:{preview.chrome}; border-bottom-color: color-mix(in srgb, {preview.bg} 88%, transparent)">
                                             <span class="market-preview-dot" style="background:#FF5F56"></span><span class="market-preview-dot" style="background:#FFBD2E"></span><span class="market-preview-dot" style="background:#27C93F"></span>
                                             <span class="market-preview-title">{preview.title}</span>
-                                            <span class="market-preview-cursor" style="background:{preview.cursor}"></span>
+                                            <span class="market-preview-meta"><span class="market-preview-tag" style="border-color: color-mix(in srgb, {preview.fg} 14%, transparent); background: color-mix(in srgb, {preview.fg} 8%, transparent)">live preview</span><span class="market-preview-cursor" style="background:{preview.cursor}"></span></span>
                                         </div>
                                         <div class="market-preview-body">
-                                            <div><span style="opacity:.45">$</span> kubectl get pods -n prod <span style="color:{preview.accent}">| grep api</span></div>
-                                            <div><span style="color:{preview.cursor}">api-7d9f8-2xk4p</span> <span style="opacity:.6">Running</span> <span style="color:{preview.accent}">12 restarts</span></div>
-                                            <div><span style="opacity:.45">$</span> tail -f /var/log/app.log <span style="background:{preview.selection}; padding:0 3px; border-radius:2px">ERROR</span></div>
+                                            <div><span style="opacity:.46">$</span> kubectl get pods -n prod <span style="color:{preview.accent}">| grep api</span></div>
+                                            <div><span style="color:{preview.cursor}">api-7d9f8-2xk4p</span> <span style="opacity:.58">Running</span> <span style="color:{preview.accent}">12 restarts</span></div>
+                                            <div><span style="opacity:.46">$</span> tail -f /var/log/app.log <span style="background:{preview.selection}; padding:0 4px; border-radius:3px">ERROR</span> <span style="opacity:.55">· 14:32:07</span></div>
+                                        </div>
+                                        <div class="market-preview-palette" aria-hidden="true">
+                                            <span class="market-preview-swatch" style="background:{preview.chrome}" title="chrome"></span>
+                                            <span class="market-preview-swatch" style="background:{preview.bg}" title="terminal bg"></span>
+                                            <span class="market-preview-swatch" style="background:{preview.fg}" title="fg"></span>
+                                            <span class="market-preview-swatch" style="background:{preview.accent}" title="accent"></span>
+                                            <span class="market-preview-swatch" style="background:{preview.cursor}" title="cursor"></span>
+                                            <span class="market-preview-tag" style="margin-left:auto; border-color: color-mix(in srgb, {preview.fg} 14%, transparent)">chrome + terminal</span>
                                         </div>
                                     </div>
                                 {/if}
@@ -891,14 +899,21 @@
                                 <div class="plugin-card-desc">{entry.description}</div>
                                 {#if themePreviewOf(entry)}
                                     {@const preview = themePreviewOf(entry)!}
-                                    <div class="market-preview market-preview--card" style="background:{preview.bg}; color:{preview.fg}">
+                                    <div class="market-preview market-preview--card" style="background:{preview.bg}; color:{preview.fg}; border-color:{preview.chrome}">
                                         <div class="market-preview-bar" style="background:{preview.chrome}">
                                             <span class="market-preview-dot" style="background:#FF5F56"></span><span class="market-preview-dot" style="background:#FFBD2E"></span><span class="market-preview-dot" style="background:#27C93F"></span>
                                             <span class="market-preview-title">{preview.title}</span>
+                                            <span class="market-preview-cursor" style="background:{preview.cursor}; margin-left:auto"></span>
                                         </div>
                                         <div class="market-preview-body">
-                                            <div><span style="opacity:.45">$</span> kubectl get pods <span style="color:{preview.accent}">| grep api</span></div>
-                                            <div><span style="color:{preview.cursor}">api-7d9f8</span> <span style="opacity:.6">Running</span></div>
+                                            <div><span style="opacity:.46">$</span> kubectl get pods <span style="color:{preview.accent}">| grep api</span></div>
+                                            <div><span style="color:{preview.cursor}">api-7d9f8</span> <span style="opacity:.58">Running</span> <span style="background:{preview.selection}; padding:0 3px; border-radius:2px; color:{preview.fg}">2 err</span></div>
+                                        </div>
+                                        <div class="market-preview-palette" aria-hidden="true">
+                                            <span class="market-preview-swatch" style="background:{preview.bg}"></span>
+                                            <span class="market-preview-swatch" style="background:{preview.accent}"></span>
+                                            <span class="market-preview-swatch" style="background:{preview.cursor}"></span>
+                                            <span class="market-preview-tag" style="margin-left:auto; border-color: color-mix(in srgb, {preview.fg} 12%, transparent)">一图胜千言</span>
                                         </div>
                                     </div>
                                 {/if}
