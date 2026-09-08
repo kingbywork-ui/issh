@@ -1,0 +1,15 @@
+.foundry-settings{ display:flex; flex-direction:column; gap:12px }
+.foundry-hero{ display:flex; gap:14px; align-items:flex-start; justify-content:space-between }
+.foundry-hero h3{ margin:6px 0 6px; font-size:18px; font-weight:700; letter-spacing:-.02em }
+.foundry-eyebrow{ font:11px var(--ops-font-mono, ui-monospace); letter-spacing:.12em; text-transform:uppercase; color:var(--ops-signal); opacity:.9 }
+.foundry-hero button{ flex:none; min-height:32px; padding:0 12px; border:1px solid var(--ops-signal-border, rgba(255,122,69,.42)); border-radius:8px; background:var(--ops-signal-dim); color:var(--ops-signal); cursor:pointer; font-size:12px; font-weight:600 }
+.foundry-hero button.active{ background:var(--ops-signal); color:#0F1A26; border-color:var(--ops-signal) }
+.foundry-meta{ display:flex; flex-wrap:wrap; gap:8px }
+.foundry-pill{ font:11px var(--ops-font-mono, ui-monospace); padding:5px 10px; border-radius:999px; border:1px solid var(--ops-line); background:var(--ops-base); color:var(--ops-fg-muted, #9aa5b1) }
+.foundry-swatches{ display:flex; gap:8px; flex-wrap:wrap }
+.foundry-swatch{ width:28px; height:28px; border-radius:50%; border:2px solid rgba(255,255,255,.9); box-shadow:0 1px 6px rgba(0,0,0,.25); cursor:pointer; padding:0 }
+.foundry-term{ border-radius:12px; overflow:hidden; border:1px solid rgba(255,255,255,.08); box-shadow:0 8px 30px rgba(0,0,0,.25) }
+.foundry-term-bar{ height:34px; display:flex; align-items:center; gap:8px; padding:0 12px; border-bottom:1px solid rgba(255,255,255,.06) }
+.dot{ width:10px; height:10px; border-radius:50%; flex:none }
+.foundry-term-title{ margin-left:6px; font:11px var(--ops-font-mono, ui-monospace); opacity:.65 }
+.foundry-term-body{ padding:12px 14px 14px; font:12px/1.7 var(--ops-font-mono, ui-monospace); white-space:pre-wrap; word-break:break-all }

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>issh — Skin Atelier / 皮肤工坊</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fragment+Mono&family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,600&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0B1420;--paper:#F6F1E7;--line:#E8E0C8}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:#0B1420;color:#E8E0C8;font-family:"Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+::selection{background:#FF7A45;color:#0B1420}
+/* top nav */
+.nav{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:rgba(11,20,32,.85);backdrop-filter:blur(12px);border-bottom:1px solid rgba(232,224,200,.12)}
+.nav-left{font-family:"Fragment Mono",monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;display:flex;gap:18px;align-items:center}
+.nav-left b{font-weight:400;color:#FF7A45}
+.nav-right{font-family:"Fragment Mono",monospace;font-size:11px;opacity:.6}
+.hero{padding:56px 24px 24px;max-width:1280px;margin:0 auto}
+.hero-eyebrow{font-family:"Fragment Mono",monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#FF7A45}
+.hero h1{font-family:"Instrument Serif",serif;font-size:clamp(44px,7vw,84px);line-height:.9;font-weight:400;margin:14px 0 0;letter-spacing:-.03em}
+.hero h1 em{font-style:italic;color:#FF7A45}
+.hero-sub{margin-top:18px;display:grid;grid-template-columns:1.2fr .8fr;gap:28px;align-items:end}
+.hero-sub p{font-size:17px;line-height:1.6;color:rgba(232,224,200,.78);margin:0;max-width:56ch}
+.hero-meta{font-family:"Fragment Mono",monospace;font-size:11px;line-height:1.7;color:rgba(232,224,200,.55);border-left:1px solid rgba(232,224,200,.15);padding-left:18px}
+@media(max-width:860px){.hero-sub{grid-template-columns:1fr}.hero-meta{border-left:none;border-top:1px solid rgba(232,224,200,.15);padding-left:0;padding-top:14px}}
+/* architecture callout — the risk */
+.compare{max-width:1280px;margin:22px auto 0;padding:0 24px}
+.compare-card{background:#F6F1E7;color:#0B1420;border-radius:18px;overflow:hidden;display:grid;grid-template-columns:1.05fr .95fr}
+.compare-card>div{padding:28px}
+.compare-card h3{font-family:"Fragment Mono",monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;margin:0 0 14px;opacity:.6}
+.compare-table{width:100%;border-collapse:collapse;font-size:13px;line-height:1.5}
+.compare-table th{font-family:"Fragment Mono",monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;text-align:left;opacity:.5;padding:8px 0;border-bottom:1px solid rgba(11,20,32,.12)}
+.compare-table td{padding:10px 0;border-bottom:1px solid rgba(11,20,32,.08);vertical-align:top}
+.compare-table td:first-child{font-weight:600;width:28%}
+.tag{display:inline-block;font-family:"Fragment Mono",monospace;font-size:10px;letter-spacing:.08em;padding:4px 8px;border-radius:999px;border:1px solid rgba(11,20,32,.15)}
+.tag-accent{background:#0B1420;color:#F6F1E7;border-color:#0B1420}
+.compare-visual{background:#0B1420;color:#E8E0C8;position:relative;overflow:hidden}
+.compare-visual::before{content:"";position:absolute;inset:0;background:radial-gradient(600px 400px at 70% 20%, rgba(255,122,69,.18), transparent 60%), radial-gradient(500px 300px at 20% 80%, rgba(46,124,246,.12), transparent 60%)}
+.compare-label{position:relative;font-family:"Fragment Mono",monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#FF7A45}
+.compare-visual h4{position:relative;font-family:"Instrument Serif",serif;font-size:32px;font-weight:400;margin:10px 0 12px;line-height:.95}
+.compare-visual p{position:relative;font-size:13px;line-height:1.6;color:rgba(232,224,200,.7);margin:0}
+.repo-scaffold{position:relative;margin-top:18px;background:rgba(246,241,231,.06);border:1px solid rgba(232,224,200,.12);border-radius:12px;padding:14px 16px;font-family:"Fragment Mono",monospace;font-size:11px;line-height:1.7;color:rgba(232,224,200,.85)}
+.repo-scaffold b{color:#F6F1E7}
+@media(max-width:900px){.compare-card{grid-template-columns:1fr}}
+/* filter bar */
+.filter{max-width:1280px;margin:28px auto 0;padding:0 24px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.filter button{font-family:"Fragment Mono",monospace;font-size:11px;letter-spacing:.06em;padding:8px 14px;border-radius:999px;border:1px solid rgba(232,224,200,.18);background:transparent;color:#E8E0C8;cursor:pointer;transition:.15s}
+.filter button.active{background:#F6F1E7;color:#0B1420;border-color:#F6F1E7}
+.filter span{font-family:"Fragment Mono",monospace;font-size:11px;opacity:.5;margin-left:6px}
+/* gallery */
+.gallery{max-width:1280px;margin:18px auto 0;padding:0 24px;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:900px){.gallery{grid-template-columns:1fr}}
+.card{border-radius:18px;overflow:hidden;background:#111D2B;border:1px solid rgba(232,224,200,.10);display:flex;flex-direction:column}
+.card-head{padding:18px 18px 14px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.card-head h2{font-family:"Instrument Serif",serif;font-size:26px;font-weight:400;margin:0;line-height:1}
+.card-head h2 span{font-size:13px;font-family:"Fragment Mono",monospace;letter-spacing:.08em;text-transform:uppercase;opacity:.6;display:block;margin-top:4px}
+.badge{font-family:"Fragment Mono",monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:6px 10px;border-radius:999px;border:1px solid rgba(232,224,200,.18);white-space:nowrap}
+.card-desc{padding:0 18px 14px;font-size:13px;line-height:1.6;color:rgba(232,224,200,.68);margin:0;min-height:44px}
+/* terminal mock */
+.term{margin:0 12px 12px;background:var(--t-bg);border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,.08);box-shadow:0 8px 30px rgba(0,0,0,.35)}
+.term-bar{height:36px;display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--t-bar);border-bottom:1px solid rgba(255,255,255,.06)}
+.dot{width:10px;height:10px;border-radius:50%}
+.term-title{margin-left:8px;font-family:"Fragment Mono",monospace;font-size:11px;color:var(--t-fg);opacity:.6}
+.term-body{padding:14px 16px 16px;font-family:"Fragment Mono",monospace;font-size:11.5px;line-height:1.7;white-space:pre-wrap;word-break:break-all}
+.term-body .muted{opacity:.45}
+.term-body .accent{color:var(--t-accent)}
+.palette{display:flex;gap:6px;padding:0 12px 12px;flex-wrap:wrap}
+.swatch{width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,.9);box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.meta-row{display:flex;gap:8px;padding:0 12px 14px;flex-wrap:wrap}
+.meta-pill{font-family:"Fragment Mono",monospace;font-size:10px;letter-spacing:.06em;padding:6px 10px;border-radius:999px;background:rgba(232,224,200,.08);color:rgba(232,224,200,.8);border:1px solid rgba(232,224,200,.10)}
+/* per-theme tokens */
+.theme-foundry{--t-bg:#0F1A26;--t-bar:#132132;--t-fg:#E8E0C8;--t-accent:#FF7A45}
+.theme-field{--t-bg:#F6F1E7;--t-bar:#EDE6D6;--t-fg:#2A2F36;--t-accent:#2E7CF6}
+.theme-phosphor{--t-bg:#07140F;--t-bar:#0D2218;--t-fg:#B8E8C8;--t-accent:#00FF88}
+.theme-void{--t-bg:#13122A;--t-bar:#1B1A3A;--t-fg:#E0D8FF;--t-accent:#FF4D6A}
+/* footer how-to */
+.howto{max-width:1280px;margin:28px auto 0;padding:0 24px 40px}
+.howto-card{background:rgba(246,241,231,.06);border:1px solid rgba(232,224,200,.12);border-radius:18px;padding:26px}
+.howto-card h3{font-family:"Instrument Serif",serif;font-size:24px;font-weight:400;margin:0}
+.howto-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-top:18px}
+@media(max-width:900px){.howto-grid{grid-template-columns:1fr}}
+.step{border-top:1px solid rgba(232,224,200,.15);padding-top:12px}
+.step b{font-family:"Fragment Mono",monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#FF7A45}
+.step p{font-size:13px;line-height:1.6;color:rgba(232,224,200,.7);margin:8px 0 0}
+.step code{font-family:"Fragment Mono",monospace;font-size:11px;background:rgba(246,241,231,.08);padding:2px 6px;border-radius:6px}
+.footer{padding:18px 24px 32px;max-width:1280px;margin:0 auto;font-family:"Fragment Mono",monospace;font-size:11px;color:rgba(232,224,200,.4);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="nav">
+  <div class="nav-left"><span>issh <b>SKIN ATELIER</b></span><span style="opacity:.25">—</span><span style="opacity:.6">参照 Tabby · 为 Tauri 重制</span></div>
+  <div class="nav-right">独立仓库 · 4 skins 已构建 · issh 0.0.4 + isshd</div>
+</div>
+
+<div class="hero">
+  <div class="hero-eyebrow">Tabby 参照 · issh 架构适配 · Plugin Marketplace</div>
+  <h1>终端不是主题的容器，<br><em>是材料的延伸。</em></h1>
+  <div class="hero-sub">
+    <p>Tabby 的皮肤是 Electron 里的一块 CSS；issh 的皮肤是 Tauri WebView2 的 chrome 着色 + Rust isshd 驱动的 xterm 调色板。同一套 <code style="font-family:'Fragment Mono',monospace;background:rgba(255,122,69,.15);padding:2px 6px;border-radius:6px">Theme + TerminalColorScheme</code>，在新架构里分两层生效 — 我们为此做了 4 套可直接发独立仓库的皮肤。</p>
+    <div class="hero-meta">
+      主题：issh 终端皮肤商城<br>
+      受众：在 SSH 里生活的人 · 运维 / 开发 / 现场工程师<br>
+      单一任务：30 秒内挑中一套并一键安装到 issh<br>
+      审美锚点：服务器机房、纸带、CRT、光纤 — 而非通用的奶油色/酸绿模板<br>
+      上架：4 套独立仓库 0.1.0 已 vite build → --force-local tgz 封包（Foundry/Field/Phosphor/Void）
+    </div>
+  </div>
+</div>
+
+<div class="compare">
+  <div class="compare-card">
+    <div>
+      <h3>架构差异 · 为什么不能直接搬 Tabby 皮肤</h3>
+      <table class="compare-table">
+        <tr><th></th><th>Tabby (eugeny/tabby)</th><th>issh (new-ssh / Tauri)</th></tr>
+        <tr><td>宿主</td><td>Electron + Angular</td><td>Tauri 2 + Svelte 5 + Rust isshd</td></tr>
+        <tr><td>主题入口</td><td><code>Theme</code> (css string) + <code>TerminalColorSchemeProvider</code></td><td>同接口（issh-core 仍是 Angular JIT），但分两层：<b>WebView2 chrome</b> 与 <b>xterm 画布</b></td></tr>
+        <tr><td>样式生效</td><td>注入 Electron renderer</td><td>WebView2 的 CSS 变量 <code>--body-bg / --theme-bg-*</code> + <code>--bs-*</code> 控制标签栏/标题栏</td></tr>
+        <tr><td>终端生效</td><td>xterm 16 色 + bg/fg/cursor</td><td>相同，但通过 <code>issh-terminal</code> 的 <code>colorSchemes / config.terminal.colorScheme</code></td></tr>
+        <tr><td>分发</td><td>npm / 内置 <code>issh-community-color-schemes</code> (150+ Xresources)</td><td><span class="tag tag-accent">独立 GitHub 仓库</span> <span class="tag">1 仓库 = 1 皮肤</span> → Release tgz → registry index.json → jsDelivr</td></tr>
+        <tr><td>安装位置</td><td>Electron app/plugins</td><td><code>%APPDATA%/issh/plugins/&lt;id&gt;/</code></td></tr>
+      </table>
+      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"><span class="tag">followsColorScheme = false 精调皮肤</span><span class="tag">followsColorScheme = true 跟随系统</span></div>
+    </div>
+    <div class="compare-visual">
+      <div class="compare-label">本次的设计赌注 · Signature risk</div>
+      <h4>把“机房的材料”<br>搬进主题变量</h4>
+      <p>不用通用的奶白/酸绿。4 套皮肤各自锚定一种真实材料 — 钢、牛皮纸、荧光粉、光纤 — 并让它贯穿 shell chrome 与终端调色板。标签栏的哑光、选中态的信号色、滚动条的质感，都来自同一种材料逻辑。克制，只赌这一次。</p>
+      <div class="repo-scaffold">
+        <b>独立仓库骨架</b> (每套皮肤一个 repo, 参照 issh-plugin-agent-bridge)<br>
+        issh-plugin-theme-foundry/<br>
+        ├─ package.json <span style="opacity:.5">(name, version, issh.plugin)</span><br>
+        ├─ src/index.ts <span style="opacity:.5">→ NgModule 提供 Theme + TerminalColorSchemeProvider</span><br>
+        ├─ src/theme.scss <span style="opacity:.5">→ 编译后注入 Theme.css</span><br>
+        ├─ src/colorScheme.ts <span style="opacity:.5">→ foreground/background/cursor + 16 色</span><br>
+        └─ plugin.yaml <span style="opacity:.5">→ 商城元数据</span><br>
+        发布: <b>build → tgz → gh release → registry/index.json → purge jsDelivr</b>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="filter">
+  <button class="active" onclick="filterTheme('all',this)">全部 4</button>
+  <button onclick="filterTheme('dark',this)">深色</button>
+  <button onclick="filterTheme('light',this)">浅色</button>
+  <span>— 点击色块复制 hex · 终端可交互切换配色</span>
+</div>
+
+<div class="gallery" id="gallery">
+  <!-- FOUNDRY -->
+  <div class="card" data-kind="dark">
+    <div class="card-head">
+      <h2>Foundry <span>01 — 铸造车间 · 深色 · 哑光钢与琥珀信号</span></h2>
+      <span class="badge" style="background:#FF7A45;color:#0B1420;border-color:#FF7A45">最推荐 · 日常运维</span>
+    </div>
+    <p class="card-desc">灵感：数据中心楼层的钢板、警示橙、机柜阴影。深海军蓝基底上，信号橙只用于活动标签与光标，克制而可扫描。</p>
+    <div class="term theme-foundry">
+      <div class="term-bar"><span class="dot" style="background:#FF5F56"></span><span class="dot" style="background:#FFBD2E"></span><span class="dot" style="background:#27C93F"></span><span class="term-title">ssh root@prod-01 — issh · Foundry</span></div>
+      <div class="term-body"><span class="muted">$</span> kubectl get pods -n prod | grep api<br><span style="color:#FF7A45">api-7d9f8-2xk4p</span>   <span style="color:#B1E969">Running</span>   3d   <span class="muted">— 12 restarts</span><br><span style="color:#FF7A45">api-7d9f8-9m2lq</span>   <span style="color:#5DA9F6">Pending</span>   4m<br><span class="muted">$</span> tail -f /var/log/app.log <span class="accent">| grep ERROR</span><br><span style="color:#FF615A">[ERROR]</span> 14:02:11 upstream timeout <span style="color:#E8E0C8">10.0.4.22:8080</span></div>
+      <div class="palette" id="pal-foundry"></div>
+      <div class="meta-row"><span class="meta-pill">bg #0F1A26</span><span class="meta-pill">fg #E8E0C8</span><span class="meta-pill">accent #FF7A45 · 活动标签/光标</span><span class="meta-pill">followsColorScheme: false</span></div>
+    </div>
+  </div>
+  <!-- FIELD -->
+  <div class="card" data-kind="light">
+    <div class="card-head">
+      <h2>Field <span>02 — 现场 · 浅色 · 牛皮纸与蓝图</span></h2>
+      <span class="badge">白天 · 长时间阅读</span>
+    </div>
+    <p class="card-desc">灵感：现场工程师的牛皮纸工单、蓝图蓝。暖纸色基底降低对比疲劳，蓝只用于选中与链接，适合白天与投屏。</p>
+    <div class="term theme-field">
+      <div class="term-bar"><span class="dot" style="background:#D9CFC0"></span><span class="dot" style="background:#D9CFC0"></span><span class="dot" style="background:#D9CFC0"></span><span class="term-title" style="color:#2A2F36">ssh field@edge-03 — issh · Field</span></div>
+      <div class="term-body" style="color:#2A2F36"><span style="opacity:.45">$</span> cat /etc/issh/profiles.yaml<br><span style="color:#2E7CF6">hosts:</span>  edge-03: <span style="color:#718C00">192.168.10.31</span> <span style="opacity:.5"># 跳板</span><br><span style="color:#2E7CF6">bridge:</span> token: <span style="opacity:.5">••••••••</span>  port: 33555<br><span style="opacity:.45">$</span> issh-agent --help <span style="color:#2E7CF6">| head</span></div>
+      <div class="palette" id="pal-field"></div>
+      <div class="meta-row"><span class="meta-pill" style="background:rgba(11,20,32,.06);color:#2A2F36;border-color:rgba(11,20,32,.1)">bg #F6F1E7</span><span class="meta-pill" style="background:rgba(11,20,32,.06);color:#2A2F36;border-color:rgba(11,20,32,.1)">fg #2A2F36</span><span class="meta-pill" style="background:rgba(11,20,32,.06);color:#2A2F36;border-color:rgba(11,20,32,.1)">accent #2E7CF6</span><span class="meta-pill" style="background:rgba(11,20,32,.06);color:#2A2F36;border-color:rgba(11,20,32,.1)">纸张纹理 · 1% 噪点</span></div>
+    </div>
+  </div>
+  <!-- PHOSPHOR -->
+  <div class="card" data-kind="dark">
+    <div class="card-head">
+      <h2>Phosphor <span>03 — 荧光粉 · 深绿 · VT220 致敬</span></h2>
+      <span class="badge" style="background:#00FF88;color:#07140F;border-color:#00FF88">夜cat · 复古</span>
+    </div>
+    <p class="card-desc">灵感：CRT 荧光粉余晖与扫描线。极深绿黑基底，文本带 0.6px 光晕，仅在焦点处出现扫描线 — 致敬而非复刻。</p>
+    <div class="term theme-phosphor">
+      <div class="term-bar"><span class="dot" style="background:#0A3D2A"></span><span class="dot" style="background:#0A3D2A"></span><span class="dot" style="background:#0A3D2A"></span><span class="term-title">ssh root@vault — issh · Phosphor</span></div>
+      <div class="term-body" style="text-shadow:0 0 6px rgba(0,255,136,.35)"><span class="muted">$</span> htop <span class="muted" style="opacity:.35">— 3.2.1</span><br><span style="color:#00FF88">CPU</span> [||||||||<span style="opacity:.3">····</span>]  42.1%   <span style="color:#9FE870">Mem</span> 1.2G/4G<br><span style="color:#B8E8C8">  PID  USER  CPU  MEM  CMD</span><br>  3847  root  12.3  2.1  <span style="color:#00FF88">isshd --port 33555</span></div>
+      <div class="palette" id="pal-phosphor"></div>
+      <div class="meta-row"><span class="meta-pill">bg #07140F</span><span class="meta-pill">fg #B8E8C8</span><span class="meta-pill">accent #00FF88 · 光标/进度</span><span class="meta-pill">scanline 仅焦点</span></div>
+    </div>
+  </div>
+  <!-- VOID -->
+  <div class="card" data-kind="dark">
+    <div class="card-head">
+      <h2>Void <span>04 — 虚空 · 深紫 · 光纤暮色</span></h2>
+      <span class="badge">专注 · 夜间</span>
+    </div>
+    <p class="card-desc">灵感：暮色机房的光纤微光。深靛紫基底，粉紫前景，玫红信号只用于危险操作确认 — 让人慢下来再按回车。</p>
+    <div class="term theme-void">
+      <div class="term-bar"><span class="dot" style="background:#2A2850"></span><span class="dot" style="background:#2A2850"></span><span class="dot" style="background:#2A2850"></span><span class="term-title">ssh deploy@hk-1 — issh · Void</span></div>
+      <div class="term-body"><span class="muted">$</span> git log --oneline -4<br><span style="color:#FF4D6A">8dab80c</span> <span style="color:#E0D8FF">docs: issh 0.0.4</span> <span class="muted">— 2h ago</span><br><span style="color:#A78BFA">63158e5</span> registry 0.4.0 <span class="muted">— 5h ago</span><br><span class="muted">$</span> <span style="color:#FF4D6A">rm -rf ./dist</span>  <span class="muted">— guarded: press Ctrl+Y to confirm</span></div>
+      <div class="palette" id="pal-void"></div>
+      <div class="meta-row"><span class="meta-pill">bg #13122A</span><span class="meta-pill">fg #E0D8FF</span><span class="meta-pill">accent #FF4D6A · 危险确认</span><span class="meta-pill">selection 薰衣草 18%</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="howto">
+  <div class="howto-card">
+    <h3>如何把一套皮肤发到 issh 商城 — 独立仓库流水线</h3>
+    <p style="font-size:13px;color:rgba(232,224,200,.6);margin:8px 0 0">每套皮肤 = 一个 GitHub 仓库（与 Tabby 的社区包不同，issh 商城推荐 1 皮肤 1 仓库，便于版本与签名）。Tauri 皮肤为 <code style="font-family:'Fragment Mono',monospace">kind: appearance</code> 自含 Svelte runtime，经 <code style="font-family:'Fragment Mono',monospace">gateway.ui: registerSettingsTab + registerTerminalDecorator</code> 双层注入（chrome CSS 变量 + xterm 16 色 + selection）。</p>
+    <div class="howto-grid">
+      <div class="step"><b>01 — 克隆模板</b><p>复制 <code>plugins/issh-plugin-agent-bridge</code> 结构，改 <code>package.json</code> 的 <code>name/version</code> 与 <code>src/index.ts</code> 的 Theme/ColorScheme。深色设 <code>followsColorScheme:false</code> 精调，浅色可设 true 跟随系统。</p></div>
+      <div class="step"><b>02 — 构建与签名</b><p><code>npm run build</code> → <code>dist/index.js</code>，<code>node scripts/publish-plugin.mjs &lt;id&gt;</code> 自动打 tgz、算 sha256、ed25519 签名。</p></div>
+      <div class="step"><b>03 — 发版与上架</b><p>推独立仓库 <code>main</code> + <code>tag v0.x.0</code> → <code>gh release create</code> 上传 tgz → 更新 <code>kingbywork-ui/issh-plugin-registry/index.json</code> 的 version/downloadUrl/sha256 → <code>purge.jsdelivr.net</code>。</p></div>
+    </div>
+    <div style="margin-top:18px;padding:14px 16px;background:rgba(255,122,69,.08);border:1px solid rgba(255,122,69,.2);border-radius:12px;font-size:12px;line-height:1.6;color:rgba(232,224,200,.85)">
+      <b style="color:#FF7A45;font-family:'Fragment Mono',monospace;letter-spacing:.06em">Token 系统（每套皮肤 6 色锚点）</b>：bg / fg / cursor / accent(ANSI 4) / selection / chrome(bg-more)。<br>
+      <span style="opacity:.7">示例 — Foundry: #0F1A26 / #E8E0C8 / #FF7A45 / #5DA9F6 / rgba(255,122,69,.18) / #132132 · Field: #F6F1E7 / #2A2F36 / #2E7CF6 · Phosphor: #07140F / #B8E8C8 / #00FF88 · Void: #13122A / #E0D8FF / #FF4D6A</span>
+    </div>
+  </div>
+</div>
+
+<div class="footer"><span>issh skin atelier · 参照 eugeny/tabby · 为 Tauri 2 + isshd 重制 · 独立仓库商城</span><span>last updated 2026-09-07 · issh 0.0.4</span></div>
+
+<script>
+const pals={
+  "pal-foundry":["#000000","#FF615A","#B1E969","#EBD99C","#5DA9F6","#E86AFF","#82FFF7","#E8E0C8","#313131","#F58C80","#DDF88F","#EEE5B2","#A5C7FF","#DDAAFF","#B7FFF9","#FFFFFF"],
+  "pal-field":["#2A2F36","#C82829","#718C00","#EAB700","#4271AE","#8959A8","#3E999F","#F6F1E7","#5A5E66","#C82829","#718C00","#EAB700","#4271AE","#8959A8","#3E999F","#FFFFFF"],
+  "pal-phosphor":["#07140F","#FF5A3C","#00E676","#FFEB3B","#40C4FF","#E040FB","#18FFFF","#B8E8C8","#1A3328","#FF7A5C","#9FE870","#FFF176","#80D8FF","#EA80FC","#84FFFF","#E8FFF0"],
+  "pal-void":["#13122A","#FF615A","#7ED321","#FFD166","#7A6CFF","#FF4D9A","#4ECDC4","#E0D8FF","#2A2850","#FF7A6A","#A8E05F","#FFE08A","#9B8CFF","#FF7AB5","#7CE8E0","#FFFFFF"]
+};
+Object.entries(pals).forEach(([id,cols])=>{
+  const el=document.getElementById(id);
+  cols.forEach(c=>{
+    const s=document.createElement('button');
+    s.className='swatch'; s.style.background=c; s.title=c; s.setAttribute('aria-label',c);
+    s.onclick=()=>{navigator.clipboard.writeText(c); s.style.transform='scale(1.15)'; setTimeout(()=>s.style.transform='',180)};
+    el.appendChild(s);
+  });
+});
+function filterTheme(k,btn){
+  document.querySelectorAll('.filter button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.card').forEach(c=>{
+    c.style.display=(k==='all'||c.dataset.kind===k)?'':'none';
+  });
+}
+</script>
+</body>
+</html>

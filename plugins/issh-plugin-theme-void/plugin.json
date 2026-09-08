@@ -1,0 +1,15 @@
+{
+    "id": "issh-plugin-theme-void",
+    "name": "Void — 虚空暮色",
+    "version": "0.1.0",
+    "description": "深靛紫暮色 + 光纤微光：让人在危险操作前慢下来的夜间专注皮肤，贯穿 chrome 与 xterm 16 色",
+    "kind": "appearance",
+    "minAppVersion": "0.0.1",
+    "entry": "index.js",
+    "gatewayApiVersion": "1",
+    "capabilities": ["ui.settings.register", "terminal.decorate"],
+    "permissions": ["settings:tab", "terminal:decorate"],
+    "author": "kingbywork-ui",
+    "homepage": "https://github.com/kingbywork-ui/issh-plugin-theme-void",
+    "repository": "https://github.com/kingbywork-ui/issh-plugin-theme-void"
+}

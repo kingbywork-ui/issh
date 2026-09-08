@@ -1,0 +1,15 @@
+{
+    "id": "issh-plugin-theme-phosphor",
+    "name": "Phosphor — 荧光粉",
+    "version": "0.1.0",
+    "description": "极深绿黑 + CRT 荧光绿晕与扫描线：向 VT220 致敬的夜间专用皮肤，贯穿 chrome 与 xterm 16 色",
+    "kind": "appearance",
+    "minAppVersion": "0.0.1",
+    "entry": "index.js",
+    "gatewayApiVersion": "1",
+    "capabilities": ["ui.settings.register", "terminal.decorate"],
+    "permissions": ["settings:tab", "terminal:decorate"],
+    "author": "kingbywork-ui",
+    "homepage": "https://github.com/kingbywork-ui/issh-plugin-theme-phosphor",
+    "repository": "https://github.com/kingbywork-ui/issh-plugin-theme-phosphor"
+}

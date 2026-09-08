@@ -14,7 +14,7 @@
 |------|------|
 | 待办 | 7 |
 | 进行中 | 1 |
-| 已完成 | 48 |
+| 已完成 | 49 |
 | 已放弃 | 0 |
 
 > 状态说明（2026-09-03 同步）：R-008 原始范围（对齐 issh 分支 Agent Bridge：17 工具闭环 + CLI/MCP + 安全）已完成，Netcatty 架构超前能力拆为 R-050~R-055；R-050 已完成（isshd workspace/agent/task 服务端已有，本轮放开 19 个工具），R-051 已完成（C5 pane 完成、C4 cordis kernel 已放弃、C6 herdr 判定商城插件路线）；R-036/R-037 已完成（正文 2026-09-01 最终验收记录为准，302/308 行的「保持进行中」为当日中间快照）；R-044 为持续生效的提交约定，保持「进行中」。
@@ -98,6 +98,12 @@
 - 根因：`agent_hub.rs::request()` POST 到 `discovery.rpc_url` 根路径（`http://127.0.0.1:33555`），而管理服务器仅接受 `POST /rpc`，所有请求 404（R-089 引入）。
 - 修复：`request()` 改为 POST `{rpc_url}/rpc`（`trim_end_matches('/')` 后拼接）。影响 `agentHub.status`（hub.health/provider.list）与 `agentHub.open`（hub.bootstrap）两条链路。
 - 验证：cargo check 通过；端到端模拟 hub.health/provider.list/hub.bootstrap 全 200、bootstrap 交换成功、session 调 management.status running:true；重打包安装 0.0.4 通过。已提交 `cd89cd1`。
+
+### R-094 Dashboard 管理令牌粘贴闪退修复（用户需求，2026-09-07，已完成）
+
+- 现象：在「输入管理令牌」页面粘贴 token 后输入框闪一下并立即清空，无法进入 Dashboard，且鉴权错误不可见。
+- 根因：登录输入框直接绑定已认证 `token`；其响应式语句在每次输入变化时立即调用 `refresh()`，中间值或无效值收到 401 后又清空 token。登录页位于另一条件分支，原错误提示也随 token 清空一起隐藏。
+- 修复：新增独立 `tokenDraft`，只在点击「连接」或按 Enter 后提交；提交时去除首尾空白并兼容粘贴 `Bearer ` 前缀；失败时保留输入并在登录页显示明确错误，成功后才写入 sessionStorage。设置页 bootstrap 自动连接与已保存会话自动恢复保持不变。
 
 ### R-058 外置 Agent 桥接设置页点击后空白（2026-09-03，已完成）
 

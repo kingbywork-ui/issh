@@ -1,0 +1,15 @@
+{
+    "id": "issh-plugin-theme-foundry",
+    "name": "Foundry — 铸造车间",
+    "version": "0.1.0",
+    "description": "深海军蓝哑光钢 + 琥珀信号橙：为日常运维而生的暗色常驻皮肤，贯穿 WebView2 chrome 与 xterm 16 色",
+    "kind": "appearance",
+    "minAppVersion": "0.0.1",
+    "entry": "index.js",
+    "gatewayApiVersion": "1",
+    "capabilities": ["ui.settings.register", "terminal.decorate"],
+    "permissions": ["settings:tab", "terminal:decorate"],
+    "author": "kingbywork-ui",
+    "homepage": "https://github.com/kingbywork-ui/issh-plugin-theme-foundry",
+    "repository": "https://github.com/kingbywork-ui/issh-plugin-theme-foundry"
+}

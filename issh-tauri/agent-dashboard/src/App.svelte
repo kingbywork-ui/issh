@@ -9,6 +9,7 @@
 
   const bootstrap = location.hash.match(/bootstrap=([^&]+)/)?.[1] ? decodeURIComponent(location.hash.match(/bootstrap=([^&]+)/)![1]) : ''
   let token = sessionStorage.getItem('issh-management-token') ?? ''
+  let tokenDraft = ''
   let status: Status | null = null
   let health: Health | null = null
   let workspaces: Workspace[] = []
@@ -39,8 +40,8 @@
     return body.result as T
   }
 
-  async function refresh(): Promise<void> {
-    if (!token) return
+  async function refresh(): Promise<boolean> {
+    if (!token) return false
     busy = true
     message = ''
     try {
@@ -51,8 +52,10 @@
       if (!workspaces.some((workspace) => workspace.id === selectedWorkspace)) selectedWorkspace = workspaces[0]?.id ?? ''
       if (selectedWorkspace) agents = await rpc<Agent[]>('agent.list', { workspaceId: selectedWorkspace })
       else agents = []
+      return true
     } catch (error) {
       message = error instanceof Error ? error.message : String(error)
+      return false
     } finally {
       busy = false
     }
@@ -71,7 +74,23 @@
     } catch (error) { message = error instanceof Error ? error.message : String(error) } finally { busy = false }
   }
 
-  async function login(): Promise<void> { await refresh() }
+  async function login(): Promise<void> {
+    const candidate = tokenDraft.trim().replace(/^Bearer\s+/i, '').trim()
+    if (!candidate) {
+      message = '请输入管理令牌'
+      return
+    }
+    // 先锁住响应式自动刷新，避免粘贴过程中的中间值被当作完整令牌提交。
+    busy = true
+    message = ''
+    token = candidate
+    if (await refresh()) {
+      sessionStorage.setItem('issh-management-token', token)
+      tokenDraft = ''
+    } else if (!token) {
+      message = '管理令牌无效或已过期，请检查后重试'
+    }
+  }
   function selectWorkspace(id: string): void { selectedWorkspace = id; void refresh() }
   function selectedSessions(): Session[] {
     const workspace = workspaces.find((item) => item.id === selectedWorkspace)
@@ -98,7 +117,7 @@
     })
     const body = await response.json() as { token?: string; error?: { message?: string } }
     if (!response.ok || body.error || !body.token) throw new Error(body.error?.message ?? '引导地址已失效，请重新打开 Web')
-    token = body.token
+    token = body.token.trim()
     sessionStorage.setItem('issh-management-token', token)
     history.replaceState(null, '', location.pathname)
     return true
@@ -137,10 +156,10 @@
 
 <main class="shell">
   <header><div><p class="eyebrow">ISSH / AGENT BRIDGE</p><h1>Agent 管理</h1></div><button onclick={() => void refresh()} disabled={busy}>刷新</button></header>
+  {#if message}<div class="notice">{message}</div>{/if}
   {#if !token}
-    <section class="card login"><h2>输入管理令牌</h2><p>令牌只保存在当前浏览器会话中。也可以从 issh 设置页重新打开本页自动连接。</p><input type="password" bind:value={token} placeholder="Bearer token" onkeydown={(event) => event.key === 'Enter' && void login()} /><button class="primary" onclick={() => void login()}>连接</button></section>
+    <section class="card login"><h2>输入管理令牌</h2><p>令牌只保存在当前浏览器会话中。也可以从 issh 设置页重新打开本页自动连接。</p><input type="password" bind:value={tokenDraft} placeholder="Bearer token" onkeydown={(event) => { if (event.key === 'Enter' && !busy) { event.preventDefault(); void login() } }} /><button class="primary" disabled={busy || !tokenDraft.trim()} onclick={() => void login()}>连接</button></section>
   {:else}
-    {#if message}<div class="notice">{message}</div>{/if}
     <section class="grid overview">
       <div class="card"><span>管理服务</span><strong class:ok={status?.running}>{status ? (status.running ? '运行中' : '已暂停') : '未连接'}</strong><small>127.0.0.1:{status?.port ?? 33555}</small></div>
       <div class="card"><span>Runtime</span><strong>{health?.runtimeVersion ?? '—'}</strong><small>{health?.capabilities?.length ?? 0} 项能力</small></div>
