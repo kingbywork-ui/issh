@@ -6,6 +6,9 @@
   type Health = { runtimeVersion: string; capabilities: string[] }
   type Status = { enabled: boolean; running: boolean; port: number; url: string; tokenConfigured: boolean; lastError?: string | null }
   type Probe = { agents: Array<{ sessionId: string; name: string; path: string }>; errors: string[] }
+  type RefreshResult = 'ok' | 'unauthorized' | 'error'
+
+  class UnauthorizedError extends Error {}
 
   const bootstrap = location.hash.match(/bootstrap=([^&]+)/)?.[1] ? decodeURIComponent(location.hash.match(/bootstrap=([^&]+)/)![1]) : ''
   let token = sessionStorage.getItem('issh-management-token') ?? ''
@@ -24,38 +27,38 @@
   let message = ''
   let busy = false
 
-  async function rpc<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+  async function rpc<T>(method: string, params: Record<string, unknown> = {}, bearerToken = token): Promise<T> {
     const response = await fetch('/rpc', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${bearerToken}` },
       body: JSON.stringify({ jsonrpc: '2.0', id: crypto.randomUUID(), method, params }),
     })
     if (response.status === 401) {
       sessionStorage.removeItem('issh-management-token')
       token = ''
-      throw new Error('连接已过期，正在重新授权…')
+      throw new UnauthorizedError('连接已过期，正在重新授权…')
     }
     const body = await response.json() as RpcResponse<T>
     if (!response.ok || body.error) throw new Error(body.error?.message ?? `请求失败：${response.status}`)
     return body.result as T
   }
 
-  async function refresh(): Promise<boolean> {
-    if (!token) return false
+  async function refresh(bearerToken = token): Promise<RefreshResult> {
+    if (!bearerToken) return 'error'
     busy = true
     message = ''
     try {
-      status = await rpc<Status>('management.status')
-      health = await rpc<Health>('runtime.health')
-      workspaces = await rpc<Workspace[]>('workspace.list')
-      sessions = await rpc<Session[]>('session.list')
+      status = await rpc<Status>('management.status', {}, bearerToken)
+      health = await rpc<Health>('runtime.health', {}, bearerToken)
+      workspaces = await rpc<Workspace[]>('workspace.list', {}, bearerToken)
+      sessions = await rpc<Session[]>('session.list', {}, bearerToken)
       if (!workspaces.some((workspace) => workspace.id === selectedWorkspace)) selectedWorkspace = workspaces[0]?.id ?? ''
-      if (selectedWorkspace) agents = await rpc<Agent[]>('agent.list', { workspaceId: selectedWorkspace })
+      if (selectedWorkspace) agents = await rpc<Agent[]>('agent.list', { workspaceId: selectedWorkspace }, bearerToken)
       else agents = []
-      return true
+      return 'ok'
     } catch (error) {
       message = error instanceof Error ? error.message : String(error)
-      return false
+      return error instanceof UnauthorizedError ? 'unauthorized' : 'error'
     } finally {
       busy = false
     }
@@ -83,11 +86,12 @@
     // 先锁住响应式自动刷新，避免粘贴过程中的中间值被当作完整令牌提交。
     busy = true
     message = ''
-    token = candidate
-    if (await refresh()) {
+    const result = await refresh(candidate)
+    if (result === 'ok') {
+      token = candidate
       sessionStorage.setItem('issh-management-token', token)
       tokenDraft = ''
-    } else if (!token) {
+    } else if (result === 'unauthorized') {
       message = '管理令牌无效或已过期，请检查后重试'
     }
   }
