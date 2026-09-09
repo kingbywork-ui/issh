@@ -354,7 +354,7 @@ try {
     assert.equal(unknown.id, 7)
     assert.equal(unknown.error.code, -32601)
 
-    const oversized = await request(`{"padding":"${'x'.repeat(64 * 1024)}"}`)
+    const oversized = await request(`{"padding":"${'x'.repeat(8 * 1024 * 1024)}"}`)
     assert.equal(oversized.error.code, -32001)
 
     const duplicate = startRuntime()

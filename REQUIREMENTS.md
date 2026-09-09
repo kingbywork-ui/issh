@@ -14,7 +14,7 @@
 |------|------|
 | 待办 | 7 |
 | 进行中 | 1 |
-| 已完成 | 50 |
+| 已完成 | 51 |
 | 已放弃 | 0 |
 
 > 状态说明（2026-09-03 同步）：R-008 原始范围（对齐 issh 分支 Agent Bridge：17 工具闭环 + CLI/MCP + 安全）已完成，Netcatty 架构超前能力拆为 R-050~R-055；R-050 已完成（isshd workspace/agent/task 服务端已有，本轮放开 19 个工具），R-051 已完成（C5 pane 完成、C4 cordis kernel 已放弃、C6 herdr 判定商城插件路线）；R-036/R-037 已完成（正文 2026-09-01 最终验收记录为准，302/308 行的「保持进行中」为当日中间快照）；R-044 为持续生效的提交约定，保持「进行中」。
@@ -53,6 +53,13 @@
 | R-026 | 修复残留孤儿 isshd 进程导致 runtime 启动失败（「Runtime健康响应缺少result」）：ensure_started 探测到旧 runtime 不兼容时终止残留进程并重新拉起，新增 terminate_stale_runtime（按进程名+pipe 名精确匹配，零新依赖） | 用户需求 | 2026-08-31 | 已完成 |
 
 ## 需求记录（后续追加）
+
+### R-104 修复 SFTP 上传/下载 64 KiB 消息限制（用户需求，2026-09-09，已完成：打包安装与验证通过）
+
+- 现象：SFTP 面板上传/下载较大文件时报「Runtime 请求/响应超过 65536 字节」。前端按 512 KiB（上传）/1 MiB（下载）分块，但 Tauri↔isshd Named Pipe JSON-RPC 传输层 `MAX_MESSAGE_BYTES=64 KiB`，文件内容 base64 膨胀约 4/3 后超限被拒。
+- 根因：传输层消息上限（`issh-runtime/crates/protocol/src/lib.rs` 与 `issh-tauri/src-tauri/src/lib.rs` 各自定义 64 KiB）远小于 SFTP 分块设计（runtime `MAX_SFTP_CHUNK_BYTES=4 MiB`、前端 512 KiB/1 MiB）。
+- 修复：两侧传输上限同步上调至 8 MiB（覆盖 4 MiB 分块 base64≈5.6 MiB + 余量）；`isshd` oversized 报错文案改为「Message exceeds 8 MiB」；`runtime-smoke.mjs` oversized 用例从 64 KiB 同步到 8 MiB。文件总大小仍由分块循环保证，不受单条消息限制；其余单域限制（vault secret 64 KiB、pane write 64 KiB、session write 12 KiB 等）保持不变。
+- 验证：`cargo check`（issh-runtime workspace、issh-tauri/src-tauri）通过；`cargo test`：issh-runtime-protocol 13 passed、tauri `validates_runtime_request_shape_and_size` passed；isshd debug 构建通过。已重打包 `issh_0.0.4_x64-setup.exe`（5,312,412 字节）并 `/S` 安装 + launch test 通过（窗口标题 `issh`、isshd 从安装目录 `%LOCALAPPDATA%\issh\issh-runtime\isshd.exe` 拉起）。真实大文件传输建议手工上传 >64 KiB 文件复核。
 
 ### R-088 桥接功能拆分（用户需求，2026-09-07，已完成）
 

@@ -867,7 +867,11 @@ async fn handle_client(
     }
 
     let response = if oversized {
-        serialize_error(Value::Null, MESSAGE_TOO_LARGE, "Message exceeds 64 KiB")
+        serialize_error(
+            Value::Null,
+            MESSAGE_TOO_LARGE,
+            format!("Message exceeds {} MiB", MAX_MESSAGE_BYTES / (1024 * 1024)),
+        )
     } else {
         dispatch(&message, state).await
     };

@@ -21,7 +21,7 @@ use std::time::Duration;
 use tauri::{Manager, Runtime, State, WebviewUrl, WebviewWindowBuilder};
 use tokio::sync::Mutex as AsyncMutex;
 
-const MAX_MESSAGE_BYTES: usize = 64 * 1024;
+const MAX_MESSAGE_BYTES: usize = 8 * 1024 * 1024;
 const PROTOCOL_VERSION: &str = "0.4.0";
 /// 构建时嵌入的当前分支名（build.rs 通过 git/环境变量注入），用于跨分支交叉更新拦截。
 const BUILD_BRANCH: &str = match option_env!("ISSH_BUILD_BRANCH") {
@@ -1425,7 +1425,10 @@ fn validate_request(request: &Value) -> Result<(), String> {
     }
     let bytes = serde_json::to_vec(request).map_err(|error| error.to_string())?;
     if bytes.len() > MAX_MESSAGE_BYTES {
-        return Err(format!("Runtime 请求超过 {MAX_MESSAGE_BYTES} 字节"));
+        return Err(format!(
+            "Runtime 请求超过 {} MiB",
+            MAX_MESSAGE_BYTES / (1024 * 1024)
+        ));
     }
     Ok(())
 }
@@ -1551,7 +1554,10 @@ async fn send_request(
             .await
             .map_err(|error| format!("读取 Runtime 响应失败：{error}"))?;
         if response.len() > MAX_MESSAGE_BYTES {
-            return Err(format!("Runtime 响应超过 {MAX_MESSAGE_BYTES} 字节"));
+            return Err(format!(
+                "Runtime 响应超过 {} MiB",
+                MAX_MESSAGE_BYTES / (1024 * 1024)
+            ));
         }
         serde_json::from_slice::<Value>(&response)
             .map_err(|error| format!("Runtime 响应不是有效 JSON：{error}"))
