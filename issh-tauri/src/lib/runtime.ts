@@ -671,6 +671,14 @@ export function agentHubManagementOpen (): Promise<void> {
     return invoke<void>('agent_hub_management_open')
 }
 
+export function agentHubManagementStart (): Promise<AgentHubManagementStatus> {
+    return invoke<AgentHubManagementStatus>('agent_hub_management_start')
+}
+
+export function agentHubManagementClose (): Promise<AgentHubManagementStatus> {
+    return invoke<AgentHubManagementStatus>('agent_hub_management_close')
+}
+
 export function agentBridgeConfigure (patch: AgentBridgePatch): Promise<AgentBridgeStatus> {
     return invoke<AgentBridgeStatus>('agent_bridge_configure', { patch })
 }

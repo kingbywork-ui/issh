@@ -56,6 +56,8 @@ __pycache__/
 *.pyc
 
 # Smoke test / debug
+.conversation-qa/
+build/agent-hub-web-verification-*.json
 .issh-smoke/
 .tabby-smoke/
 .agent-hub-smoke/
@@ -104,6 +106,12 @@ smoke_helpers.py
 
 # User manual temp/build
 .tmp-*
+build/issh-test-code-signing.pfx
+build/issh-test-code-signing.key
+build/issh-test-code-signing.crt
+build/issh-test-code-signing.cer
+build/issh-test-code-signing.inf
+build/test-no-pass.pfx
 docs/user-manual/
 issh-runtime.sqlite3*
 

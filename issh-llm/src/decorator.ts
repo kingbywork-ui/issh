@@ -12,6 +12,7 @@ import { AgentBridgeService } from './services/agentBridge.service'
 @Injectable()
 export class LLMDecorator extends TerminalDecorator {
     private controllers = new Map<BaseTerminalTabComponent<any>, TabLLMController>()
+    private attachments = new WeakMap<BaseTerminalTabComponent<any>, object>()
 
     constructor (
         private llm: LLMService,
@@ -35,9 +36,11 @@ export class LLMDecorator extends TerminalDecorator {
         if (!(tab.frontend instanceof XTermFrontend)) {
             return
         }
+        const attachment = {}
+        this.attachments.set(tab, attachment)
 
         const setup = () => {
-            if (this.controllers.has(tab)) {
+            if (this.attachments.get(tab) !== attachment || this.controllers.has(tab)) {
                 return
             }
             const content = tab.content?.nativeElement
@@ -90,10 +93,11 @@ export class LLMDecorator extends TerminalDecorator {
     }
 
     detach (tab: BaseTerminalTabComponent<any>): void {
+        this.attachments.delete(tab)
+        this.agentBridge.unregisterController(tab)
         const controller = this.controllers.get(tab)
         if (controller) {
             controller.destroy()
-            this.agentBridge.unregisterController(tab)
             this.controllers.delete(tab)
         }
         super.detach(tab)

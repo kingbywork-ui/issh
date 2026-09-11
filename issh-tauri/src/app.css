@@ -901,7 +901,9 @@ button { font: inherit; color: inherit; }
 
 /* ===== SFTP 浏览器（ops 风格化） ===== */
 
-.sftp-browser { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; min-width: 0; padding: 10px 12px; overflow: auto; }
+.sftp-browser { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; min-width: 0; padding: 10px 12px; overflow: auto; position: relative; }
+.sftp-browser.drag-over { outline: 2px dashed var(--ops-signal); outline-offset: -2px; background: var(--ops-signal-dim); }
+.sftp-drop-overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(89, 217, 142, 0.08); border: 2px dashed var(--ops-signal); border-radius: var(--ops-radius-lg); z-index: 5; pointer-events: none; color: var(--ops-signal); font-size: 13px; font-weight: 600; }
 
 .sftp-toolbar { display: flex; gap: 6px; align-items: center; }
 
@@ -1018,20 +1020,6 @@ button { font: inherit; color: inherit; }
     text-align: right;
 }
 
-.sftp-ops { display: flex; gap: 4px; padding-right: 10px; }
-
-.sftp-ops button {
-    min-width: 30px;
-    min-height: 26px;
-    border: 1px solid var(--ops-line);
-    border-radius: 4px;
-    background: transparent;
-    color: var(--ops-fg-muted);
-    font-size: 11px;
-    cursor: pointer;
-}
-
-.sftp-ops button:hover { color: var(--ops-fg); border-color: var(--ops-signal); }
 .sftp-empty { margin: 0; padding: 26px; color: var(--ops-fg-muted); font-size: 13px; text-align: center; }
 
 .sftp-preview {
@@ -1089,8 +1077,8 @@ button { font: inherit; color: inherit; }
     .sftp-actions .sftp-file { flex: 1 1 110px; min-width: 0; max-width: 150px; }
     .sftp-actions button { padding: 0 8px; }
     .sftp-entry { grid-template-columns: 20px minmax(0, 1fr); gap: 5px; padding: 0 8px; }
-    .sftp-ops { padding-right: 5px; }
-    .sftp-ops button { min-width: 26px; padding: 0 4px; }
+
+
 }
 
 /* ===== 首次启动 Welcome tab，与 issh 的首次启动逻辑对应 ===== */
@@ -1755,6 +1743,19 @@ button { font: inherit; color: inherit; }
 .sandbox-panel iframe { height: 160px; }
 
 .confirm-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 300; }
+
+/* P0 toast：浮层之上（z 400），底部居中，复用现有语义色 */
+.toast-host { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 400; pointer-events: none; }
+.toast { display: flex; align-items: center; gap: 10px; max-width: 560px; padding: 9px 12px 9px 14px; border: 1px solid var(--ops-line); border-radius: var(--ops-radius); background: #151d27; color: var(--ops-fg); box-shadow: 0 10px 30px rgba(0,0,0,.45); font: 12px/1.5 var(--ops-font-sans); pointer-events: auto; }
+.toast-ok { border-color: var(--ops-signal-border); }
+.toast-ok::before { content: '✓'; color: var(--ops-signal); font-weight: 700; }
+.toast-error { border-color: var(--ops-danger); }
+.toast-error::before { content: '!'; color: var(--ops-danger); font-weight: 700; }
+.toast-info { border-color: var(--ops-risk); }
+.toast-info::before { content: 'i'; color: var(--ops-risk); font-weight: 700; }
+.toast-message { flex: 1; }
+.toast-close { border: 0; background: transparent; color: var(--ops-fg-muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px; }
+.toast-close:hover { color: var(--ops-fg); }
 .confirm-dialog { min-width: 320px; max-width: 480px; background: var(--ops-base); border: 1px solid var(--ops-line); border-radius: 8px; padding: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.35); }
 .confirm-title { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
 .confirm-message { font-family: inherit; font-size: 12px; white-space: pre-wrap; word-break: break-all; margin: 0 0 14px; color: var(--ops-fg-muted); max-height: 240px; overflow: auto; }

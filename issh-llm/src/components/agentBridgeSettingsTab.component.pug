@@ -256,7 +256,7 @@ ng-container(*ngIf='config.store.llm.agentBridgeEnabled')
                     i.fas.fa-sync-alt.me-1(*ngIf='!auditLoading')
                     i.fas.fa-circle-notch.fa-spin.me-1(*ngIf='auditLoading')
                     span 刷新
-                button.btn.btn-danger(type='button', (click)='clearAuditLog()')
+                button.btn.btn-danger(type='button', (click)='clearAuditLog()', [disabled]='auditLoading')
                     i.fas.fa-trash.me-1
                     span 清空
             .text-muted.mb-2(*ngIf='auditTotalCount > 0') 当前显示 {{ auditEntries.length }} 条，共 {{ auditTotalCount }} 条

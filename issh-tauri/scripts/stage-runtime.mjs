@@ -28,7 +28,7 @@ if (existsSync(skillSource)) {
 }
 
 // Agent Bridge 的 stdio CLI/MCP 运行时必须随 Tauri 安装包发布。
-// 只暂存运行所需文件，避免把测试、文档和未完成的实验性适配器带进发布包。
+// 暂存 CLI/MCP 和 Web 通讯所需运行文件，不复制测试及开发脚本。
 const agentSourceDir = path.join(repositoryRoot, 'issh-agent')
 const agentDestinationDir = path.join(tauriDir, 'src-tauri', 'bin', 'agent-bridge')
 const agentRuntimeFiles = [
@@ -41,6 +41,10 @@ const agentRuntimeFiles = [
     path.join('src', 'cli.mjs'),
     path.join('src', 'mcp-server.mjs'),
     path.join('src', 'protocol.js'),
+    path.join('bin', 'issh-conversation-worker.mjs'),
+    path.join('src', 'conversation-service.mjs'),
+    path.join('src', 'conversation-process.mjs'),
+    path.join('src', 'conversation-adapters.mjs'),
 ]
 
 for (const relativePath of agentRuntimeFiles) {

@@ -127,6 +127,17 @@ pub fn write_discovery(token: &str) -> Result<(), String> {
         .map_err(|error| format!("无法写入 Agent Hub 发现文件：{error}"))
 }
 
+/// Remove the built-in management discovery record after the listener closes.
+/// This is idempotent so a stale/absent record never prevents shutdown.
+pub fn remove_discovery() -> Result<(), String> {
+    let path = discovery_path();
+    match std::fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("无法删除 Agent Hub 发现文件：{error}")),
+    }
+}
+
 fn read_discovery() -> Result<AgentHubDiscovery, String> {
     let path = discovery_path();
     let raw = std::fs::read_to_string(&path)

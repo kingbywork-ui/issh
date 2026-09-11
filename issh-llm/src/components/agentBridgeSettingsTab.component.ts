@@ -198,7 +198,7 @@ export class AgentBridgeSettingsTabComponent extends BaseComponent implements On
         this.auditLoading = true
         try {
             const offset = append ? this.auditOffset : 0
-            const result = this.agentBridge.readAuditLog(this.auditPageSize, offset, this.auditFilter || undefined)
+            const result = await this.agentBridge.readAuditLog(this.auditPageSize, offset, this.auditFilter || undefined)
             if (append) {
                 this.auditEntries = [...this.auditEntries, ...result.entries]
             } else {
@@ -220,10 +220,18 @@ export class AgentBridgeSettingsTabComponent extends BaseComponent implements On
     }
 
     async clearAuditLog (): Promise<void> {
-        this.agentBridge.clearAuditLog()
-        this.auditEntries = []
-        this.auditTotalCount = 0
-        this.auditOffset = 0
+        if (this.auditLoading) {
+            return
+        }
+        this.auditLoading = true
+        try {
+            await this.agentBridge.clearAuditLog()
+            this.auditEntries = []
+            this.auditTotalCount = 0
+            this.auditOffset = 0
+        } finally {
+            this.auditLoading = false
+        }
     }
 
     async testBridgeConnection (): Promise<void> {
@@ -254,17 +262,11 @@ export class AgentBridgeSettingsTabComponent extends BaseComponent implements On
     readonly scopeOptions = ['read', 'write', 'exec', 'sftp']
 
     hasScope (scope: string): boolean {
-        const scopes = this.config.store.llm.agentBridgeTokenScopes
-        if (!Array.isArray(scopes)) {
-            return true
-        }
-        return scopes.includes(scope)
+        return this.agentBridge.getTokenScopes().some(item => item === scope)
     }
 
     toggleScope (scope: string): void {
-        let scopes = Array.isArray(this.config.store.llm.agentBridgeTokenScopes)
-            ? [...this.config.store.llm.agentBridgeTokenScopes]
-            : [...this.scopeOptions]
+        let scopes: string[] = [...this.agentBridge.getTokenScopes()]
         if (scopes.includes(scope)) {
             scopes = scopes.filter(item => item !== scope)
         } else {

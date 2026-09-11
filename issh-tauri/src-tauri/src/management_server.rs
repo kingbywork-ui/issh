@@ -45,6 +45,7 @@ struct ManagementConfig {
 }
 
 struct ManagementShared {
+    conversations: Arc<tokio::sync::Mutex<Option<crate::conversation_worker::ConversationWorker>>>,
     manager: Arc<RuntimeManager>,
     user_data: PathBuf,
     token: Mutex<String>,
@@ -77,6 +78,7 @@ impl ManagementServerRuntime {
         });
         Self {
             shared: Arc::new(ManagementShared {
+                conversations: Arc::new(tokio::sync::Mutex::new(None)),
                 manager,
                 user_data,
                 token: Mutex::new(token),
@@ -87,6 +89,19 @@ impl ManagementServerRuntime {
             }),
             handle: Mutex::new(None),
         }
+    }
+
+    /// Stop the management listener and remove its discovery record. The
+    /// terminal Runtime and Agent Bridge are deliberately left untouched.
+    pub async fn close(&self) -> Result<(), String> {
+        self.stop();
+        if let Some(mut worker) = self.shared.conversations.lock().await.take() {
+            worker.shutdown().await;
+        }
+        // accept_loop checks the flag between accepts; give it a short window
+        // to finish before removing the record advertised to external clients.
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        crate::agent_hub::remove_discovery()
     }
 
     pub async fn start(&self) -> Result<(), String> {
@@ -261,35 +276,121 @@ impl ManagementServerRuntime {
                 let token = self.rotate_token()?;
                 Ok(json!({ "token": token, "status": self.status() }))
             }
-            "mgmt.probeAgents" => self.probe_agents().await,
+            "mgmt.probeAgents" => {
+                self.probe_agents(params.get("workspaceId").and_then(Value::as_str))
+                    .await
+            }
+            "conversation.configs" | "conversation.configure" | "conversation.list"
+            | "conversation.create" | "conversation.read" | "conversation.send"
+            | "conversation.cancel" => self.conversation_rpc(method, params).await,
+            "workspace.delete" => {
+                let workspace_id = params
+                    .get("workspaceId")
+                    .and_then(Value::as_str)
+                    .filter(|id| !id.is_empty())
+                    .ok_or("请选择工作区")?;
+                self.invalidate_conversations(
+                    workspace_id,
+                    None,
+                    "工作区已删除，已停止后续转发。",
+                )
+                .await?;
+                runtime_call(&self.shared.manager, method, params).await
+            }
+            "agent.unregister" => {
+                let workspace_id = params
+                    .get("workspaceId")
+                    .and_then(Value::as_str)
+                    .filter(|id| !id.is_empty())
+                    .ok_or("请选择工作区")?;
+                let agent_id = params
+                    .get("agentId")
+                    .and_then(Value::as_str)
+                    .filter(|id| !id.is_empty())
+                    .ok_or("请选择 Agent")?;
+                self.invalidate_conversations(
+                    workspace_id,
+                    Some(agent_id),
+                    "Agent 已注销，已停止后续转发。",
+                )
+                .await?;
+                runtime_call(&self.shared.manager, method, params).await
+            }
             "runtime.health" | "session.list" | "workspace.list" | "workspace.create"
-            | "workspace.delete" | "workspace.bind" | "workspace.unbind" | "agent.list"
-            | "agent.register" | "agent.unregister" | "agent.authorize" => {
+            | "workspace.bind" | "workspace.unbind" | "agent.list"
+            | "agent.register" | "agent.authorize" | "agent.grantScope" => {
                 runtime_call(&self.shared.manager, method, params).await
             }
             _ => Err(format!("管理 RPC 不允许 method：{method}")),
         }
     }
 
-    async fn probe_agents(&self) -> Result<Value, String> {
+    async fn conversation_rpc(&self, method: &str, params: Value) -> Result<Value, String> {
+        let workspace_id = params.get("workspaceId").and_then(Value::as_str)
+            .filter(|id| !id.is_empty()).ok_or("请选择工作区")?;
+        // Agent identity and permissions come from Runtime, never browser data.
+        let agents = runtime_call(&self.shared.manager, "agent.list", json!({"workspaceId": workspace_id})).await?;
+        let registry = json!({"workspaceId": workspace_id, "agents": agents});
+        let mut worker = self.shared.conversations.lock().await;
+        if worker.is_none() { *worker = Some(crate::conversation_worker::ConversationWorker::start(&self.shared.user_data)?); }
+        let result = worker.as_mut().unwrap().call(method, params, registry).await;
+        match result {
+            Ok(response) => {
+                if let Some(error) = response.get("error") {
+                    Err(error.get("message").and_then(Value::as_str).unwrap_or("Agent 通讯失败").to_string())
+                } else { Ok(response.get("result").cloned().unwrap_or(Value::Null)) }
+            }
+            Err(error) => { worker.take(); Err(error) }
+        }
+    }
+
+    async fn invalidate_conversations(
+        &self,
+        workspace_id: &str,
+        agent_id: Option<&str>,
+        reason: &str,
+    ) -> Result<(), String> {
+        let agents = runtime_call(
+            &self.shared.manager,
+            "agent.list",
+            json!({"workspaceId": workspace_id}),
+        )
+        .await?;
+        let registry = json!({"workspaceId": workspace_id, "agents": agents});
+        let mut worker = self.shared.conversations.lock().await;
+        let Some(active) = worker.as_mut() else {
+            return Ok(());
+        };
+        let mut params = json!({"workspaceId": workspace_id, "reason": reason});
+        if let Some(agent_id) = agent_id {
+            params["agentId"] = json!(agent_id);
+        }
+        let response = match active.call("conversation.invalidate", params, registry).await {
+            Ok(response) => response,
+            Err(error) => {
+                worker.take();
+                return Err(error);
+            }
+        };
+        if let Some(error) = response.get("error") {
+            return Err(error
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or("无法停止 Agent 通讯")
+                .to_string());
+        }
+        Ok(())
+    }
+
+    async fn probe_agents(&self, workspace_id: Option<&str>) -> Result<Value, String> {
         let sessions = runtime_call(&self.shared.manager, "session.list", Value::Null).await?;
         let workspaces = runtime_call(&self.shared.manager, "workspace.list", Value::Null).await?;
         let session_values = sessions.as_array().cloned().unwrap_or_default();
-        let mut bound = Vec::new();
-        for workspace in workspaces.as_array().cloned().unwrap_or_default() {
-            for binding in workspace
-                .get("bindings")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-            {
-                if let Some(session_id) = binding.get("sessionId").and_then(Value::as_str) {
-                    if !bound.iter().any(|id: &String| id == session_id) {
-                        bound.push(session_id.to_string());
-                    }
-                }
-            }
-        }
+        let bound = probe_session_ids(
+            &workspaces.as_array().cloned().unwrap_or_default(),
+            &session_values,
+            workspace_id,
+        )?;
         let mut agents = Vec::new();
         let mut errors = Vec::new();
         for session_id in bound {
@@ -411,18 +512,21 @@ async fn handle_connection(mut stream: TcpStream, shared: Arc<ManagementShared>)
             return Ok(());
         }
         buffer.extend_from_slice(&chunk[..read]);
-        if buffer.len() > MAX_HTTP_HEADER + MAX_HTTP_BODY {
-            return respond(
-                &mut stream,
-                413,
-                "text/plain; charset=utf-8",
-                b"Request too large",
-            )
-            .await;
-        }
-        if let Some(position) = buffer.windows(4).position(|window| window == b"\r\n\r\n") {
-            header_end = position + 4;
-            break;
+        match scan_header_end(&buffer) {
+            Ok(Some(end)) => {
+                header_end = end;
+                break;
+            }
+            Ok(None) => {}
+            Err(()) => {
+                return respond(
+                    &mut stream,
+                    413,
+                    "text/plain; charset=utf-8",
+                    b"Request header too large",
+                )
+                .await;
+            }
         }
     }
     let header_text = String::from_utf8_lossy(&buffer[..header_end]);
@@ -592,6 +696,7 @@ async fn shared_rpc(
     // sharing the listener's state and avoiding a second data store.
     let runtime = ManagementServerRuntime {
         shared: Arc::new(ManagementShared {
+            conversations: shared.conversations.clone(),
             manager: shared.manager.clone(),
             user_data: shared.user_data.clone(),
             token: Mutex::new(
@@ -682,6 +787,87 @@ async fn respond(
     let header = format!("HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n", body.len());
     stream.write_all(header.as_bytes()).await?;
     stream.write_all(body).await
+}
+
+fn probe_session_ids(
+    workspaces: &[Value],
+    sessions: &[Value],
+    workspace_id: Option<&str>,
+) -> Result<Vec<String>, String> {
+    if let Some(id) = workspace_id {
+        if !workspaces.iter().any(|workspace| workspace.get("id").and_then(Value::as_str) == Some(id)) {
+            return Err("工作区已不存在，请刷新后重试".to_string());
+        }
+    }
+    let mut bound = Vec::new();
+    for workspace in workspaces {
+        if workspace_id.is_some() && workspace.get("id").and_then(Value::as_str) != workspace_id {
+            continue;
+        }
+        for binding in workspace.get("bindings").and_then(Value::as_array).into_iter().flatten() {
+            if let Some(id) = binding.get("sessionId").and_then(Value::as_str) {
+                let online = sessions.iter().any(|session| {
+                    session.get("id").and_then(Value::as_str) == Some(id)
+                        && session.get("connected").and_then(Value::as_bool) == Some(true)
+                });
+                if online && !bound.iter().any(|existing: &String| existing == id) {
+                    bound.push(id.to_string());
+                }
+            }
+        }
+    }
+    Ok(bound)
+}
+
+fn scan_header_end(buffer: &[u8]) -> Result<Option<usize>, ()> {
+    if let Some(position) = buffer.windows(4).position(|window| window == b"\r\n\r\n") {
+        let end = position + 4;
+        return (end <= MAX_HTTP_HEADER).then_some(Some(end)).ok_or(());
+    }
+    (buffer.len() <= MAX_HTTP_HEADER).then_some(None).ok_or(())
+}
+
+#[cfg(test)]
+mod dashboard_tests {
+    use super::*;
+
+    #[test]
+    fn probe_is_limited_to_selected_workspace_online_sessions() {
+        let workspaces = vec![
+            json!({"id":"a","bindings":[{"sessionId":"local-1"},{"sessionId":"offline"},{"sessionId":"missing"}]}),
+            json!({"id":"b","bindings":[{"sessionId":"ssh-1"}]}),
+        ];
+        let sessions = vec![
+            json!({"id":"local-1","connected":true}),
+            json!({"id":"ssh-1","connected":true}),
+            json!({"id":"offline","connected":false}),
+        ];
+        assert_eq!(probe_session_ids(&workspaces, &sessions, Some("a")).unwrap(), vec!["local-1"]);
+        assert_eq!(probe_session_ids(&workspaces, &sessions, Some("b")).unwrap(), vec!["ssh-1"]);
+        assert!(probe_session_ids(&workspaces, &sessions, Some("deleted")).is_err());
+    }
+
+    #[test]
+    fn legacy_probe_without_workspace_deduplicates_shared_sessions() {
+        let workspaces = vec![
+            json!({"id":"a","bindings":[{"sessionId":"local-1"}]}),
+            json!({"id":"b","bindings":[{"sessionId":"local-1"}]}),
+        ];
+        let sessions = vec![json!({"id":"local-1","connected":true})];
+        assert_eq!(probe_session_ids(&workspaces, &sessions, None).unwrap(), vec!["local-1"]);
+    }
+
+    #[test]
+    fn http_header_limit_is_independent_from_body_limit() {
+        let mut maximum = vec![b'a'; MAX_HTTP_HEADER - 4];
+        maximum.extend_from_slice(b"\r\n\r\n");
+        assert_eq!(scan_header_end(&maximum), Ok(Some(MAX_HTTP_HEADER)));
+        assert_eq!(scan_header_end(&vec![b'a'; MAX_HTTP_HEADER + 1]), Err(()));
+
+        let mut oversized = vec![b'a'; MAX_HTTP_HEADER];
+        oversized.extend_from_slice(b"\r\n\r\n");
+        assert_eq!(scan_header_end(&oversized), Err(()));
+    }
 }
 
 fn token_path(user_data: &Path) -> PathBuf {

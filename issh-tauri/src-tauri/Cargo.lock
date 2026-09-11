@@ -2143,7 +2143,7 @@ dependencies = [
 
 [[package]]
 name = "issh-tauri"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",
@@ -4603,6 +4603,7 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",

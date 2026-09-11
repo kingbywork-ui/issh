@@ -14,7 +14,7 @@
 |------|------|
 | 待办 | 7 |
 | 进行中 | 1 |
-| 已完成 | 51 |
+| 已完成 | 55 |
 | 已放弃 | 0 |
 
 > 状态说明（2026-09-03 同步）：R-008 原始范围（对齐 issh 分支 Agent Bridge：17 工具闭环 + CLI/MCP + 安全）已完成，Netcatty 架构超前能力拆为 R-050~R-055；R-050 已完成（isshd workspace/agent/task 服务端已有，本轮放开 19 个工具），R-051 已完成（C5 pane 完成、C4 cordis kernel 已放弃、C6 herdr 判定商城插件路线）；R-036/R-037 已完成（正文 2026-09-01 最终验收记录为准，302/308 行的「保持进行中」为当日中间快照）；R-044 为持续生效的提交约定，保持「进行中」。
@@ -54,12 +54,25 @@
 
 ## 需求记录（后续追加）
 
-### R-104 修复 SFTP 上传/下载 64 KiB 消息限制（用户需求，2026-09-09，已完成：打包安装与验证通过）
+### R-103 已注册 Agent Web 通讯与会话记录（用户需求，2026-09-08，进行中：实现与真实通讯验证完成，待安装生效）
 
-- 现象：SFTP 面板上传/下载较大文件时报「Runtime 请求/响应超过 65536 字节」。前端按 512 KiB（上传）/1 MiB（下载）分块，但 Tauri↔isshd Named Pipe JSON-RPC 传输层 `MAX_MESSAGE_BYTES=64 KiB`，文件内容 base64 膨胀约 4/3 后超限被拒。
-- 根因：传输层消息上限（`issh-runtime/crates/protocol/src/lib.rs` 与 `issh-tauri/src-tauri/src/lib.rs` 各自定义 64 KiB）远小于 SFTP 分块设计（runtime `MAX_SFTP_CHUNK_BYTES=4 MiB`、前端 512 KiB/1 MiB）。
-- 修复：两侧传输上限同步上调至 8 MiB（覆盖 4 MiB 分块 base64≈5.6 MiB + 余量）；`isshd` oversized 报错文案改为「Message exceeds 8 MiB」；`runtime-smoke.mjs` oversized 用例从 64 KiB 同步到 8 MiB。文件总大小仍由分块循环保证，不受单条消息限制；其余单域限制（vault secret 64 KiB、pane write 64 KiB、session write 12 KiB 等）保持不变。
-- 验证：`cargo check`（issh-runtime workspace、issh-tauri/src-tauri）通过；`cargo test`：issh-runtime-protocol 13 passed、tauri `validates_runtime_request_shape_and_size` passed；isshd debug 构建通过。已重打包 `issh_0.0.4_x64-setup.exe`（5,312,412 字节）并 `/S` 安装 + launch test 通过（窗口标题 `issh`、isshd 从安装目录 `%LOCALAPPDATA%\issh\issh-runtime\isshd.exe` 拉起）。真实大文件传输建议手工上传 >64 KiB 文件复核。
+- 用户确认：继续完成已注册 Agent 之间互相通讯，至少可以在 Web 界面发起通讯并查看会话记录；延续 R-071，不以仅注册、入队或模拟回复作为完成。
+- 实施：将现有 Pi RPC / Hermes ACP / Codex App Server 适配器接入内置 Hub；注册身份与权限由 Runtime 校验；Web 配置协议进程、选择两个 Agent、发送/有界自动转发、查看持久化历史与失败状态。
+- 边界：使用独立协议会话，不接管用户当前交互终端；同一 Web 会话尽量保持原生 conversationId，不能恢复时明确失败，不静默切换新对话。验收要求真实 Agent A→B→A 和刷新后历史可见。
+- 实测：Web 上 Pi agent-17 → Hermes agent-15 → Pi 真实闭环通过（`WEB_A2A_0909`）；页面刷新保留全部记录；通讯 worker 重启后再次往返 `WEB_RESUME_0909`，双方原生 conversationId 未改变。测试没有修改真实注册和交互终端。Node 回归 44/44、Tauri lib 52/52、Dashboard 检查 0/0，embed/13 个运行时文件已同步。原安装入口尚未更新，需要用户允许覆盖安装/重启。
+- 使用说明：`docs/agent-hub-conversations.md`。历史存储于 issh 用户数据目录 `agent-conversations.json`；暂停/失败不自动重发；单次最多 6 次回复，支持停止后续转发。
+
+### R-105 P0 稳定性护栏：toast 通知 / 静默 catch 清理 / Runtime 看门狗（对话衍生，2026-09-11，已完成源码，待打包验证）
+
+- 来源：dev 与 issh 使用体验分析报告（`dev-ux-analysis-report.md`）建议按 P0 先做稳定性护栏，用户确认执行。
+- toast 通知：新增 `issh-tauri/src/lib/toast.svelte.ts`（模块级 `$state` 存储 + `pushToast/dismissToast`）与 `ToastHost.svelte`（底部居中、复用 `--ops-*` 语义色、z-index 400 置顶）；作为替换 `window.confirm` / 静默失败的统一反馈通道，已在 `App.svelte` 挂载。
+- 静默 catch 清理（`App.svelte`）：
+  - `pollOutput`：连续轮询失败 ≥3 次判定会话断开，toast 提示并关闭失效标签，避免「终端无响应」长期不可见；
+  - `restoreRecoveredTabs`：读取主机配置失败不再是空 catch，toast 提示恢复失败原因；
+  - 深链连接失败：`.catch(() => {})` 改为 toast 显示「深链连接失败：原因」。
+- Runtime 看门狗（`App.svelte`）：每 5s 健康探测（in-flight 防重；连续 2 次探测失败判定丢失）；丢失/恢复均 toast 提示并同步顶栏 Runtime 徽标；恢复依赖 Tauri 侧 `ensure_started` 在 pipe 失达时自动拉起 isshd，前端无需手动重启。
+- 单实例：确认已有覆盖，无新增 Rust 改动——`tauri-plugin-single-instance`（二次启动聚焦已有窗口 + 深链转发）与 `terminate_stale_runtime`（启动时清理占用本实例 pipe 的残留 isshd）已满足 P0「单实例 / 端口所有权」目标。
+- 验证：`svelte-check` 0 errors / 0 warnings（含新 `.svelte.ts` rune 与两个新组件）；`vite build` 在 Linux 沙箱因 rolldown Windows 原生二进制缺失不可复现，需在 Windows 侧重打包 `issh-tauri` 复核。
 
 ### R-088 桥接功能拆分（用户需求，2026-09-07，已完成）
 
@@ -68,7 +81,7 @@
 - Web 管理工作区、会话绑定、Agent 探测/注册/授权和 runtime 健康；新增 `workspace.delete` RPC 与级联删除。
 - 宿主版本 `0.0.3`、商城插件版本 `0.3.0`，registry 元数据同步。
 
-### R-089 Agent Hub 外部化迁移（用户需求，2026-09-07，已完成）
+### R-089 Agent Hub 外部化迁移（用户需求，2026-09-07，已被 R-091 替代）
 
 - 移除 R-088 的内置 `management_server.rs` 与 `agent-dashboard`（含 `embed`/`sync-dashboard-embed.mjs`），改为只读连接独立运行的 Agent Hub（`issh-tauri/src-tauri/src/agent_hub.rs`）。
 - Agent Hub 通过 `%APPDATA%\agent-hub\agent-hub.json` 发现文件定位，强制校验回环地址、端口 `33555`、token ≥ 32 字符；仅暴露 `agentHub.status` / `agentHub.open` 两个只读网关能力。
@@ -76,6 +89,7 @@
 - 宿主与商城插件版本升至 `0.0.4`；`issh-plugin-agent-bridge` 改名「Agent Hub Connector」，权限从 `management.read` 改为 `agentHub.read`。
 - 已发布 `issh-plugin-agent-bridge` v0.4.0（tgz sha256 `e70daf0d…`，gh release + registry `index.json` 同步 + jsDelivr purge 完成），源码迁移已提交（`daba5fc`）。
 - 安全清理：`.env` 移出版本控制并加入 `.gitignore`。
+- 状态核对（2026-09-08）：上述迁移步骤为历史实现；用户已确认 R-091 恢复内置 Hub。独立 Hub 产品未交付，不以本条历史“已完成”表示独立产品发布完成。
 
 ### R-090 插件安装版本校验误报修复（对话衍生，2026-09-07，已完成）
 
@@ -765,6 +779,8 @@
 
 ### R-071 Agent 跨会话互通（2026-09-04，进行中）
 
+**2026-09-08 更新**：R-103 已把协议适配器、注册身份校验、持久化会话和 Web 入口接通；Pi/Hermes 从 Web 实际完成 A→B→A，通讯进程重启后恢复同一原生对话再次往返。以下内容保留为历史实施记录，不再代表当前源码能力；安装生效仍待覆盖安装与重启。
+
 **来源**（用户需求）：绑定并注册后，希望不同 SSH 会话中的 Agent 能够互相发送消息、协作处理任务。
 
 **实施进度（2026-09-05）**：用户已批准按复评方案实施。新增 Codex App Server/Hermes ACP 流式适配器、进程封装及显式指定两个 Agent 的 A→B→A 验收脚本；先运行缺失模块测试复现，再实现后同组协议测试 6/6 通过。本机 Codex 0.153.0 真实 initialize 握手通过，尚未验证模型回复。当前本机 Bridge 127.0.0.1:59688 拒绝连接，等待开启 Bridge、连接测试 SSH 会话并明确 Hermes/Codex 所在主机；真实远端闭环未通过，持久化中转、SSH exec 流及桌面 UI 尚未实现，不代表绑定注册后已可互通。
@@ -923,3 +939,85 @@
 - 验证：`npm --prefix issh-tauri run check`（svelte-check）0 errors / 0 warnings；`npm --prefix issh-tauri run build`（vite build）通过。
 - 边界：终端焦点下 Ctrl+Shift+D 被拦截分屏，Ctrl+D（EOF）不受影响（非白名单）；小键盘 Ctrl+NumPad0 与主键盘 Ctrl+0 一致触发 Home。
 - 补充（用户反馈“Ctrl+Shift+B 打不开send窗口”后处理）：源码逻辑核对无误（白名单含 b、分支正确），判定为 dev 模式 HMR 热更新后 `onMount` 一次性注册的 keydown 监听器持有旧函数引用（旧 handleGlobalHotkeys 无 b 分支）所致。加固：全局快捷键监听从 onMount 注册改为 `$effect` 注册（幂等 remove+add，HMR 热更新会重跑 effect 重建监听器）。用户需完全重启 dev（关闭 `npm run tauri dev` 后重新启动）后验证。验证：svelte-check 0 errors / 0 warnings，vite build 通过。
+### R-098 Windows 测试签名、原生进程调用与 Agent Hub 独立关闭（2026-09-08，已完成）
+
+**来源**（用户需求）：给安装器、主程序和 `isshd.exe` 做带时间戳的正式 Authenticode 签名；将内部 PowerShell/cmd 控制调用替换为原生 Windows API 或 Tauri 进程/打开接口；在 issh 中增加 Agent Hub 独立、真实关闭按钮。
+
+**实现**：
+- `issh-tauri/src-tauri/src/lib.rs` 使用 `CreateFileW` + `GetNamedPipeServerProcessId` 精确终止旧 Runtime，使用 `ShellExecuteW` 完成提权重启和外部 URL 打开；`issh-runtime/crates/session` 使用 Toolhelp/Process API 清理 ConPTY 进程树。用户选择的 shell（含 PowerShell）仍保留为会话功能，不属于内部控制调用。
+- 管理服务器新增异步 `start`/`close` 命令；关闭会停止 `127.0.0.1:33555`、等待监听循环退出并删除 Agent Hub discovery 文件，不影响终端 Runtime 和 Agent Bridge。设置页新增「开启/关闭 Agent Hub」按钮和关闭确认提示。
+- 新增 `scripts/sign-windows.ps1`：要求 PFX 或 Windows 证书存储 thumbprint，使用 SHA-256 + RFC3161 时间戳，并对 Runtime、主程序和 NSIS 安装器逐一执行 `signtool verify /pa /all /tw`；`scripts/package-signed-windows.ps1` 负责先签名 staged `isshd.exe` 再打包并签名外层产物。
+
+**验证**：`cargo check`（Linux）、Windows target `cargo check`（Tauri 与 session）、`npm.cmd run check --prefix issh-tauri`（0 errors/0 warnings）、`cargo test --manifest-path issh-tauri/src-tauri/Cargo.toml --lib`（49/49）及 Tauri NSIS 打包均通过；安装包包含新命令和 `ShellExecuteW` 标识。
+
+**验证结果**：已生成自签名 Code Signing 证书（thumbprint `C6281C6921A3A8E5F65013FEE20A293652974114`），加入当前用户受信任根存储；三个目标均由 `signtool verify /pa /all /tw` 和 `Get-AuthenticodeSignature` 验证为 `Valid`，时间戳来自 `http://timestamp.digicert.com`。最终安装器 SHA-256 为 `96F1CF2667A9D8BEFC3EE8924893B9CFADA64A3505F4937435A70DC841316E8D`。自签名证书仅适合本机测试，其他机器仍会显示不受信任。
+
+### R-099 Dashboard Agent 展示工作区/会话绑定关系（2026-09-08，已完成）
+
+**来源**（用户需求）：用户查看 Dashboard 截图后指出“2号区域注册的agent应该显示与1号区域的绑定关系”。
+
+**需求**：Agent 列表中的每个已注册 Agent 需要显示其与工作区及会话绑定关系，使 2 号区域能对应到 1 号区域的绑定记录。
+
+**实现**：Dashboard `App.svelte` 新增绑定摘要逻辑；有 `sessionId` 时显示会话标题、profile 类型、会话 ID 和绑定状态；工作区级 Agent 显示工作区名称及其全部会话绑定状态，无绑定会话时显示“工作区级，暂无会话”。绑定摘要以辅助色显示在 Agent 状态/权限下方。
+
+**验证**：`npm.cmd run check`（`issh-tauri/agent-dashboard`）0 errors / 0 warnings；Vite build 成功；构建产物已同步至 `issh-tauri/agent-dashboard/embed`，并进入重新生成的 NSIS 安装器 `issh_0.0.4_x64-setup.exe`。安装器 SHA-256：`1A5A83F5E8BB6AE70767B1A52372BDCDA5E7A161178A1CBEF34B476F6041E378`。
+
+### R-100 Agent 探测结果展示工作区/会话绑定关系（2026-09-08，已完成）
+
+**来源**（用户需求）：用户补充指出“agent区域也需要加上与工作区/会话的绑定关系”，并提供 Dashboard 截图。
+
+**需求**：Agent 区域中探测到的 Agent 也要显示其来源会话，以及该会话所属工作区和绑定状态；不能只显示 Agent 名称、路径和“注册”按钮。
+
+**实现**：探测结果按 `sessionId` 反查全部工作区绑定，显示“绑定关系：工作区 · 会话标题 · profile 类型（会话 ID） · 状态”；未找到工作区绑定时显示“未绑定工作区”。已注册 Agent 的工作区/会话绑定展示继续保留。
+
+**验证**：`npm.cmd run check`（`issh-tauri/agent-dashboard`）0 errors / 0 warnings；Vite build 成功；`agent-dashboard/embed` 已同步更新。本轮未关闭正在运行的 issh 进程，未重新生成 NSIS 安装器。
+
+### R-102 Agent Hub Web 需求审查与体验补齐（2026-09-08，进行中：实现与打包完成，待安装验收）
+
+**来源**（用户需求）：审查 Agent Hub Web 端需求是否满足，补齐缺口，注意页面美观和体验；继续未完成任务。
+
+**审查与实现**：以用户确认的 R-091 内置 Hub 为当前方案，保留 R-088 工作区/会话/Agent 管理与 R-092～R-100 登录、状态及关系展示要求。重整为工作区侧栏与会话/Agent 分区，增加搜索、空态、状态提示与窄屏布局；探测限定当前工作区的在线绑定会话并去重；注册选择限定当前工作区，防重复注册；逐 Agent 独立授权选择；鉴权草稿与会话分离，bootstrap 优先，Runtime 失败不误判管理鉴权；失败保留表单，成功创建后选择工作区；防重复提交和删除/解绑/注销/轮换确认。
+
+**验证**：Dashboard 类型/模板检查 0/0，构建与 embed 同步通过；后端工作区探测回归 2/2；隔离浏览器交互覆盖创建、绑定、注册、授权、暂停/恢复、失败反馈、确认取消与 390px 布局。新版页面经只读代理连接真实 Hub，核验本地/SSH 探测和工作区/会话/Agent 关系；浏览器无 error 日志。签名 NSIS 已生成，5,295,640 bytes，SHA-256 `93BE65FA3C78A120D23CE65DDE7FB2B77AE193E01EEBB2812E9FB286C4C4D2BF`。
+
+**待办**：当前用户 Agent 正在运行，未覆盖安装或重启，原安装入口验收尚未完成；自动审批拦截令牌轮换确认点击，未进行真实轮换。独立 Hub 产品并非本轮新授权范围；签名仍是本机测试自签名，不代表正式可信发布。
+
+### R-101 商城皮肤插件「装前可见」示例核对与重装（2026-09-08，已完成）
+
+**来源**（用户需求）：“核对我的皮肤插件，在插件商城未安装是没有示例，只有安装插件后才看得到示例。”
+
+**需求**：皮肤插件在插件商城未安装时也应展示示例（装前可见），与安装后的实际效果一致。
+
+**核对结论**：源码已实现装前可见预览——`Settings.svelte` 的 `THEME_PREVIEWS` 覆盖 4 套皮肤（foundry/field/phosphor/void），`themePreviewOf()` 仅要求 `kind === 'appearance'`（与安装状态无关），列表与详情视图均渲染；`app.css` 有 `market-preview` 样式；线上 raw/jsDelivr 索引（2026-09-08T06:08Z）均含 4 套皮肤且 `kind: appearance`。代码与索引均无缺陷。
+
+**根因**：运行中的已安装 exe 为 09-07 21:38 旧构建（5,865,984 B），早于装前预览提交 `1850071`（22:48）/`52c324d`（22:59），前端不含预览功能。
+
+**处理**：关闭旧进程后静默重装 `issh_0.0.4_x64-setup.exe`（/S，退出码 0）并重启；已安装 exe 更新为 23:08:48 构建（5,870,080 B）。issh-tauri（PID 56796）/isshd（PID 59036）于 09-08 01:03 启动。
+
+**验证**：安装器退出码 0，已安装 exe 时间戳/大小与 0.0.4 包一致；商城皮肤「装前可见」的最终界面验收待用户打开插件商城确认。
+
+### R-105 Agent Bridge 缺陷与次要风险修复（用户需求，2026-09-09，已完成：源码与插件构建验证）
+
+**来源**：用户要求修复 execViaPty 空输出超时、注销后自动重新注册、scope 前后端差异、HTTP 请求字节限额、多级不存在 SFTP 路径、CLI stderr 丢失，以及审计日志、prompt、路径和 asar 次要风险。
+
+**实现**：PTY 空输出使用既有 750ms 静默判定；WeakSet 阻止已注销 tab 被自动同步重新添加，decorator 代际标记取消过期初始化；设置页共享后端 scope 解析；HTTP 按原始 Buffer 字节执行 1 MiB 限额；SFTP 仅遇到不存在错误才逐级回退，保留 canonical 根边界与权限错误；CLI 诊断包含最多 8192 字符 stderr。审计日志异步分块倒序读取当前文件和 .1、仅保留分页结果，清空覆盖两份文件；prompt 只匹配行首已知格式；外部 Node 包发现使用 app.asar.unpacked。
+
+**核查修正**：super.detach() 仅清理订阅，不移除 app.tabs；同一同步调用栈不会被 HTTP 回调抢占，但后续同步及排队初始化确实能重注册。POSIX SFTP 不解码 %2e%2e，反斜杠不是目录分隔符，两者作为字面文件名保留；已有 ../ 与 canonical 越界检查继续生效。
+
+**验证**：旧代码 8 组最小复现全部失败，修复后扩展为 11 组全部通过；Agent 测试 44/44；issh-llm TypeScript 检查与 Webpack 构建通过。可用 npm.cmd run test:agent-bridge-regressions 重跑。PTY 结果仍是输出静默启发式，不代表取得进程退出状态；SFTP 路径解析不自动创建父目录。此次修改 Angular 插件源码及产物，未做 Tauri 安装包或已安装应用运行验收。
+
+### R-106 全仓库审查缺陷修复与回归验证（用户需求，2026-09-09，已完成：源码与构建验证）
+
+**来源**：用户要求直接修复审查发现的功能缺陷和 lint 阻塞项。
+
+**实现**：修复 Windows 会话树清理误杀无关 `conhost.exe`、PTY 空闲输出误判成功、Agent 注销后的会话重注册、Agent scope 检查与管理授予混用、会话 worker 生命周期和注销/删除竞态、HTTP header 上限未独立执行、Agent Hub 关闭/应用退出未完整清理，以及插件宿主 lint 错误。Agent 权限新增管理专用 `agent.grantScope`，`agent.authorize` 保持运行时权限检查；Dashboard 与内嵌产物已同步。
+
+**验证**：workspace 9/9、isshd 13/13（3 个依赖环境测试忽略）、Tauri 53/53；runtime smoke 通过；Agent 测试 46/46；Agent Bridge 回归 12/12；Dashboard `svelte-check` 0 errors/0 warnings、Vite build 通过；issh-llm TypeScript 检查通过；全仓库 lint 0 errors、保留 2 条既有复杂度 warning。未重新打包 NSIS 或覆盖安装运行中的应用。
+
+### R-107 项目 P0–P1 核查与有限修复（用户需求，2026-09-11，已完成：源码与隔离验证）
+
+- 用户确认：仔细核查当前项目，仅修复有明确证据的 P0/P1 缺陷。
+- 本轮确认并修复 4 项 P1：订阅失败误关仍在运行的终端、SFTP 根目录穿越与符号链接越界、UTF-8 输出截断 panic、SSH 后台执行被 10 秒管道超时提前判失败。未确认 P0。
+- 验证：终端行为回归 4/4；SSH 14/14、isshd 14/14（3 项环境测试跳过）；Tauri 全量 57/57，追加真实 11 秒管道及超时边界 2/2；前端 check 0/0、build 成功；最终 debug Runtime 隔离冒烟成功；Runtime 严格 Clippy 通过。
+- 限制：Tauri 严格 Clippy 和全项目格式检查仍有既有警告/格式差异；未打包安装、未中断现有终端，未做新构建 GUI 与用户远端 SFTP 验收。
+- 审查证据、实现边界与命令详见 docs/bug-audit-2026-09-11.md。R-105 的轮询失败策略以本条为准：失败仅提示重试，成功清零；不能凭订阅失败关闭 shell。

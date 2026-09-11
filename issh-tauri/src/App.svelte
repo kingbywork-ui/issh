@@ -55,6 +55,8 @@
     } from './lib/runtime'
     import { registerTerminalLinkifier } from './lib/linkifier'
     import SearchPanel from './lib/SearchPanel.svelte'
+    import ToastHost from './lib/ToastHost.svelte'
+    import { pushToast } from './lib/toast.svelte'
 
     interface SshTabInfo {
         host: string
@@ -77,6 +79,8 @@
         decoratorCleanups: Array<() => void> | null
         sudoAction: { label: string, invoke: () => void } | null
         bracketedPaste: boolean
+        pollErrors?: number
+        disconnectNotified?: boolean
     }
 
     const splitLayoutKey = 'issh.splitLayout'
@@ -348,7 +352,9 @@
         try {
             const result = await hostProfiles()
             if (!result.encrypted || result.unlocked) profiles = result.profiles
-        } catch {}
+        } catch (cause) {
+            pushToast('error', `恢复上次会话失败：无法读取主机配置（${cause instanceof Error ? cause.message : String(cause)}）`, 6000)
+        }
         const layout = saved.layout
         const mapping = new Map<string, string>()
         const previousLayout = splitLayout
@@ -427,6 +433,38 @@
             error = cause instanceof Error ? cause.message : String(cause)
         } finally {
             loading = false
+        }
+    }
+
+    // P0 看门狗：周期探测 Runtime 健康；丢失/恢复时通知用户。
+    // Tauri 侧 ensure_started 会在 pipe 失达时自动拉起 isshd，所以恢复时无需手动重启。
+    const WATCHDOG_INTERVAL_MS = 5000
+    const WATCHDOG_DOWN_THRESHOLD = 2
+    let watchdogHandle: ReturnType<typeof setInterval> | null = null
+    let watchdogInFlight = false
+    let runtimeDownCount = 0
+    let runtimeWasDown = false
+
+    async function watchRuntime (): Promise<void> {
+        if (watchdogInFlight) return
+        watchdogInFlight = true
+        try {
+            const next = await runtimeHealth()
+            runtimeDownCount = 0
+            if (runtimeWasDown) {
+                runtimeWasDown = false
+                pushToast('ok', `Runtime 已恢复（PID ${next.pid}）`, 6000)
+            }
+            health = next
+        } catch (cause) {
+            runtimeDownCount += 1
+            if (runtimeDownCount >= WATCHDOG_DOWN_THRESHOLD && !runtimeWasDown) {
+                runtimeWasDown = true
+                health = null
+                pushToast('error', `Runtime 失去响应（${cause instanceof Error ? cause.message : String(cause)}），正在自动恢复…`, 8000)
+            }
+        } finally {
+            watchdogInFlight = false
         }
     }
 
@@ -1134,6 +1172,10 @@
             await syncWorkspaceState()
         } catch (cause) {
             connectError = cause instanceof Error ? cause.message : String(cause)
+            // 直连路径（指纹已信任）失败时原本静默无反馈：重新打开连接弹窗，
+            // 让用户看到错误并补充凭据（如 vault 中未保存密码导致的认证失败）。
+            showConnect = true
+            pendingConnect = true
         } finally {
             connecting = false
         }
@@ -1306,6 +1348,8 @@
     async function pollOutput (tab: TerminalTab): Promise<void> {
         try {
             const subscription = await subscribeSession(tab.session.id, tab.sequence)
+            tab.pollErrors = 0
+            tab.disconnectNotified = false
             tab.session = subscription.session
             tab.sequence = subscription.nextAfterSequence
             for (const event of subscription.events) {
@@ -1322,7 +1366,12 @@
                 await closeTab(tab)
             }
         } catch {
-            // 轮询失败静默处理：下一轮自动重试，避免每轮刷新全局错误提示
+            // 订阅失败不代表 shell 已退出；保留会话并继续探测，避免误杀正在运行的任务。
+            tab.pollErrors = (tab.pollErrors ?? 0) + 1
+            if (tab.pollErrors >= 3 && !tab.disconnectNotified) {
+                tab.disconnectNotified = true
+                pushToast('error', `暂时无法读取会话：${tab.session.title}，正在重试`, 6000)
+            }
         }
     }
 
@@ -1446,7 +1495,9 @@
             keyPassphrase: '',
             vaultSecretId: '',
             profile: null,
-        }).catch(() => {})
+        }).catch((cause) => {
+            pushToast('error', `深链连接失败：${cause instanceof Error ? cause.message : String(cause)}`, 6000)
+        })
     }
 
     onMount(() => {
@@ -1463,6 +1514,7 @@
             void checkUpdatesOnStartup()
         })()
         pollHandle = setInterval(pollAll, POLL_INTERVAL_MS)
+        watchdogHandle = setInterval(() => { void watchRuntime() }, WATCHDOG_INTERVAL_MS)
         window.addEventListener('storage', schemeChangeHandler)
         window.addEventListener('issh:terminal-scheme-change', schemeChangeHandler)
         // 深链监听：Rust 侧启动参数/运行期事件统一 emit 到此
@@ -1477,6 +1529,7 @@
             .catch(() => {})
         return () => {
             if (pollHandle) clearInterval(pollHandle)
+            if (watchdogHandle) clearInterval(watchdogHandle)
             deepLinkUnlisten?.()
             closeUnlisten?.()
             window.removeEventListener('keydown', handleGlobalHotkeys, true)
@@ -1841,4 +1894,6 @@
     {#if searchOpen && activeTab?.terminal}
         <SearchPanel terminal={activeTab.terminal} onclose={() => { searchOpen = false }} />
     {/if}
+
+    <ToastHost />
 </div>

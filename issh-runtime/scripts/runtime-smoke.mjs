@@ -124,6 +124,7 @@ try {
         'runtime.health',
         'session.sync',
         'session.list',
+        'session.runtimeList',
         'session.openLocal',
         'session.openSsh',
         'session.snapshot',
@@ -131,6 +132,11 @@ try {
         'session.resize',
         'session.subscribe',
         'session.close',
+        'ssh.forwardLocal',
+        'ssh.forwardDynamic',
+        'ssh.forwardRemote',
+        'ssh.stopForward',
+        'sftp.scopedPaths',
         'sftp.open',
         'sftp.read',
         'sftp.write',
@@ -154,11 +160,14 @@ try {
         'workspace.create',
         'workspace.list',
         'workspace.delete',
+        'workspace.exportAll',
         'workspace.bind',
         'workspace.unbind',
         'agent.register',
+        'agent.unregister',
         'agent.list',
         'agent.authorize',
+        'agent.grantScope',
         'task.prompt',
         'task.start',
         'task.wait',
@@ -260,11 +269,27 @@ try {
 
     const deniedExecute = await request(JSON.stringify({
         jsonrpc: '2.0',
+        id: 'authorize-agent-check',
+        method: 'agent.authorize',
+        params: { agentId: agent.result.id, scope: 'command.execute' },
+    }))
+    assert.match(deniedExecute.error?.message ?? '', /scope|权限/i, JSON.stringify(deniedExecute))
+
+    const grantedExecute = await request(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'grant-agent-scope',
+        method: 'agent.grantScope',
+        params: { agentId: agent.result.id, scope: 'command.execute' },
+    }))
+    assert.ok(grantedExecute.result.scopes.includes('command.execute'), JSON.stringify(grantedExecute))
+
+    const authorizedExecute = await request(JSON.stringify({
+        jsonrpc: '2.0',
         id: 'authorize-agent',
         method: 'agent.authorize',
         params: { agentId: agent.result.id, scope: 'command.execute' },
     }))
-    assert.equal(deniedExecute.error.code, -32602, JSON.stringify(deniedExecute))
+    assert.ok(authorizedExecute.result.id === agent.result.id, JSON.stringify(authorizedExecute))
 
     const queued = await request(JSON.stringify({
         jsonrpc: '2.0',

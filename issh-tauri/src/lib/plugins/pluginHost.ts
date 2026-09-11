@@ -240,7 +240,7 @@ export async function activatePlugin (id: string): Promise<void> {
         markState(id, 'failed', dependencyError)
         return
     }
-    const fiber = root.plugin((ctx) => {
+    const fiber = root.plugin((_ctx) => {
         const directory = pluginDirectories.get(id) ?? ''
         void Promise.resolve(plugin.activate(makePluginContext(plugin.manifest, directory))).catch((cause: unknown) => {
             markState(id, 'failed', cause instanceof Error ? cause.message : String(cause))

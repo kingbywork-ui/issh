@@ -420,6 +420,8 @@ struct SftpReadParams {
     session_id: String,
     path: String,
     #[serde(default)]
+    root: Option<String>,
+    #[serde(default)]
     offset: u64,
     #[serde(default = "default_sftp_read_length")]
     length: u64,
@@ -444,6 +446,8 @@ struct SftpWriteParams {
     session_id: String,
     path: String,
     #[serde(default)]
+    root: Option<String>,
+    #[serde(default)]
     offset: u64,
     #[serde(default)]
     truncate: bool,
@@ -465,6 +469,8 @@ struct SftpWriteResult {
 struct SftpListParams {
     session_id: String,
     path: String,
+    #[serde(default)]
+    root: Option<String>,
     #[serde(default)]
     offset: usize,
     #[serde(default = "default_sftp_list_limit")]
@@ -932,6 +938,7 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                     "ssh.forwardDynamic",
                     "ssh.forwardRemote",
                     "ssh.stopForward",
+                    "sftp.scopedPaths",
                     "sftp.open",
                     "sftp.read",
                     "sftp.write",
@@ -962,6 +969,7 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                     "agent.unregister",
                     "agent.list",
                     "agent.authorize",
+                    "agent.grantScope",
                     "task.prompt",
                     "task.start",
                     "task.wait",
@@ -1584,6 +1592,15 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
             };
             with_workspace(state, id, |workspace| {
                 workspace.authorize_agent(&params.agent_id, &params.scope, now_unix_ms())
+            })
+        }
+        "agent.grantScope" => {
+            let params = match parse_params::<AgentAuthorizeParams>(request.params) {
+                Ok(params) => params,
+                Err(error) => return serialize_error(id, error.code, error.message),
+            };
+            with_workspace(state, id, |workspace| {
+                workspace.grant_agent_scope(&params.agent_id, &params.scope, now_unix_ms())
             })
         }
         "task.prompt" => {
@@ -2344,6 +2361,9 @@ async fn sftp_read(
     let offset = params.offset;
     let session_id = params.session_id.clone();
     let chunk = with_sftp_session(state, &session_id, move |sftp| async move {
+        let path = sftp
+            .resolve_scoped_path(&path, params.root.as_deref(), false)
+            .await?;
         sftp.read_file_chunk(&path, offset, length).await
     })
     .await?;
@@ -2372,6 +2392,9 @@ async fn sftp_write(
     let truncate = params.truncate;
     let session_id = params.session_id.clone();
     let outcome = with_sftp_session(state, &session_id, move |sftp| async move {
+        let path = sftp
+            .resolve_scoped_path(&path, params.root.as_deref(), true)
+            .await?;
         sftp.write_file_chunk(&path, offset, &data, truncate).await
     })
     .await?;
@@ -2388,6 +2411,9 @@ async fn sftp_list(
     let path = params.path.clone();
     let session_id = params.session_id.clone();
     let entries = with_sftp_session(state, &session_id, move |sftp| async move {
+        let path = sftp
+            .resolve_scoped_path(&path, params.root.as_deref(), false)
+            .await?;
         sftp.list_dir(&path).await
     })
     .await?;
@@ -2399,8 +2425,8 @@ async fn sftp_list(
         .skip(params.offset)
         .take(end.saturating_sub(params.offset))
         .map(|entry| SftpEntryDto {
+            path: format!("{}/{}", params.path.trim_end_matches('/'), entry.name),
             name: entry.name,
-            path: entry.path,
             is_dir: entry.is_dir,
             is_file: entry.is_file,
             is_symlink: entry.is_symlink,
@@ -2546,11 +2572,12 @@ async fn ssh_exec_readonly(
             }
         }
     };
+    let timeout_ms = params.timeout_ms.clamp(1, 3_600_000);
     let output = tokio::time::timeout(
-        Duration::from_millis(params.timeout_ms.saturating_add(2_000)),
+        Duration::from_millis(timeout_ms.saturating_add(2_000)),
         connection.run_readonly_command(
             &params.command,
-            params.timeout_ms,
+            timeout_ms,
             params.max_output_bytes,
         ),
     )
@@ -2991,5 +3018,49 @@ mod tests {
         let response: Value = serde_json::from_slice(&response).expect("response should be JSON");
         assert_eq!(response["error"]["code"], INVALID_PARAMS);
         assert_eq!(response["error"]["message"], "SSH session is not connected");
+    }
+}
+
+#[cfg(test)]
+mod sftp_scope_contract_tests {
+    use super::*;
+    #[test]
+    fn optional_sftp_root_is_preserved_without_breaking_desktop_requests() {
+        let request = serde_json::json!({"sessionId": "ssh-1", "path": "/allowed/file", "root": "/allowed", "dataBase64": ""});
+        assert_eq!(
+            serde_json::from_value::<SftpReadParams>(request.clone())
+                .unwrap()
+                .root
+                .as_deref(),
+            Some("/allowed")
+        );
+        assert_eq!(
+            serde_json::from_value::<SftpWriteParams>(request.clone())
+                .unwrap()
+                .root
+                .as_deref(),
+            Some("/allowed")
+        );
+        assert_eq!(
+            serde_json::from_value::<SftpListParams>(request.clone())
+                .unwrap()
+                .root
+                .as_deref(),
+            Some("/allowed")
+        );
+        let mut legacy = request;
+        legacy.as_object_mut().unwrap().remove("root");
+        assert!(serde_json::from_value::<SftpReadParams>(legacy.clone())
+            .unwrap()
+            .root
+            .is_none());
+        assert!(serde_json::from_value::<SftpWriteParams>(legacy.clone())
+            .unwrap()
+            .root
+            .is_none());
+        assert!(serde_json::from_value::<SftpListParams>(legacy)
+            .unwrap()
+            .root
+            .is_none());
     }
 }

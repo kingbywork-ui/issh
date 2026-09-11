@@ -95,6 +95,49 @@ impl SshSftpSession {
         Self { session }
     }
 
+    /// Resolve the path on the remote server before enforcing a configured root.
+    /// A missing final filename is allowed only for writes; permission failures
+    /// and dangling symlinks never fall back to unchecked lexical paths.
+    pub async fn resolve_scoped_path(
+        &self,
+        path: &str,
+        root: Option<&str>,
+        create: bool,
+    ) -> Result<String, SftpError> {
+        let Some(root) = root else {
+            return Ok(path.to_string());
+        };
+        validate_scoped_path(root)?;
+        validate_scoped_path(path)?;
+        let transfer =
+            |error: russh_sftp::client::error::Error| SftpError::Transfer(error.to_string());
+        let canonical_root = self.session.canonicalize(root).await.map_err(transfer)?;
+        let resolved = if create {
+            match self.session.symlink_metadata(path).await {
+                Ok(_) => self.session.canonicalize(path).await.map_err(transfer)?,
+                Err(russh_sftp::client::error::Error::Status(status))
+                    if status.status_code == russh_sftp::protocol::StatusCode::NoSuchFile =>
+                {
+                    let (parent, name) = path.rsplit_once('/').ok_or(SftpError::InvalidPath)?;
+                    if name.is_empty() || name == "." {
+                        return Err(SftpError::InvalidPath);
+                    }
+                    let parent = self
+                        .session
+                        .canonicalize(if parent.is_empty() { "/" } else { parent })
+                        .await
+                        .map_err(transfer)?;
+                    entry_path(&parent, name)
+                }
+                Err(error) => return Err(transfer(error)),
+            }
+        } else {
+            self.session.canonicalize(path).await.map_err(transfer)?
+        };
+        ensure_scoped_path(&canonical_root, &resolved)?;
+        Ok(resolved)
+    }
+
     pub async fn close(&self) -> Result<(), SftpError> {
         self.session
             .close()
@@ -360,6 +403,32 @@ pub(crate) fn validate_path(path: &str) -> Result<(), SftpError> {
     Ok(())
 }
 
+fn validate_scoped_path(path: &str) -> Result<(), SftpError> {
+    validate_path(path)?;
+    if path.contains('\0') || path.split('/').any(|part| part == "..") {
+        return Err(SftpError::InvalidPath);
+    }
+    Ok(())
+}
+
+fn ensure_scoped_path(root: &str, path: &str) -> Result<(), SftpError> {
+    validate_scoped_path(root)?;
+    validate_scoped_path(path)?;
+    let root = root.trim_end_matches('/');
+    if root.is_empty()
+        || path == root
+        || path
+            .strip_prefix(root)
+            .is_some_and(|tail| tail.starts_with('/'))
+    {
+        Ok(())
+    } else {
+        Err(SftpError::Transfer(
+            "SFTP path escapes configured root".into(),
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -380,5 +449,112 @@ mod tests {
         assert_eq!(entry_path("/", "home"), "/home");
         assert_eq!(entry_path("/home", "user"), "/home/user");
         assert_eq!(entry_path("/home/", "user"), "/home/user");
+    }
+}
+
+#[cfg(test)]
+mod scoped_path_tests {
+    use super::*;
+    use russh_sftp::protocol::{Attrs, File, FileAttributes, Name, StatusCode, Version};
+    struct RemotePaths;
+    impl russh_sftp::server::Handler for RemotePaths {
+        type Error = StatusCode;
+        fn unimplemented(&self) -> Self::Error {
+            StatusCode::OpUnsupported
+        }
+        async fn init(
+            &mut self,
+            _: u32,
+            _: std::collections::HashMap<String, String>,
+        ) -> Result<Version, Self::Error> {
+            Ok(Version::new())
+        }
+        async fn realpath(&mut self, id: u32, path: String) -> Result<Name, Self::Error> {
+            let resolved = match path.as_str() {
+                "/root-alias" => "/allowed",
+                "/allowed/link" | "/allowed/link/secret" => "/outside/secret",
+                "/allowed/alias" => "/allowed/file",
+                "/allowed/dangling" | "/allowed/missing-parent" => {
+                    return Err(StatusCode::NoSuchFile)
+                }
+                "/allowed/denied" => return Err(StatusCode::PermissionDenied),
+                _ => &path,
+            };
+            Ok(Name {
+                id,
+                files: vec![File::dummy(resolved)],
+            })
+        }
+        async fn lstat(&mut self, id: u32, path: String) -> Result<Attrs, Self::Error> {
+            match path.as_str() {
+                "/allowed/new"
+                | "/allowed/link/new"
+                | "/allowed/missing-parent/new"
+                | "/allowed/denied/new" => Err(StatusCode::NoSuchFile),
+                "/allowed/denied" => Err(StatusCode::PermissionDenied),
+                _ => Ok(Attrs {
+                    id,
+                    attrs: FileAttributes::default(),
+                }),
+            }
+        }
+    }
+    #[tokio::test]
+    async fn remote_realpaths_enforce_roots_for_reads_and_new_writes() {
+        let (client, server) = tokio::io::duplex(65536);
+        let server_task = tokio::spawn(russh_sftp::server::run(server, RemotePaths));
+        let sftp = SshSftpSession::from_session(SftpSession::new(client).await.unwrap());
+        for create in [false, true] {
+            assert!(sftp
+                .resolve_scoped_path("/allowed/../outside", Some("/allowed"), create)
+                .await
+                .is_err());
+            assert!(sftp
+                .resolve_scoped_path("/allowed/link", Some("/allowed"), create)
+                .await
+                .is_err());
+            assert!(sftp
+                .resolve_scoped_path("/allowed/link/secret", Some("/allowed"), create)
+                .await
+                .is_err());
+            assert!(sftp
+                .resolve_scoped_path("/allowed-other/file", Some("/allowed"), create)
+                .await
+                .is_err());
+            assert_eq!(
+                sftp.resolve_scoped_path("/allowed/alias", Some("/root-alias"), create)
+                    .await
+                    .unwrap(),
+                "/allowed/file"
+            );
+        }
+        assert_eq!(
+            sftp.resolve_scoped_path("/allowed/new", Some("/allowed"), true)
+                .await
+                .unwrap(),
+            "/allowed/new"
+        );
+        for path in [
+            "/allowed/dangling",
+            "/allowed/link/new",
+            "/allowed/denied",
+            "/allowed/denied/new",
+            "/allowed/missing-parent/new",
+        ] {
+            assert!(
+                sftp.resolve_scoped_path(path, Some("/allowed"), true)
+                    .await
+                    .is_err(),
+                "{path}"
+            );
+        }
+        assert_eq!(
+            sftp.resolve_scoped_path("/elsewhere", None, false)
+                .await
+                .unwrap(),
+            "/elsewhere"
+        );
+        sftp.close().await.unwrap();
+        server_task.abort();
     }
 }

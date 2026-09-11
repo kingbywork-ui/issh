@@ -6,8 +6,6 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
 pub const MAX_SESSION_BUFFER_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_SESSION_EVENT_BYTES: usize = 4 * 1024;
 pub const MAX_SESSION_BATCH_BYTES: usize = 12 * 1024;
@@ -228,9 +226,9 @@ impl LocalSession {
         if let Ok(mut output) = self.output.lock() {
             output.state = "closed".to_string();
         }
-        // 进程树（cmd + conhost）的终止与 ConPTY 句柄清理统一由
-        // SessionStore::close 的后台清理线程执行（先杀 conhost 再 taskkill
-        // 杀 cmd 树，最后析构 entry 触发 ClosePseudoConsole）。这里绝不做
+        // shell 进程树的终止与 ConPTY 句柄清理统一由 SessionStore::close
+        // 的后台清理线程执行（先杀 shell 及其真实子进程，再析构 entry 触发
+        // ClosePseudoConsole）。这里绝不做
         // 任何可能阻塞的系统调用：stop() 运行在持 sessions 锁的 RPC
         // dispatch 线程上，一旦阻塞会使 isshd 的所有会话请求全部堵死。
     }
@@ -618,36 +616,15 @@ impl SessionStore {
             .ok_or_else(|| SessionError::SessionNotFound(session_id.to_string()))?;
         entry.stop();
         let snap = entry.snapshot();
-        // Windows ConPTY：SessionEntry 析构时 ClosePseudoConsole 会同步等待
-        // conhost 退出，而 conhost 可能因后台 reader 线程仍持有读端句柄而
-        // 迟迟不退出，导致析构长时间阻塞。close() 运行在 RPC dispatch 线程
-        // 上且持有 sessions 锁，一旦阻塞会使 isshd 的所有会话请求（poll/
-        // subscribe 等）全部堵死。因此把清理移到独立线程：先杀进程树
-        // （cmd + conhost，conhost 死后读端立即关闭、reader 线程 EOF 退出），
-        // 再析构 entry，ClosePseudoConsole 就能快速返回。
+        // Windows ConPTY：SessionEntry 析构时 ClosePseudoConsole 可能同步等待
+        // conhost 退出。close() 运行在 RPC dispatch 线程且持有 sessions 锁，
+        // 因此把 shell 进程树和 ConPTY 句柄清理移到独立线程。只终止 root_pid
+        // 的真实后代；conhost 不属于该树，由 ClosePseudoConsole 负责关闭。
         let cleanup_pid = snap.as_ref().ok().and_then(|snapshot| snapshot.pid);
         std::thread::spawn(move || {
-            #[cfg(windows)]
             if let Some(pid) = cleanup_pid {
-                // ConPTY 的 conhost 进程由 isshd 直接启动（不在 cmd 进程树中），
-                // 必须单独终止：conhost 与 cmd 在 ConPTY 创建时几乎同时诞生
-                // （毫秒级），在 cmd 还活着时用其创建时间匹配出本会话的 conhost。
-                // 若不先杀 conhost，cmd 死后 ClosePseudoConsole 会永久等待
-                // conhost 退出，而 conhost 因读端句柄被 reader 线程持有而滞留。
-                let script = format!(
-                    "$cmdTime = (Get-Process -Id {0} -ErrorAction SilentlyContinue).StartTime; if ($cmdTime) {{ Get-Process conhost -ErrorAction SilentlyContinue | Where-Object {{ [math]::Abs(($_.StartTime - $cmdTime).TotalMilliseconds) -lt 2000 }} | ForEach-Object {{ Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }} }}",
-                    pid
-                );
-                let _ = std::process::Command::new("powershell")
-                    .args(["-NoProfile", "-Command", &script])
-                    .creation_flags(0x0800_0000)
-                    .output();
-            }
-            if let Some(pid) = cleanup_pid {
-                let _ = std::process::Command::new("taskkill")
-                    .args(["/T", "/F", "/PID", &pid.to_string()])
-                    .creation_flags(0x0800_0000)
-                    .output();
+                #[cfg(windows)]
+                terminate_windows_process_tree(pid);
             }
             drop(entry);
         });
@@ -658,6 +635,73 @@ impl SessionStore {
         self.sessions
             .get_mut(session_id)
             .ok_or_else(|| SessionError::SessionNotFound(session_id.to_string()))
+    }
+}
+
+#[cfg(windows)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ProcessInfo {
+    pid: u32,
+    parent_pid: u32,
+}
+
+#[cfg(windows)]
+fn process_tree_pids(processes: &[ProcessInfo], root_pid: u32) -> Vec<u32> {
+    let mut to_kill = vec![root_pid];
+    let mut index = 0;
+    while index < to_kill.len() {
+        let parent = to_kill[index];
+        for child in processes.iter().filter(|info| info.parent_pid == parent) {
+            if !to_kill.contains(&child.pid) {
+                to_kill.push(child.pid);
+            }
+        }
+        index += 1;
+    }
+    to_kill
+}
+
+#[cfg(windows)]
+fn terminate_windows_process_tree(root_pid: u32) {
+    use std::mem::size_of;
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+    if snapshot == INVALID_HANDLE_VALUE {
+        return;
+    }
+    let mut processes = Vec::new();
+    let mut entry = PROCESSENTRY32W {
+        dwSize: size_of::<PROCESSENTRY32W>() as u32,
+        ..Default::default()
+    };
+    let mut has_entry = unsafe { Process32FirstW(snapshot, &mut entry) } != 0;
+    while has_entry {
+        processes.push(ProcessInfo {
+            pid: entry.th32ProcessID,
+            parent_pid: entry.th32ParentProcessID,
+        });
+        has_entry = unsafe { Process32NextW(snapshot, &mut entry) } != 0;
+    }
+    unsafe { CloseHandle(snapshot) };
+
+    for pid in process_tree_pids(&processes, root_pid).into_iter().rev() {
+        terminate_windows_process(pid);
+    }
+}
+
+#[cfg(windows)]
+fn terminate_windows_process(pid: u32) {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
+    let handle = unsafe { OpenProcess(PROCESS_TERMINATE, 0, pid) };
+    if !handle.is_null() {
+        let _ = unsafe { TerminateProcess(handle, 1) };
+        unsafe { CloseHandle(handle) };
     }
 }
 
@@ -791,6 +835,27 @@ mod tests {
     #[test]
     fn path_must_be_a_directory() {
         assert!(!Path::new("definitely-not-an-existing-directory").is_dir());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn process_tree_excludes_unrelated_console_hosts() {
+        let processes = vec![
+            ProcessInfo {
+                pid: 101,
+                parent_pid: 100,
+            },
+            ProcessInfo {
+                pid: 102,
+                parent_pid: 101,
+            },
+            ProcessInfo {
+                pid: 200,
+                parent_pid: 999,
+            },
+        ];
+        assert_eq!(process_tree_pids(&processes, 100), vec![100, 101, 102]);
+        assert!(!process_tree_pids(&processes, 100).contains(&200));
     }
 
     struct FakeShell {

@@ -1408,7 +1408,7 @@ async fn exec_command(state: &Arc<AgentBridgeState>, params: &Value) -> Result<V
                 let output_id = cache_output(&job_state, &output).unwrap_or_default();
                 let truncated = output.len() > 64 * 1024;
                 let visible = if truncated {
-                    &output[..64 * 1024]
+                    utf8_prefix(&output, 64 * 1024)
                 } else {
                     output.as_str()
                 };
@@ -1641,15 +1641,60 @@ async fn exec_on_session(
 
 // ---------- sftp tools ----------
 
+fn utf8_prefix(text: &str, max_bytes: usize) -> &str {
+    let mut end = text.len().min(max_bytes);
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
+}
+
+fn require_scoped_sftp_support(health: &Value) -> Result<(), String> {
+    if health
+        .get("capabilities")
+        .and_then(Value::as_array)
+        .is_some_and(|items| {
+            items
+                .iter()
+                .any(|item| item.as_str() == Some("sftp.scopedPaths"))
+        })
+    {
+        Ok(())
+    } else {
+        Err("Runtime 不支持 SFTP 真实路径边界检查，请更新 Runtime".into())
+    }
+}
+
 fn ensure_sftp_root(state: &AgentBridgeState, path: &str) -> Result<(), String> {
     let Some(root) = &state.sftp_root else {
         return Ok(());
     };
-    let path_buf = PathBuf::from(path);
-    if path_buf.starts_with(root) {
+    ensure_sftp_root_path(root.to_str().ok_or("SFTP 根目录不是有效 UTF-8")?, path)
+}
+
+fn ensure_sftp_root_path(root: &str, path: &str) -> Result<(), String> {
+    // Remote paths use POSIX semantics even when the desktop runs on Windows.
+    let valid = |value: &str| {
+        value.starts_with('/')
+            && !value.contains('\0')
+            && !value.split('/').any(|part| part == "..")
+    };
+    if !valid(root) {
+        return Err("SFTP 根目录无效".into());
+    }
+    let root = root.trim_end_matches('/');
+    let root = if root.is_empty() { "/" } else { root };
+    if valid(root)
+        && valid(path)
+        && (root == "/"
+            || path == root
+            || path
+                .strip_prefix(root)
+                .is_some_and(|tail| tail.starts_with('/')))
+    {
         return Ok(());
     }
-    Err(format!("SFTP 路径受限：必须在 {root:?} 之内"))
+    Err(format!("SFTP 路径受限：必须在 {root} 之内"))
 }
 
 async fn sftp_list(state: &AgentBridgeState, params: &Value) -> Result<Value, String> {
@@ -1660,7 +1705,7 @@ async fn sftp_list(state: &AgentBridgeState, params: &Value) -> Result<Value, St
     let result = rpc(
         state,
         "sftp.list",
-        json!({ "sessionId": session_id, "path": path, "offset": 0, "limit": 256 }),
+        json!({ "sessionId": session_id, "path": path, "root": state.sftp_root, "offset": 0, "limit": 256 }),
     )
     .await?;
     Ok(result)
@@ -1682,7 +1727,7 @@ async fn sftp_read(state: &AgentBridgeState, params: &Value) -> Result<Value, St
         let chunk = rpc(
             state,
             "sftp.read",
-            json!({ "sessionId": session_id, "path": path, "offset": offset, "length": 1024 * 1024 }),
+            json!({ "sessionId": session_id, "path": path, "root": state.sftp_root, "offset": offset, "length": 1024 * 1024 }),
         )
         .await?;
         let data_b64 = chunk
@@ -1741,6 +1786,7 @@ async fn sftp_write(state: &AgentBridgeState, params: &Value) -> Result<Value, S
             "sessionId": session_id,
             "path": path,
             "offset": 0,
+            "root": state.sftp_root,
             "truncate": true,
             "eof": true,
             "dataBase64": data_b64,
@@ -1751,6 +1797,10 @@ async fn sftp_write(state: &AgentBridgeState, params: &Value) -> Result<Value, S
 }
 
 async fn ensure_sftp_open(state: &AgentBridgeState, session_id: &str) -> Result<Value, String> {
+    if state.sftp_root.is_some() {
+        let health = rpc(state, "runtime.health", json!({})).await?;
+        require_scoped_sftp_support(&health)?;
+    }
     // isshd 的 sftp.open 幂等性未知，保守策略：每次 open 新句柄，close 由 isshd 会话关闭兜底。
     rpc(state, "sftp.open", json!({ "sessionId": session_id })).await
 }
@@ -2014,5 +2064,54 @@ mod tests {
         assert_eq!(active_session_id(), Value::String("ssh-2".to_string()));
         set_active_session_id(None);
         assert_eq!(active_session_id(), Value::Null);
+    }
+}
+
+#[cfg(test)]
+mod boundary_regressions {
+    use super::*;
+    #[test]
+    fn sftp_root_rejects_traversal_and_sibling_prefixes() {
+        for path in [
+            "/allowed/../secret",
+            "/allowed/sub/../../secret",
+            "/allowed-other/file",
+            "relative",
+            "/allowed/evil\0",
+        ] {
+            assert!(ensure_sftp_root_path("/allowed", path).is_err(), "{path}");
+        }
+        for path in [
+            "/allowed",
+            "/allowed/file",
+            "/allowed/%2e%2e",
+            "/allowed/a\\b",
+        ] {
+            assert!(ensure_sftp_root_path("/allowed/", path).is_ok(), "{path}");
+        }
+        assert!(ensure_sftp_root_path("/", "/etc/hosts").is_ok());
+        assert!(ensure_sftp_root_path("/allowed/..", "/allowed/../secret").is_err());
+    }
+    #[test]
+    fn output_preview_preserves_utf8_at_the_byte_limit() {
+        for text in ["中".repeat(23000), "x".repeat(65535) + "😀", "short".into()] {
+            let preview = utf8_prefix(&text, 65536);
+            assert!(preview.len() <= 65536);
+            assert!(text.starts_with(preview));
+            assert!(text.len() <= 65536 || preview.len() >= 65533);
+        }
+    }
+}
+
+#[cfg(test)]
+mod sftp_compatibility_tests {
+    use super::*;
+    #[test]
+    fn configured_root_never_silently_falls_back_to_an_older_runtime() {
+        assert!(require_scoped_sftp_support(&json!({"capabilities": ["sftp.read"]})).is_err());
+        assert!(
+            require_scoped_sftp_support(&json!({"capabilities": ["sftp.scopedPaths"]})).is_ok()
+        );
+        assert!(ensure_sftp_root_path("", "/etc/hosts").is_err());
     }
 }

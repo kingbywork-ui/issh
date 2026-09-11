@@ -129,6 +129,7 @@
         "tabby-mcp-server": "node issh-agent/bin/tabby-mcp-server.mjs",
         "test:tabby-agent": "node --test issh-agent/test/*.test.mjs",
         "test:codex-desktop-config": "node scripts/test-codex-desktop-config.mjs",
+        "test:agent-bridge-regressions": "node --test scripts/test-agent-bridge-regressions.mjs",
         "test:environment-compat": "node scripts/test-environment-compat.mjs",
         "test:migrations": "node scripts/test-issh-migrations.mjs",
         "test:pilot-release-gate": "node scripts/pilot-release-gate.mjs",
@@ -145,5 +146,5 @@
         "mz": "2.7.0",
         "zod": "4.4.3"
     },
-    "version": "0.0.4"
+    "version": "0.0.5"
 }

@@ -10,6 +10,8 @@
         agentBridgeRotateToken,
         agentBridgeStatus,
         agentHubManagementOpen,
+        agentHubManagementStart,
+        agentHubManagementClose,
         agentHubManagementStatus,
         agentProcesses,
         type AgentBridgeStatus,
@@ -159,6 +161,29 @@
         finally { hubBusy = false }
     }
 
+    async function startHub (): Promise<void> {
+        hubBusy = true
+        hubError = ''
+        try {
+            hubStatus = await agentHubManagementStart()
+            notice = 'Agent Hub 管理服务已开启'
+        } catch (cause) {
+            hubError = cause instanceof Error ? cause.message : String(cause)
+        } finally { hubBusy = false }
+    }
+
+    async function closeHub (): Promise<void> {
+        if (!window.confirm('关闭 Agent Hub 管理服务？这会停止 127.0.0.1:33555 并移除发现文件；终端 Runtime 和 Agent Bridge 不受影响。')) return
+        hubBusy = true
+        hubError = ''
+        try {
+            hubStatus = await agentHubManagementClose()
+            notice = 'Agent Hub 管理服务已关闭'
+        } catch (cause) {
+            hubError = cause instanceof Error ? cause.message : String(cause)
+        } finally { hubBusy = false }
+    }
+
     async function copyMcpConfig (kind: 'claude' | 'codex'): Promise<void> {
         const discovery = status?.publicDiscovery ? status.discoveryPath ?? '<数据目录>/issh-agent-bridge.json' : '<数据目录>/issh-agent-bridge.json'
         const separatorIndex = Math.max(discovery.lastIndexOf('/'), discovery.lastIndexOf('\\'))
@@ -266,6 +291,11 @@
                     <input class="agent-token" type={showHubToken ? 'text' : 'password'} readonly value={hubStatus.token} aria-label="Agent Hub 管理令牌" />
                     <button type="button" onclick={() => { showHubToken = !showHubToken }}>{showHubToken ? '隐藏' : '显示'}</button>
                     <button type="button" onclick={() => void copyText(hubStatus?.token ?? '')}>复制管理 token</button>
+                    {#if hubStatus.running}
+                        <button class="plugin-remove" type="button" disabled={hubBusy} onclick={() => void closeHub()}>{hubBusy ? '正在关闭…' : '关闭 Agent Hub'}</button>
+                    {:else}
+                        <button class="market-install" type="button" disabled={hubBusy} onclick={() => void startHub()}>{hubBusy ? '正在开启…' : '开启 Agent Hub'}</button>
+                    {/if}
                     <button class="market-install" type="button" disabled={!hubStatus.running || hubBusy} onclick={() => void openHubWeb()}>{hubBusy ? '正在打开…' : '打开 Agent Hub Web'}</button>
                 </div>
             {/if}

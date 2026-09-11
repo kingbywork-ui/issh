@@ -60,13 +60,13 @@ export class TerminalContextService {
         }
 
         // POSIX prompts: user@host:~/path$ command, root@host:/path# command
-        const posixPromptMatch = /(?:^|\s)(?:[\w.-]+@[\w.-]+:\S+)\s*[#$%]\s*(.*)$/.exec(trimmed)
+        const posixPromptMatch = /^(?:[\w.-]+@[\w.-]+:[^\s#$%]+)\s*[#$%]\s*(.*)$/.exec(trimmed)
         if (posixPromptMatch) {
             return posixPromptMatch[1]
         }
 
         // Simple root/user prompt at line start: # command, $ command
-        const simplePromptMatch = /^[#$]\s+(.*)$/.exec(trimmed)
+        const simplePromptMatch = /^[#$%>]\s+(.*)$/.exec(trimmed)
         if (simplePromptMatch) {
             return simplePromptMatch[1]
         }
@@ -87,21 +87,6 @@ export class TerminalContextService {
         const historyMatch = /^\s*\d+\s{2,}(.*)$/.exec(trimmed)
         if (historyMatch) {
             return historyMatch[1].trim()
-        }
-
-        // Find the last common prompt marker and take input after it
-        const markers = ['$ ', '# ', '% ', '> ']
-        let bestIndex = -1
-        let bestLength = 0
-        for (const marker of markers) {
-            const idx = trimmed.lastIndexOf(marker)
-            if (idx > bestIndex) {
-                bestIndex = idx
-                bestLength = marker.length
-            }
-        }
-        if (bestIndex >= 0) {
-            return trimmed.substring(bestIndex + bestLength)
         }
 
         return trimmed

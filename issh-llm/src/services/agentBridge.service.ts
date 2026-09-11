@@ -104,6 +104,7 @@ export class AgentBridgeService {
     private server: http.Server | null = null
     private token: string | null = null
     private tabs = new Map<BaseTerminalTabComponent<any>, RegisteredTab>()
+    private unregisteredTabs = new WeakSet<BaseTerminalTabComponent<any>>()
     private nextTabId = 1
     private connectionFilePath: string | null = null
     private publicConnectionFilePath: string | null = null
@@ -142,6 +143,7 @@ export class AgentBridgeService {
     }
 
     registerController (tab: BaseTerminalTabComponent<any>, controller: TabLLMController): void {
+        this.unregisteredTabs.delete(tab)
         const existing = this.tabs.get(tab)
         if (existing) {
             existing.controller = controller
@@ -155,6 +157,7 @@ export class AgentBridgeService {
     }
 
     unregisterController (tab: BaseTerminalTabComponent<any>): void {
+        this.unregisteredTabs.add(tab)
         const existing = this.tabs.get(tab)
         if (existing) {
             delete existing.controller
@@ -555,15 +558,15 @@ export class AgentBridgeService {
         const candidates = [
             path.join(process.cwd(), 'issh-agent'),
             resourcesPath ? path.join(resourcesPath, 'issh-agent') : null,
-            resourcesPath ? path.join(resourcesPath, 'app.asar', 'issh-agent') : null,
+            resourcesPath ? path.join(resourcesPath, 'app.asar.unpacked', 'issh-agent') : null,
             resourcesPath ? path.join(resourcesPath, 'app', 'issh-agent') : null,
             path.join(path.dirname(process.execPath), 'resources', 'issh-agent'),
-            path.join(path.dirname(process.execPath), 'resources', 'app.asar', 'issh-agent'),
+            path.join(path.dirname(process.execPath), 'resources', 'app.asar.unpacked', 'issh-agent'),
             resourcesPath ? path.join(resourcesPath, 'tabby-agent') : null,
-            resourcesPath ? path.join(resourcesPath, 'app.asar', 'tabby-agent') : null,
+            resourcesPath ? path.join(resourcesPath, 'app.asar.unpacked', 'tabby-agent') : null,
             resourcesPath ? path.join(resourcesPath, 'app', 'tabby-agent') : null,
             path.join(path.dirname(process.execPath), 'resources', 'tabby-agent'),
-            path.join(path.dirname(process.execPath), 'resources', 'app.asar', 'tabby-agent'),
+            path.join(path.dirname(process.execPath), 'resources', 'app.asar.unpacked', 'tabby-agent'),
         ]
         for (const candidate of candidates) {
             if (candidate && fs.existsSync(path.join(candidate, 'package.json'))) {
@@ -584,9 +587,10 @@ export class AgentBridgeService {
             ], {
                 timeout: 5000,
                 windowsHide: true,
-            }, (error, stdout) => {
+            }, (error, stdout, stderr) => {
                 if (error) {
-                    reject(new Error(`Agent Bridge CLI check failed: ${error.message}`))
+                    const diagnostic = String(stderr ?? '').trim().slice(0, 8192)
+                    reject(new Error(`Agent Bridge CLI check failed: ${error.message}${diagnostic ? `\n${diagnostic}` : ''}`))
                     return
                 }
                 try {
@@ -760,16 +764,26 @@ export class AgentBridgeService {
 
     private readBody (request: http.IncomingMessage): Promise<string> {
         return new Promise((resolve, reject) => {
-            let body = ''
-            request.setEncoding('utf8')
+            const chunks: Buffer[] = []
+            let bytes = 0
+            let tooLarge = false
             request.on('data', chunk => {
-                body += chunk
-                if (body.length > 1024 * 1024) {
+                if (tooLarge) {
+                    return
+                }
+                const data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+                bytes += data.length
+                if (bytes > 1024 * 1024) {
+                    tooLarge = true
+                    chunks.length = 0
                     reject(new Error('Request body too large'))
                     request.destroy()
+                    return
                 }
+                chunks.push(data)
             })
-            request.on('end', () => resolve(body))
+            request.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+            request.on('aborted', () => reject(new Error('Request body aborted')))
             request.on('error', reject)
         })
     }
@@ -1790,24 +1804,32 @@ export class AgentBridgeService {
     private async execViaPty (entry: RegisteredTab, command: string, timeoutMs: number): Promise<{ stdout: string, timedOut: boolean }> {
         const startedAt = Date.now()
         const baseline = this.context.getRecentOutput(entry.tab, 200).join('\n')
+        const completionMarker = `__issh_done_${crypto.randomBytes(8).toString('hex')}__`
         entry.tab.sendInput(command + '\r')
+        // Echo is understood by cmd, PowerShell and POSIX shells. Sending it as
+        // the next input line makes the marker appear only after the foreground
+        // command returns to its shell. A program that consumes the queued line
+        // will correctly time out instead of being reported as completed.
+        entry.tab.sendInput(`echo ${completionMarker}\r`)
 
         let lastOutput = ''
-        let lastChangedAt = Date.now()
         while (Date.now() - startedAt < timeoutMs) {
             await this.sleep(250)
             const current = this.context.getRecentOutput(entry.tab, 200).join('\n')
             const output = current.startsWith(baseline) ? current.slice(baseline.length).trim() : current.trim()
-            if (output !== lastOutput) {
-                lastOutput = output
-                lastChangedAt = Date.now()
-                continue
-            }
-            if (lastOutput && Date.now() - lastChangedAt >= 750) {
-                return { stdout: lastOutput, timedOut: false }
+            lastOutput = output
+            const lines = output.split(/\r?\n/)
+            if (lines.some(line => line.trim() === completionMarker)) {
+                return {
+                    stdout: lines.filter(line => !line.includes(completionMarker)).join('\n').trim(),
+                    timedOut: false,
+                }
             }
         }
-        return { stdout: lastOutput, timedOut: true }
+        return {
+            stdout: lastOutput.split(/\r?\n/).filter(line => !line.includes(completionMarker)).join('\n').trim(),
+            timedOut: true,
+        }
     }
 
     private async batchExec (params: RpcParams): Promise<any> {
@@ -2069,7 +2091,7 @@ export class AgentBridgeService {
     private syncRegisteredTabs (): void {
         const currentTabs = new Set(this.flattenTerminalTabs(this.app.tabs))
         for (const tab of currentTabs) {
-            if (!this.tabs.has(tab)) {
+            if (!this.tabs.has(tab) && !this.unregisteredTabs.has(tab)) {
                 this.tabs.set(tab, {
                     id: `tab-${this.nextTabId++}`,
                     tab,
@@ -2240,12 +2262,28 @@ export class AgentBridgeService {
         const canonicalRoot = path.posix.normalize(String(await canonicalize(path.posix.normalize(configuredRoot))))
         let canonicalCandidate: string
         if (forWrite) {
-            try {
-                canonicalCandidate = path.posix.normalize(String(await canonicalize(candidate)))
-            } catch {
-                const parent = path.posix.dirname(candidate)
-                const canonicalParent = path.posix.normalize(String(await canonicalize(parent)))
-                canonicalCandidate = path.posix.join(canonicalParent, path.posix.basename(candidate))
+            let ancestor = candidate
+            const missing: string[] = []
+            while (true) {
+                try {
+                    const canonicalAncestor = path.posix.normalize(String(await canonicalize(ancestor)))
+                    canonicalCandidate = path.posix.join(canonicalAncestor, ...missing)
+                    break
+                } catch (error) {
+                    // Never turn permission/transport failures into a lexical path check.
+                    const code = (error as any)?.code
+                    const message = String((error as any)?.message ?? '')
+                    const missingStatus = (code === undefined || code === 'GenericFailure') && /\bNoSuchFile\b|^No such file(?: or directory)?$/i.test(message)
+                    if (code !== 2 && code !== 'ENOENT' && !missingStatus) {
+                        throw error
+                    }
+                    const parent = path.posix.dirname(ancestor)
+                    if (parent === ancestor) {
+                        throw error
+                    }
+                    missing.unshift(path.posix.basename(ancestor))
+                    ancestor = parent
+                }
             }
         } else {
             canonicalCandidate = path.posix.normalize(String(await canonicalize(candidate)))
@@ -2439,7 +2477,7 @@ export class AgentBridgeService {
         this.config.store.llm.agentBridgeTokenScopes = ['read']
     }
 
-    private getTokenScopes (): AgentBridgeScope[] {
+    getTokenScopes (): AgentBridgeScope[] {
         this.ensureScopesMigrated()
         const scopes = this.config.store.llm.agentBridgeTokenScopes
         if (!Array.isArray(scopes) || !scopes.length) {
@@ -2463,45 +2501,88 @@ export class AgentBridgeService {
         }
     }
 
-    readAuditLog (limit = 100, offset = 0, filter?: string): { entries: any[], total: number } {
-        if (!this.auditLogFilePath || !fs.existsSync(this.auditLogFilePath)) {
+    async readAuditLog (limit = 100, offset = 0, filter?: string): Promise<{ entries: any[], total: number }> {
+        if (!this.auditLogFilePath) {
             return { entries: [], total: 0 }
         }
+        const entries: any[] = []
+        let total = 0
+        const lower = filter?.toLowerCase()
+        limit = Number.isFinite(limit) ? Math.max(0, Math.min(500, Math.floor(limit))) : 100
+        offset = Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0
+        const accept = (line: Buffer): void => {
+            let entry: any
+            try {
+                entry = JSON.parse(line.toString('utf8'))
+            } catch {
+                return
+            }
+            if (!entry || typeof entry !== 'object') {
+                return
+            }
+            if (lower && ![entry.method, entry.errorCode, entry.errorMessage].some(value => String(value ?? '').toLowerCase().includes(lower))) {
+                return
+            }
+            if (total >= offset && entries.length < limit) {
+                entries.push(entry)
+            }
+            total++
+        }
         try {
-            const raw = fs.readFileSync(this.auditLogFilePath, 'utf8')
-            const lines = raw.split('\n').filter(line => line.trim())
-            let parsed: any[] = []
-            for (const line of lines) {
+            // Read newest first in bounded chunks; retain only the requested page.
+            for (const file of [this.auditLogFilePath, `${this.auditLogFilePath}.1`]) {
+                let handle: fs.promises.FileHandle
                 try {
-                    parsed.push(JSON.parse(line))
-                } catch {
-                    /* skip invalid lines */
+                    handle = await fs.promises.open(file, 'r')
+                } catch (error) {
+                    if ((error as any)?.code === 'ENOENT') {
+                        continue
+                    }
+                    throw error
+                }
+                try {
+                    let position = (await handle.stat()).size
+                    let remainder = Buffer.alloc(0)
+                    while (position > 0) {
+                        const size = Math.min(position, 64 * 1024)
+                        position -= size
+                        const chunk = Buffer.alloc(size)
+                        const { bytesRead } = await handle.read(chunk, 0, size, position)
+                        const data = Buffer.concat([chunk.subarray(0, bytesRead), remainder])
+                        let end = data.length
+                        for (let index = data.length - 1; index >= 0; index--) {
+                            if (data[index] === 10) {
+                                accept(data.subarray(index + 1, end))
+                                end = index
+                            }
+                        }
+                        remainder = Buffer.from(data.subarray(0, end))
+                    }
+                    accept(remainder)
+                } finally {
+                    await handle.close()
                 }
             }
-            if (filter) {
-                const lower = filter.toLowerCase()
-                parsed = parsed.filter(entry =>
-                    String(entry.method ?? '').toLowerCase().includes(lower) ||
-                    String(entry.errorCode ?? '').toLowerCase().includes(lower) ||
-                    String(entry.errorMessage ?? '').toLowerCase().includes(lower),
-                )
-            }
-            const total = parsed.length
-            const reversed = parsed.reverse()
-            const page = reversed.slice(offset, offset + limit)
-            return { entries: page, total }
+            return { entries, total }
         } catch (error) {
             this.logger.warn('Agent bridge audit read failed', error)
             return { entries: [], total: 0 }
         }
     }
 
-    clearAuditLog (): void {
+    async clearAuditLog (): Promise<void> {
         if (!this.auditLogFilePath) {
             return
         }
         try {
-            fs.writeFileSync(this.auditLogFilePath, '', 'utf8')
+            await fs.promises.writeFile(this.auditLogFilePath, '', 'utf8')
+            try {
+                await fs.promises.unlink(`${this.auditLogFilePath}.1`)
+            } catch (error) {
+                if ((error as any)?.code !== 'ENOENT') {
+                    throw error
+                }
+            }
         } catch (error) {
             this.logger.warn('Agent bridge audit clear failed', error)
         }

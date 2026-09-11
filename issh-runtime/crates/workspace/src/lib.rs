@@ -882,6 +882,43 @@ impl WorkspaceStore {
         }
     }
 
+    pub fn grant_agent_scope(
+        &mut self,
+        agent_id: &str,
+        scope: &str,
+        now_unix_ms: i64,
+    ) -> Result<Agent, WorkspaceError> {
+        if !SUPPORTED_AGENT_SCOPES.contains(&scope) {
+            return Err(WorkspaceError::InvalidAgentScope(scope.to_string()));
+        }
+        let mut agent = self.get_agent(agent_id)?;
+        if agent.scopes.iter().any(|candidate| candidate == scope) {
+            return Ok(agent);
+        }
+        agent.scopes.push(scope.to_string());
+        let scopes_json = serde_json::to_string(&agent.scopes)
+            .map_err(|error| WorkspaceError::Storage(error.to_string()))?;
+        let transaction = self.connection.transaction()?;
+        let updated = transaction.execute(
+            "UPDATE agents SET scopes_json = ?1, updated_at_unix_ms = ?2 WHERE public_id = ?3",
+            params![scopes_json, now_unix_ms, agent_id],
+        )?;
+        if updated == 0 {
+            return Err(WorkspaceError::AgentNotFound(agent_id.to_string()));
+        }
+        insert_event(
+            &transaction,
+            &agent.workspace_id,
+            "security",
+            agent_id,
+            "security.scope_granted",
+            &json!({ "scope": scope }),
+            now_unix_ms,
+        )?;
+        transaction.commit()?;
+        self.get_agent(agent_id)
+    }
+
     pub fn create_task(
         &mut self,
         agent_id: &str,
@@ -1789,7 +1826,14 @@ mod tests {
             store.authorize_agent(&agent.id, "command.execute", 7),
             Err(WorkspaceError::AgentScopeDenied { .. })
         ));
-        assert!(store.authorize_agent(&agent.id, "llm.prompt", 8).is_ok());
+        let granted = store
+            .grant_agent_scope(&agent.id, "command.execute", 8)
+            .unwrap();
+        assert!(granted.scopes.iter().any(|scope| scope == "command.execute"));
+        assert!(store
+            .authorize_agent(&agent.id, "command.execute", 9)
+            .is_ok());
+        assert!(store.authorize_agent(&agent.id, "llm.prompt", 10).is_ok());
     }
 
     #[test]

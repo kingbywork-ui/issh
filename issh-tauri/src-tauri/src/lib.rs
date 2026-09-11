@@ -2,6 +2,7 @@ mod agent_bridge;
 mod agent_bridge_config;
 mod agent_hub;
 mod clipboard;
+mod conversation_worker;
 mod host_profiles;
 mod management_server;
 mod plugin_gateway;
@@ -50,6 +51,10 @@ const AGENT_BRIDGE_RUNTIME_FILES: &[&str] = &[
     "src/cli.mjs",
     "src/mcp-server.mjs",
     "src/protocol.js",
+    "bin/issh-conversation-worker.mjs",
+    "src/conversation-service.mjs",
+    "src/conversation-process.mjs",
+    "src/conversation-adapters.mjs",
 ];
 
 /// 将安装包资源中的 issh-agent 运行文件同步到用户配置目录。
@@ -218,36 +223,65 @@ impl RuntimeManager {
         // 清理占用本实例 pipe 的残留 isshd：升级重装后旧进程可能仍存活，但持有
         // 已轮换的 auth token，会让健康检查永远失败。按进程名 + pipe 名精确匹配，
         // 避免误杀其它实例或无关进程。
-        let process_name = self
-            .binary_path
-            .file_name()
-            .map(|name| name.to_string_lossy().to_string())
-            .unwrap_or_else(|| "isshd.exe".to_string());
-        let marker = self.pipe_name.trim_start_matches(r"\\.\pipe\");
-        if marker.is_empty() {
-            return;
-        }
-        let script = format!(
-            "Get-CimInstance Win32_Process -Filter \"Name = '{process_name}'\" | \
-             Where-Object {{ $_.CommandLine -like '*{marker}*' }} | \
-             ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}"
-        );
-        let mut command = Command::new("powershell");
-        command
-            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            command.creation_flags(0x0800_0000);
-        }
-        let _ = command.output();
+        #[cfg(target_os = "windows")]
+        terminate_pipe_server(&self.pipe_name);
         // 等待内核释放 pipe 句柄，避免新 isshd 绑定失败。
         std::thread::sleep(Duration::from_millis(250));
     }
 }
+
+#[cfg(target_os = "windows")]
+fn wide_null(value: &str) -> Vec<u16> {
+    use std::os::windows::ffi::OsStrExt;
+    std::ffi::OsStr::new(value)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect()
+}
+
+#[cfg(target_os = "windows")]
+fn terminate_pipe_server(pipe_name: &str) {
+    use std::ptr::null;
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    };
+    use windows_sys::Win32::System::Pipes::GetNamedPipeServerProcessId;
+    use windows_sys::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
+
+    let pipe = wide_null(pipe_name);
+    // The pipe is opened only to ask Windows which process owns it. This avoids
+    // WMI/PowerShell and never searches or terminates unrelated processes.
+    let handle = unsafe {
+        CreateFileW(
+            pipe.as_ptr(),
+            0,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            null(),
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            std::ptr::null_mut(),
+        )
+    };
+    if handle == INVALID_HANDLE_VALUE {
+        return;
+    }
+    let mut server_pid = 0u32;
+    let found = unsafe { GetNamedPipeServerProcessId(handle, &mut server_pid) } != 0;
+    unsafe { CloseHandle(handle) };
+    if !found || server_pid == 0 {
+        return;
+    }
+    let process = unsafe { OpenProcess(PROCESS_TERMINATE, 0, server_pid) };
+    if process.is_null() {
+        return;
+    }
+    let _ = unsafe { TerminateProcess(process, 1) };
+    unsafe { CloseHandle(process) };
+}
+
+#[cfg(not(target_os = "windows"))]
+fn terminate_pipe_server(_pipe_name: &str) {}
 
 #[tauri::command]
 async fn runtime_health(manager: State<'_, Arc<RuntimeManager>>) -> Result<Value, String> {
@@ -261,25 +295,15 @@ async fn runtime_health(manager: State<'_, Arc<RuntimeManager>>) -> Result<Value
 }
 
 #[tauri::command]
-fn relaunch_elevated(app: tauri::AppHandle) -> Result<(), String> {
+fn relaunch_elevated(_app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
         let exe = std::env::current_exe().map_err(|error| format!("无法定位当前程序：{error}"))?;
-        let mut command = std::process::Command::new("powershell");
-        command
-            .args(["-NoProfile", "-Command", "Start-Process", "-FilePath"])
-            .arg(&exe)
-            .args(["-Verb", "RunAs"])
-            .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
-            .spawn()
-            .map_err(|error| format!("提权启动失败：{error}"))?;
-        let _ = app;
+        shell_execute("runas", &exe.to_string_lossy())?;
         Ok(())
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = app;
         Err("仅 Windows 支持管理员重启".to_string())
     }
 }
@@ -672,6 +696,8 @@ pub fn run() {
             agent_bridge_status,
             agent_hub_management_status,
             agent_hub_management_open,
+            agent_hub_management_start,
+            agent_hub_management_close,
             agent_bridge_configure,
             agent_bridge_rotate_token,
             agent_bridge_audit_read,
@@ -690,9 +716,10 @@ pub fn run() {
 
     app.run(|handle, event| {
         if matches!(event, tauri::RunEvent::Exit) {
-            handle
-                .state::<management_server::ManagementServerRuntime>()
-                .stop();
+            let management = handle.state::<management_server::ManagementServerRuntime>();
+            if let Err(error) = tauri::async_runtime::block_on(management.close()) {
+                eprintln!("[management] shutdown failed: {error}");
+            }
             handle.state::<Arc<RuntimeManager>>().stop();
             // R-045：完全退出时自动关闭 Agent Bridge（开关为运行时态，重启默认关）
             if let Ok(mut bridge_guard) = handle.state::<AgentBridgeRuntime>().bridge.lock() {
@@ -888,6 +915,22 @@ fn agent_hub_management_open(
     state: State<'_, management_server::ManagementServerRuntime>,
 ) -> Result<(), String> {
     open_agent_hub_url(state.open_url()?)
+}
+
+#[tauri::command]
+async fn agent_hub_management_start(
+    state: State<'_, management_server::ManagementServerRuntime>,
+) -> Result<Value, String> {
+    state.start().await?;
+    agent_hub_management_status(state)
+}
+
+#[tauri::command]
+async fn agent_hub_management_close(
+    state: State<'_, management_server::ManagementServerRuntime>,
+) -> Result<Value, String> {
+    state.close().await?;
+    agent_hub_management_status(state)
 }
 
 /// 更新 port / scope / sftpRoot / auditLogEnabled / publicDiscovery（token 与 enabled 不可经此修改）。
@@ -1370,10 +1413,29 @@ fn open_external_url(url: String) -> Result<(), String> {
     }
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("cmd")
-            .args(["/C", "start", "", trimmed])
-            .spawn()
-            .map_err(|e| format!("启动默认浏览器失败：{e}"))?;
+        shell_execute("open", trimmed)?;
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn shell_execute(operation: &str, target: &str) -> Result<(), String> {
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    let operation = wide_null(operation);
+    let target = wide_null(target);
+    let result = unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            operation.as_ptr(),
+            target.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    if (result as isize) <= 32 {
+        return Err(format!("ShellExecuteW 打开目标失败（错误码 {}）", result as isize));
     }
     Ok(())
 }
@@ -1439,6 +1501,15 @@ fn request_timeout(request: &Value) -> Duration {
     let method = request.get("method").and_then(Value::as_str).unwrap_or("");
     match method {
         "session.openSsh" => Duration::from_secs(30),
+        "ssh.execReadonly" => Duration::from_millis(
+            request
+                .get("params")
+                .and_then(|params| params.get("timeoutMs"))
+                .and_then(Value::as_u64)
+                .unwrap_or(10_000)
+                .clamp(1, 3_600_000)
+                .saturating_add(5_000),
+        ),
         "sftp.open"
         | "sftp.read"
         | "sftp.write"
@@ -1618,5 +1689,86 @@ mod tests {
         assert!(compare_semver("v1.0.0", "0.9.9") > 0);
         assert!(compare_semver("0.10.0", "0.9.9") > 0);
         assert!(compare_semver("1.0", "0.9.9") > 0);
+    }
+}
+
+#[cfg(test)]
+mod deadline_regressions {
+    use super::*;
+    #[test]
+    fn ssh_exec_deadline_includes_runtime_execution_and_cleanup() {
+        for timeout in [10_000u64, 60_000, 600_000, 3_600_000] {
+            let request = json!({"method": "ssh.execReadonly", "params": {"timeoutMs": timeout}});
+            assert!(request_timeout(&request) > Duration::from_millis(timeout + 2_000));
+        }
+        assert!(request_timeout(&json!({"method": "ssh.execReadonly"})) > Duration::from_secs(12));
+        assert_eq!(
+            request_timeout(
+                &json!({"method": "ssh.execReadonly", "params": {"timeoutMs": u64::MAX}})
+            ),
+            Duration::from_millis(3_605_000)
+        );
+        assert_eq!(
+            request_timeout(&json!({"method": "runtime.health"})),
+            Duration::from_secs(10)
+        );
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn ssh_exec_transport_waits_past_the_old_ten_second_deadline() {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+        use tokio::net::windows::named_pipe::ServerOptions;
+        let pipe = format!(r"\\.\pipe\issh-deadline-test-{}", std::process::id());
+        let server = ServerOptions::new()
+            .first_pipe_instance(true)
+            .create(&pipe)
+            .unwrap();
+        let server_pipe = pipe.clone();
+        let responder = tokio::spawn(async move {
+            let mut server = server;
+            for index in 0..2 {
+                server.connect().await.unwrap();
+                let mut line = String::new();
+                BufReader::new(&mut server)
+                    .read_line(&mut line)
+                    .await
+                    .unwrap();
+                let request: Value = serde_json::from_str(&line).unwrap();
+                let result = if index == 0 {
+                    assert_eq!(request["method"], "runtime.health");
+                    json!({"protocolVersion": PROTOCOL_VERSION, "capabilities": ["workspace.list"]})
+                } else {
+                    assert_eq!(request["method"], "ssh.execReadonly");
+                    tokio::time::sleep(Duration::from_secs(11)).await;
+                    json!({"output": "finished after eleven seconds"})
+                };
+                let bytes = serde_json::to_vec(
+                    &json!({"jsonrpc":"2.0", "id":request["id"], "result":result}),
+                )
+                .unwrap();
+                server.write_all(&bytes).await.unwrap();
+                if index == 0 {
+                    let next = ServerOptions::new().create(&server_pipe).unwrap();
+                    drop(server);
+                    server = next;
+                }
+            }
+        });
+        let manager = RuntimeManager {
+            pipe_name: pipe,
+            database_path: PathBuf::new(),
+            binary_path: PathBuf::new(),
+            auth_token: "isolated-test".into(),
+            child: Mutex::new(None),
+            startup: AsyncMutex::new(()),
+            hosts: HostProfileStore::new(&std::env::temp_dir()),
+        };
+        let response = manager.request(json!({"jsonrpc":"2.0", "id":"slow", "method":"ssh.execReadonly", "params":{"timeoutMs":12000}})).await;
+        responder.abort();
+        assert_eq!(
+            response.unwrap()["result"]["output"],
+            "finished after eleven seconds"
+        );
     }
 }

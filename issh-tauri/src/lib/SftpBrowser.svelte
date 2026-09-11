@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte'
+    import ContextMenu, { type ContextMenuItem } from './ContextMenu.svelte'
     import {
         base64ToBytes,
         bytesToBase64,
@@ -39,6 +40,9 @@
     let uploadPath = $state('')
     let uploadFile: File | null = $state(null)
     let uploadQueue: File[] = $state([])
+    let folderInput: HTMLInputElement | null = $state(null)
+    let dragOver = $state(false)
+    let contextMenu = $state<{ x: number, y: number, items: ContextMenuItem[] } | null>(null)
     let editingPath = $state(false)
     let pathInput = $state('/')
     let disconnected = $state(false)
@@ -360,6 +364,155 @@
         if (files.length === 0) return
         uploadQueue = files
         uploadFile = files[0]
+        // clear value so same file can be re-selected
+        input.value = ''
+    }
+
+    async function onFolderChange (event: Event): Promise<void> {
+        const input = event.currentTarget as HTMLInputElement
+        const files = Array.from(input.files ?? []) as File[]
+        if (files.length === 0) return
+        // webkitRelativePath contains folder structure; upload preserving relative paths
+        await uploadFolderFiles(files)
+        input.value = ''
+    }
+
+    async function uploadFolderFiles (files: File[]): Promise<void> {
+        if (uploading || files.length === 0) return
+        error = ''
+        // Group by top-level folder name from webkitRelativePath if available
+        for (const file of files) {
+            const rel = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
+            const remotePath = joinPath(cwd, rel)
+            // Ensure parent directories exist
+            const dirPart = remotePath.slice(0, remotePath.lastIndexOf('/'))
+            if (dirPart && dirPart !== cwd) {
+                await ensureRemoteDir(dirPart)
+            }
+            await uploadSingle(file, remotePath.slice(cwd === '/' ? 1 : cwd.length + 1))
+            if (transfer?.cancel) break
+        }
+    }
+
+    async function ensureRemoteDir (remoteDir: string): Promise<void> {
+        const parts = remoteDir.split('/').filter(Boolean)
+        let cur = ''
+        for (const part of parts) {
+            cur += '/' + part
+            try { await withReconnect(() => sftpMkdir(sessionId, cur)) } catch { /* already exists */ }
+        }
+    }
+
+    // ---- Drag & drop handlers ----
+    function onDragOver (event: DragEvent): void {
+        event.preventDefault()
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+        dragOver = true
+    }
+    function onDragLeave (event: DragEvent): void {
+        // only clear if leaving the browser container
+        const target = event.currentTarget as HTMLElement
+        const related = event.relatedTarget as Node | null
+        if (!related || !target.contains(related)) dragOver = false
+    }
+    async function onDrop (event: DragEvent): Promise<void> {
+        event.preventDefault()
+        dragOver = false
+        const dt = event.dataTransfer
+        if (!dt) return
+        // Try DataTransferItem with webkitGetAsEntry for folder support
+        const items = Array.from(dt.items ?? [])
+        if (items.length > 0 && (items[0] as DataTransferItem & { webkitGetAsEntry?: () => unknown }).webkitGetAsEntry) {
+            const entries: FileSystemEntry[] = []
+            for (const item of items) {
+                const entry = (item as unknown as { webkitGetAsEntry: () => FileSystemEntry | null }).webkitGetAsEntry()
+                if (entry) entries.push(entry)
+            }
+            if (entries.length > 0) {
+                await handleEntries(entries, '')
+                return
+            }
+        }
+        // Fallback: flat files
+        const files = Array.from(dt.files ?? [])
+        if (files.length > 0) {
+            if (files.length === 1) {
+                await uploadSingle(files[0], files[0].name)
+            } else {
+                for (const f of files) {
+                    await uploadSingle(f, f.name)
+                    if (transfer?.cancel) break
+                }
+            }
+        }
+    }
+
+    async function handleEntries (entries: FileSystemEntry[], prefix: string): Promise<void> {
+        for (const entry of entries) {
+            if (entry.isFile) {
+                const fileEntry = entry as FileSystemFileEntry
+                const file: File = await new Promise((resolve, reject) => fileEntry.file(resolve, reject))
+                const rel = prefix ? `${prefix}/${file.name}` : file.name
+                const dirPart = rel.slice(0, rel.lastIndexOf('/'))
+                if (dirPart) await ensureRemoteDir(joinPath(cwd, dirPart))
+                await uploadSingle(file, rel)
+                if (transfer?.cancel) return
+            } else if (entry.isDirectory) {
+                const dirEntry = entry as unknown as FileSystemDirectoryEntry
+                const dirName = prefix ? `${prefix}/${entry.name}` : entry.name
+                await withReconnect(() => sftpMkdir(sessionId, joinPath(cwd, dirName))).catch(() => {})
+                const children = await readDirectoryEntries(dirEntry)
+                await handleEntries(children, dirName)
+                if (transfer?.cancel) return
+            }
+        }
+    }
+
+    function readDirectoryEntries (dir: FileSystemDirectoryEntry): Promise<FileSystemEntry[]> {
+        return new Promise((resolve, reject) => {
+            const reader = dir.createReader()
+            const all: FileSystemEntry[] = []
+            const read = () => {
+                reader.readEntries((batch: FileSystemEntry[]) => {
+                    if (batch.length === 0) resolve(all)
+                    else { all.push(...batch); read() }
+                }, reject)
+            }
+            read()
+        })
+    }
+
+    // ---- Context menu ----
+    function showEntryMenu (event: MouseEvent, entry: SftpEntry): void {
+        event.preventDefault()
+        event.stopPropagation()
+        const items: ContextMenuItem[] = [
+            { label: entry.isDir ? '打开' : '预览', action: () => void (entry.isSymlink ? followSymlink(entry) : openEntry(entry)) },
+            { label: entry.isDir && !entry.isSymlink ? '下载文件夹' : '下载', disabled: transfer !== null, action: () => void downloadEntry(entry) },
+            { label: '重命名', action: () => beginRename(entry) },
+            { label: '修改权限', action: () => void changeMode(entry) },
+            { label: '删除', danger: true, action: () => void removeEntry(entry) },
+        ]
+        const margin = 8
+        const menuWidth = 200
+        const menuHeight = 180
+        const x = Math.max(margin, Math.min(event.clientX, window.innerWidth - menuWidth - margin))
+        const y = Math.max(margin, Math.min(event.clientY, window.innerHeight - menuHeight - margin))
+        contextMenu = { x, y, items }
+    }
+    function showBlankMenu (event: MouseEvent): void {
+        // 右键空白处：新建目录 / 上传 / 上传文件夹 / 刷新
+        if ((event.target as HTMLElement)?.closest('.sftp-row')) return
+        event.preventDefault()
+        const items: ContextMenuItem[] = [
+            { label: '新建目录', action: () => { const el = document.querySelector<HTMLInputElement>('.sftp-actions input[placeholder="新目录名"]'); el?.focus() } },
+            { label: '上传文件', action: () => document.querySelector<HTMLInputElement>('input[type="file"]:not([webkitdirectory])')?.click() },
+            { label: '上传文件夹', action: () => folderInput?.click() },
+            { label: '刷新', action: () => void refresh() },
+        ]
+        const x = Math.max(8, Math.min(event.clientX, window.innerWidth - 210))
+        const y = Math.max(8, Math.min(event.clientY, window.innerHeight - 160))
+        contextMenu = { x, y, items }
     }
 
     async function upload (): Promise<void> {
@@ -534,7 +687,7 @@
     })
 </script>
 
-<section class="sftp-browser" aria-label={sudoMode ? 'SUDO SFTP 文件浏览器' : 'SFTP 文件浏览器'}>
+<section class="sftp-browser" aria-label={sudoMode ? 'SUDO SFTP 文件浏览器' : 'SFTP 文件浏览器'} ondragover={onDragOver} ondragleave={onDragLeave} ondrop={(event) => void onDrop(event)} oncontextmenu={showBlankMenu} class:drag-over={dragOver}>
     <header class="sftp-toolbar">
         <button class="sftp-nav" type="button" onclick={() => void navigate(parentPath(cwd))} disabled={cwd === '/' || loading} title="上级目录">
             ↑
@@ -557,6 +710,11 @@
             <button class="sftp-nav close" type="button" onclick={onclose} title="关闭 SFTP">×</button>
         {/if}
     </header>
+    {#if dragOver}
+        <div class="sftp-drop-overlay" aria-hidden="true">
+            <span>松开以上传到 {cwd}</span>
+        </div>
+    {/if}
 
     <div class="sftp-actions">
         <input class="sftp-input filter" type="search" placeholder="过滤当前目录…" bind:value={filterText} aria-label="过滤文件" />
@@ -575,6 +733,8 @@
             aria-label="上传目标文件名"
         />
         <input class="sftp-file" type="file" multiple onchange={(event) => void onUploadChange(event)} aria-label="选择本地文件" />
+        <input bind:this={folderInput} class="sftp-file" type="file" webkitdirectory multiple onchange={(event) => void onFolderChange(event)} aria-label="选择本地文件夹" style="display:none" />
+        <button type="button" onclick={() => folderInput?.click()} disabled={loading || uploading} title="选择本地文件夹上传">上传文件夹</button>
         <button type="button" onclick={() => void upload()} disabled={!uploadFile || loading || uploading}>上传</button>
     </div>
 
@@ -610,19 +770,13 @@
             <button class="sftp-parent-row" type="button" onclick={() => void navigate(parentPath(cwd))}>↖ <span>..</span></button>
         {/if}
         {#each visibleEntries as entry (entry.path)}
-            <div class="sftp-row" role="listitem">
+            <div class="sftp-row" role="listitem" oncontextmenu={(event) => showEntryMenu(event, entry)}>
                 <button class="sftp-entry" type="button" onclick={() => void (entry.isSymlink ? followSymlink(entry) : openEntry(entry))} title={entry.path}>
                     <span class="sftp-icon" class:dir={entry.isDir} class:link={entry.isSymlink}>
                         {entryIcon(entry)}
                     </span>
                     <span class="sftp-name">{entry.name}</span>
                 </button>
-                <span class="sftp-ops">
-                    <button type="button" onclick={() => void downloadEntry(entry)} disabled={transfer !== null} title="下载">↓</button>
-                    <button type="button" onclick={() => void changeMode(entry)} title="修改权限">权</button>
-                    <button type="button" onclick={() => beginRename(entry)} title="重命名">改</button>
-                    <button type="button" onclick={() => void removeEntry(entry)} title="删除">删</button>
-                </span>
             </div>
         {:else}
             <p class="sftp-empty">{loading ? '正在读取目录…' : filterText.trim() ? '无匹配文件' : '目录为空'}</p>
@@ -637,5 +791,8 @@
             </header>
             <pre class="sftp-preview-body">{previewLoading ? '读取中…' : previewText}</pre>
         </section>
+    {/if}
+    {#if contextMenu}
+        <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenu.items} onclose={() => { contextMenu = null }} />
     {/if}
 </section>
