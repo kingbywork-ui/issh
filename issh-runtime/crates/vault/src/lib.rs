@@ -200,7 +200,10 @@ fn strip_pkcs7(buffer: &mut Vec<u8>) -> Result<(), VaultError> {
 /// the strict [`Vault`] shape, so it can decrypt Electron-era issh vaults whose
 /// secret keys use `{user, host, port}` objects instead of
 /// [`VaultSecretFileKey`]. Callers parse the JSON themselves.
-pub fn decrypt_stored_to_json(stored: &StoredVault, passphrase: &str) -> Result<String, VaultError> {
+pub fn decrypt_stored_to_json(
+    stored: &StoredVault,
+    passphrase: &str,
+) -> Result<String, VaultError> {
     let salt = hex::decode(&stored.key_salt)
         .map_err(|error| VaultError::Malformed(format!("keySalt: {error}")))?;
     let iv =
@@ -248,7 +251,8 @@ pub fn decrypt_stored_to_json(stored: &StoredVault, passphrase: &str) -> Result<
         version => return Err(VaultError::UnsupportedVersion(version)),
     };
 
-    String::from_utf8(plaintext).map_err(|error| VaultError::Malformed(format!("vault UTF-8: {error}")))
+    String::from_utf8(plaintext)
+        .map_err(|error| VaultError::Malformed(format!("vault UTF-8: {error}")))
 }
 
 /// Encrypts an arbitrary JSON payload using the current Electron-compatible

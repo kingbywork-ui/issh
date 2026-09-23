@@ -158,7 +158,7 @@ export const AGENT_BRIDGE_TOOLS = [
     {
         name: 'issh_workspace_export',
         scope: 'read',
-        description: 'Export all legacy issh workspace, binding, Agent, task, and event data for one-time Agent Hub migration.',
+        description: 'Export a versioned snapshot of issh workspace, binding, agent, task, and event data.',
         inputSchema: {
             type: 'object',
             properties: {},

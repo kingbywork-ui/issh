@@ -2,14 +2,6 @@
 
 This package is the dependency-free external client for the issh Agent Bridge.
 
-The built-in Agent Hub Web also uses `bin/issh-conversation-worker.mjs` to
-connect registered Agents through the Pi RPC, Hermes ACP and Codex App Server
-adapters. It persists message history and preserves native conversation IDs;
-registration alone does not attach an existing interactive terminal chat.
-See [Agent Hub Web conversations](../docs/agent-hub-conversations.md) for setup,
-supported transports and the tested delivery boundary. These conversation
-methods are management RPCs, not additional MCP tools.
-
 - `bin/issh-agent.mjs` provides the command-line client.
 - `bin/issh-mcp-server.mjs` provides the stdio MCP adapter.
 - `src/protocol.js` is the canonical tool and scope definition shared with `issh-llm`.

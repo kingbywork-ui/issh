@@ -419,7 +419,8 @@
 
     async function loadInstalled (): Promise<void> {
         try {
-            installedFromMarket = await invoke<InstalledRecord[]>('plugin_list_installed')
+            installedFromMarket = (await invoke<InstalledRecord[]>('plugin_list_installed'))
+                .filter((entry) => !SUPERSEDED_PLUGIN_IDS.has(entry.id))
         } catch {
             installedFromMarket = []
         }

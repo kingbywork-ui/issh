@@ -130,7 +130,7 @@ a{color:inherit}
       <h4>把“机房的材料”<br>搬进主题变量</h4>
       <p>不用通用的奶白/酸绿。4 套皮肤各自锚定一种真实材料 — 钢、牛皮纸、荧光粉、光纤 — 并让它贯穿 shell chrome 与终端调色板。标签栏的哑光、选中态的信号色、滚动条的质感，都来自同一种材料逻辑。克制，只赌这一次。</p>
       <div class="repo-scaffold">
-        <b>独立仓库骨架</b> (每套皮肤一个 repo, 参照 issh-plugin-agent-bridge)<br>
+        <b>独立仓库骨架</b> (每套皮肤一个 repo, 参照 issh-plugin-theme-foundry)<br>
         issh-plugin-theme-foundry/<br>
         ├─ package.json <span style="opacity:.5">(name, version, issh.plugin)</span><br>
         ├─ src/index.ts <span style="opacity:.5">→ NgModule 提供 Theme + TerminalColorSchemeProvider</span><br>
@@ -214,7 +214,7 @@ a{color:inherit}
     <h3>如何把一套皮肤发到 issh 商城 — 独立仓库流水线</h3>
     <p style="font-size:13px;color:rgba(232,224,200,.6);margin:8px 0 0">每套皮肤 = 一个 GitHub 仓库（与 Tabby 的社区包不同，issh 商城推荐 1 皮肤 1 仓库，便于版本与签名）。Tauri 皮肤为 <code style="font-family:'Fragment Mono',monospace">kind: appearance</code> 自含 Svelte runtime，经 <code style="font-family:'Fragment Mono',monospace">gateway.ui: registerSettingsTab + registerTerminalDecorator</code> 双层注入（chrome CSS 变量 + xterm 16 色 + selection）。</p>
     <div class="howto-grid">
-      <div class="step"><b>01 — 克隆模板</b><p>复制 <code>plugins/issh-plugin-agent-bridge</code> 结构，改 <code>package.json</code> 的 <code>name/version</code> 与 <code>src/index.ts</code> 的 Theme/ColorScheme。深色设 <code>followsColorScheme:false</code> 精调，浅色可设 true 跟随系统。</p></div>
+      <div class="step"><b>01 — 克隆模板</b><p>复制 <code>plugins/issh-plugin-theme-foundry</code> 结构，改 <code>package.json</code> 的 <code>name/version</code> 与 <code>src/index.ts</code> 的 Theme/ColorScheme。深色设 <code>followsColorScheme:false</code> 精调，浅色可设 true 跟随系统。</p></div>
       <div class="step"><b>02 — 构建与签名</b><p><code>npm run build</code> → <code>dist/index.js</code>，<code>node scripts/publish-plugin.mjs &lt;id&gt;</code> 自动打 tgz、算 sha256、ed25519 签名。</p></div>
       <div class="step"><b>03 — 发版与上架</b><p>推独立仓库 <code>main</code> + <code>tag v0.x.0</code> → <code>gh release create</code> 上传 tgz → 更新 <code>kingbywork-ui/issh-plugin-registry/index.json</code> 的 version/downloadUrl/sha256 → <code>purge.jsdelivr.net</code>。</p></div>
     </div>

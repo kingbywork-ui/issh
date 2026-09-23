@@ -20,6 +20,8 @@ npm-debug.log
 
 builtin-plugins
 package-lock.json
+*.tgz
+*.tgz.sha256
 yarn-error.log
 
 docs/api

@@ -28,9 +28,8 @@ import type {
 
 type Listener = () => void
 
-// 已内置进程序的功能（原插件形态）：禁止商城同名插件再安装/加载，避免重复注册
-// 注意：商城 issh-plugin-agent-bridge（「Agent 桥接」，workspace/agent 管理）与本内置插件（CLI/MCP 外部 agent 接入）是两个不同产品，内置插件用独立 id
-export const SUPERSEDED_PLUGIN_IDS = new Set(['issh-plugin-auto-sudo', 'issh-plugin-vault', 'issh-plugin-agent-bridge-rpc', 'issh-plugin-herdr'])
+// 已内置或下线的商城插件：旧版已安装时也禁止加载。
+export const SUPERSEDED_PLUGIN_IDS = new Set(['issh-plugin-auto-sudo', 'issh-plugin-vault', 'issh-plugin-agent-bridge-rpc', 'issh-plugin-herdr', 'issh-plugin-agent-bridge'])
 
 const root = new Context()
 
@@ -207,7 +206,7 @@ interface MarketplacePluginModule {
 
 export async function loadMarketplacePlugin (directory: string, entryFile: string, id: string): Promise<void> {
     if (SUPERSEDED_PLUGIN_IDS.has(id)) {
-        throw new Error(`插件 ${id} 已内置进程序，无需安装`)
+        throw new Error(`插件 ${id} 已内置或下线，无法加载`)
     }
     if (plugins.has(id)) return
     installedMarketplaceIds.add(id)

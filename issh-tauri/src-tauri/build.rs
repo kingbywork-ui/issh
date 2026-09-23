@@ -7,7 +7,7 @@ fn main() {
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-        .or_else(|| current_git_branch())
+        .or_else(current_git_branch)
         .unwrap_or_else(|| "unknown".to_string());
     println!("cargo:rustc-env=ISSH_BUILD_BRANCH={branch}");
 

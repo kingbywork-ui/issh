@@ -358,12 +358,17 @@ impl SessionStore {
                         "C:\\Program Files\\Git\\bin\\bash.exe",
                         "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
                     ];
-                    candidates.into_iter().find(|path| std::path::Path::new(path).is_file()).unwrap_or("bash.exe")
+                    candidates
+                        .into_iter()
+                        .find(|path| std::path::Path::new(path).is_file())
+                        .unwrap_or("bash.exe")
                 }
                 _ => "cmd.exe",
             };
             let mut command = CommandBuilder::new(shell);
-            if shell == "cmd.exe" { command.arg("/d"); }
+            if shell == "cmd.exe" {
+                command.arg("/d");
+            }
             command
         };
         #[cfg(not(windows))]

@@ -594,15 +594,6 @@ export interface AgentBridgeStatus {
     permissionMode: 'observer' | 'confirm' | 'auto'
 }
 
-export interface AgentHubManagementStatus {
-    enabled: boolean
-    running: boolean
-    port: number
-    url: string
-    token: string
-    lastError: string | null
-}
-
 export interface UpdateCheckResult {
     hasUpdate: boolean
     currentVersion: string
@@ -661,22 +652,6 @@ export function agentBridgeDisconnect (): Promise<AgentBridgeStatus> {
 
 export function agentBridgeStatus (): Promise<AgentBridgeStatus> {
     return invoke<AgentBridgeStatus>('agent_bridge_status')
-}
-
-export function agentHubManagementStatus (): Promise<AgentHubManagementStatus> {
-    return invoke<AgentHubManagementStatus>('agent_hub_management_status')
-}
-
-export function agentHubManagementOpen (): Promise<void> {
-    return invoke<void>('agent_hub_management_open')
-}
-
-export function agentHubManagementStart (): Promise<AgentHubManagementStatus> {
-    return invoke<AgentHubManagementStatus>('agent_hub_management_start')
-}
-
-export function agentHubManagementClose (): Promise<AgentHubManagementStatus> {
-    return invoke<AgentHubManagementStatus>('agent_hub_management_close')
 }
 
 export function agentBridgeConfigure (patch: AgentBridgePatch): Promise<AgentBridgeStatus> {

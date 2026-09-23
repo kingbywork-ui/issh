@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -28,7 +28,7 @@ if (existsSync(skillSource)) {
 }
 
 // Agent Bridge 的 stdio CLI/MCP 运行时必须随 Tauri 安装包发布。
-// 暂存 CLI/MCP 和 Web 通讯所需运行文件，不复制测试及开发脚本。
+// 暂存 CLI/MCP 运行文件，不复制测试及开发脚本。
 const agentSourceDir = path.join(repositoryRoot, 'issh-agent')
 const agentDestinationDir = path.join(tauriDir, 'src-tauri', 'bin', 'agent-bridge')
 const agentRuntimeFiles = [
@@ -41,11 +41,17 @@ const agentRuntimeFiles = [
     path.join('src', 'cli.mjs'),
     path.join('src', 'mcp-server.mjs'),
     path.join('src', 'protocol.js'),
+]
+
+// 清除旧暂存目录中的已下线组件，避免 Tauri 将历史产物再次打进资源包。
+for (const relativePath of [
     path.join('bin', 'issh-conversation-worker.mjs'),
     path.join('src', 'conversation-service.mjs'),
     path.join('src', 'conversation-process.mjs'),
     path.join('src', 'conversation-adapters.mjs'),
-]
+]) {
+    rmSync(path.join(agentDestinationDir, relativePath), { force: true })
+}
 
 for (const relativePath of agentRuntimeFiles) {
     const sourcePath = path.join(agentSourceDir, relativePath)

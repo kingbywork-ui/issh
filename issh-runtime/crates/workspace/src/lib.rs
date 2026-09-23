@@ -521,8 +521,8 @@ impl WorkspaceStore {
             .collect()
     }
 
-    /// Returns a versioned, read-only snapshot for the one-time Agent Hub
-    /// migration. IDs and event sequences are preserved by the importer.
+    /// Returns a versioned, read-only snapshot of workspace data.
+    /// IDs and event sequences are preserved for consumers.
     pub fn export_all(&self) -> Result<WorkspaceExportV1, WorkspaceError> {
         let workspaces = self.list_workspaces()?;
         let mut agents = Vec::new();
@@ -537,7 +537,10 @@ impl WorkspaceStore {
                 if page.is_empty() {
                     break;
                 }
-                after_sequence = page.last().map(|event| event.sequence).unwrap_or(after_sequence);
+                after_sequence = page
+                    .last()
+                    .map(|event| event.sequence)
+                    .unwrap_or(after_sequence);
                 let complete = page.len() < 500;
                 events.extend(page);
                 if complete {
@@ -565,9 +568,10 @@ impl WorkspaceStore {
         let transaction = self.connection.transaction()?;
         let count = |table: &str| -> Result<usize, WorkspaceError> {
             let query = format!("SELECT COUNT(*) FROM {table} WHERE workspace_id = ?1");
-            Ok(transaction.query_row(&query, params![workspace_id], |row| {
-                row.get::<_, i64>(0)
-            })? as usize)
+            Ok(
+                transaction.query_row(&query, params![workspace_id], |row| row.get::<_, i64>(0))?
+                    as usize,
+            )
         };
         let deleted_bindings = count("bindings")?;
         let deleted_agents = count("agents")?;
@@ -1595,7 +1599,9 @@ mod tests {
                 5,
             )
             .unwrap();
-        store.create_task(&agent.id, "Inspect".to_string(), 6).unwrap();
+        store
+            .create_task(&agent.id, "Inspect".to_string(), 6)
+            .unwrap();
 
         let deleted = store.delete_workspace(&workspace.id).unwrap();
 
@@ -1829,7 +1835,10 @@ mod tests {
         let granted = store
             .grant_agent_scope(&agent.id, "command.execute", 8)
             .unwrap();
-        assert!(granted.scopes.iter().any(|scope| scope == "command.execute"));
+        assert!(granted
+            .scopes
+            .iter()
+            .any(|scope| scope == "command.execute"));
         assert!(store
             .authorize_agent(&agent.id, "command.execute", 9)
             .is_ok());

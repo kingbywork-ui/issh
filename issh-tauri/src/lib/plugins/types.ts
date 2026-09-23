@@ -36,10 +36,6 @@ export interface PluginGateway {
         read (sessionId: string, lines?: number, options?: GatewayRequestOptions): Promise<unknown>
         write (sessionId: string, data: string | Uint8Array, options?: GatewayRequestOptions): Promise<unknown>
     }
-    agentHub: {
-        status (options?: GatewayRequestOptions): Promise<unknown>
-        open (options?: GatewayRequestOptions): Promise<{ opened: boolean }>
-    }
     profiles: {
         read (options?: GatewayRequestOptions): Promise<unknown>
         mutate (mutation: unknown, options?: GatewayRequestOptions): Promise<unknown>

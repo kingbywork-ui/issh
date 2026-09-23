@@ -10,10 +10,11 @@ use std::path::{Path, PathBuf};
 /// - Observer：只读，写/执行/SFTP 工具只返回执行计划、不实际执行
 /// - Confirm：默认，危险操作需 confirmDangerous=true + 桌面端确认
 /// - Auto：自动放行（跳过 Agent Bridge 层 confirm 校验，桌面端确认框仍生效）
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PermissionMode {
     Observer,
+    #[default]
     Confirm,
     Auto,
 }
@@ -33,12 +34,6 @@ impl PermissionMode {
             "auto" => PermissionMode::Auto,
             _ => PermissionMode::Confirm,
         }
-    }
-}
-
-impl Default for PermissionMode {
-    fn default() -> Self {
-        PermissionMode::Confirm
     }
 }
 

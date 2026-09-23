@@ -22,7 +22,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
-use tokio::{io::{copy_bidirectional, AsyncReadExt, AsyncWriteExt}, net::TcpListener};
+use tokio::{
+    io::{copy_bidirectional, AsyncReadExt, AsyncWriteExt},
+    net::TcpListener,
+};
 
 #[cfg(windows)]
 mod windows_security;
@@ -139,9 +142,15 @@ impl RuntimeState {
         }
         if let Ok(mut forwards) = self.ssh_forward_tasks.lock() {
             let prefix = format!("{session_id}:");
-            let ids = forwards.keys().filter(|id| id.starts_with(&prefix)).cloned().collect::<Vec<_>>();
+            let ids = forwards
+                .keys()
+                .filter(|id| id.starts_with(&prefix))
+                .cloned()
+                .collect::<Vec<_>>();
             for id in ids {
-                if let Some(task) = forwards.remove(&id) { task.abort(); }
+                if let Some(task) = forwards.remove(&id) {
+                    task.abort();
+                }
             }
         }
     }
@@ -591,7 +600,9 @@ struct SshForwardLocalResult {
     target_port: u16,
 }
 
-fn default_forward_kind() -> String { "Local".to_string() }
+fn default_forward_kind() -> String {
+    "Local".to_string()
+}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -902,7 +913,11 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
     if let Some(expected) = state.auth_token.as_deref() {
         let provided = request.auth.as_deref().unwrap_or("");
         if provided != expected {
-            return serialize_error(id, INVALID_REQUEST, "Unauthorized: invalid or missing auth token");
+            return serialize_error(
+                id,
+                INVALID_REQUEST,
+                "Unauthorized: invalid or missing auth token",
+            );
         }
     }
 
@@ -1046,8 +1061,11 @@ async fn dispatch(message: &[u8], state: &RuntimeState) -> Vec<u8> {
                 Err(error) => return serialize_error(id, INVALID_PARAMS, error.to_string()),
             };
             match local_agent_probe::probe(shell.as_deref()).await {
-                Ok(output) => serde_json::to_vec(&RpcResponse::new(id, serde_json::json!({ "output": output })))
-                    .expect("probe response serialization cannot fail"),
+                Ok(output) => serde_json::to_vec(&RpcResponse::new(
+                    id,
+                    serde_json::json!({ "output": output }),
+                ))
+                .expect("probe response serialization cannot fail"),
                 Err(error) => serialize_error(id, -32002, error),
             }
         }
@@ -1883,7 +1901,9 @@ async fn connect_ssh_transport(
         params.password.clone(),
     )?;
     let jump_connection = if let Some(jump) = params.jump.as_deref() {
-        Some(Arc::new(Box::pin(connect_ssh_transport(state, jump)).await?))
+        Some(Arc::new(
+            Box::pin(connect_ssh_transport(state, jump)).await?,
+        ))
     } else {
         None
     };
@@ -1905,8 +1925,8 @@ async fn connect_ssh_transport(
         x11_display: params.x11_display.clone(),
         jump_connection,
     })
-        .await
-        .map_err(|error| RpcError::new(INVALID_PARAMS, error.to_string()))
+    .await
+    .map_err(|error| RpcError::new(INVALID_PARAMS, error.to_string()))
 }
 
 async fn open_ssh_session(
@@ -1917,16 +1937,21 @@ async fn open_ssh_session(
         Duration::from_millis(SSH_CONNECT_TIMEOUT_MS),
         connect_ssh_transport(state, &params),
     )
-            .await
-            .map_err(|_| {
-                RpcError::new(
-                    INVALID_PARAMS,
-                    format!("SSH connect timed out after {SSH_CONNECT_TIMEOUT_MS}ms"),
-                )
-            })??;
+    .await
+    .map_err(|_| {
+        RpcError::new(
+            INVALID_PARAMS,
+            format!("SSH connect timed out after {SSH_CONNECT_TIMEOUT_MS}ms"),
+        )
+    })??;
 
     let channel = {
-        let open_fut = connection.open_interactive(params.columns, params.rows, params.agent_forward, params.x11);
+        let open_fut = connection.open_interactive(
+            params.columns,
+            params.rows,
+            params.agent_forward,
+            params.x11,
+        );
         match tokio::time::timeout(Duration::from_millis(SSH_CONNECT_TIMEOUT_MS), open_fut).await {
             Ok(Ok(channel)) => channel,
             Ok(Err(error)) => {
@@ -1982,7 +2007,10 @@ async fn ssh_forward_local(
         return Err(RpcError::new(INVALID_PARAMS, "forward host is required"));
     }
     if params.bind_port == 0 || params.target_port == 0 {
-        return Err(RpcError::new(INVALID_PARAMS, "forward port must be 1-65535"));
+        return Err(RpcError::new(
+            INVALID_PARAMS,
+            "forward port must be 1-65535",
+        ));
     }
     let connection = state
         .ssh_connections
@@ -1993,14 +2021,22 @@ async fn ssh_forward_local(
         .ok_or_else(|| RpcError::new(INVALID_PARAMS, "SSH session is not connected"))?;
     let listener = TcpListener::bind((params.bind_host.as_str(), params.bind_port))
         .await
-        .map_err(|error| RpcError::new(INVALID_PARAMS, format!("cannot bind local forward: {error}")))?;
+        .map_err(|error| {
+            RpcError::new(
+                INVALID_PARAMS,
+                format!("cannot bind local forward: {error}"),
+            )
+        })?;
     let task_id = forward_task_id(&params.session_id, "Local", params.bind_port);
     let mut forwards = state
         .ssh_forward_tasks
         .lock()
         .map_err(|_| RpcError::new(-32603, "SSH forward state is unavailable"))?;
     if forwards.contains_key(&task_id) {
-        return Err(RpcError::new(INVALID_PARAMS, "local forward is already active"));
+        return Err(RpcError::new(
+            INVALID_PARAMS,
+            "local forward is already active",
+        ));
     }
     let target_address = params.target_address.clone();
     let target_port = params.target_port;
@@ -2012,9 +2048,16 @@ async fn ssh_forward_local(
                 let originator_address = peer.ip().to_string();
                 let originator_port = peer.port();
                 let Ok(mut channel) = connection
-                    .open_direct_tcpip(&target_address, target_port, &originator_address, originator_port)
+                    .open_direct_tcpip(
+                        &target_address,
+                        target_port,
+                        &originator_address,
+                        originator_port,
+                    )
                     .await
-                else { return };
+                else {
+                    return;
+                };
                 let _ = copy_bidirectional(&mut stream, &mut channel).await;
             });
         }
@@ -2029,7 +2072,10 @@ async fn ssh_forward_local(
     })
 }
 
-async fn ssh_stop_forward(state: &RuntimeState, params: SshForwardStopParams) -> Result<Value, RpcError> {
+async fn ssh_stop_forward(
+    state: &RuntimeState,
+    params: SshForwardStopParams,
+) -> Result<Value, RpcError> {
     if params.kind == "Remote" {
         let connection = state
             .ssh_connections
@@ -2042,7 +2088,9 @@ async fn ssh_stop_forward(state: &RuntimeState, params: SshForwardStopParams) ->
             .stop_remote_forward(params.bind_port)
             .await
             .map_err(|error| RpcError::new(INVALID_PARAMS, error.to_string()))?;
-        return Ok(serde_json::json!({ "stopped": true, "sessionId": params.session_id, "bindPort": params.bind_port, "kind": params.kind }));
+        return Ok(
+            serde_json::json!({ "stopped": true, "sessionId": params.session_id, "bindPort": params.bind_port, "kind": params.kind }),
+        );
     }
     let task_id = forward_task_id(&params.session_id, &params.kind, params.bind_port);
     let mut forwards = state
@@ -2053,7 +2101,9 @@ async fn ssh_stop_forward(state: &RuntimeState, params: SshForwardStopParams) ->
         .remove(&task_id)
         .ok_or_else(|| RpcError::new(INVALID_PARAMS, "local forward is not active"))?;
     task.abort();
-    Ok(serde_json::json!({ "stopped": true, "sessionId": params.session_id, "bindPort": params.bind_port, "kind": params.kind }))
+    Ok(
+        serde_json::json!({ "stopped": true, "sessionId": params.session_id, "bindPort": params.bind_port, "kind": params.kind }),
+    )
 }
 
 async fn ssh_forward_dynamic(
@@ -2061,7 +2111,10 @@ async fn ssh_forward_dynamic(
     params: SshForwardDynamicParams,
 ) -> Result<SshForwardLocalResult, RpcError> {
     if params.bind_host.trim().is_empty() || params.bind_port == 0 {
-        return Err(RpcError::new(INVALID_PARAMS, "dynamic forward bind host and port are required"));
+        return Err(RpcError::new(
+            INVALID_PARAMS,
+            "dynamic forward bind host and port are required",
+        ));
     }
     let connection = state
         .ssh_connections
@@ -2072,19 +2125,29 @@ async fn ssh_forward_dynamic(
         .ok_or_else(|| RpcError::new(INVALID_PARAMS, "SSH session is not connected"))?;
     let listener = TcpListener::bind((params.bind_host.as_str(), params.bind_port))
         .await
-        .map_err(|error| RpcError::new(INVALID_PARAMS, format!("cannot bind dynamic forward: {error}")))?;
+        .map_err(|error| {
+            RpcError::new(
+                INVALID_PARAMS,
+                format!("cannot bind dynamic forward: {error}"),
+            )
+        })?;
     let task_id = forward_task_id(&params.session_id, "Dynamic", params.bind_port);
     let mut forwards = state
         .ssh_forward_tasks
         .lock()
         .map_err(|_| RpcError::new(-32603, "SSH forward state is unavailable"))?;
     if forwards.contains_key(&task_id) {
-        return Err(RpcError::new(INVALID_PARAMS, "dynamic forward is already active"));
+        return Err(RpcError::new(
+            INVALID_PARAMS,
+            "dynamic forward is already active",
+        ));
     }
     let task = tokio::spawn(async move {
         while let Ok((stream, peer)) = listener.accept().await {
             let connection = connection.clone();
-            tokio::spawn(async move { let _ = serve_socks5_connection(stream, peer, connection).await; });
+            tokio::spawn(async move {
+                let _ = serve_socks5_connection(stream, peer, connection).await;
+            });
         }
     });
     forwards.insert(task_id, task);
@@ -2102,10 +2165,16 @@ async fn ssh_forward_remote(
     params: SshForwardRemoteParams,
 ) -> Result<SshForwardLocalResult, RpcError> {
     if params.bind_host.trim().is_empty() || params.target_address.trim().is_empty() {
-        return Err(RpcError::new(INVALID_PARAMS, "remote forward host is required"));
+        return Err(RpcError::new(
+            INVALID_PARAMS,
+            "remote forward host is required",
+        ));
     }
     if params.target_port == 0 {
-        return Err(RpcError::new(INVALID_PARAMS, "remote forward target port must be 1-65535"));
+        return Err(RpcError::new(
+            INVALID_PARAMS,
+            "remote forward target port must be 1-65535",
+        ));
     }
     let connection = state
         .ssh_connections
@@ -2115,7 +2184,12 @@ async fn ssh_forward_remote(
         .cloned()
         .ok_or_else(|| RpcError::new(INVALID_PARAMS, "SSH session is not connected"))?;
     let actual_port = connection
-        .start_remote_forward(&params.bind_host, params.bind_port, &params.target_address, params.target_port)
+        .start_remote_forward(
+            &params.bind_host,
+            params.bind_port,
+            &params.target_address,
+            params.target_port,
+        )
         .await
         .map_err(|error| RpcError::new(INVALID_PARAMS, error.to_string()))?;
     Ok(SshForwardLocalResult {
@@ -2134,25 +2208,62 @@ async fn serve_socks5_connection(
 ) -> Result<(), std::io::Error> {
     let mut greeting = [0u8; 2];
     stream.read_exact(&mut greeting).await?;
-    if greeting[0] != 5 { return Ok(()); }
+    if greeting[0] != 5 {
+        return Ok(());
+    }
     let mut methods = vec![0u8; greeting[1] as usize];
     stream.read_exact(&mut methods).await?;
-    if !methods.contains(&0) { stream.write_all(&[5, 0xff]).await?; return Ok(()); }
+    if !methods.contains(&0) {
+        stream.write_all(&[5, 0xff]).await?;
+        return Ok(());
+    }
     stream.write_all(&[5, 0]).await?;
     let mut request = [0u8; 4];
     stream.read_exact(&mut request).await?;
-    if request[0] != 5 || request[1] != 1 { stream.write_all(&[5, 7, 0, 1, 0, 0, 0, 0, 0, 0]).await?; return Ok(()); }
+    if request[0] != 5 || request[1] != 1 {
+        stream.write_all(&[5, 7, 0, 1, 0, 0, 0, 0, 0, 0]).await?;
+        return Ok(());
+    }
     let target_address = match request[3] {
-        1 => { let mut address = [0u8; 4]; stream.read_exact(&mut address).await?; std::net::Ipv4Addr::from(address).to_string() }
-        3 => { let mut length = [0u8; 1]; stream.read_exact(&mut length).await?; let mut domain = vec![0u8; length[0] as usize]; stream.read_exact(&mut domain).await?; String::from_utf8(domain).unwrap_or_default() }
-        4 => { let mut address = [0u8; 16]; stream.read_exact(&mut address).await?; std::net::Ipv6Addr::from(address).to_string() }
-        _ => { stream.write_all(&[5, 8, 0, 1, 0, 0, 0, 0, 0, 0]).await?; return Ok(()); }
+        1 => {
+            let mut address = [0u8; 4];
+            stream.read_exact(&mut address).await?;
+            std::net::Ipv4Addr::from(address).to_string()
+        }
+        3 => {
+            let mut length = [0u8; 1];
+            stream.read_exact(&mut length).await?;
+            let mut domain = vec![0u8; length[0] as usize];
+            stream.read_exact(&mut domain).await?;
+            String::from_utf8(domain).unwrap_or_default()
+        }
+        4 => {
+            let mut address = [0u8; 16];
+            stream.read_exact(&mut address).await?;
+            std::net::Ipv6Addr::from(address).to_string()
+        }
+        _ => {
+            stream.write_all(&[5, 8, 0, 1, 0, 0, 0, 0, 0, 0]).await?;
+            return Ok(());
+        }
     };
-    let mut port = [0u8; 2]; stream.read_exact(&mut port).await?;
+    let mut port = [0u8; 2];
+    stream.read_exact(&mut port).await?;
     let target_port = u16::from_be_bytes(port);
-    let mut channel = match connection.open_direct_tcpip(&target_address, target_port, &peer.ip().to_string(), peer.port()).await {
+    let mut channel = match connection
+        .open_direct_tcpip(
+            &target_address,
+            target_port,
+            &peer.ip().to_string(),
+            peer.port(),
+        )
+        .await
+    {
         Ok(channel) => channel,
-        Err(_) => { stream.write_all(&[5, 5, 0, 1, 0, 0, 0, 0, 0, 0]).await?; return Ok(()); }
+        Err(_) => {
+            stream.write_all(&[5, 5, 0, 1, 0, 0, 0, 0, 0, 0]).await?;
+            return Ok(());
+        }
     };
     stream.write_all(&[5, 0, 0, 1, 0, 0, 0, 0, 0, 0]).await?;
     let _ = copy_bidirectional(&mut stream, &mut channel).await;
@@ -2526,7 +2637,8 @@ async fn sftp_chmod(state: &RuntimeState, params: SftpChmodParams) -> Result<Val
     Ok(serde_json::json!({ "changed": true }))
 }
 
-async fn sftp_close(state: &RuntimeState, session_id: &str) -> Result<Value, RpcError> {    let sftp = {
+async fn sftp_close(state: &RuntimeState, session_id: &str) -> Result<Value, RpcError> {
+    let sftp = {
         let sessions = state.sftp_sessions.lock();
         let Ok(mut sessions) = sessions else {
             return Err(RpcError::new(-32603, "SFTP state is unavailable"));
@@ -2575,17 +2687,11 @@ async fn ssh_exec_readonly(
     let timeout_ms = params.timeout_ms.clamp(1, 3_600_000);
     let output = tokio::time::timeout(
         Duration::from_millis(timeout_ms.saturating_add(2_000)),
-        connection.run_readonly_command(
-            &params.command,
-            timeout_ms,
-            params.max_output_bytes,
-        ),
+        connection.run_readonly_command(&params.command, timeout_ms, params.max_output_bytes),
     )
     .await
     .map_err(|_| RpcError::new(-32002, "ssh execReadonly timed out"))?
-    .map_err(|error: issh_runtime_ssh::SshError| {
-        RpcError::new(-32001, error.to_string())
-    })?;
+    .map_err(|error: issh_runtime_ssh::SshError| RpcError::new(-32001, error.to_string()))?;
     Ok(serde_json::json!({ "output": output }))
 }
 
@@ -2888,7 +2994,14 @@ mod tests {
         let result = dispatch(&serde_json::to_vec(&request).unwrap(), &state).await;
         state.sessions.lock().unwrap().close(session_id).unwrap();
         let result: Value = serde_json::from_slice(&result).unwrap();
-        assert!(result["result"]["output"].as_str().expect("probe output").lines().any(|line| line.starts_with("pi\t/")), "{result}");
+        assert!(
+            result["result"]["output"]
+                .as_str()
+                .expect("probe output")
+                .lines()
+                .any(|line| line.starts_with("pi\t/")),
+            "{result}"
+        );
     }
 
     #[tokio::test]
@@ -2931,7 +3044,8 @@ mod tests {
             &state,
         )
         .await;
-        let missing: Value = serde_json::from_slice(&missing).expect("missing delete should return JSON");
+        let missing: Value =
+            serde_json::from_slice(&missing).expect("missing delete should return JSON");
         assert_eq!(missing["error"]["code"], INVALID_PARAMS);
     }
 

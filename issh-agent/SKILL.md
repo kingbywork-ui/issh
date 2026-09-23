@@ -36,7 +36,6 @@ workspace 和任务状态已持久化。先 list workspace/agents，再按用户
 - agent_prompt 仅入队并返回 task id；task_wait/read/list 查看状态，workspace_events 用 afterSequence 增量读。没有消费者时任务会停 queued，注册 Agent 不会自动控制 TUI 或唤醒 Codex/OpsClaw 当前聊天。
 - task_start/complete 是状态接口：执行者实际开始后 start，工作确实完成后 complete 并提交 output；不能用这两个接口伪造完成，不能假定它们实现原子领取或自动执行。多人调度需指定唯一执行者。
 - task_cancel 更新任务状态；不保证已启动的外部 Agent/进程已经终止，需执行器确认。
-- Pi adapter 在源码 issh-agent/src/conversation-adapters.mjs，使用 pi --mode rpc；当前属于实验性独立对话链，未接生产 workspace relay 或安装包。会话恢复不代表接管运行中的 TUI。真实验收须检查同一 conversationId 上的请求→回复，不以握手为完成。
 - Codex 与 OpsClaw 可作为同一 Bridge 的 MCP 客户端，但自动任务领取、转发 Pi、回写结果和聊天唤醒仍需明确实现；技能不提供这些产品功能。
 - Pane 原始输入必须先 claim_input，写入携带其返回的所有权凭据，完成后 release_input。普通终端命令不是 pane 协议。
 - 未列入实际 tools/list 的工具不可调用：当前不包含 issh_search_rag 或 issh_agent_unregister；UI 注销能力不等于已暴露同名 MCP 工具。

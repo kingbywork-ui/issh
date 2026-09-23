@@ -3,25 +3,6 @@
   "updated": "2026-09-08T06:08:56.001Z",
   "plugins": [
     {
-      "id": "issh-plugin-agent-bridge",
-      "name": "Agent Hub Connector",
-      "version": "0.4.0",
-      "description": "显示 Agent Hub 与 issh Provider 状态并打开独立管理界面",
-      "kind": "integration",
-      "audience": "user",
-      "permissions": [
-        "agentHub:read",
-        "settings:tab"
-      ],
-      "minAppVersion": "0.0.4",
-      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge/releases/download/v0.4.0/issh-plugin-agent-bridge-0.4.0.tgz",
-      "sha256": "e70daf0d82e7673668b698bc073b274de4fb4f9fc2879e56f115f3f5272cd676",
-      "signature": "wfrK0sEYDvJ2B72IxCFXx7uq/rGdhfdqG/rzEMYtXbwHfhFq8td4rSqc8ixe03gdSGqYrX6LiwxhU367UQJIDA==",
-      "homepage": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge",
-      "repository": "https://github.com/kingbywork-ui/issh-plugin-agent-bridge",
-      "downloads": 435
-    },
-    {
       "id": "issh-plugin-config-sync",
       "name": "配置同步",
       "version": "0.2.0",

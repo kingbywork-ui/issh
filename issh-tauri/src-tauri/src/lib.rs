@@ -1,10 +1,7 @@
 mod agent_bridge;
 mod agent_bridge_config;
-mod agent_hub;
 mod clipboard;
-mod conversation_worker;
 mod host_profiles;
-mod management_server;
 mod plugin_gateway;
 mod plugin_market;
 
@@ -51,10 +48,6 @@ const AGENT_BRIDGE_RUNTIME_FILES: &[&str] = &[
     "src/cli.mjs",
     "src/mcp-server.mjs",
     "src/protocol.js",
-    "bin/issh-conversation-worker.mjs",
-    "src/conversation-service.mjs",
-    "src/conversation-process.mjs",
-    "src/conversation-adapters.mjs",
 ];
 
 /// 将安装包资源中的 issh-agent 运行文件同步到用户配置目录。
@@ -148,12 +141,13 @@ impl RuntimeManager {
         // pipe 可达但握手失败（如升级重装后残留旧 isshd、auth token 已轮换返回
         // Unauthorized 错误响应）：杀掉占用本 pipe 的残留进程后继续走 spawn 流程，
         // 而不是把「Runtime 健康响应缺少 result」直接抛给用户。
-        match send_request(&self.pipe_name, &health_request, Duration::from_millis(500)).await {
-            Ok(health) => match assert_compatible(&health) {
+        if let Ok(health) =
+            send_request(&self.pipe_name, &health_request, Duration::from_millis(500)).await
+        {
+            match assert_compatible(&health) {
                 Ok(()) => return Ok(()),
                 Err(_) => self.terminate_stale_runtime(),
-            },
-            Err(_) => {}
+            }
         }
 
         if let Some(parent) = self.database_path.parent() {
@@ -410,12 +404,11 @@ fn resolve_ssh_password(
 async fn plugin_gateway_request(
     manager: State<'_, Arc<RuntimeManager>>,
     state: State<'_, PluginGatewayState>,
-    agent_hub: State<'_, agent_hub::AgentHubRuntime>,
     request: Value,
 ) -> Result<PluginGatewayResponse, String> {
     let request: PluginGatewayRequest =
         serde_json::from_value(request).map_err(|error| format!("网关请求格式无效：{error}"))?;
-    Ok(plugin_gateway::handle_request(&manager, &state, &agent_hub, request).await)
+    Ok(plugin_gateway::handle_request(&manager, &state, request).await)
 }
 
 #[tauri::command]
@@ -598,15 +591,6 @@ pub fn run() {
             let runtime_manager = Arc::new(RuntimeManager::new(app.handle())?);
             app.manage(runtime_manager.clone());
             app.manage(PluginGatewayState::default());
-            app.manage(agent_hub::AgentHubRuntime::new());
-            let management = management_server::ManagementServerRuntime::new(
-                user_data.clone(),
-                runtime_manager.clone(),
-            );
-            if let Err(error) = tauri::async_runtime::block_on(management.start()) {
-                eprintln!("[management] {error}");
-            }
-            app.manage(management);
             app.manage(AgentBridgeRuntime::new(user_data));
             setup_tray(app.handle())?;
             // 深链：启动时（含冷启动带 ssh:// 参数）与运行期事件都转发给前端
@@ -694,10 +678,6 @@ pub fn run() {
             agent_bridge_disable,
             agent_bridge_disconnect,
             agent_bridge_status,
-            agent_hub_management_status,
-            agent_hub_management_open,
-            agent_hub_management_start,
-            agent_hub_management_close,
             agent_bridge_configure,
             agent_bridge_rotate_token,
             agent_bridge_audit_read,
@@ -716,10 +696,6 @@ pub fn run() {
 
     app.run(|handle, event| {
         if matches!(event, tauri::RunEvent::Exit) {
-            let management = handle.state::<management_server::ManagementServerRuntime>();
-            if let Err(error) = tauri::async_runtime::block_on(management.close()) {
-                eprintln!("[management] shutdown failed: {error}");
-            }
             handle.state::<Arc<RuntimeManager>>().stop();
             // R-045：完全退出时自动关闭 Agent Bridge（开关为运行时态，重启默认关）
             if let Ok(mut bridge_guard) = handle.state::<AgentBridgeRuntime>().bridge.lock() {
@@ -823,33 +799,13 @@ async fn agent_bridge_enable(
             return agent_bridge_status_snapshot(&state, true);
         }
     }
-    let (token, port, scopes, sftp_root, public_discovery, audit_enabled, permission_mode) = {
-        let config = state
-            .config
-            .lock()
-            .map_err(|_| "Agent Bridge 配置不可用".to_string())?;
-        (
-            config.token.clone(),
-            config.port,
-            config.allowed_scopes.clone(),
-            config.sftp_root.clone(),
-            config.public_discovery,
-            config.audit_log_enabled,
-            config.permission_mode,
-        )
-    };
-    let handle = agent_bridge::start(
-        manager.inner().clone(),
-        state.user_data.clone(),
-        token,
-        port,
-        agent_bridge::parse_scopes(&scopes),
-        sftp_root,
-        public_discovery,
-        audit_enabled,
-        permission_mode,
-    )
-    .await?;
+    let config = state
+        .config
+        .lock()
+        .map_err(|_| "Agent Bridge 配置不可用".to_string())?
+        .clone();
+    let handle =
+        agent_bridge::start(manager.inner().clone(), state.user_data.clone(), config).await?;
     *state
         .bridge
         .lock()
@@ -893,44 +849,6 @@ fn agent_bridge_status(state: State<'_, AgentBridgeRuntime>) -> Result<Value, St
         .map_err(|_| "Agent Bridge 状态不可用".to_string())?
         .is_some();
     agent_bridge_status_snapshot(&state, running)
-}
-
-#[tauri::command]
-fn agent_hub_management_status(
-    state: State<'_, management_server::ManagementServerRuntime>,
-) -> Result<Value, String> {
-    let status = state.status();
-    Ok(json!({
-        "enabled": status.enabled,
-        "running": status.running,
-        "port": status.port,
-        "url": status.url,
-        "token": state.access_token()?,
-        "lastError": status.last_error,
-    }))
-}
-
-#[tauri::command]
-fn agent_hub_management_open(
-    state: State<'_, management_server::ManagementServerRuntime>,
-) -> Result<(), String> {
-    open_agent_hub_url(state.open_url()?)
-}
-
-#[tauri::command]
-async fn agent_hub_management_start(
-    state: State<'_, management_server::ManagementServerRuntime>,
-) -> Result<Value, String> {
-    state.start().await?;
-    agent_hub_management_status(state)
-}
-
-#[tauri::command]
-async fn agent_hub_management_close(
-    state: State<'_, management_server::ManagementServerRuntime>,
-) -> Result<Value, String> {
-    state.close().await?;
-    agent_hub_management_status(state)
 }
 
 /// 更新 port / scope / sftpRoot / auditLogEnabled / publicDiscovery（token 与 enabled 不可经此修改）。
@@ -1010,36 +928,14 @@ async fn sync_bridge_runtime(
     if !was_running {
         return Ok(false);
     }
-    let (token, port, scopes, sftp_root, public_discovery, audit_enabled, permission_mode) = {
-        let config = state
-            .config
-            .lock()
-            .map_err(|_| "Agent Bridge 配置不可用".to_string())?;
-        (
-            config.token.clone(),
-            config.port,
-            config.allowed_scopes.clone(),
-            config.sftp_root.clone(),
-            config.public_discovery,
-            config.audit_log_enabled,
-            config.permission_mode,
-        )
-    };
+    let config = state
+        .config
+        .lock()
+        .map_err(|_| "Agent Bridge 配置不可用".to_string())?
+        .clone();
     let mut last_error: Option<String> = None;
     for _ in 0..10 {
-        match agent_bridge::start(
-            manager.clone(),
-            state.user_data.clone(),
-            token.clone(),
-            port,
-            agent_bridge::parse_scopes(&scopes),
-            sftp_root.clone(),
-            public_discovery,
-            audit_enabled,
-            permission_mode,
-        )
-        .await
-        {
+        match agent_bridge::start(manager.clone(), state.user_data.clone(), config.clone()).await {
             Ok(handle) => {
                 *state
                     .bridge
@@ -1435,14 +1331,12 @@ fn shell_execute(operation: &str, target: &str) -> Result<(), String> {
         )
     };
     if (result as isize) <= 32 {
-        return Err(format!("ShellExecuteW 打开目标失败（错误码 {}）", result as isize));
+        return Err(format!(
+            "ShellExecuteW 打开目标失败（错误码 {}）",
+            result as isize
+        ));
     }
     Ok(())
-}
-
-
-pub(crate) fn open_agent_hub_url(url: String) -> Result<(), String> {
-    open_external_url(url)
 }
 
 /// A2（R-012）SSH config 导入：读取用户主目录下的 ~/.ssh/config 文本。

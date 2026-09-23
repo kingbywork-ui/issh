@@ -156,6 +156,7 @@ async fn fetch_registry_from(
         plugins: registry
             .plugins
             .into_iter()
+            .filter(|entry| entry.id != "issh-plugin-agent-bridge")
             .map(|entry| PluginRegistryEntry {
                 id: entry.id,
                 name: entry.name,
@@ -224,6 +225,9 @@ pub async fn download_plugin(
 ) -> Result<InstalledPlugin, String> {
     if !is_valid_plugin_id(id) {
         return Err(format!("非法插件 id：{id}"));
+    }
+    if id == "issh-plugin-agent-bridge" {
+        return Err("Agent Hub Connector 已下线".to_string());
     }
     ensure_https_url(url)?;
     let client = reqwest::Client::builder()
@@ -544,7 +548,7 @@ mod tests {
         header.set_size(3);
         header.set_mode(0o644);
         header.set_cksum();
-        tarball.append(&mut header, b"abc".as_slice()).unwrap();
+        tarball.append(&header, b"abc".as_slice()).unwrap();
         let raw = tarball.into_inner().unwrap();
         let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
         encoder.write_all(&raw).unwrap();
@@ -591,6 +595,21 @@ mod tests {
         assert!(!is_valid_plugin_id(".hidden"));
         assert!(!is_valid_plugin_id("trailing."));
         assert!(!is_valid_plugin_id("double..dot"));
+    }
+
+    #[tokio::test]
+    async fn retired_hub_connector_cannot_be_downloaded() {
+        let error = download_plugin(
+            Path::new("unused"),
+            "issh-plugin-agent-bridge",
+            "https://example.com/obsolete.tgz",
+            "unused",
+            None,
+            "0.4.0",
+        )
+        .await
+        .unwrap_err();
+        assert!(error.contains("已下线"));
     }
 
     #[test]

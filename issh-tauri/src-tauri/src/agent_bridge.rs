@@ -14,13 +14,13 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
 
-use crate::agent_bridge_config::PermissionMode;
+use crate::agent_bridge_config::{AgentBridgeConfig, PermissionMode};
 use crate::RuntimeManager;
 
 /// Agent Bridge 默认监听端口。
@@ -385,14 +385,18 @@ impl AgentBridgeHandle {
 pub async fn start(
     runtime: Arc<RuntimeManager>,
     user_data: PathBuf,
-    token: String,
-    port: u16,
-    allowed_scopes: HashSet<ToolScope>,
-    sftp_root: Option<String>,
-    public_discovery: bool,
-    audit_enabled: bool,
-    permission_mode: PermissionMode,
+    config: AgentBridgeConfig,
 ) -> Result<AgentBridgeHandle, String> {
+    let AgentBridgeConfig {
+        token,
+        port,
+        allowed_scopes,
+        sftp_root,
+        public_discovery,
+        audit_log_enabled: audit_enabled,
+        permission_mode,
+    } = config;
+    let allowed_scopes = parse_scopes(&allowed_scopes);
     if port == 0 {
         return Err("端口必须为 1–65535 的整数".to_string());
     }
@@ -470,7 +474,7 @@ fn bind_error(port: u16, error: &std::io::Error) -> String {
 }
 
 /// 写 agent 可读 discovery file（对齐 issh-llm agentBridgePublicDiscoveryEnabled）。
-fn write_discovery_file(user_data: &PathBuf, token: &str, port: u16) {
+fn write_discovery_file(user_data: &Path, token: &str, port: u16) {
     let discovery = json!({
         "rpcUrl": format!("http://127.0.0.1:{port}/rpc"),
         "host": "127.0.0.1",
@@ -1848,13 +1852,15 @@ mod tests {
         let handle = start(
             runtime,
             user_data.clone(),
-            "test-token".into(),
-            port,
-            parse_scopes(&["read".into()]),
-            None,
-            true,
-            false,
-            PermissionMode::Confirm,
+            AgentBridgeConfig {
+                token: "test-token".into(),
+                port,
+                allowed_scopes: vec!["read".into()],
+                sftp_root: None,
+                public_discovery: true,
+                audit_log_enabled: false,
+                permission_mode: PermissionMode::Confirm,
+            },
         )
         .await
         .unwrap();
@@ -1914,13 +1920,15 @@ mod tests {
         let handle = start(
             runtime,
             user_data.clone(),
-            "test-token".into(),
-            port,
-            parse_scopes(&["read".into()]),
-            None,
-            false,
-            false,
-            PermissionMode::Confirm,
+            AgentBridgeConfig {
+                token: "test-token".into(),
+                port,
+                allowed_scopes: vec!["read".into()],
+                sftp_root: None,
+                public_discovery: false,
+                audit_log_enabled: false,
+                permission_mode: PermissionMode::Confirm,
+            },
         )
         .await
         .unwrap();

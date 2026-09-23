@@ -1,5 +1,4 @@
 use crate::host_profiles::HostProfileMutation;
-use crate::agent_hub::AgentHubRuntime;
 use crate::RuntimeManager;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -160,7 +159,6 @@ fn response_error(
 fn required_permission(method: &str) -> Option<&'static str> {
     match method {
         "runtime.health" => None,
-        "agentHub.status" | "agentHub.open" => Some("agentHub.read"),
         "session.list" | "session.current" | "session.read" | "session.probeAgents" => {
             Some("session.read")
         }
@@ -189,17 +187,12 @@ fn required_permission(method: &str) -> Option<&'static str> {
 
 fn permission_allowed(request: &PluginGatewayRequest, required: &str) -> bool {
     static_plugin_capabilities(&request.plugin_id)
-        .map(|capabilities| {
-            capabilities
-                .iter()
-                .any(|permission| *permission == required)
-        })
+        .map(|capabilities| capabilities.contains(&required))
         .unwrap_or(false)
 }
 
 fn static_plugin_capabilities(plugin_id: &str) -> Option<&'static [&'static str]> {
     match plugin_id {
-        "issh-plugin-agent-bridge" => Some(&["ui.settings.register", "agentHub.read"]),
         "issh-plugin-config-sync" => Some(&[
             "ui.settings.register",
             "profiles.read",
@@ -254,164 +247,6 @@ fn runtime_method(method: &str) -> Option<(&str, Option<&'static str>)> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn request(method: &str, permissions: &[&str]) -> PluginGatewayRequest {
-        PluginGatewayRequest {
-            request_id: "request-1".to_string(),
-            plugin_id: "issh-plugin-config-sync".to_string(),
-            api_version: API_VERSION.to_string(),
-            method: method.to_string(),
-            args: Value::Null,
-            permissions: permissions.iter().map(|value| value.to_string()).collect(),
-            deadline_ms: None,
-            trace_id: None,
-        }
-    }
-
-    #[test]
-    fn permissions_are_derived_from_registered_plugin_capabilities() {
-        let request = request("profiles.read", &["profiles:read"]);
-        assert!(permission_allowed(&request, "profiles.read"));
-        assert!(!permission_allowed(&request, "ssh.exec"));
-    }
-
-    #[test]
-    fn replay_protection_rejects_duplicate_request_ids() {
-        let state = PluginGatewayState::default();
-        assert!(state.claim_request("same-id").is_ok());
-        assert!(state.claim_request("same-id").is_err());
-    }
-
-    #[test]
-    fn network_allowlist_requires_https_and_known_hosts() {
-        assert!(network_host_allowed("https://api.github.com/gists").is_ok());
-        assert!(network_host_allowed("http://api.github.com/gists").is_err());
-        assert!(network_host_allowed("https://example.com").is_err());
-    }
-
-    #[test]
-    fn session_list_is_a_read_only_gateway_method() {
-        assert_eq!(
-            required_permission("session.probeAgents"),
-            Some("session.read")
-        );
-        assert_eq!(
-            runtime_method("session.probeAgents"),
-            Some(("session.probeAgents", Some("session.read")))
-        );
-        assert_eq!(required_permission("session.list"), Some("session.read"));
-        assert_eq!(
-            runtime_method("session.list"),
-            Some(("session.list", Some("session.read")))
-        );
-        assert_eq!(
-            runtime_method("session.current"),
-            Some(("session.list", Some("session.read")))
-        );
-        let mut forged = request("profiles.read", &["forged.permission"]);
-        forged.plugin_id = "issh-plugin-serial".to_string();
-        assert!(!permission_allowed(&forged, "profiles.read"));
-    }
-
-    #[test]
-    fn agent_unregister_is_a_write_gateway_method() {
-        assert_eq!(required_permission("agent.unregister"), Some("agent.write"));
-        assert_eq!(
-            runtime_method("agent.unregister"),
-            Some(("agent.unregister", Some("agent.write")))
-        );
-        let mut request = request("agent.unregister", &[]);
-        request.plugin_id = "issh-plugin-agent-bridge".to_string();
-        assert!(!permission_allowed(&request, "agent.write"));
-    }
-
-    #[test]
-    fn agent_hub_status_is_read_only_for_marketplace_bridge() {
-        assert_eq!(
-            required_permission("agentHub.status"),
-            Some("agentHub.read")
-        );
-        assert_eq!(runtime_method("agentHub.status"), None);
-        let mut request = request("agentHub.status", &[]);
-        request.plugin_id = "issh-plugin-agent-bridge".to_string();
-        assert!(permission_allowed(&request, "agentHub.read"));
-    }
-
-    #[test]
-    fn unknown_plugins_have_no_host_capability_entry() {
-        assert!(static_plugin_capabilities("marketplace.unknown").is_none());
-    }
-
-    #[test]
-    fn gateway_permissions_cover_llm_sftp_and_fs_methods() {
-        assert_eq!(required_permission("fs.userPaths"), Some("fs.read"));
-        assert_eq!(required_permission("fs.readLocalText"), Some("fs.read"));
-        assert_eq!(
-            required_permission("ssh.execReadonly"),
-            Some("ssh.execReadonly")
-        );
-        assert_eq!(
-            required_permission("http.postJson"),
-            Some("network.postJson")
-        );
-        assert_eq!(required_permission("sftp.open"), Some("sftp.read"));
-        assert_eq!(required_permission("sftp.list"), Some("sftp.read"));
-        assert_eq!(required_permission("sftp.stat"), Some("sftp.read"));
-        assert_eq!(required_permission("sftp.close"), Some("sftp.read"));
-        assert_eq!(required_permission("sftp.mkdir"), Some("sftp.write"));
-        assert_eq!(required_permission("sftp.rename"), Some("sftp.write"));
-        assert_eq!(required_permission("sftp.chmod"), Some("sftp.write"));
-        assert_eq!(
-            runtime_method("ssh.execReadonly"),
-            Some(("ssh.execReadonly", Some("ssh.execReadonly")))
-        );
-    }
-
-    #[test]
-    fn llm_plugin_host_capabilities_cover_gateway_usage() {
-        let capabilities = static_plugin_capabilities("issh-plugin-llm").unwrap();
-        for required in ["fs.read", "ssh.exec", "network.postJson"] {
-            assert!(
-                capabilities.contains(&required),
-                "llm 插件缺少能力：{required}"
-            );
-        }
-    }
-
-    #[test]
-    fn config_sync_host_capabilities_cover_vault_unlock() {
-        let capabilities = static_plugin_capabilities("issh-plugin-config-sync").unwrap();
-        assert!(
-            capabilities.contains(&"vault.read"),
-            "config-sync 插件缺少能力：vault.read"
-        );
-        assert_eq!(required_permission("vault.unlock"), Some("vault.read"));
-    }
-
-    #[test]
-    fn shell_history_path_allowlist_rejects_arbitrary_files() {
-        if let Some(home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) {
-            let home = home.to_string_lossy().into_owned();
-            assert!(is_shell_history_path(&format!("{home}\\.bash_history")));
-            assert!(is_shell_history_path(&format!("{home}/.zsh_history")));
-            assert!(!is_shell_history_path(&format!(
-                "{home}\\Documents\\secrets.txt"
-            )));
-        }
-        if let Some(app_data) = std::env::var_os("APPDATA") {
-            let app_data = app_data.to_string_lossy().into_owned();
-            assert!(is_shell_history_path(&format!(
-                "{app_data}\\Microsoft\\Windows\\PowerShell\\PSReadLine\\ConsoleHost_history.txt"
-            )));
-        }
-        assert!(!is_shell_history_path("C:\\Windows\\win.ini"));
-        assert!(!is_shell_history_path("..\\.bash_history"));
-    }
-}
-
 fn network_host_allowed(url: &str) -> Result<(), String> {
     let parsed = url::Url::parse(url).map_err(|_| "network.fetch URL 无效".to_string())?;
     if parsed.scheme() != "https" {
@@ -435,7 +270,7 @@ async fn network_fetch(args: &Value) -> Result<Value, String> {
         return Err("network.fetch 仅允许 GET、POST 或 PATCH".to_string());
     }
     let body = args.get("body").and_then(Value::as_str);
-    if body.map_or(false, |value| value.len() > 256 * 1024) {
+    if body.is_some_and(|value| value.len() > 256 * 1024) {
         return Err("network.fetch 请求体超过 256 KiB 限制".to_string());
     }
     let client = reqwest::Client::builder()
@@ -657,7 +492,6 @@ fn runtime_args(request: &PluginGatewayRequest, method: &str) -> Value {
 pub async fn handle_request(
     manager: &RuntimeManager,
     state: &PluginGatewayState,
-    agent_hub: &AgentHubRuntime,
     request: PluginGatewayRequest,
 ) -> PluginGatewayResponse {
     let request_id = request.request_id.clone();
@@ -716,14 +550,7 @@ pub async fn handle_request(
             );
         }
     }
-    let result = if request.method == "agentHub.status" {
-        serde_json::to_value(agent_hub.status().await).map_err(|error| error.to_string())
-    } else if request.method == "agentHub.open" {
-        agent_hub
-            .open_url().await
-            .and_then(crate::open_agent_hub_url)
-            .map(|_| json!({ "opened": true }))
-    } else if request.method == "network.fetch" {
+    let result = if request.method == "network.fetch" {
         network_fetch(&request.args).await
     } else if request.method == "profiles.read" {
         manager
@@ -804,5 +631,152 @@ pub async fn handle_request(
             state.audit(&request, false, Some("CALL_FAILED"));
             response_error(&request_id, "CALL_FAILED", error, true)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request(method: &str, permissions: &[&str]) -> PluginGatewayRequest {
+        PluginGatewayRequest {
+            request_id: "request-1".to_string(),
+            plugin_id: "issh-plugin-config-sync".to_string(),
+            api_version: API_VERSION.to_string(),
+            method: method.to_string(),
+            args: Value::Null,
+            permissions: permissions.iter().map(|value| value.to_string()).collect(),
+            deadline_ms: None,
+            trace_id: None,
+        }
+    }
+
+    #[test]
+    fn permissions_are_derived_from_registered_plugin_capabilities() {
+        let request = request("profiles.read", &["profiles:read"]);
+        assert!(permission_allowed(&request, "profiles.read"));
+        assert!(!permission_allowed(&request, "ssh.exec"));
+    }
+
+    #[test]
+    fn replay_protection_rejects_duplicate_request_ids() {
+        let state = PluginGatewayState::default();
+        assert!(state.claim_request("same-id").is_ok());
+        assert!(state.claim_request("same-id").is_err());
+    }
+
+    #[test]
+    fn network_allowlist_requires_https_and_known_hosts() {
+        assert!(network_host_allowed("https://api.github.com/gists").is_ok());
+        assert!(network_host_allowed("http://api.github.com/gists").is_err());
+        assert!(network_host_allowed("https://example.com").is_err());
+    }
+
+    #[test]
+    fn session_list_is_a_read_only_gateway_method() {
+        assert_eq!(
+            required_permission("session.probeAgents"),
+            Some("session.read")
+        );
+        assert_eq!(
+            runtime_method("session.probeAgents"),
+            Some(("session.probeAgents", Some("session.read")))
+        );
+        assert_eq!(required_permission("session.list"), Some("session.read"));
+        assert_eq!(
+            runtime_method("session.list"),
+            Some(("session.list", Some("session.read")))
+        );
+        assert_eq!(
+            runtime_method("session.current"),
+            Some(("session.list", Some("session.read")))
+        );
+        let mut forged = request("profiles.read", &["forged.permission"]);
+        forged.plugin_id = "issh-plugin-serial".to_string();
+        assert!(!permission_allowed(&forged, "profiles.read"));
+    }
+
+    #[test]
+    fn agent_unregister_is_a_write_gateway_method() {
+        assert_eq!(required_permission("agent.unregister"), Some("agent.write"));
+        assert_eq!(
+            runtime_method("agent.unregister"),
+            Some(("agent.unregister", Some("agent.write")))
+        );
+        let mut request = request("agent.unregister", &[]);
+        request.plugin_id = "issh-plugin-agent-bridge".to_string();
+        assert!(static_plugin_capabilities(&request.plugin_id).is_none());
+        assert!(!permission_allowed(&request, "agent.write"));
+    }
+
+    #[test]
+    fn unknown_plugins_have_no_host_capability_entry() {
+        assert!(static_plugin_capabilities("marketplace.unknown").is_none());
+    }
+
+    #[test]
+    fn gateway_permissions_cover_llm_sftp_and_fs_methods() {
+        assert_eq!(required_permission("fs.userPaths"), Some("fs.read"));
+        assert_eq!(required_permission("fs.readLocalText"), Some("fs.read"));
+        assert_eq!(
+            required_permission("ssh.execReadonly"),
+            Some("ssh.execReadonly")
+        );
+        assert_eq!(
+            required_permission("http.postJson"),
+            Some("network.postJson")
+        );
+        assert_eq!(required_permission("sftp.open"), Some("sftp.read"));
+        assert_eq!(required_permission("sftp.list"), Some("sftp.read"));
+        assert_eq!(required_permission("sftp.stat"), Some("sftp.read"));
+        assert_eq!(required_permission("sftp.close"), Some("sftp.read"));
+        assert_eq!(required_permission("sftp.mkdir"), Some("sftp.write"));
+        assert_eq!(required_permission("sftp.rename"), Some("sftp.write"));
+        assert_eq!(required_permission("sftp.chmod"), Some("sftp.write"));
+        assert_eq!(
+            runtime_method("ssh.execReadonly"),
+            Some(("ssh.execReadonly", Some("ssh.execReadonly")))
+        );
+    }
+
+    #[test]
+    fn llm_plugin_host_capabilities_cover_gateway_usage() {
+        let capabilities = static_plugin_capabilities("issh-plugin-llm").unwrap();
+        for required in ["fs.read", "ssh.exec", "network.postJson"] {
+            assert!(
+                capabilities.contains(&required),
+                "llm 插件缺少能力：{required}"
+            );
+        }
+    }
+
+    #[test]
+    fn config_sync_host_capabilities_cover_vault_unlock() {
+        let capabilities = static_plugin_capabilities("issh-plugin-config-sync").unwrap();
+        assert!(
+            capabilities.contains(&"vault.read"),
+            "config-sync 插件缺少能力：vault.read"
+        );
+        assert_eq!(required_permission("vault.unlock"), Some("vault.read"));
+    }
+
+    #[test]
+    fn shell_history_path_allowlist_rejects_arbitrary_files() {
+        if let Some(home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) {
+            let home = home.to_string_lossy().into_owned();
+            assert!(is_shell_history_path(&format!("{home}\\.bash_history")));
+            assert!(is_shell_history_path(&format!("{home}/.zsh_history")));
+            assert!(!is_shell_history_path(&format!(
+                "{home}\\Documents\\secrets.txt"
+            )));
+        }
+        if let Some(app_data) = std::env::var_os("APPDATA") {
+            let app_data = app_data.to_string_lossy().into_owned();
+            assert!(is_shell_history_path(&format!(
+                "{app_data}\\Microsoft\\Windows\\PowerShell\\PSReadLine\\ConsoleHost_history.txt"
+            )));
+        }
+        assert!(!is_shell_history_path("C:\\Windows\\win.ini"));
+        assert!(!is_shell_history_path("..\\.bash_history"));
     }
 }
