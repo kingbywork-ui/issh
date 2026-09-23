@@ -1054,4 +1054,12 @@
 - 日志检索：新增检索输入框，对时间 / 方法 / 错误码 / 错误信息 / 审批人 / 原因 / 参数 JSON 做大小写无关的关键词匹配，标题显示“命中数 / 总数”；无命中显示空状态提示；Esc 优先清空检索、再关闭弹窗。
 - 代码结构：解析 / 排序 / 检索纯逻辑抽到 `issh-tauri/src/lib/auditLog.ts`，组件只负责渲染，便于回归测试。
 - 验证：新增自包含回归测试 `issh-tauri/scripts/test-audit-log.mjs`（`npm run test:audit-log`，内存转译真实 `auditLog.ts`，20 项断言覆盖倒序 / 边界 / 容错 / 检索），全部通过；`svelte-check` 0 错误 0 警告；`vite build` 通过（155 modules）。
-- 未打包：本轮仅前端改动，未重新出安装包（用户未要求）。
+- 未打包：本轮仅前端改动，未重新出安装包（用户未要求）；随后由 R-112 重打包纳入 0.0.6 安装包。
+
+### R-112 重打包 0.0.6 安装包（纳入审计日志增强）（用户需求，2026-09-23，已完成：已打包安装验证）
+
+- 用户要求：构建安装包，版本不变（0.0.6）。
+- 目的：把 R-111 的审计日志时间倒序 / 实时刷新 / 检索增强（提交 `2c7d8f5`，此前仅源码验证、未打包）纳入安装包。
+- 版本号：应用版本 4 处保持 0.0.6 不变（根 `package.json` / `issh-tauri/package.json` / `tauri.conf.json` / `src-tauri/Cargo.toml`）；`issh-runtime` workspace version 0.4.0 独立不变。
+- 打包验收：`cargo build --release -p isshd`（1.86s，issh-runtime 无改动 up-to-date）→ stage-runtime（isshd 9.87 MB + SKILL.md + agent-bridge 9 文件）→ `tauri build`（vite + cargo 4m26s + NSIS），产物 `issh_0.0.6_x64-setup.exe` 5.01 MB（5,255,047 字节，覆盖上一轮同名产物）。
+- 安装验证：同版本覆盖静默安装 `/S` 成功；注册表 DisplayVersion=0.0.6；安装布局正确（issh-tauri.exe + issh-runtime\isshd.exe 目录形式 + uninstall.exe + agent-bridge\ + SKILL.md）；launch test 窗口标题 `issh` 且 isshd 从安装目录拉起（非 repo fallback）；数据目录 config.yaml 未被改动。
