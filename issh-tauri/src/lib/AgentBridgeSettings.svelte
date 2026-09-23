@@ -33,6 +33,7 @@
     let auditText = $state('')
     let showAudit = $state(false)
     let auditBusy = $state(false)
+    let auditAutoRefresh = $state(true)
     let testResult = $state('')
     let agentList = $state<AgentProcessInfo[] | null>(null)
     let agentBusy = $state(false)
@@ -218,6 +219,22 @@
         }
     }
 
+    // 实时刷新：弹窗打开且开启实时模式时，定时静默重读日志文件，新记录自动出现在最上面。
+    async function refreshAuditQuiet (): Promise<void> {
+        if (auditBusy) return
+        try {
+            auditText = await agentBridgeAuditRead()
+        } catch {
+            // 轮询失败静默处理，等待下一次刷新，不打断正在阅读的用户
+        }
+    }
+
+    $effect(() => {
+        if (!showAudit || !auditAutoRefresh) return
+        const timer = setInterval(() => { void refreshAuditQuiet() }, 2500)
+        return () => { clearInterval(timer) }
+    })
+
     onMount(() => {
         void refresh()
     })
@@ -368,9 +385,11 @@
                 show={showAudit}
                 {auditText}
                 {auditBusy}
+                autoRefresh={auditAutoRefresh}
                 onclose={() => { showAudit = false }}
                 onrefresh={() => void loadAudit()}
                 onclear={() => void clearAudit()}
+                ontoggleautorefresh={(value) => { auditAutoRefresh = value }}
             />
         </div>
 

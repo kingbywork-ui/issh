@@ -1,83 +1,46 @@
 <script lang="ts">
-    interface AuditEntry {
-        index: number
-        parsed: true
-        timestamp: string
-        method: string
-        ok: boolean
-        errorCode: string | null
-        errorMessage: string | null
-        params: unknown
-        executed: boolean | null
-        approved: boolean | null
-        approvedBy: string | null
-        reason: string | null
-    }
-
-    interface AuditRawEntry {
-        index: number
-        parsed: false
-        raw: string
-    }
-
-    type Entry = AuditEntry | AuditRawEntry
+    import { parseAuditEntries, filterAuditEntries } from './auditLog'
 
     let {
         show,
         auditText,
         auditBusy,
+        autoRefresh,
         onclose,
         onrefresh,
         onclear,
+        ontoggleautorefresh,
     }: {
         show: boolean
         auditText: string
         auditBusy: boolean
+        autoRefresh: boolean
         onclose: () => void
         onrefresh: () => void
         onclear: () => void
+        ontoggleautorefresh: (value: boolean) => void
     } = $props()
 
-    let parsedEntries = $derived.by((): Entry[] => {
-        if (!auditText) return []
-        const lines = auditText.split('\n').filter((l) => l.trim().length > 0)
-        return lines.map((line, i) => {
-            try {
-                const parsed = JSON.parse(line)
-                return {
-                    index: i,
-                    parsed: true,
-                    timestamp: parsed.timestamp ?? '',
-                    method: parsed.method ?? '',
-                    ok: parsed.ok ?? false,
-                    errorCode: parsed.errorCode ?? null,
-                    errorMessage: parsed.errorMessage ?? null,
-                    params: parsed.params ?? null,
-                    executed: parsed.executed ?? null,
-                    approved: parsed.approved ?? null,
-                    approvedBy: parsed.approvedBy ?? null,
-                    reason: parsed.reason ?? null,
-                } as AuditEntry
-            } catch {
-                return { index: i, parsed: false, raw: line } as AuditRawEntry
-            }
-        })
-    })
+    let query = $state('')
+
+    // 时间序列倒序：最新记录排在最上面；无法解析的行沉底。
+    let entries = $derived(parseAuditEntries(auditText))
+
+    let filteredEntries = $derived(filterAuditEntries(entries, query))
+
+    let searching = $derived(query.trim().length > 0)
 
     function formatTime (iso: string): string {
-        try {
-            const d = new Date(iso)
-            return d.toLocaleString(undefined, {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-            })
-        } catch {
-            return iso
-        }
+        const d = new Date(iso)
+        if (Number.isNaN(d.getTime())) return iso
+        return d.toLocaleString(undefined, {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+        })
     }
 
     function handleBackdrop (): void {
@@ -85,7 +48,10 @@
     }
 
     function handleKeydown (e: KeyboardEvent): void {
-        if (e.key === 'Escape') onclose()
+        if (e.key === 'Escape') {
+            if (searching) query = ''
+            else onclose()
+        }
     }
 </script>
 
@@ -105,7 +71,11 @@
             <div class="audit-modal-header">
                 <div class="audit-modal-title">
                     <h2>Agent Bridge 审计日志</h2>
-                    <span class="audit-count">{parsedEntries.length} 条记录</span>
+                    {#if searching}
+                        <span class="audit-count">{filteredEntries.length} / {entries.length} 条记录</span>
+                    {:else}
+                        <span class="audit-count">{entries.length} 条记录</span>
+                    {/if}
                 </div>
                 <div class="audit-modal-actions">
                     <button type="button" disabled={auditBusy} onclick={onrefresh}>刷新</button>
@@ -113,11 +83,42 @@
                     <button class="close-btn" type="button" onclick={onclose} aria-label="关闭">✕</button>
                 </div>
             </div>
+            <div class="audit-toolbar">
+                <div class="audit-search">
+                    <input
+                        type="search"
+                        class="audit-search-input"
+                        placeholder="检索方法 / 错误码 / 参数 / 时间…"
+                        aria-label="检索审计日志"
+                        bind:value={query}
+                    />
+                    {#if searching}
+                        <button
+                            class="audit-search-clear"
+                            type="button"
+                            aria-label="清空检索"
+                            onclick={() => { query = '' }}
+                        >✕</button>
+                    {/if}
+                </div>
+                <button
+                    class="audit-live-toggle"
+                    class:active={autoRefresh}
+                    type="button"
+                    aria-pressed={autoRefresh}
+                    title="实时刷新：新记录自动出现在最上面"
+                    onclick={() => ontoggleautorefresh(!autoRefresh)}
+                >
+                    <span class="audit-live-dot"></span>实时刷新
+                </button>
+            </div>
             <div class="audit-modal-body">
-                {#if parsedEntries.length === 0}
+                {#if entries.length === 0}
                     <div class="audit-empty">暂无审计记录</div>
+                {:else if filteredEntries.length === 0}
+                    <div class="audit-empty">未找到匹配 “{query.trim()}” 的记录</div>
                 {:else}
-                    {#each parsedEntries as entry (entry.index)}
+                    {#each filteredEntries as entry (entry.index)}
                         {#if entry.parsed}
                             <div class="audit-row">
                                 <div class="audit-row-head">
@@ -272,6 +273,119 @@
         border-color: transparent !important;
     }
 
+    .audit-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: none;
+        padding: 8px 16px;
+        border-bottom: 1px solid var(--ops-line);
+    }
+
+    .audit-search {
+        position: relative;
+        display: flex;
+        flex: 1;
+        min-width: 0;
+        align-items: center;
+    }
+
+    .audit-search-input {
+        width: 100%;
+        min-height: 28px;
+        padding: 0 26px 0 10px;
+        border: 1px solid var(--ops-line);
+        border-radius: var(--ops-radius);
+        background: var(--ops-panel);
+        color: var(--ops-fg);
+        font-size: 12px;
+    }
+
+    .audit-search-input:focus {
+        outline: none;
+        border-color: var(--ops-signal-border);
+    }
+
+    .audit-search-input::-webkit-search-cancel-button {
+        display: none;
+    }
+
+    .audit-search-clear {
+        position: absolute;
+        right: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        border: none;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--ops-fg-muted);
+        cursor: pointer;
+        font-size: 12px;
+        line-height: 1;
+    }
+
+    .audit-search-clear:hover {
+        color: var(--ops-fg);
+        background: var(--ops-line);
+    }
+
+    .audit-live-toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex: none;
+        min-height: 28px;
+        padding: 0 12px;
+        border: 1px solid var(--ops-line);
+        border-radius: var(--ops-radius);
+        background: transparent;
+        color: var(--ops-fg-muted);
+        cursor: pointer;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    .audit-live-toggle.active {
+        color: var(--ops-signal);
+        border-color: var(--ops-signal-border);
+    }
+
+    .audit-live-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--ops-fg-muted);
+        flex: none;
+    }
+
+    .audit-live-toggle.active .audit-live-dot {
+        background: var(--ops-signal);
+        box-shadow: 0 0 0 0 var(--ops-signal);
+        animation: audit-pulse 2s ease-out infinite;
+    }
+
+    @keyframes audit-pulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(61, 214, 140, 0.55);
+        }
+        70% {
+            box-shadow: 0 0 0 6px rgba(61, 214, 140, 0);
+        }
+        100% {
+            box-shadow: 0 0 0 0 rgba(61, 214, 140, 0);
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .audit-live-toggle.active .audit-live-dot {
+            animation: none;
+        }
+    }
+
     .audit-modal-body {
         flex: 1;
         min-height: 0;
@@ -408,6 +522,15 @@
         .audit-modal-actions {
             width: 100%;
             justify-content: flex-end;
+        }
+
+        .audit-toolbar {
+            flex-wrap: wrap;
+            padding: 8px 12px;
+        }
+
+        .audit-search {
+            flex: 1 1 100%;
         }
     }
 </style>

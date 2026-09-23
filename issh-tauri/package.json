@@ -7,6 +7,7 @@
         "dev": "vite",
         "build": "vite build",
         "check": "svelte-check --tsconfig ./tsconfig.json",
+        "test:audit-log": "node scripts/test-audit-log.mjs",
         "tauri": "tauri",
         "stage:runtime": "node scripts/stage-runtime.mjs"
     },

@@ -1045,3 +1045,13 @@
 - 随包携带 Agent Bridge 审计日志弹窗化改动（本会话开始前工作区既有未提交改动，一并发布）：审计日志由设置页内联 `<pre>` 改为独立弹窗组件 `issh-tauri/src/lib/AuditLogModal.svelte`，支持条目解析 / 刷新 / 清空与原始行兜底。
 - 打包验收：`cargo build --release -p isshd`（1.66s，issh-runtime 无改动 up-to-date）→ stage-runtime（isshd 9.87 MB + SKILL.md + agent-bridge 9 文件）→ `tauri build`（vite 3.05s + cargo 4m15s + NSIS），产物 `issh_0.0.6_x64-setup.exe` 5.01 MB（5,253,990 字节）。
 - 安装验证：0.0.5 → 0.0.6 静默升级安装 `/S` 成功；注册表 DisplayVersion=0.0.6；安装布局正确（issh-tauri.exe + issh-runtime\isshd.exe 目录形式 + uninstall.exe + agent-bridge\ + SKILL.md）；launch test 窗口标题 `issh` 且 isshd 从安装目录拉起；数据目录 config.yaml 未被改动。提交 `3349fa7`。
+
+### R-111 审计日志时间序列排序 + 实时刷新 + 检索（用户需求，2026-09-23，已完成：逻辑回归 + 类型检查 + 构建验证）
+
+- 用户原话“升级日志需要使用时间序列的方式来显示排序，最新实时显示再最上面，同时需要增加日志检索功能”，按上下文确认为 Agent Bridge 审计日志弹窗（`AuditLogModal`，R-110 刚落地）的排序与检索增强。
+- 时间序列倒序：审计记录按 `timestamp` 倒序排列，最新一条显示在最上面；无法解析的行与无有效时间戳的行沉底并保持原始文件顺序（依赖 `Array.prototype.sort` 稳定性），无法解析的行保留原文兜底展示。
+- 实时刷新：弹窗打开且“实时刷新”开关开启时，每 2.5s 静默重读审计日志文件，新记录自动出现在最上面；提供“实时刷新”开关（默认开，带脉冲指示）与失败静默处理，关闭弹窗或关闭开关即停止轮询。
+- 日志检索：新增检索输入框，对时间 / 方法 / 错误码 / 错误信息 / 审批人 / 原因 / 参数 JSON 做大小写无关的关键词匹配，标题显示“命中数 / 总数”；无命中显示空状态提示；Esc 优先清空检索、再关闭弹窗。
+- 代码结构：解析 / 排序 / 检索纯逻辑抽到 `issh-tauri/src/lib/auditLog.ts`，组件只负责渲染，便于回归测试。
+- 验证：新增自包含回归测试 `issh-tauri/scripts/test-audit-log.mjs`（`npm run test:audit-log`，内存转译真实 `auditLog.ts`，20 项断言覆盖倒序 / 边界 / 容错 / 检索），全部通过；`svelte-check` 0 错误 0 警告；`vite build` 通过（155 modules）。
+- 未打包：本轮仅前端改动，未重新出安装包（用户未要求）。
