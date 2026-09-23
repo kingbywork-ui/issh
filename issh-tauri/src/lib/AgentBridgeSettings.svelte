@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte'
+    import AuditLogModal from './AuditLogModal.svelte'
     import {
         agentBridgeAuditClear,
         agentBridgeAuditRead,
@@ -363,9 +364,14 @@
                 <button type="button" disabled={auditBusy} onclick={() => void loadAudit()}>查看审计日志</button>
                 <button class="plugin-remove" type="button" disabled={auditBusy} onclick={() => void clearAudit()}>清除审计日志</button>
             </div>
-            {#if showAudit}
-                <pre class="agent-audit">{auditText.length > 0 ? auditText : '（暂无审计记录）'}</pre>
-            {/if}
+            <AuditLogModal
+                show={showAudit}
+                {auditText}
+                {auditBusy}
+                onclose={() => { showAudit = false }}
+                onrefresh={() => void loadAudit()}
+                onclear={() => void clearAudit()}
+            />
         </div>
 
         <div class="settings-field">
