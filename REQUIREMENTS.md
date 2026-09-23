@@ -1037,3 +1037,11 @@
 - 保留独立 Agent Bridge（CLI/MCP、终端接入）及 Herdr/Bridge 共用的 Runtime workspace/agent/task 数据与接口；既有用户数据和正在运行的旧客户端不作清理。
 - 验证：前端检查 0 错误/警告、构建通过；Agent Bridge 33/33、Tauri 原生 53/53，旧连接器下载拒绝回归通过；严格 Clippy、格式检查通过。
 - 打包验收（2026-09-23，版本不变 0.0.5）：`cargo build --release -p isshd`（1m04s）→ stage-runtime（isshd 9.87 MB + agent-bridge 9 文件）→ `tauri build`（vite 2.17s + cargo 4m22s + NSIS），产物 `issh_0.0.5_x64-setup.exe` 5.01 MB；同版本静默覆盖安装 `/S` 成功，注册表 DisplayVersion=0.0.5、安装布局与 launch test（窗口 `issh` + isshd 从安装目录拉起）均通过；未中断现有终端，数据目录 config.yaml 未被改动。
+
+### R-110 发布 0.0.6 安装包（用户需求，2026-09-23，已完成：已打包安装验证）
+
+- 用户要求：构建新安装包，版本 0.0.6。
+- 版本号：应用版本 4 处（根 `package.json` / `issh-tauri/package.json` / `tauri.conf.json` / `src-tauri/Cargo.toml`）由 0.0.5 升级为 0.0.6，`Cargo.lock` 随之更新；`issh-runtime/Cargo.toml` workspace version（0.4.0）独立于应用版本，保持不变。
+- 随包携带 Agent Bridge 审计日志弹窗化改动（本会话开始前工作区既有未提交改动，一并发布）：审计日志由设置页内联 `<pre>` 改为独立弹窗组件 `issh-tauri/src/lib/AuditLogModal.svelte`，支持条目解析 / 刷新 / 清空与原始行兜底。
+- 打包验收：`cargo build --release -p isshd`（1.66s，issh-runtime 无改动 up-to-date）→ stage-runtime（isshd 9.87 MB + SKILL.md + agent-bridge 9 文件）→ `tauri build`（vite 3.05s + cargo 4m15s + NSIS），产物 `issh_0.0.6_x64-setup.exe` 5.01 MB（5,253,990 字节）。
+- 安装验证：0.0.5 → 0.0.6 静默升级安装 `/S` 成功；注册表 DisplayVersion=0.0.6；安装布局正确（issh-tauri.exe + issh-runtime\isshd.exe 目录形式 + uninstall.exe + agent-bridge\ + SKILL.md）；launch test 窗口标题 `issh` 且 isshd 从安装目录拉起；数据目录 config.yaml 未被改动。提交 `3349fa7`。
