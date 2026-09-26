@@ -1126,3 +1126,4 @@
 - 发布处理：以 `dev` 的 Tauri/Rust 源码树作为本版内容，保留旧 Electron `main` 的提交历史关联；移除已跟踪的安装器/npm 缓存与本地 Agent 工作文件，忽略备份安装包、上游参考克隆和构建产物。
 - 交付：`dev` 发布准备提交 `2b44892`，`main` 双亲合并提交 `09d6cae`；`v0.1.3` 指向 `09d6cae`，与既有 `v0.1.2` 命名形式一致。GitHub Release 已发布详细说明及 Windows x64 NSIS 包、SHA-256 校验文件。
 - 验证：中英文 README 与版本文件均为 0.1.3；Tauri 和 AI 插件类型检查 0/0、构建成功，混合分屏、审计日志和 AI 插件定向测试通过；Rust 61/61，NSIS 构建成功。安装包 5,277,745 字节，SHA-256 `efc170769ed45cc9640fdfab3d8b3ed78a79e0ea38b4a6f52e1ce134cf0d500f`，GitHub 资产 digest 与本地一致。未覆盖已安装客户端，也未做真实模型/MCP 或安装版 GUI 验收。
+- 合并后的 CI 修复：补全 toast 源文件末尾换行以通过 lint；将 `typedoc.mjs` 配置改为 ES module 导出以匹配当前仓库模块类型。完整 lint 0 错误（2 条既有警告），文档生成通过。
