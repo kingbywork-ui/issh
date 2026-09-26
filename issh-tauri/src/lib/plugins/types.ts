@@ -18,7 +18,7 @@ export interface GatewayNetworkOptions extends GatewayRequestOptions {
 }
 
 export interface PluginGateway {
-    apiVersion: typeof PLUGIN_GATEWAY_API_VERSION
+    apiVersion: '1' | '2'
     request<T = unknown> (method: string, args?: Record<string, unknown>, options?: GatewayRequestOptions): Promise<T>
     ui: {
         registerSettingsTab (tab: SettingsTabDefinition): Disposable
@@ -51,6 +51,15 @@ export interface PluginGateway {
     /** 受控 JSON POST（LLM API 等用户配置端点）：https/http、请求头白名单、大小与超时限制。 */
     http: {
         postJson (url: string, options?: { headers?: Record<string, string>; body?: string } & GatewayRequestOptions): Promise<{ status: number; ok: boolean; body: string }>
+        streamOpen (url: string, options?: { headers?: Record<string, string>; body?: string } & GatewayRequestOptions): Promise<{ streamId: string; status: number }>
+        streamPoll (streamId: string, options?: GatewayRequestOptions): Promise<{ chunkBase64: string; done: boolean }>
+        streamClose (streamId: string, options?: GatewayRequestOptions): Promise<{ closed: boolean }>
+    }
+    mcp: {
+        connect (serverId: string, config: { command: string; arguments?: string[]; cwd?: string; environment?: Record<string, string> }, options?: GatewayRequestOptions): Promise<unknown>
+        listTools (serverId: string, options?: GatewayRequestOptions): Promise<{ tools: Array<{ name: string; description?: string; inputSchema?: Record<string, unknown> }> }>
+        callTool (serverId: string, name: string, args: Record<string, unknown>, options?: GatewayRequestOptions): Promise<unknown>
+        disconnect (serverId: string, options?: GatewayRequestOptions): Promise<unknown>
     }
     /** 本地文件读取：仅限 shell 历史文件（路径白名单），缺失返回 null。 */
     fs: {
@@ -124,8 +133,15 @@ export interface HomeCardDefinition {
 export interface PanelDefinition {
     id: string
     title: string
-    placement: 'left' | 'bottom'
-    component: Component<Record<string, unknown>>
+    placement: 'left' | 'bottom' | 'right'
+    component?: Component<Record<string, unknown>>
+    mount?: (target: HTMLElement, host: PanelHostContext) => () => void
+    /** 由宿主按插件权限填充，不接受插件自行声明。 */
+    canReadTerminal?: boolean
+}
+
+export interface PanelHostContext {
+    getActiveSession (): { id: string; title: string; kind: string; lines: string[] } | null
 }
 
 export interface SandboxPanelDefinition {

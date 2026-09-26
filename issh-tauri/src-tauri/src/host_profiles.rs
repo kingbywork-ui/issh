@@ -459,6 +459,73 @@ impl HostProfileStore {
             }
         }
 
+        // Older imports and edited profiles can leave a host-specific secret
+        // without a matching profile. Keep that account visible in the Vault.
+        for secret in &secrets {
+            let kind = secret.get("type").and_then(Value::as_str).unwrap_or("");
+            if !matches!(
+                kind,
+                VAULT_SECRET_TYPE_PASSWORD
+                    | VAULT_SECRET_TYPE_SUDO_PASSWORD
+                    | VAULT_SECRET_TYPE_PASSPHRASE
+            ) {
+                continue;
+            }
+            let Some(key) = secret.get("key") else {
+                continue;
+            };
+            let (Some(user), Some(host)) = (
+                key.get("user").and_then(Value::as_str),
+                key.get("host").and_then(Value::as_str),
+            ) else {
+                continue;
+            };
+            if user.is_empty() || host.is_empty() {
+                continue;
+            }
+            let port = key
+                .get("port")
+                .and_then(Value::as_u64)
+                .and_then(|value| u16::try_from(value).ok())
+                .unwrap_or(22);
+            let credential_key = format!("{user}|{host}|{port}");
+            if !emitted.insert(credential_key) {
+                continue;
+            }
+            let password = find_exact_connection_secret(
+                &secrets,
+                VAULT_SECRET_TYPE_PASSWORD,
+                user,
+                host,
+                port,
+            );
+            let sudo_password = find_exact_connection_secret(
+                &secrets,
+                VAULT_SECRET_TYPE_SUDO_PASSWORD,
+                user,
+                host,
+                port,
+            );
+            let key_passphrase = find_exact_connection_secret(
+                &secrets,
+                VAULT_SECRET_TYPE_PASSPHRASE,
+                user,
+                host,
+                port,
+            );
+            if password.is_some() || sudo_password.is_some() || key_passphrase.is_some() {
+                credentials.push(HostCredential {
+                    user: user.to_string(),
+                    host: host.to_string(),
+                    port,
+                    password,
+                    sudo_password,
+                    key_passphrase,
+                    passphrase_by_key: false,
+                });
+            }
+        }
+
         for secret in &secrets {
             let key = match secret.get("key") {
                 Some(key) => key,
@@ -532,14 +599,12 @@ impl HostProfileStore {
         } else {
             mutation.port
         };
-        if mutation.sudo_password.is_some() {
-            let state = self.read()?;
-            if !state.encrypted {
-                return Err("保存 sudo 密码前请先在保险库中启用主口令".to_string());
-            }
-            if !state.unlocked {
-                return Err("保存 sudo 密码前请先解锁保险库".to_string());
-            }
+        let state = self.read()?;
+        if !state.encrypted {
+            return Err("保存凭据前请先在保险库中启用主口令".to_string());
+        }
+        if !state.unlocked {
+            return Err("保存凭据前请先解锁保险库".to_string());
         }
         self.mutate_secret(|secrets| {
             apply_credential_mutation(secrets, user, host, port, &mutation);
@@ -572,7 +637,7 @@ impl HostProfileStore {
                     .map(|key| {
                         key.get("user").and_then(Value::as_str) == Some(user)
                             && key.get("host").and_then(Value::as_str) == Some(host)
-                            && key.get("port").and_then(Value::as_u64) == Some(port as u64)
+                            && key.get("port").and_then(Value::as_u64).unwrap_or(22) == port as u64
                     })
                     .unwrap_or(false);
                 !matches
@@ -1372,7 +1437,7 @@ fn find_exact_connection_secret(
                     .map(|key| {
                         key.get("user").and_then(Value::as_str) == Some(user)
                             && key.get("host").and_then(Value::as_str) == Some(host)
-                            && key.get("port").and_then(Value::as_u64) == Some(port as u64)
+                            && key.get("port").and_then(Value::as_u64).unwrap_or(22) == port as u64
                     })
                     .unwrap_or(false)
         })
@@ -1453,7 +1518,7 @@ fn apply_credential_mutation(
                     .map(|key| {
                         key.get("user").and_then(Value::as_str) == Some(user)
                             && key.get("host").and_then(Value::as_str) == Some(host)
-                            && key.get("port").and_then(Value::as_u64) == Some(port as u64)
+                            && key.get("port").and_then(Value::as_u64).unwrap_or(22) == port as u64
                     })
                     .unwrap_or(false)
         });
@@ -1470,7 +1535,7 @@ fn apply_credential_mutation(
                     .map(|key| {
                         key.get("user").and_then(Value::as_str) == Some(user)
                             && key.get("host").and_then(Value::as_str) == Some(host)
-                            && key.get("port").and_then(Value::as_u64) == Some(port as u64)
+                            && key.get("port").and_then(Value::as_u64).unwrap_or(22) == port as u64
                     })
                     .unwrap_or(false))
         });
@@ -1820,6 +1885,48 @@ mod tests {
         store.lock();
         assert!(store.unlock("wrong-pass").is_err());
 
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn lists_password_for_account_without_matching_profile() {
+        let (store, path) = temp_store("unmatched-account");
+        std::fs::write(&path, sample_config()).expect("write config");
+        store.enable_vault("master-pass").expect("enable");
+        let result = store
+            .save_credential(CredentialMutation {
+                user: "deploy".into(),
+                host: "10.0.0.1".into(),
+                port: 22,
+                password: Some("orphan-pass".into()),
+                sudo_password: None,
+                key_passphrase: None,
+            })
+            .expect("save credential");
+        assert!(result.credentials.iter().any(|credential| {
+            credential.user == "deploy"
+                && credential.host == "10.0.0.1"
+                && credential.password.as_deref() == Some("orphan-pass")
+        }));
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn saving_password_requires_enabled_and_unlocked_vault() {
+        let (store, path) = temp_store("password-vault-required");
+        std::fs::write(&path, sample_config()).expect("write config");
+        let mutation = CredentialMutation {
+            user: "root".into(),
+            host: "10.0.0.1".into(),
+            port: 22,
+            password: Some("new-pass".into()),
+            sudo_password: None,
+            key_passphrase: None,
+        };
+        assert!(store.save_credential(mutation.clone()).is_err());
+        store.enable_vault("master-pass").expect("enable");
+        store.lock();
+        assert!(store.save_credential(mutation).is_err());
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 

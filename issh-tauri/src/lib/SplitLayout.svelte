@@ -1,12 +1,7 @@
-<script module lang="ts">
-    export type SplitLayoutNode =
-        | { type: 'pane', id: string }
-        | { type: 'split', orientation: 'vertical' | 'horizontal', ratios: number[], children: SplitLayoutNode[] }
-</script>
-
 <script lang="ts">
     import type { Snippet } from 'svelte'
     import SplitLayoutSelf from './SplitLayout.svelte'
+    import type { SplitLayoutNode } from './splitLayout'
 
     let { node, pane, onratiochange }: { node: SplitLayoutNode, pane: Snippet<[string]>, onratiochange?: () => void } = $props()
     const ratios = $derived(node.type === 'split' ? node.ratios.flatMap((ratio, index) => index < node.ratios.length - 1 ? [`${Math.max(0.05, ratio)}fr`, '4px'] : [`${Math.max(0.05, ratio)}fr`]).join(' ') : '')

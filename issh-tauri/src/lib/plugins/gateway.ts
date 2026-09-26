@@ -43,6 +43,7 @@ const LEGACY_PERMISSION_ALIASES: Record<string, string> = {
     'sftp:write': 'sftp.write',
     'fs:read': 'fs.read',
     'network:postJson': 'network.postJson',
+    'mcp:stdio': 'mcp.stdio',
 }
 
 const METHOD_PERMISSIONS: Record<string, string> = {
@@ -82,11 +83,18 @@ const METHOD_PERMISSIONS: Record<string, string> = {
     'agent.authorize': 'agent.write',
     'network.fetch': 'network.fetch',
     'http.postJson': 'network.postJson',
+    'http.streamOpen': 'network.postJson',
+    'http.streamPoll': 'network.postJson',
+    'http.streamClose': 'network.postJson',
+    'mcp.connect': 'mcp.stdio',
+    'mcp.listTools': 'mcp.stdio',
+    'mcp.callTool': 'mcp.stdio',
+    'mcp.disconnect': 'mcp.stdio',
     'fs.userPaths': 'fs.read',
     'fs.readLocalText': 'fs.read',
 }
 const MAX_IN_FLIGHT_REQUESTS = 16
-const CONFIRM_METHODS = new Set(['profiles.mutate', 'vault.unlock', 'vault.getSecret', 'ssh.exec', 'sftp.write', 'network.fetch'])
+const CONFIRM_METHODS = new Set(['profiles.mutate', 'vault.unlock', 'vault.getSecret', 'ssh.exec', 'sftp.write', 'network.fetch', 'mcp.callTool'])
 
 let requestSequence = 0
 
@@ -118,6 +126,7 @@ export function createPluginGateway (
     hooks: PluginGatewayHooks,
 ): PluginGateway {
     let inFlight = 0
+    const apiVersion = manifest.gatewayApiVersion === '2' ? '2' : '1'
     const hasPermission = (permission: string): boolean => {
         const declared = [...(manifest.permissions ?? []), ...(manifest.capabilities ?? [])]
         return declared.some((item) => item === permission || normalizePermission(item) === permission)
@@ -136,7 +145,10 @@ export function createPluginGateway (
             throw new Error(error)
         }
         if (permission) requirePermission(permission, method)
-        if (CONFIRM_METHODS.has(method) && hooks.confirm && !await hooks.confirm(`插件「${manifest.name}」请求执行 ${method}，是否继续？`)) {
+        const confirmation = method === 'mcp.callTool'
+            ? `插件「${manifest.name}」请求调用本地 MCP 工具：\n服务：${String(args.serverId ?? '')}\n工具：${String(args.name ?? '')}\n参数：${JSON.stringify(args.arguments ?? {}).slice(0, 2000)}\n\n是否继续？`
+            : `插件「${manifest.name}」请求执行 ${method}，是否继续？`
+        if (CONFIRM_METHODS.has(method) && hooks.confirm && !await hooks.confirm(confirmation)) {
             const error = '用户拒绝了网关请求'
             hooks.audit({ method, ok: false, error })
             throw new Error(error)
@@ -152,7 +164,7 @@ export function createPluginGateway (
         const requestPayload = {
             requestId,
             pluginId: manifest.id,
-            apiVersion: '1',
+            apiVersion,
             method,
             args,
             permissions: [...(manifest.permissions ?? []), ...(manifest.capabilities ?? [])].map(normalizePermission),
@@ -195,7 +207,7 @@ export function createPluginGateway (
         },
     }
     return {
-        apiVersion: '1',
+        apiVersion,
         request,
         ui: {
             registerSettingsTab: (tab) => register('ui.settings.register', 'ui.settings.register', hooks.registerSettingsTab, tab),
@@ -227,6 +239,15 @@ export function createPluginGateway (
         },
         http: {
             postJson: (url, options) => request('http.postJson', { url, headers: options?.headers, body: options?.body }, options),
+            streamOpen: (url, options) => request('http.streamOpen', { url, headers: options?.headers, body: options?.body }, { timeoutMs: 30000, ...options }),
+            streamPoll: (streamId, options) => request('http.streamPoll', { streamId }, options),
+            streamClose: (streamId, options) => request('http.streamClose', { streamId }, options),
+        },
+        mcp: {
+            connect: (serverId, config, options) => request('mcp.connect', { serverId, ...config }, { timeoutMs: 35000, ...options }),
+            listTools: (serverId, options) => request('mcp.listTools', { serverId }, { timeoutMs: 35000, ...options }),
+            callTool: (serverId, name, args, options) => request('mcp.callTool', { serverId, name, arguments: args }, { timeoutMs: 35000, ...options }),
+            disconnect: (serverId, options) => request('mcp.disconnect', { serverId }, options),
         },
         fs: {
             userPaths: (options) => request('fs.userPaths', {}, options),

@@ -1,13 +1,19 @@
 use crate::host_profiles::HostProfileMutation;
+use crate::mcp_stdio::LocalMcpManager;
 use crate::RuntimeManager;
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 
 const API_VERSION: &str = "1";
+
+fn api_version_supported(version: &str) -> bool {
+    version == API_VERSION || version == "2"
+}
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_SEEN_REQUESTS: usize = 2048;
 const MAX_AUDIT_ENTRIES: usize = 1000;
@@ -63,6 +69,20 @@ pub struct PluginGatewayState {
     seen: Mutex<HashSet<String>>,
     seen_order: Mutex<VecDeque<String>>,
     audit: Mutex<VecDeque<PluginGatewayAuditEntry>>,
+    mcp: LocalMcpManager,
+    streams: tokio::sync::Mutex<HashMap<String, StreamEntry>>,
+}
+
+struct StreamEntry {
+    owner: String,
+    receiver: tokio::sync::mpsc::Receiver<StreamEvent>,
+    task: tokio::task::JoinHandle<()>,
+}
+
+enum StreamEvent {
+    Chunk(Vec<u8>),
+    End,
+    Error(String),
 }
 
 impl PluginGatewayState {
@@ -180,7 +200,10 @@ fn required_permission(method: &str) -> Option<&'static str> {
         | "sftp.chmod" => Some("sftp.write"),
         "fs.userPaths" | "fs.readLocalText" => Some("fs.read"),
         "ssh.execReadonly" => Some("ssh.execReadonly"),
-        "http.postJson" => Some("network.postJson"),
+        "http.postJson" | "http.streamOpen" | "http.streamPoll" | "http.streamClose" => {
+            Some("network.postJson")
+        }
+        "mcp.connect" | "mcp.listTools" | "mcp.callTool" | "mcp.disconnect" => Some("mcp.stdio"),
         _ => None,
     }
 }
@@ -207,6 +230,13 @@ fn static_plugin_capabilities(plugin_id: &str) -> Option<&'static [&'static str]
             "fs.read",
             "ssh.exec",
             "network.postJson",
+        ]),
+        "issh-plugin-ai-assistant" => Some(&[
+            "ui.panel.register",
+            "terminal.read",
+            "terminal.write",
+            "network.postJson",
+            "mcp.stdio",
         ]),
         "issh-plugin-sandbox-demo" => Some(&[
             "ui.panel.register",
@@ -430,7 +460,7 @@ async fn http_post_json(args: &Value) -> Result<Value, String> {
         for (name, value) in headers {
             if !matches!(
                 name.to_ascii_lowercase().as_str(),
-                "authorization" | "content-type" | "accept"
+                "authorization" | "content-type" | "accept" | "x-api-key" | "anthropic-version"
             ) {
                 return Err(format!("http.postJson 不允许请求头：{name}"));
             }
@@ -453,6 +483,172 @@ async fn http_post_json(args: &Value) -> Result<Value, String> {
     Ok(
         json!({ "status": status.as_u16(), "ok": status.is_success(), "body": String::from_utf8_lossy(&bytes) }),
     )
+}
+
+async fn http_stream_open(
+    state: &PluginGatewayState,
+    plugin: &str,
+    stream_id: &str,
+    args: &Value,
+) -> Result<Value, String> {
+    let url = args
+        .get("url")
+        .and_then(Value::as_str)
+        .ok_or("http.streamOpen 需要 url")?;
+    let parsed = url::Url::parse(url).map_err(|_| "流式请求 URL 无效")?;
+    if !matches!(parsed.scheme(), "http" | "https") || parsed.host_str().is_none() {
+        return Err("流式请求仅允许 http/https URL".to_string());
+    }
+    let body = args
+        .get("body")
+        .and_then(Value::as_str)
+        .ok_or("http.streamOpen 需要 body")?;
+    if body.len() > 256 * 1024 {
+        return Err("流式请求体超过 256 KiB".to_string());
+    }
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(180))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|e| e.to_string())?;
+    let mut request = client
+        .post(url)
+        .header("User-Agent", "issh-plugin-gateway/1");
+    if let Some(headers) = args.get("headers").and_then(Value::as_object) {
+        for (name, value) in headers {
+            if !matches!(
+                name.to_ascii_lowercase().as_str(),
+                "authorization" | "content-type" | "accept" | "x-api-key" | "anthropic-version"
+            ) {
+                return Err(format!("流式请求不允许请求头：{name}"));
+            }
+            request = request.header(name, value.as_str().ok_or("流式请求头无效")?);
+        }
+    }
+    let response = request
+        .body(body.to_string())
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let status = response.status();
+    if !status.is_success() {
+        let mut response = response;
+        let mut message = Vec::new();
+        while message.len() < 4096 {
+            match response.chunk().await.map_err(|e| e.to_string())? {
+                Some(bytes) => {
+                    message.extend_from_slice(&bytes[..bytes.len().min(4096 - message.len())])
+                }
+                None => break,
+            }
+        }
+        return Err(format!(
+            "模型请求失败（HTTP {}）：{}",
+            status.as_u16(),
+            String::from_utf8_lossy(&message)
+        ));
+    }
+    let mut streams = state.streams.lock().await;
+    if streams.len() >= 8 {
+        return Err("流式连接数超过上限".to_string());
+    }
+    let id = stream_id.to_string();
+    let (sender, receiver) = tokio::sync::mpsc::channel(32);
+    let task = tokio::spawn(async move {
+        let mut response = response;
+        let mut total = 0usize;
+        loop {
+            match response.chunk().await {
+                Ok(Some(bytes)) => {
+                    total += bytes.len();
+                    if total > 4 * 1024 * 1024 {
+                        let _ = sender
+                            .send(StreamEvent::Error("流式响应超过 4 MiB".to_string()))
+                            .await;
+                        break;
+                    }
+                    if sender
+                        .send(StreamEvent::Chunk(bytes.to_vec()))
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+                Ok(None) => {
+                    let _ = sender.send(StreamEvent::End).await;
+                    break;
+                }
+                Err(error) => {
+                    let _ = sender.send(StreamEvent::Error(error.to_string())).await;
+                    break;
+                }
+            }
+        }
+    });
+    streams.insert(
+        id.clone(),
+        StreamEntry {
+            owner: plugin.to_string(),
+            receiver,
+            task,
+        },
+    );
+    Ok(json!({"streamId":id,"status":status.as_u16()}))
+}
+
+async fn http_stream_poll(
+    state: &PluginGatewayState,
+    plugin: &str,
+    args: &Value,
+) -> Result<Value, String> {
+    let id = args
+        .get("streamId")
+        .and_then(Value::as_str)
+        .ok_or("缺少 streamId")?;
+    let mut streams = state.streams.lock().await;
+    let entry = streams.get_mut(id).ok_or("流式连接不存在")?;
+    if entry.owner != plugin {
+        return Err("流式连接所有者不匹配".to_string());
+    }
+    let event = match tokio::time::timeout(Duration::from_millis(500), entry.receiver.recv()).await
+    {
+        Ok(Some(event)) => event,
+        Ok(None) => StreamEvent::End,
+        Err(_) => return Ok(json!({"chunkBase64":"","done":false})),
+    };
+    match event {
+        StreamEvent::Chunk(bytes) => Ok(
+            json!({"chunkBase64":base64::engine::general_purpose::STANDARD.encode(bytes),"done":false}),
+        ),
+        StreamEvent::End => {
+            streams.remove(id);
+            Ok(json!({"chunkBase64":"","done":true}))
+        }
+        StreamEvent::Error(error) => {
+            streams.remove(id);
+            Err(error)
+        }
+    }
+}
+
+async fn http_stream_close(
+    state: &PluginGatewayState,
+    plugin: &str,
+    args: &Value,
+) -> Result<Value, String> {
+    let id = args
+        .get("streamId")
+        .and_then(Value::as_str)
+        .ok_or("缺少 streamId")?;
+    let mut streams = state.streams.lock().await;
+    if streams.get(id).is_some_and(|entry| entry.owner != plugin) {
+        return Err("流式连接所有者不匹配".to_string());
+    }
+    if let Some(entry) = streams.remove(id) {
+        entry.task.abort();
+    }
+    Ok(json!({"closed":true}))
 }
 
 fn runtime_args(request: &PluginGatewayRequest, method: &str) -> Value {
@@ -526,7 +722,7 @@ pub async fn handle_request(
             false,
         );
     }
-    if request.api_version != API_VERSION {
+    if !api_version_supported(&request.api_version) {
         state.audit(&request, false, Some("API_VERSION_UNSUPPORTED"));
         return response_error(
             &request_id,
@@ -593,6 +789,32 @@ pub async fn handle_request(
         }
     } else if request.method == "http.postJson" {
         http_post_json(&request.args).await
+    } else if request.method == "http.streamOpen" {
+        http_stream_open(
+            state,
+            &request.plugin_id,
+            &request.request_id,
+            &request.args,
+        )
+        .await
+    } else if request.method == "http.streamPoll" {
+        http_stream_poll(state, &request.plugin_id, &request.args).await
+    } else if request.method == "http.streamClose" {
+        http_stream_close(state, &request.plugin_id, &request.args).await
+    } else if request.method == "mcp.connect" {
+        state.mcp.connect(&request.plugin_id, &request.args).await
+    } else if request.method == "mcp.listTools" {
+        state
+            .mcp
+            .list_tools(&request.plugin_id, &request.args)
+            .await
+    } else if request.method == "mcp.callTool" {
+        state.mcp.call_tool(&request.plugin_id, &request.args).await
+    } else if request.method == "mcp.disconnect" {
+        state
+            .mcp
+            .disconnect(&request.plugin_id, &request.args)
+            .await
     } else if let Some((runtime_method, _method_permission)) = runtime_method(&request.method) {
         let params = runtime_args(&request, &request.method);
         let mut runtime_request =
@@ -624,7 +846,9 @@ pub async fn handle_request(
     };
     match result {
         Ok(data) => {
-            state.audit(&request, true, None);
+            if request.method != "http.streamPoll" {
+                state.audit(&request, true, None);
+            }
             response_ok(&request_id, data)
         }
         Err(error) => {
@@ -656,6 +880,13 @@ mod tests {
         let request = request("profiles.read", &["profiles:read"]);
         assert!(permission_allowed(&request, "profiles.read"));
         assert!(!permission_allowed(&request, "ssh.exec"));
+    }
+
+    #[test]
+    fn gateway_accepts_existing_and_new_plugin_api_versions() {
+        assert!(api_version_supported("1"));
+        assert!(api_version_supported("2"));
+        assert!(!api_version_supported("3"));
     }
 
     #[test]
@@ -712,6 +943,110 @@ mod tests {
     #[test]
     fn unknown_plugins_have_no_host_capability_entry() {
         assert!(static_plugin_capabilities("marketplace.unknown").is_none());
+    }
+
+    #[test]
+    fn ai_assistant_has_only_required_host_capabilities() {
+        let capabilities = static_plugin_capabilities("issh-plugin-ai-assistant").unwrap();
+        assert_eq!(
+            capabilities,
+            &[
+                "ui.panel.register",
+                "terminal.read",
+                "terminal.write",
+                "network.postJson",
+                "mcp.stdio"
+            ]
+        );
+        assert!(!capabilities.contains(&"ssh.exec"));
+    }
+
+    #[tokio::test]
+    async fn ai_assistant_can_send_anthropic_headers_through_json_gateway() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/v1/messages", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = [0_u8; 4096];
+            let read = stream.read(&mut request).await.unwrap();
+            let headers = String::from_utf8_lossy(&request[..read]).to_ascii_lowercase();
+            assert!(headers.contains("x-api-key: test-key"));
+            assert!(headers.contains("anthropic-version: 2023-06-01"));
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}")
+                .await
+                .unwrap();
+        });
+        let response = http_post_json(&json!({
+            "url": url,
+            "body": "{}",
+            "headers": {
+                "content-type": "application/json",
+                "x-api-key": "test-key",
+                "anthropic-version": "2023-06-01"
+            }
+        }))
+        .await
+        .unwrap();
+        assert_eq!(response["status"], 200);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn ai_assistant_receives_streamed_http_chunks() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!(
+            "http://{}/v1/chat/completions",
+            listener.local_addr().unwrap()
+        );
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = [0_u8; 4096];
+            let _ = socket.read(&mut buffer).await.unwrap();
+            socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n").await.unwrap();
+            for part in [
+                "data: {\"choices\":[{\"delta\":",
+                "{\"content\":\"hi\"}}]}\n\n",
+            ] {
+                socket
+                    .write_all(format!("{:X}\r\n{}\r\n", part.len(), part).as_bytes())
+                    .await
+                    .unwrap();
+            }
+            socket.write_all(b"0\r\n\r\n").await.unwrap();
+        });
+        let state = PluginGatewayState::default();
+        let opened = http_stream_open(
+            &state,
+            "issh-plugin-ai-assistant",
+            "stream-test",
+            &json!({"url":url,"body":"{}"}),
+        )
+        .await
+        .unwrap();
+        let id = opened["streamId"].as_str().unwrap();
+        let mut received = Vec::new();
+        loop {
+            let chunk =
+                http_stream_poll(&state, "issh-plugin-ai-assistant", &json!({"streamId":id}))
+                    .await
+                    .unwrap();
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(chunk["chunkBase64"].as_str().unwrap())
+                .unwrap();
+            received.extend(bytes);
+            if chunk["done"] == true {
+                break;
+            }
+        }
+        assert_eq!(
+            String::from_utf8(received).unwrap(),
+            "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n"
+        );
+        server.await.unwrap();
     }
 
     #[test]

@@ -660,7 +660,7 @@
                         <div class="settings-field">
                             <div class="settings-field-title">快捷键</div>
                             <div class="hotkey-list">
-                                <div class="hotkey-row"><span>返回首页（Home）</span><kbd>Ctrl+0</kbd></div>
+                                <div class="hotkey-row"><span>返回首页</span><kbd>Ctrl+0</kbd></div>
                                 <div class="hotkey-row"><span>新建本地终端</span><kbd>Ctrl+Shift+T</kbd></div>
                                 <div class="hotkey-row"><span>左右分屏</span><kbd>Ctrl+Shift+S</kbd></div>
                                 <div class="hotkey-row"><span>上下分屏</span><kbd>Ctrl+Shift+D</kbd></div>
@@ -738,13 +738,6 @@
                                 </div>
                             </div>
                         {/each}
-                        {#if marketTotalPages > 1}
-                            <div class="market-pagination">
-                                <button type="button" class="market-page-btn" disabled={marketCurrentPage <= 1} onclick={() => { marketPage = marketCurrentPage - 1 }}>{t('market.page.prev')}</button>
-                                <span class="market-page-info">{t('market.page.info', { p: marketCurrentPage, total: marketTotalPages })}</span>
-                                <button type="button" class="market-page-btn" disabled={marketCurrentPage >= marketTotalPages} onclick={() => { marketPage = marketCurrentPage + 1 }}>{t('market.page.next')}</button>
-                            </div>
-                        {/if}
                         {#if installedFromMarket.length > 0}
                             <h2 class="settings-subtitle">商城安装记录</h2>
                             {#each installedFromMarket as record (record.id)}
@@ -958,6 +951,13 @@
                                 </div>
                             </div>
                         {/each}
+                        {/if}
+                        {#if !detailEntry && marketTotalPages > 1}
+                            <div class="market-pagination">
+                                <button type="button" class="market-page-btn" disabled={marketCurrentPage <= 1} onclick={() => { marketPage = marketCurrentPage - 1 }}>{t('market.page.prev')}</button>
+                                <span class="market-page-info">{t('market.page.info', { p: marketCurrentPage, total: marketTotalPages })}</span>
+                                <button type="button" class="market-page-btn" disabled={marketCurrentPage >= marketTotalPages} onclick={() => { marketPage = marketCurrentPage + 1 }}>{t('market.page.next')}</button>
+                            </div>
                         {/if}
                     </section>
                 {:else if section === 'about'}

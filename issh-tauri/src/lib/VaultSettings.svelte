@@ -6,6 +6,7 @@
         disableHostVault,
         enableHostVault,
         hostCredentials,
+        hostProfiles,
         lockHostProfiles,
         mutateHostProfiles,
         saveHostCredential,
@@ -51,6 +52,10 @@
     let collapsed = $state<Set<string>>(new Set())
     let genericRevealed = $state<Record<number, boolean>>({})
     let editingProfile = $state<SshHostProfile | null>(null)
+
+    const unmatchedCredentials = $derived(section?.credentials.filter((credential) =>
+        !section?.profiles.some((profile) => profile.user === credential.user && profile.host === credential.host && profile.port === credential.port)
+    ) ?? [])
 
     onDestroy(() => {
         // Leaving the Vault page must not leave decrypted credentials resident.
@@ -104,7 +109,20 @@
     }
 
     onMount(() => {
-        void refresh()
+        // Opening this page requires a fresh master-passphrase check even when
+        // the host manager has already unlocked the shared profile store.
+        void hostProfiles().then((result) => {
+            section = {
+                encrypted: result.encrypted,
+                unlocked: false,
+                profiles: [],
+                groups: [],
+                credentials: [],
+                generic: [],
+            }
+        }).catch((cause) => {
+            error = cause instanceof Error ? cause.message : String(cause)
+        })
     })
 
     async function unlock (): Promise<void> {
@@ -279,19 +297,15 @@
         error = ''
         try {
             await mutateHostProfiles({ action: 'updateProfile', profile })
-            await refresh()
-            editingProfile = null
-            notice = '主机配置已更新'
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
+            throw cause
         } finally {
             busy = false
         }
     }
 
-    async function removeCredential (entry: HostEntry): Promise<void> {
-        const credential = entry.credential
-        if (!credential) return
+    async function removeCredential (credential: HostCredential): Promise<void> {
         const label = `${credential.user}@${credential.host}:${credential.port}`
         if (!window.confirm(`删除「${label}」的密码与私钥口令？`)) return
         busy = true
@@ -315,6 +329,41 @@
 
     function toggleGenericReveal (index: number): void {
         genericRevealed = { ...genericRevealed, [index]: !genericRevealed[index] }
+    }
+
+    function unmatchedKey (credential: HostCredential): string {
+        return `unmatched:${credential.user}|${credential.host}|${credential.port}`
+    }
+
+    function toggleUnmatchedReveal (credential: HostCredential): void {
+        const key = unmatchedKey(credential)
+        revealed = { ...revealed, [key]: !revealed[key] }
+    }
+
+    function startUnmatchedEdit (credential: HostCredential): void {
+        editing = { ...editing, [unmatchedKey(credential)]: {
+            password: credential.password ?? '',
+            sudoPassword: credential.sudoPassword ?? '',
+            keyPassphrase: credential.keyPassphrase ?? '',
+        } }
+    }
+
+    async function saveUnmatchedEdit (credential: HostCredential): Promise<void> {
+        const key = unmatchedKey(credential)
+        const draft = editing[key]
+        if (!draft) return
+        busy = true
+        error = ''
+        try {
+            section = await saveHostCredential({ user: credential.user, host: credential.host, port: credential.port, ...draft })
+            const next = { ...editing }
+            delete next[key]
+            editing = next
+        } catch (cause) {
+            error = cause instanceof Error ? cause.message : String(cause)
+        } finally {
+            busy = false
+        }
     }
 </script>
 
@@ -390,7 +439,7 @@
             <div class="settings-hint vault-notice">{notice}</div>
         {/if}
 
-        {#if section.profiles.length === 0 && section.generic.length === 0}
+        {#if section.profiles.length === 0 && unmatchedCredentials.length === 0 && section.generic.length === 0}
             <div class="settings-empty">保险库中暂无主机配置或凭据。</div>
         {/if}
 
@@ -414,7 +463,7 @@
                         {#if entry.credential}<button type="button" disabled={busy} onclick={() => toggleReveal(entry)}>{revealed[key] ? '隐藏' : '查看'}</button>{/if}
                         <button type="button" disabled={busy} onclick={() => { editingProfile = { ...profile, tags: [...profile.tags], privateKeys: [...profile.privateKeys] } }}>编辑主机</button>
                         <button type="button" disabled={busy} onclick={() => startEdit(entry)}>编辑凭据</button>
-                        {#if entry.credential}<button class="plugin-remove" type="button" disabled={busy} onclick={() => void removeCredential(entry)}>删除</button>{/if}
+                        {#if entry.credential}<button class="plugin-remove" type="button" disabled={busy} onclick={() => void removeCredential(entry.credential!)}>删除</button>{/if}
                     {/if}
                 </div>
                 {#if revealed[key] && !editing[key] && entry.credential}
@@ -464,6 +513,48 @@
             </div>
         {/if}
 
+        {#if unmatchedCredentials.length > 0}
+            <div class="settings-field">
+                <div class="settings-field-title">未关联主机配置的账号凭据</div>
+                <p class="settings-hint">这些凭据已保存，但没有用户名、地址和端口均匹配的主机配置。请核对主机配置中的用户名。</p>
+                {#each unmatchedCredentials as credential (unmatchedKey(credential))}
+                    {@const key = unmatchedKey(credential)}
+                    <div class="vault-secret">
+                        <div class="vault-secret-head">
+                            <span class="vault-account">{credential.user}</span>
+                            <span class="vault-secret-desc">{credential.host}:{credential.port}</span>
+                            {#if credential.password !== null}<span class="host-badge recent">密码</span>{/if}
+                            {#if credential.sudoPassword !== null}<span class="host-badge favorite">sudo</span>{/if}
+                            {#if credential.keyPassphrase !== null}<span class="host-badge favorite">口令</span>{/if}
+                            <span class="vault-secret-spacer"></span>
+                            {#if editing[key]}
+                                <button type="button" disabled={busy} onclick={() => void saveUnmatchedEdit(credential)}>保存</button>
+                                <button type="button" disabled={busy} onclick={() => { const next = { ...editing }; delete next[key]; editing = next }}>取消</button>
+                            {:else}
+                                <button type="button" disabled={busy} onclick={() => toggleUnmatchedReveal(credential)}>{revealed[key] ? '隐藏' : '查看'}</button>
+                                <button type="button" disabled={busy} onclick={() => startUnmatchedEdit(credential)}>编辑凭据</button>
+                                <button class="plugin-remove" type="button" disabled={busy} onclick={() => void removeCredential(credential)}>删除</button>
+                            {/if}
+                        </div>
+                        {#if revealed[key] && !editing[key]}
+                            <div class="vault-secret-value">
+                                {#if credential.password !== null}<div>密码：{credential.password}</div>{/if}
+                                {#if credential.sudoPassword !== null}<div>sudo 密码：{credential.sudoPassword}</div>{/if}
+                                {#if credential.keyPassphrase !== null}<div>私钥口令：{credential.keyPassphrase}</div>{/if}
+                            </div>
+                        {/if}
+                        {#if editing[key]}
+                            <div class="vault-edit-form">
+                                <label>密码<input type="password" bind:value={editing[key].password} placeholder="留空表示清除" /></label>
+                                <label>sudo 密码<input type="password" bind:value={editing[key].sudoPassword} placeholder="留空表示清除" /></label>
+                                <label>私钥口令<input type="password" bind:value={editing[key].keyPassphrase} placeholder="留空表示清除" /></label>
+                            </div>
+                        {/if}
+                    </div>
+                {/each}
+            </div>
+        {/if}
+
         {#if section.generic.length > 0}
             <div class="settings-field">
                 <div class="settings-field-title">通用凭据（未绑定具体主机）</div>
@@ -484,5 +575,5 @@
     {/if}
 </section>
 {#if editingProfile}
-    <HostProfileEditor profile={editingProfile} groups={section?.groups ?? []} onconnect={saveProfile} oncancel={() => { editingProfile = null }} />
+    <HostProfileEditor profile={editingProfile} groups={section?.groups ?? []} onconnect={saveProfile} oncomplete={refresh} oncancel={() => { editingProfile = null }} />
 {/if}

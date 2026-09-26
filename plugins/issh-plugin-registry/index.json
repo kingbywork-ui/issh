@@ -1,7 +1,29 @@
 {
   "schema": 1,
-  "updated": "2026-09-08T06:08:56.001Z",
+  "updated": "2026-09-25T03:14:14.750Z",
   "plugins": [
+    {
+      "id": "issh-plugin-ai-assistant",
+      "name": "AI 助手",
+      "version": "0.2.0",
+      "description": "多模型流式对话、本地 MCP 工具、终端上下文分析与命令辅助",
+      "kind": "feature",
+      "audience": "user",
+      "permissions": [
+        "panel:register",
+        "terminal:read",
+        "terminal:write",
+        "network:postJson",
+        "mcp:stdio"
+      ],
+      "minAppVersion": "0.0.6",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-ai-assistant/releases/download/v0.2.0/issh-plugin-ai-assistant-0.2.0.tgz",
+      "sha256": "249ad0aa7e1b8b3d2fd3ce1c4b14ffaecc5b44e66cc11057d322b1f9e0471a68",
+      "signature": "15DW2TUIxtd/dz0EBj8ksLQc6leCD8YZIUC9UYQCqOGu0Q4pNB5jDq9Jazwch0VsoGHrNZirncMWlFhovwVICg==",
+      "homepage": "https://github.com/kingbywork-ui/issh-plugin-ai-assistant",
+      "repository": "https://github.com/kingbywork-ui/issh-plugin-ai-assistant",
+      "downloads": 0
+    },
     {
       "id": "issh-plugin-config-sync",
       "name": "配置同步",

@@ -51,6 +51,12 @@ crowdin.yml
 .electron-builder-cache/
 .electron-builder-cache2/
 .npm-cache/
+build/backup-installers/
+build/issh-ai-assistant-upstream/
+.psacowork/
+issh-tauri/src-tauri/target/
+issh-runtime/target/
+issh-tauri/src-tauri/bin/
 
 # Python & AI deps
 .python-deps/

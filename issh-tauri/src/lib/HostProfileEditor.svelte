@@ -1,17 +1,20 @@
 <script lang="ts">
     import { saveHostCredential, type SshHostGroup, type SshHostProfile } from './runtime'
 
-    let { profile, groups, onconnect, oncancel }: { profile: SshHostProfile, groups: SshHostGroup[], onconnect: (profile: SshHostProfile) => void, oncancel: () => void } = $props()
+    let { profile, groups, onconnect, oncomplete, oncancel }: { profile: SshHostProfile, groups: SshHostGroup[], onconnect: (profile: SshHostProfile) => Promise<void>, oncomplete?: () => Promise<void>, oncancel: () => void } = $props()
     // svelte-ignore state_referenced_locally
     let draft = $state({ ...profile, tags: [...profile.tags], privateKeys: [...profile.privateKeys], forwardedPorts: [...(profile.forwardedPorts ?? [])], loginScript: profile.loginScript ?? '', jumpHost: profile.jumpHost ?? '', proxyCommand: profile.proxyCommand ?? '', socksProxyHost: profile.socksProxyHost ?? '', httpProxyHost: profile.httpProxyHost ?? '' })
     let tags = $state(draft.tags.join(', '))
     let forwardedPortsText = $state(JSON.stringify(draft.forwardedPorts, null, 2))
     let forwardingError = $state('')
     let authPassword = $state('')
+    let saveError = $state('')
+    let saving = $state(false)
     let activeTab = $state<'general' | 'advanced' | 'security'>('general')
-    const isNew = $derived(!profile.id)
+    const isNew = $derived(!draft.id)
 
-    function save (): void {
+    async function save (): Promise<void> {
+        if (saving) return
         let forwardedPorts = draft.forwardedPorts
         try {
             const parsed = JSON.parse(forwardedPortsText)
@@ -24,18 +27,28 @@
             return
         }
         const next: SshHostProfile = { ...draft, id: draft.id || `profile-${Date.now().toString(36)}`, name: draft.name.trim(), host: draft.host.trim(), user: draft.user.trim(), port: Number(draft.port) || 22, group: draft.group || '', tags: tags.split(',').map((tag) => tag.trim()).filter(Boolean), loginScript: draft.loginScript.trim() || null, jumpHost: draft.jumpHost.trim() || null, proxyCommand: draft.proxyCommand.trim() || null, socksProxyHost: draft.socksProxyHost.trim() || null, httpProxyHost: draft.httpProxyHost.trim() || null, socksProxyPort: Number(draft.socksProxyPort) || null, httpProxyPort: Number(draft.httpProxyPort) || null, forwardedPorts }
-        onconnect(next)
-        if ((draft.auth === 'password' || draft.auth === 'keyboardInteractive') && authPassword.trim()) {
-            // 密码认证：把输入的密码保存到保险库凭据，连接时由 resolveSshPassword 取用；失败不影响主机配置保存。
-            void saveHostCredential({ user: next.user, host: next.host, port: next.port, password: authPassword }).catch(() => {})
+        saving = true
+        saveError = ''
+        try {
+            await onconnect(next)
+            draft.id = next.id
+            if ((draft.auth === 'password' || draft.auth === 'keyboardInteractive') && authPassword.length > 0) {
+                await saveHostCredential({ user: next.user, host: next.host, port: next.port, password: authPassword })
+            }
+            await oncomplete?.()
+            oncancel()
+        } catch (cause) {
+            saveError = cause instanceof Error ? cause.message : String(cause)
+        } finally {
+            saving = false
         }
     }
 </script>
 
-<div class="modal-backdrop" role="presentation" onclick={(event) => { if (event.target === event.currentTarget) oncancel() }}>
+<div class="modal-backdrop" role="presentation" onclick={(event) => { if (event.target === event.currentTarget && !saving) oncancel() }}>
     <div class="editor-panel editor-panel-wide" role="dialog" aria-modal="true" tabindex="-1">
-        <form onsubmit={(event) => { event.preventDefault(); save() }}>
-            <div class="editor-header"><h2>{isNew ? '新建 SSH 主机' : '编辑 SSH 主机'}</h2><button type="button" class="icon-button" aria-label="关闭" onclick={oncancel}>×</button></div>
+        <form onsubmit={(event) => { event.preventDefault(); void save() }}>
+            <div class="editor-header"><h2>{isNew ? '新建 SSH 主机' : '编辑 SSH 主机'}</h2><button type="button" class="icon-button" aria-label="关闭" disabled={saving} onclick={oncancel}>×</button></div>
             <div class="editor-tabs" role="tablist" aria-label="SSH 主机设置">
                 <button type="button" class:active={activeTab === 'general'} role="tab" aria-selected={activeTab === 'general'} onclick={() => { activeTab = 'general' }}>常规</button>
                 <button type="button" class:active={activeTab === 'advanced'} role="tab" aria-selected={activeTab === 'advanced'} onclick={() => { activeTab = 'advanced' }}>高级连接</button>
@@ -89,7 +102,8 @@
                     </div>
                 </fieldset>
             {/if}
-            <div class="editor-actions"><button type="button" class="secondary" onclick={oncancel}>取消</button><button type="submit" disabled={!draft.name.trim() || !draft.host.trim() || !draft.user.trim()}>保存</button></div>
+            {#if saveError}<p class="form-error" role="alert">{saveError}</p>{/if}
+            <div class="editor-actions"><button type="button" class="secondary" disabled={saving} onclick={oncancel}>取消</button><button type="submit" disabled={saving || !draft.name.trim() || !draft.host.trim() || !draft.user.trim()}>{saving ? '保存中…' : '保存'}</button></div>
         </form>
     </div>
 </div>

@@ -138,7 +138,7 @@ function makePluginContext (manifest: IsshPluginManifest, directory: string): Is
         hasPermission,
         registerSettingsTab: (tab) => register(settingsTabs, `${manifest.id}:${tab.id}`, tab),
         registerHomeCard: (card) => register(homeCards, `${manifest.id}:${card.id}`, card),
-        registerPanel: (panel) => register(panels, `${manifest.id}:${panel.id}`, panel),
+        registerPanel: (panel) => register(panels, `${manifest.id}:${panel.id}`, { ...panel, canReadTerminal: hasPermission('terminal.read') }),
         registerSandboxPanel: (panel) => {
             // 插件传相对文件名（如 sandbox.html），宿主用插件目录解析为 asset URL，
             // 避免插件直接依赖 @tauri-apps/api（convertFileSrc）。
@@ -188,7 +188,7 @@ function compareVersions (a: string, b: string): number {
 }
 
 function checkManifestCompatibility (manifest: IsshPluginManifest): string | null {
-    if (manifest.gatewayApiVersion && manifest.gatewayApiVersion !== '1') {
+    if (manifest.gatewayApiVersion && !['1', '2'].includes(manifest.gatewayApiVersion)) {
         return `插件需要不兼容的网关 API 版本：${manifest.gatewayApiVersion}`
     }
     if (manifest.minAppVersion && (!hostVersion || compareVersions(hostVersion, manifest.minAppVersion) < 0)) {

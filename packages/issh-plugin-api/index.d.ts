@@ -18,7 +18,7 @@ export interface GatewayNetworkOptions extends GatewayRequestOptions {
 }
 
 export interface PluginGateway {
-    apiVersion: '1'
+    apiVersion: '1' | '2'
     request<T = unknown> (method: string, args?: Record<string, unknown>, options?: GatewayRequestOptions): Promise<T>
     ui: {
         registerSettingsTab (tab: SettingsTabDefinition): Disposable
@@ -44,6 +44,18 @@ export interface PluginGateway {
         status (options?: GatewayRequestOptions): Promise<unknown>
         unlock (passphrase: string, options?: GatewayRequestOptions): Promise<unknown>
         getSecret (id: string, options?: GatewayRequestOptions): Promise<unknown>
+    }
+    http: {
+        postJson (url: string, options?: { headers?: Record<string, string>; body?: string }): Promise<{ status: number; ok: boolean; body: string }>
+        streamOpen (url: string, options?: { headers?: Record<string, string>; body?: string } & GatewayRequestOptions): Promise<{ streamId: string; status: number }>
+        streamPoll (streamId: string, options?: GatewayRequestOptions): Promise<{ chunkBase64: string; done: boolean }>
+        streamClose (streamId: string, options?: GatewayRequestOptions): Promise<{ closed: boolean }>
+    }
+    mcp: {
+        connect (serverId: string, config: { command: string; arguments?: string[]; cwd?: string; environment?: Record<string, string> }, options?: GatewayRequestOptions): Promise<unknown>
+        listTools (serverId: string, options?: GatewayRequestOptions): Promise<{ tools: Array<{ name: string; description?: string; inputSchema?: Record<string, unknown> }> }>
+        callTool (serverId: string, name: string, args: Record<string, unknown>, options?: GatewayRequestOptions): Promise<unknown>
+        disconnect (serverId: string, options?: GatewayRequestOptions): Promise<unknown>
     }
     network: { fetch (url: string, options?: GatewayNetworkOptions): Promise<{ status: number; ok: boolean; body: string }> }
     events: { on (eventName: string, handler: (params: unknown) => void): Disposable }
@@ -86,8 +98,13 @@ export interface HomeCardDefinition {
 export interface PanelDefinition {
     id: string
     title: string
-    placement: 'left' | 'bottom'
-    component: unknown
+    placement: 'left' | 'bottom' | 'right'
+    component?: unknown
+    mount?: (target: HTMLElement, host: PanelHostContext) => () => void
+}
+
+export interface PanelHostContext {
+    getActiveSession (): { id: string; title: string; kind: string; lines: string[] } | null
 }
 
 export interface SandboxPanelDefinition {

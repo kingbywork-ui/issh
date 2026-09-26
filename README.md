@@ -2,7 +2,7 @@
 
 # issh — Lightweight, Secure, AI-Native SSH Terminal
 
-**issh** is a next-generation SSH terminal built on **Tauri 2 + Rust**. It combines a native-performance terminal core, an enterprise-grade SSH toolkit, a locally encrypted credential vault, and AI-assisted workflows in a **~5 MB** installer — a fraction of the footprint of Electron-based terminals.
+**issh 0.1.3** is an SSH terminal built on **Tauri 2 + Rust**. It combines a terminal, SSH and SFTP tools, a locally encrypted credential vault, and agent workflows in a compact Windows installer.
 
 ## Why issh
 
@@ -17,7 +17,7 @@
 
 ### Terminal Experience
 
-- Multi-tab workspace with recursive **split panes**: nest panes arbitrarily, drag dividers to resize, maximize/restore any pane, and persist the whole layout across restarts.
+- Multi-tab workspace with recursive **split panes**: mix horizontal and vertical splits in one tab, resize dividers, and maximize or close panes without creating extra top-level tabs.
 - **Session recovery**: trusted hosts reconnect automatically after a restart; local shells are rebuilt with the same shell, working directory, and size.
 - Native system clipboard with **selection auto-copy** and right-click paste.
 - One-click **terminal export** to a local file; drag a file path into the terminal to inject it.
@@ -35,23 +35,26 @@
 ### SFTP Browser
 
 - Built-in SFTP panel with browse, upload, download, rename, delete, and directory navigation — no extra client needed.
+- Uploads and downloads support files larger than the runtime's 64 KiB message limit through chunked transfer.
 
 ### Credential Vault & Auto-Sudo
 
 - All secrets — passwords, private-key passphrases, and **sudo passwords** — are stored in a locally encrypted vault (**AES-256-GCM**, key derived via PBKDF2-SHA512 with 310,000 iterations) protected by a master passphrase, with automatic lock.
 - Secrets match exactly by `host + user + port`, never leaking across servers.
+- Opening the vault requires the master passphrase; credentials without a matching host profile remain visible and editable in the vault.
 - **Auto-Sudo**: when a `sudo` password prompt appears, fill it with one click — the vault is unlocked temporarily for that single read, then locked again immediately; pending passwords expire after 10 seconds.
 
 ### Plugin Marketplace
 
 - One-click install and update from a **signed marketplace** (ed25519 signatures + SHA-256 verification, permission declarations, dependency checks).
-- Built-in plugins: **AI Command Completion** (LLM autocomplete), **Agent Bridge** (workspace/agent management), **Config Sync** (JSON export/import + GitHub Gist), **Linkifier** (URL/IP/path detection), **Serial Terminal** (Web Serial), and **Herdr Workspace**.
+- The marketplace includes themes and independently installed extensions. The **AI Assistant** extension supports streaming model responses and local stdio MCP tools on hosts with plugin gateway API v2.
 - Automatic CDN fallback keeps the marketplace reachable even when the primary registry is slow or blocked.
 
 ## AI & Agent Integration
 
 - **Command completion**: as you type, an OpenAI-compatible LLM (OpenAI, Azure OpenAI, Ollama, DeepSeek, and others) suggests the next command; accept with `Ctrl+Y`, debounced to avoid interrupting your flow.
 - **Agent bridge**: expose your terminal workspace to AI coding agents (Codex, Cursor, Claude Desktop) over a token-protected localhost RPC/MCP channel. Session access, command execution, and file operations are scoped and audit-logged.
+- **Audit log**: inspect recent Agent Bridge activity in a searchable, newest-first view that refreshes while open.
 
 ## Architecture
 
@@ -75,8 +78,8 @@
 
 ## Downloads
 
-- **Windows x64**: `issh-<version>-x64-setup.exe` NSIS installer (~5 MB, current-user install). WebView2 is installed on demand when missing.
-- The core Rust runtime and frontend are cross-platform; Linux and macOS builds can be produced from source (see below).
+- **Windows x64**: download the `issh_0.1.3_x64-setup.exe` NSIS installer from the [v0.1.3 release](https://github.com/kingbywork-ui/issh/releases/tag/v0.1.3). WebView2 is installed on demand when missing.
+- This release uses the Tauri desktop client. The previous Electron release packages do not represent the 0.1.3 codebase.
 
 ## Building from Source
 

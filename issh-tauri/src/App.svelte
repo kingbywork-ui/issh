@@ -11,13 +11,16 @@
     import ProfileSelector from './lib/ProfileSelector.svelte'
     import Settings from './lib/Settings.svelte'
     import SandboxPanel from './lib/SandboxPanel.svelte'
-    import { getTerminalDecorators, getSandboxPanels, subscribeUi } from './lib/plugins/pluginHost'
+    import PluginPanelHost from './lib/PluginPanelHost.svelte'
+    import { getTerminalDecorators, getSandboxPanels, getPanels, subscribeUi } from './lib/plugins/pluginHost'
+    import type { PanelDefinition, PanelHostContext } from './lib/plugins/types'
     import { autoSudoDecorator } from './lib/autoSudo'
     import { registerTerminal, unregisterTerminal, setActiveTerminal } from './lib/plugins/terminalRegistry'
     import { broadcastSandboxEvent, setProfileWriteConfirm } from './lib/plugins/sandboxBridge'
     import ConfirmDialog from './lib/ConfirmDialog.svelte'
     import ContextMenu, { type ContextMenuItem } from './lib/ContextMenu.svelte'
-    import SplitLayout, { type SplitLayoutNode } from './lib/SplitLayout.svelte'
+    import SplitLayout from './lib/SplitLayout.svelte'
+    import { insertSplitPane, layoutLeaves, removeSplitPane, type SplitLayoutNode } from './lib/splitLayout'
     import { focusOnMount } from './lib/a11y'
     import { checkPluginUpdates, type PluginUpdateInfo } from './lib/plugins/pluginHost'
     import { findScheme } from './lib/terminalSchemes'
@@ -92,10 +95,6 @@
             return value?.type === 'pane' || value?.type === 'split' ? value : null
         } catch { return null }
     }
-    function layoutLeaves (node: SplitLayoutNode | null): string[] {
-        if (!node) return []
-        return node.type === 'pane' ? [node.id] : node.children.flatMap(layoutLeaves)
-    }
     function persistSplitLayout (node: SplitLayoutNode | null): void {
         try { node ? localStorage.setItem(splitLayoutKey, JSON.stringify(node)) : localStorage.removeItem(splitLayoutKey) } catch {}
     }
@@ -146,9 +145,7 @@
     })
     let splitDirection = $state<'vertical' | 'horizontal' | null>((localStorage.getItem('issh.splitDirection') as 'vertical' | 'horizontal' | null) ?? null)
     let splitPaneIds = $state<string[]>([])
-    let splitRatio = $state(Number.parseInt(localStorage.getItem('issh.splitRatio') ?? '', 10) || 50)
     let maximizedPaneId = $state<string | null>(null)
-    let draggedPaneId = $state<string | null>(null)
     let splitLayout = $state<SplitLayoutNode | null>(readSplitLayout())
     let showHome = $state(false)
     let showSftp = $state(false)
@@ -160,6 +157,9 @@
     let vaultPassphrasePrompt = $state<{ resolve: (value: string | null) => void } | null>(null)
     let showSend = $state(false)
     let showConnect = $state(false)
+    let pendingConnections = $state<Array<{ id: number, name: string, address: string }>>([])
+    let activePendingId = $state<number | null>(null)
+    let nextPendingId = 0
     let showSelector = $state(false)
     let tabMenu = $state<{ x: number, y: number, items: ContextMenuItem[] } | null>(null)
     let searchOpen = $state(false)
@@ -198,10 +198,34 @@
     let pluginUpdates = $state<PluginUpdateInfo[]>([])
     // 插件注册/注销时刷新沙箱面板列表（$state 快照不会自动跟踪 pluginHost 内部 Map）
     const sandboxPanels = $state(getSandboxPanels('bottom'))
+    const pluginPanels = $state(getPanels('right'))
+    let activePluginPanelId = $state<string | null>(null)
+    const activePluginPanel = $derived(pluginPanels.find((panel) => panel.id === activePluginPanelId) ?? null)
     subscribeUi(() => {
         sandboxPanels.length = 0
         sandboxPanels.push(...getSandboxPanels('bottom'))
+        pluginPanels.length = 0
+        pluginPanels.push(...getPanels('right'))
     })
+
+    function panelHostContext (panel: PanelDefinition): PanelHostContext {
+        return {
+            getActiveSession: () => {
+                const tab = tabs.find((candidate) => candidate.session.id === activeId)
+                if (!tab || showHome || !tab.terminal) return null
+                const lines: string[] = []
+                if (panel.canReadTerminal) {
+                    const buffer = tab.terminal.buffer.active
+                    const end = buffer.baseY + buffer.cursorY
+                    for (let row = Math.max(0, end - 29); row <= end; row += 1) {
+                        const line = buffer.getLine(row)
+                        if (line) lines.push(line.translateToString(true))
+                    }
+                }
+                return { id: tab.session.id, title: tab.session.title, kind: tab.session.kind, lines }
+            },
+        }
+    }
 
     // 终端配色热更新：scheme 变更时重建所有 xterm 实例代价高，
     // 通过 storage 事件 + 自定义事件监听，仅更新 theme
@@ -301,23 +325,22 @@
     let pollInFlight = false
 
     const activeTab = $derived(tabs.find((tab) => tab.session.id === activeId) ?? null)
-    const showStartPage = $derived(tabs.length === 0 || showHome)
+    const showStartPage = $derived((tabs.length === 0 && pendingConnections.length === 0) || showHome)
     const layoutPaneIds = $derived(splitLayout ? layoutLeaves(splitLayout).filter((id) => tabs.some((tab) => tab.session.id === id)) : [])
     const hasSplitLayout = $derived(layoutPaneIds.length > 1)
+    const splitRootId = $derived(hasSplitLayout ? layoutPaneIds[0] : null)
+    const headerTabs = $derived(tabs.filter((tab) => !hasSplitLayout || !layoutPaneIds.includes(tab.session.id) || tab.session.id === splitRootId))
     const visiblePaneIds = $derived(maximizedPaneId ? [maximizedPaneId] : (layoutPaneIds.length > 1 ? layoutPaneIds : [activeId]))
 
     function syncSplitState (): void {
         splitPaneIds = layoutPaneIds
         splitDirection = splitLayout?.type === 'split' ? splitLayout.orientation : null
         if (splitDirection) localStorage.setItem('issh.splitDirection', splitDirection)
+        else localStorage.removeItem('issh.splitDirection')
     }
 
     function persistRecursiveSplitRatios (): void {
         persistSplitLayout(splitLayout)
-        if (splitLayout?.type === 'split' && splitLayout.children.length === 2) {
-            splitRatio = Math.round(splitLayout.ratios[0] * 100)
-            localStorage.setItem('issh.splitRatio', String(splitRatio))
-        }
     }
 
     $effect(() => {
@@ -633,6 +656,7 @@
 
     function activateTab (tab: TerminalTab): void {
         if (splitPaneIds.length > 1 && !splitPaneIds.includes(tab.session.id)) closeSplit()
+        activePendingId = null
         activeId = tab.session.id
         setActiveTerminal(tab.session.id)
         showHome = false
@@ -798,10 +822,10 @@
         const current = source.session.id
         const second = await cloneTab(source)
         if (!second) return
-        splitDirection = splitDirection ?? direction
-        localStorage.setItem('issh.splitDirection', splitDirection)
-        splitPaneIds = splitPaneIds.length > 0 ? [...splitPaneIds, second.session.id] : [current, second.session.id]
-        splitLayout = { type: 'split', orientation: splitDirection, ratios: splitPaneIds.map(() => 1 / splitPaneIds.length), children: splitPaneIds.map((id) => ({ type: 'pane', id })) }
+        if (splitLayout && !layoutLeaves(splitLayout).includes(current)) closeSplit()
+        splitLayout = insertSplitPane(splitLayout, current, second.session.id, direction)
+        syncSplitState()
+        maximizedPaneId = null
         persistSplitLayout(splitLayout)
         persistTabRecovery()
         activeId = current
@@ -826,19 +850,40 @@
                 { label: '复制', action: () => duplicateTab(tab) },
                 { label: '右分屏', action: () => { void splitTab(tab, 'vertical') } },
                 { label: '下分屏', action: () => { void splitTab(tab, 'horizontal') } },
-                { label: '关闭', danger: true, action: () => { void closeTab(tab) } },
+                { label: '关闭', danger: true, action: () => { void closeHeaderTab(tab) } },
             ],
         }
     }
 
     function closeSplit (): void {
+        const paneIds = layoutLeaves(splitLayout)
+        const rootId = paneIds[0]
         splitDirection = null
         splitPaneIds = []
         maximizedPaneId = null
         localStorage.removeItem('issh.splitDirection')
         splitLayout = null
         persistSplitLayout(null)
+        if (paneIds.includes(activeId) && rootId) {
+            activeId = rootId
+            setActiveTerminal(rootId)
+            requestAnimationFrame(() => {
+                if (activeId !== rootId) return
+                const root = tabs.find((tab) => tab.session.id === rootId)
+                root?.fitAddon?.fit()
+                root?.terminal?.focus()
+            })
+        }
+        for (const id of paneIds.slice(1)) {
+            const tab = tabs.find((candidate) => candidate.session.id === id)
+            if (tab) void closeTab(tab)
+        }
         persistTabRecovery()
+    }
+
+    async function closeHeaderTab (tab: TerminalTab): Promise<void> {
+        if (hasSplitLayout && tab.session.id === splitRootId) closeSplit()
+        await closeTab(tab)
     }
 
     function togglePaneMaximize (): void {
@@ -852,44 +897,6 @@
         const next = splitPaneIds[(index + offset + splitPaneIds.length) % splitPaneIds.length]
         const tab = tabs.find((item) => item.session.id === next)
         if (tab) activateTab(tab)
-    }
-
-    function reorderPane (targetId: string): void {
-        if (!draggedPaneId || draggedPaneId === targetId || !splitPaneIds.includes(draggedPaneId) || !splitPaneIds.includes(targetId)) return
-        const next = [...splitPaneIds]
-        const from = next.indexOf(draggedPaneId)
-        const to = next.indexOf(targetId)
-        next.splice(from, 1)
-        next.splice(to, 0, draggedPaneId)
-        splitPaneIds = next
-        if (splitLayout?.type === 'split') {
-            splitLayout = { ...splitLayout, children: next.map((id) => ({ type: 'pane', id })), ratios: next.map(() => 1 / next.length) }
-            persistSplitLayout(splitLayout)
-        }
-        persistTabRecovery()
-        draggedPaneId = null
-    }
-
-    function startSplitResize (event: PointerEvent): void {
-        if (!splitDirection || splitPaneIds.length !== 2) return
-        event.preventDefault()
-        const start = splitDirection === 'vertical' ? event.clientX : event.clientY
-        const host = event.currentTarget as HTMLElement
-        const rect = host.parentElement?.getBoundingClientRect()
-        if (!rect) return
-        const total = splitDirection === 'vertical' ? rect.width : rect.height
-        const startRatio = splitRatio
-        const onMove = (move: PointerEvent) => {
-            const delta = (splitDirection === 'vertical' ? move.clientX : move.clientY) - start
-            splitRatio = Math.min(80, Math.max(20, startRatio + (delta / total) * 100))
-        }
-        const onUp = () => {
-            localStorage.setItem('issh.splitRatio', String(splitRatio))
-            window.removeEventListener('pointermove', onMove)
-            window.removeEventListener('pointerup', onUp)
-        }
-        window.addEventListener('pointermove', onMove)
-        window.addEventListener('pointerup', onUp, { once: true })
     }
 
     // 应用级快捷键统一在 window 捕获阶段处理，先于 xterm textarea 收到按键。
@@ -944,17 +951,19 @@
             searchOpen = !searchOpen
         } else if (event.key === 'Tab') {
             handled = true
-            if (tabs.length > 0) {
-                const index = tabs.findIndex((candidate) => candidate.session.id === activeId)
+            if (headerTabs.length > 0) {
+                const currentId = layoutPaneIds.includes(activeId) ? splitRootId : activeId
+                const index = headerTabs.findIndex((candidate) => candidate.session.id === currentId)
                 const next = event.shiftKey
-                    ? (index - 1 + tabs.length) % tabs.length
-                    : (index + 1) % tabs.length
-                activeId = tabs[next]?.session.id ?? activeId
+                    ? (index - 1 + headerTabs.length) % headerTabs.length
+                    : (index + 1) % headerTabs.length
+                const tab = headerTabs[next]
+                if (tab) activateTab(tab)
             }
         } else if (!event.shiftKey && key === 'w') {
             handled = true
             const tab = tabs.find((candidate) => candidate.session.id === activeId)
-            if (tab) void closeTab(tab)
+            if (tab) void (tab.session.id === splitRootId ? closeHeaderTab(tab) : closeTab(tab))
         } else if (!event.shiftKey && key === ',') {
             handled = true
             showSettings = true
@@ -1056,6 +1065,10 @@
     }
 
     async function connectHost (profile: SshHostProfile): Promise<void> {
+        const pendingId = ++nextPendingId
+        pendingConnections.push({ id: pendingId, name: profile.name, address: `${profile.user}@${profile.host}:${profile.port}` })
+        activePendingId = pendingId
+        showHome = false
         connectError = ''
         connecting = true
         try {
@@ -1065,14 +1078,14 @@
             // 从已解锁的 vault 解析保存的密码/口令
             let password = ''
             let keyPassphrase = ''
-            const profiles = (await hostProfiles()).profiles
-            const jump = await resolveJumpProfile(profile, profiles)
-            try {
-                password = policy.usePassword ? (await resolveSshPassword(profile.user, profile.host, profile.port)) ?? '' : ''
-                keyPassphrase = policy.useKey ? (await resolveKeyPassphrase(profile.user, profile.host, profile.port, expandedKeyPath || undefined)) ?? '' : ''
-            } catch {
-                // vault 未解锁时忽略，走指纹确认流程手动输入
-            }
+            const jump = profile.jumpHost ? await resolveJumpProfile(profile, (await hostProfiles()).profiles) : undefined
+            const [passwordResult, keyPassphraseResult] = await Promise.allSettled([
+                policy.usePassword ? resolveSshPassword(profile.user, profile.host, profile.port) : Promise.resolve(null),
+                policy.useKey ? resolveKeyPassphrase(profile.user, profile.host, profile.port, expandedKeyPath || undefined) : Promise.resolve(null),
+            ])
+            // Vault 未解锁时单项凭据失败不应丢弃另一项，继续走手动输入。
+            if (passwordResult.status === 'fulfilled') password = passwordResult.value ?? ''
+            if (keyPassphraseResult.status === 'fulfilled') keyPassphrase = keyPassphraseResult.value ?? ''
             await connectWithParams({
                 host: profile.host,
                 port: profile.port,
@@ -1089,6 +1102,8 @@
             connectError = cause instanceof Error ? cause.message : String(cause)
             showConnect = true
         } finally {
+            pendingConnections = pendingConnections.filter((entry) => entry.id !== pendingId)
+            if (activePendingId === pendingId) activePendingId = pendingConnections[pendingConnections.length - 1]?.id ?? null
             connecting = false
         }
     }
@@ -1166,10 +1181,11 @@
             localStorage.setItem(`issh.trustedHostKey.${params.host}:${params.port}`, fingerprint)
             tabs.push(tab)
             activeId = session.id
+            activePendingId = null
             showHome = false
             void startProfileLocalForwards(session.id, params.profile)
             persistTabRecovery()
-            await syncWorkspaceState()
+            void syncWorkspaceState()
         } catch (cause) {
             connectError = cause instanceof Error ? cause.message : String(cause)
             // 直连路径（指纹已信任）失败时原本静默无反馈：重新打开连接弹窗，
@@ -1388,31 +1404,24 @@
     }
 
     async function closeTab (tab: TerminalTab): Promise<void> {
-        try {
-            await closeSession(tab.session.id)
-        } catch {
-            // 会话可能已关闭
-        }
+        const closePromise = closeSession(tab.session.id).catch(() => { /* 会话可能已关闭 */ })
         tab.resizeObserver?.disconnect()
         tab.resizeObserver = null
         tab.terminal?.dispose()
         runDecoratorCleanups(tab)
         unregisterTerminal(tab.session.id)
         tabs = tabs.filter((candidate) => candidate.session.id !== tab.session.id)
-        splitPaneIds = splitPaneIds.filter((id) => id !== tab.session.id)
-        if (splitLayout?.type === 'split') {
-            const remaining = splitPaneIds
-            splitLayout = remaining.length > 1 ? { ...splitLayout, children: remaining.map((id) => ({ type: 'pane', id })), ratios: remaining.map(() => 1 / remaining.length) } : null
-            persistSplitLayout(splitLayout)
-        }
+        splitLayout = removeSplitPane(splitLayout, tab.session.id)
+        syncSplitState()
+        persistSplitLayout(splitLayout)
         persistTabRecovery()
         if (maximizedPaneId === tab.session.id) maximizedPaneId = null
-        if (splitPaneIds.length < 2) closeSplit()
+        if (splitLayout && splitPaneIds.length < 2) closeSplit()
         writeQueues.delete(tab.session.id)
         writeQueueLengths.delete(tab.session.id)
         writeQueueWarned.delete(tab.session.id)
         if (activeId === tab.session.id) {
-            const next = tabs[0]
+            const next = tabs.find((candidate) => candidate.session.id === layoutLeaves(splitLayout)[0]) ?? tabs[0]
             if (next) {
                 activateTab(next)
             } else {
@@ -1421,6 +1430,7 @@
                 showSend = false
             }
         }
+        await closePromise
         await syncWorkspaceState()
     }
 
@@ -1567,23 +1577,18 @@
                 class="btn-tab-bar profile-button"
                 type="button"
                 onclick={() => { showSelector = true }}
-                title="Profiles & connections"
-                aria-label="Profiles & connections"
+                title="主机与连接"
+                aria-label="主机与连接"
             >▦</button>
         {/if}
         <div class="tabs">
-            {#each tabs as tab, index (tab.session.id)}
+            {#each headerTabs as tab, index (tab.session.id)}
                 <button
                     class="tab-header"
-                    class:active={tab.session.id === activeId}
+                    class:active={activePendingId === null && (tab.session.id === activeId || (tab.session.id === splitRootId && layoutPaneIds.includes(activeId)))}
                     type="button"
                     onclick={() => activateTab(tab)}
                     oncontextmenu={(event) => showTabMenu(event, tab)}
-                    draggable={splitPaneIds.includes(tab.session.id)}
-                    ondragstart={() => { draggedPaneId = tab.session.id }}
-                    ondragover={(event) => { if (draggedPaneId) event.preventDefault() }}
-                    ondrop={(event) => { event.preventDefault(); reorderPane(tab.session.id) }}
-                    ondragend={() => { draggedPaneId = null }}
                     title={tab.session.title}
                 >
                     <span class="tab-status" class:open={tab.session.state !== 'closed'}></span>
@@ -1593,20 +1598,43 @@
                         class="tab-close"
                         role="button"
                         tabindex="0"
-                        onclick={(event) => { event.stopPropagation(); void closeTab(tab) }}
-                        onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.stopPropagation(); event.preventDefault(); void closeTab(tab) } }}
+                        onclick={(event) => { event.stopPropagation(); void closeHeaderTab(tab) }}
+                        onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.stopPropagation(); event.preventDefault(); void closeHeaderTab(tab) } }}
                         aria-label="关闭标签页"
                     >×</span>
+                </button>
+            {/each}
+            {#each pendingConnections as pending (pending.id)}
+                <button
+                    class="tab-header pending-tab"
+                    class:active={activePendingId === pending.id && !showHome}
+                    type="button"
+                    onclick={() => { activePendingId = pending.id; showHome = false }}
+                    title={`正在连接 ${pending.address}`}
+                >
+                    <span class="tab-status"></span>
+                    <span class="tab-name">{pending.name} · 连接中…</span>
                 </button>
             {/each}
         </div>
         <div class="btn-space"></div>
         {#if health}
-            <span class="runtime-badge" title={`Runtime ${health.runtimeVersion} · PID ${health.pid}`}>●</span>
+            <span class="runtime-badge" title={`运行时 ${health.runtimeVersion} · 进程 ${health.pid}`}>●</span>
         {:else}
-            <span class="runtime-badge offline" title="Runtime 未连接">●</span>
+            <span class="runtime-badge offline" title="运行时未连接">●</span>
         {/if}
         {#if !vaultLocked}
+            {#each pluginPanels as panel (panel.id)}
+                <button
+                    class="btn-tab-bar plugin-panel-toggle"
+                    class:active={activePluginPanelId === panel.id}
+                    type="button"
+                    onclick={() => { activePluginPanelId = activePluginPanelId === panel.id ? null : panel.id }}
+                    title={panel.title}
+                    aria-label={panel.title}
+                    aria-pressed={activePluginPanelId === panel.id}
+                >{panel.title}</button>
+            {/each}
             <button
                 class="btn-tab-bar"
                 type="button"
@@ -1617,7 +1645,7 @@
         {/if}
     </header>
 
-    <div class="app-workspace" class:left-open={showSftp && !!activeTab} class:bottom-open={showSend} class:split-vertical={splitDirection === 'vertical'} class:split-horizontal={splitDirection === 'horizontal'} class:multi-split={splitPaneIds.length > 2} class:recursive-split={hasSplitLayout}>
+    <div class="app-workspace" class:left-open={showSftp && !!activeTab} class:bottom-open={showSend} class:recursive-split={hasSplitLayout}>
         {#if showStartPage}
             {#if showWelcome}
                 <WelcomeHome onclose={() => { showWelcome = false }} />
@@ -1631,7 +1659,7 @@
                 </aside>
             {/if}
 
-            <div class="app-panel-center" style={`--split-ratio: ${splitRatio}%`}>
+            <div class="app-panel-center">
                 <!-- 终端 stack 常驻 DOM：xterm open() 只能执行一次，
                      若用 {#if} 切换会销毁/重建 DOM 导致切回终端空白 -->
                 <div class="terminal-stack">
@@ -1664,28 +1692,24 @@
                                         🔑 <span>{tab.sudoAction.label}</span>
                                     </button>
                                 {/if}
-                                <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); showHomePage() }} title="返回 Home">
-                                    ⌂ <span>Home</span>
+                                <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); showHomePage() }} title="返回首页">
+                                    ⌂ <span>首页</span>
                                 </button>
                                 {#if tab.ssh}
                                     <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); void reconnectTab(tab) }} disabled={connecting} title="重新连接">
-                                        ↻ <span>Reconnect</span>
+                                        ↻ <span>重连</span>
                                     </button>
                                     <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); if (showSftp) showSftp = false; else openSftpForTab(tab) }} title="SFTP 文件浏览">
                                         🗀 <span>SFTP</span>
                                     </button>
                                 {/if}
-                                <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); void exportTerminal(tab) }} title="导出终端内容">⇩ <span>Export</span></button>
-                                {#if !splitDirection}
-                                    <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); void splitActive('vertical') }} title="左右分屏">◫ <span>Split</span></button>
-                                    <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); void splitActive('horizontal') }} title="上下分屏">▤ <span>Split</span></button>
-                                {:else}
-                                    <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); void splitActive(splitDirection ?? 'vertical') }} title="新增窗格">＋ <span>Pane</span></button>
-                                    <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); togglePaneMaximize() }} title="最大化当前窗格">□ <span>{maximizedPaneId === tab.session.id ? 'Restore' : 'Maximize'}</span></button>
-                                    <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); closeSplit() }} title="关闭分屏">▣ <span>Unsplit</span></button>
+                                <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); void exportTerminal(tab) }} title="导出终端内容">⇩ <span>导出</span></button>
+                                {#if hasSplitLayout}
+                                    <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); togglePaneMaximize() }} title={maximizedPaneId === tab.session.id ? '还原当前窗格' : '最大化当前窗格'}>□ <span>{maximizedPaneId === tab.session.id ? '还原' : '最大化'}</span></button>
+                                    <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); closeSplit() }} title="取消分屏">▣ <span>取消分屏</span></button>
                                 {/if}
                                 <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); showSend = !showSend }} title="向多个标签发送输入">
-                                    ✈ <span>Send</span>
+                                    ✈ <span>群发</span>
                                 </button>
                             </div>
                             <div
@@ -1697,9 +1721,6 @@
                                 aria-label={`终端输入区 ${tab.session.title}`}
                             ></div>
                         </div>
-                        {#if splitPaneIds.length === 2 && splitDirection && visiblePaneIds.includes(tab.session.id) && visiblePaneIds.indexOf(tab.session.id) === 0}
-                            <button class="split-divider" type="button" aria-label="调整分屏比例" onpointerdown={startSplitResize}></button>
-                        {/if}
                     {/each}
                     {/snippet}
                     {#if splitLayout && hasSplitLayout}
@@ -1707,6 +1728,13 @@
                     {:else}
                         {#each tabs as tab (tab.session.id)}{@render renderPane(tab.session.id)}{/each}
                     {/if}
+                    {#each pendingConnections.filter((entry) => entry.id === activePendingId) as pending (pending.id)}
+                        <div class="connection-pending" role="status" aria-live="polite">
+                            <span class="connection-pending-dot" aria-hidden="true"></span>
+                            <strong>正在连接 {pending.name}</strong>
+                            <span>{pending.address}</span>
+                        </div>
+                    {/each}
                 </div>
             </div>
 
@@ -1730,6 +1758,18 @@
             {/if}
         {/if}
     </div>
+
+    {#if activePluginPanel && !vaultLocked}
+        <aside class="plugin-side-panel" aria-label={activePluginPanel.title}>
+            <div class="plugin-side-panel-header">
+                <strong>{activePluginPanel.title}</strong>
+                <button type="button" onclick={() => { activePluginPanelId = null }} aria-label={`关闭${activePluginPanel.title}`}>×</button>
+            </div>
+            {#key activePluginPanel.id}
+                <PluginPanelHost panel={activePluginPanel} host={panelHostContext(activePluginPanel)} />
+            {/key}
+        </aside>
+    {/if}
 
     {#if showSelector}
         <ProfileSelector

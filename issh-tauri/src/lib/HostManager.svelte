@@ -129,7 +129,14 @@
         ]
     }
     async function mutate (change: HostProfileMutation): Promise<void> { try { const result = await mutateHostProfiles(change); profiles = result.profiles; groups = result.groups; encrypted = result.encrypted; unlocked = result.unlocked; reportVaultState(); editorProfile = null; editorGroup = null; moveProfile = null } catch (cause) { error = cause instanceof Error ? cause.message : String(cause) } }
-    function saveProfile (profile: SshHostProfile): void { void mutate({ action: profiles.some((item) => item.id === profile.id) ? 'updateProfile' : 'createProfile', profile }) }
+    async function saveProfile (profile: SshHostProfile): Promise<void> {
+        const result = await mutateHostProfiles({ action: profiles.some((item) => item.id === profile.id) ? 'updateProfile' : 'createProfile', profile })
+        profiles = result.profiles
+        groups = result.groups
+        encrypted = result.encrypted
+        unlocked = result.unlocked
+        reportVaultState()
+    }
     function saveGroup (group: SshHostGroup): void { void mutate({ action: groups.some((item) => item.id === group.id) ? 'updateGroup' : 'createGroup', group }) }
     function newProfile (): void { editorProfile = { id: '', name: '', group: '', host: '', port: 22, user: '', auth: null, privateKeys: [], environment: null, remark: null, favorite: false, tags: [], loginScript: null, x11: false, agentForward: false, jumpHost: null, proxyCommand: null, forwardedPorts: [], socksProxyHost: null, socksProxyPort: null, httpProxyHost: null, httpProxyPort: null, reuseSession: false } }
     function newGroup (parentGroupId: string | null = null): void { editorGroup = { id: `group-${Date.now().toString(36)}`, name: '', parentGroupId } }
