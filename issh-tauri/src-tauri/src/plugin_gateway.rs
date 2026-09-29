@@ -12,7 +12,7 @@ use std::time::Duration;
 const API_VERSION: &str = "1";
 
 fn api_version_supported(version: &str) -> bool {
-    version == API_VERSION || version == "2"
+    version == API_VERSION || version == "2" || version == "3"
 }
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_SEEN_REQUESTS: usize = 2048;
@@ -237,6 +237,7 @@ fn static_plugin_capabilities(plugin_id: &str) -> Option<&'static [&'static str]
             "terminal.write",
             "network.postJson",
             "mcp.stdio",
+            "mcp.remote",
         ]),
         "issh-plugin-sandbox-demo" => Some(&[
             "ui.panel.register",
@@ -746,6 +747,22 @@ pub async fn handle_request(
             );
         }
     }
+    if request.method == "mcp.connect"
+        && request
+            .args
+            .get("transport")
+            .and_then(Value::as_str)
+            .is_some_and(|transport| transport != "stdio")
+        && !permission_allowed(&request, "mcp.remote")
+    {
+        state.audit(&request, false, Some("PERMISSION_DENIED"));
+        return response_error(
+            &request_id,
+            "PERMISSION_DENIED",
+            "未声明权限：mcp.remote".to_string(),
+            false,
+        );
+    }
     let result = if request.method == "network.fetch" {
         network_fetch(&request.args).await
     } else if request.method == "profiles.read" {
@@ -886,7 +903,8 @@ mod tests {
     fn gateway_accepts_existing_and_new_plugin_api_versions() {
         assert!(api_version_supported("1"));
         assert!(api_version_supported("2"));
-        assert!(!api_version_supported("3"));
+        assert!(api_version_supported("3"));
+        assert!(!api_version_supported("4"));
     }
 
     #[test]
@@ -955,7 +973,8 @@ mod tests {
                 "terminal.read",
                 "terminal.write",
                 "network.postJson",
-                "mcp.stdio"
+                "mcp.stdio",
+                "mcp.remote"
             ]
         );
         assert!(!capabilities.contains(&"ssh.exec"));

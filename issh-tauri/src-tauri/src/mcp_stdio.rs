@@ -1,3 +1,4 @@
+use crate::mcp_remote::RemoteMcpConnection;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::process::Stdio;
@@ -9,14 +10,14 @@ use tokio::time::{timeout, Duration};
 
 const MAX_LINE: usize = 1024 * 1024;
 
-struct Connection {
+struct StdioConnection {
     child: Child,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
     next_id: u64,
 }
 
-impl Connection {
+impl StdioConnection {
     async fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
         self.next_id += 1;
         let id = self.next_id;
@@ -76,6 +77,20 @@ impl Connection {
     }
 }
 
+enum Connection {
+    Stdio(StdioConnection),
+    Remote(RemoteMcpConnection),
+}
+
+impl Connection {
+    async fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
+        match self {
+            Self::Stdio(connection) => connection.call(method, params).await,
+            Self::Remote(connection) => connection.call(method, params).await,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct LocalMcpManager {
     connections: Mutex<HashMap<String, Arc<Mutex<Connection>>>>,
@@ -102,6 +117,25 @@ impl LocalMcpManager {
         let key = Self::key(plugin, server)?;
         if self.connections.lock().await.contains_key(&key) {
             return Err("MCP 服务已连接".to_string());
+        }
+        let transport = args
+            .get("transport")
+            .and_then(Value::as_str)
+            .unwrap_or("stdio");
+        if transport != "stdio" && transport != "streamable-http" && transport != "sse" {
+            return Err("不支持的 MCP 连接方式".to_string());
+        }
+        if transport != "stdio" {
+            let mut connection = RemoteMcpConnection::connect(args, transport).await?;
+            let init = connection.call("initialize", json!({"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"issh-ai-assistant","version":"0.2.1"}})).await?;
+            connection.notify("notifications/initialized").await?;
+            let result = json!({"serverId":server,"serverInfo":init.get("serverInfo"),"capabilities":init.get("capabilities")});
+            let mut connections = self.connections.lock().await;
+            if connections.len() >= 8 || connections.contains_key(&key) {
+                return Err("MCP 连接数超过上限或服务已连接".to_string());
+            }
+            connections.insert(key, Arc::new(Mutex::new(Connection::Remote(connection))));
+            return Ok(result);
         }
         let command = args
             .get("command")
@@ -160,13 +194,13 @@ impl LocalMcpManager {
             .map_err(|e| format!("启动 MCP 服务失败：{e}"))?;
         let stdin = child.stdin.take().ok_or("MCP stdin 不可用")?;
         let stdout = child.stdout.take().ok_or("MCP stdout 不可用")?;
-        let mut connection = Connection {
+        let mut connection = StdioConnection {
             child,
             stdin,
             stdout: BufReader::new(stdout),
             next_id: 0,
         };
-        let init = connection.call("initialize", json!({"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"issh-ai-assistant","version":"0.2.0"}})).await?;
+        let init = connection.call("initialize", json!({"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"issh-ai-assistant","version":"0.2.1"}})).await?;
         connection.notify("notifications/initialized").await?;
         let result = json!({"serverId":server,"serverInfo":init.get("serverInfo"),"capabilities":init.get("capabilities")});
         let mut connections = self.connections.lock().await;
@@ -176,7 +210,7 @@ impl LocalMcpManager {
         if connections.contains_key(&key) {
             return Err("MCP 服务已连接".to_string());
         }
-        connections.insert(key, Arc::new(Mutex::new(connection)));
+        connections.insert(key, Arc::new(Mutex::new(Connection::Stdio(connection))));
         Ok(result)
     }
 
@@ -235,13 +269,12 @@ impl LocalMcpManager {
             .ok_or("缺少 serverId")?;
         let key = Self::key(plugin, server)?;
         if let Some(connection) = self.connections.lock().await.remove(&key) {
-            connection
-                .lock()
-                .await
-                .child
-                .kill()
-                .await
-                .map_err(|e| e.to_string())?;
+            match &mut *connection.lock().await {
+                Connection::Stdio(connection) => {
+                    connection.child.kill().await.map_err(|e| e.to_string())?
+                }
+                Connection::Remote(connection) => connection.disconnect().await,
+            }
         }
         Ok(json!({"serverId":server,"disconnected":true}))
     }

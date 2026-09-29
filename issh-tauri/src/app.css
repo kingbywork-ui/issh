@@ -132,24 +132,27 @@ button { font: inherit; color: inherit; }
 }
 
 .plugin-panel-toggle.active { color: var(--ops-signal); background: var(--ops-signal-dim); }
+.app-content { display: flex; flex: 1 1 0; min-width: 0; min-height: 0; overflow: hidden; }
 .plugin-side-panel {
-    position: absolute;
-    top: var(--tabs-height);
-    right: 0;
-    bottom: 0;
-    z-index: 20;
     display: flex;
     flex-direction: column;
-    width: min(420px, 92vw);
+    flex: 0 0 min(420px, 42vw);
+    width: min(420px, 42vw);
     min-height: 0;
+    min-width: 0;
     border-left: 1px solid var(--ops-line);
     background: var(--ops-panel);
-    box-shadow: -16px 0 40px rgba(0, 0, 0, .25);
 }
 .plugin-side-panel-header { display: flex; align-items: center; justify-content: space-between; min-height: 40px; padding: 0 14px; border-bottom: 1px solid var(--ops-line); }
 .plugin-side-panel-header button { border: 0; background: transparent; color: var(--ops-fg); font-size: 20px; cursor: pointer; }
 .plugin-panel-content { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .plugin-panel-error { padding: 12px; color: var(--ops-danger); }
+
+@media (max-width: 1100px) {
+    .app-content:has(.app-workspace.left-open):has(.plugin-side-panel) { flex-direction: column; }
+    .app-content:has(.app-workspace.left-open):has(.plugin-side-panel) .app-workspace { flex: 1 1 60%; }
+    .app-content:has(.app-workspace.left-open):has(.plugin-side-panel) .plugin-side-panel { flex: 1 1 40%; width: 100%; border-left: 0; border-top: 1px solid var(--ops-line); }
+}
 
 @keyframes fadeIn {
     from { opacity: 0; }
@@ -860,6 +863,8 @@ button { font: inherit; color: inherit; }
 
 .connect-panel {
     width: min(460px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    overflow: auto;
     padding: 24px 26px;
     border: 1px solid var(--ops-line);
     border-radius: var(--ops-radius-lg);
@@ -1092,6 +1097,9 @@ button { font: inherit; color: inherit; }
 }
 
 @media (max-width: 620px) {
+    .app-content:has(.plugin-side-panel) { flex-direction: column; }
+    .app-content:has(.plugin-side-panel) .app-workspace { flex: 1 1 55%; }
+    .plugin-side-panel { flex: 1 1 45%; width: 100%; border-left: 0; border-top: 1px solid var(--ops-line); }
     .app-workspace.left-open .app-panel-left {
         flex: 0 1 min(320px, 100vw);
         width: min(320px, 100vw);
@@ -1377,8 +1385,11 @@ button { font: inherit; color: inherit; }
 .fingerprint-key { margin: 8px 0 0; color: var(--ops-fg-muted); font-size: 12px; overflow-wrap: anywhere; }
 
 .fingerprint-credential { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; font-size: 12px; color: var(--ops-fg-muted); }
+.fingerprint-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
+.fingerprint-wide { grid-column: 1 / -1; }
 
-.fingerprint-credential input {
+.fingerprint-credential input, .fingerprint-credential select {
+    width: 100%;
     min-height: 32px;
     padding: 0 10px;
     border: 1px solid var(--ops-line);
@@ -1387,6 +1398,8 @@ button { font: inherit; color: inherit; }
     color: var(--ops-fg);
     font-size: 13px;
 }
+.fingerprint-save { display: flex; align-items: center; gap: 8px; color: var(--ops-fg-muted); font-size: 12px; }
+.fingerprint-save input { accent-color: var(--ops-signal); }
 
 /* ===== 滚动条（issh 风格） ===== */
 

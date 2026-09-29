@@ -3,6 +3,7 @@ mod agent_bridge_config;
 mod clipboard;
 mod host_profiles;
 mod mcp_stdio;
+mod mcp_remote;
 mod plugin_gateway;
 mod plugin_market;
 

@@ -1,5 +1,6 @@
 <script lang="ts">
     import { saveHostCredential, type SshHostGroup, type SshHostProfile } from './runtime'
+    import { groupOptions } from './groupOptions'
 
     let { profile, groups, onconnect, oncomplete, oncancel }: { profile: SshHostProfile, groups: SshHostGroup[], onconnect: (profile: SshHostProfile) => Promise<void>, oncomplete?: () => Promise<void>, oncancel: () => void } = $props()
     // svelte-ignore state_referenced_locally
@@ -12,6 +13,7 @@
     let saving = $state(false)
     let activeTab = $state<'general' | 'advanced' | 'security'>('general')
     const isNew = $derived(!draft.id)
+    const groupChoices = $derived(groupOptions(groups))
 
     async function save (): Promise<void> {
         if (saving) return
@@ -57,7 +59,7 @@
             {#if activeTab === 'general'}
                 <div class="editor-grid">
                     <label>名称<input bind:value={draft.name} required maxlength="160" /></label>
-                    <label>分组<select bind:value={draft.group}><option value="">未分组</option>{#each groups as group}<option value={group.id}>{group.name}</option>{/each}</select></label>
+                    <label>分组<select bind:value={draft.group}><option value="">未分组</option>{#each groupChoices as group (group.id)}<option value={group.id}>{group.label}</option>{/each}</select></label>
                     <label>主机<input bind:value={draft.host} required placeholder="192.168.1.10" /></label>
                     <label>端口<input type="number" bind:value={draft.port} min="1" max="65535" required /></label>
                     <label>用户名<input bind:value={draft.user} required /></label>

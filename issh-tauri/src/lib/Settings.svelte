@@ -15,6 +15,7 @@
     import type { RegistryEntry } from './plugins/types'
     import { invoke } from '@tauri-apps/api/core'
     import { terminalColorSchemes } from './terminalSchemes'
+    import { firstAvailableRegistry, isOfficialRegistry, officialRegistryOrder, registryCandidates } from './marketRegistry'
     import AutoSudoSettings from './AutoSudoSettings.svelte'
     import VaultSettings from './VaultSettings.svelte'
     import { lockHostProfiles, runtimeHealth, checkUpdate, getBuildInfo, type UpdateCheckResult, type BuildInfo } from './runtime'
@@ -65,7 +66,14 @@
         directory: string
     }
 
-    const DEFAULT_REGISTRY = 'https://raw.githubusercontent.com/kingbywork-ui/issh-plugin-registry/main/index.json'
+    function preferredRegistries (): string[] {
+        return officialRegistryOrder(Intl.DateTimeFormat().resolvedOptions().timeZone ?? '', navigator.language)
+    }
+
+    function initialRegistryUrl (): string {
+        const saved = localStorage.getItem('issh.plugins.registryUrl')?.trim()
+        return saved && !isOfficialRegistry(saved) ? saved : preferredRegistries()[0]
+    }
 
     const MARKET_I18N: Record<string, Record<string, string>> = {
         zh: {
@@ -156,7 +164,7 @@
     let pluginBusy = $state('')
     let pluginError = $state('')
 
-    let registryUrl = $state(localStorage.getItem('issh.plugins.registryUrl') ?? DEFAULT_REGISTRY)
+    let registryUrl = $state(initialRegistryUrl())
     let marketEntries = $state<MarketEntry[]>([])
     let marketLoading = $state(false)
     let marketError = $state('')
@@ -212,12 +220,18 @@
     }
 
     function leaveVault (next: Section): void {
+        const enteringMarket = next === 'market' && section !== 'market'
         if (section === 'vault' && next !== 'vault') {
             void lockHostProfiles().catch(() => {})
         }
         section = next
         if (next !== 'plugin-tab') pluginTabSection = ''
         if (next === 'general') loadKnownHosts()
+        if (enteringMarket) {
+            detailEntry = null
+            if (isOfficialRegistry(registryUrl)) registryUrl = preferredRegistries()[0]
+            void loadMarket()
+        }
     }
 
     function closeSettings (): void {
@@ -402,18 +416,31 @@
         }
     }
 
+    let marketLoadId = 0
     async function loadMarket (): Promise<void> {
+        const loadId = ++marketLoadId
+        const requestedUrl = registryUrl.trim()
+        const candidates = registryCandidates(requestedUrl, Intl.DateTimeFormat().resolvedOptions().timeZone ?? '', navigator.language)
         marketLoading = true
         marketError = ''
+        marketEntries = []
         try {
-            const registry = await invoke<{ plugins: MarketEntry[] }>('plugin_fetch_registry', { url: registryUrl })
+            const { url, registry } = await firstAvailableRegistry(candidates, (candidate) =>
+                invoke<{ plugins: MarketEntry[] }>('plugin_fetch_registry', { url: candidate }),
+            )
+            if (loadId !== marketLoadId) return
             marketEntries = (registry.plugins ?? []).filter((entry) => !SUPERSEDED_PLUGIN_IDS.has(entry.id))
-            persist('issh.plugins.registryUrl', registryUrl)
+            registryUrl = url
+            try {
+                if (isOfficialRegistry(url)) localStorage.removeItem('issh.plugins.registryUrl')
+                else persist('issh.plugins.registryUrl', url)
+            } catch {}
         } catch (cause) {
-            marketError = cause instanceof Error ? cause.message : String(cause)
+            if (loadId !== marketLoadId) return
             marketEntries = []
+            marketError = cause instanceof Error ? cause.message : String(cause)
         } finally {
-            marketLoading = false
+            if (loadId === marketLoadId) marketLoading = false
         }
     }
 

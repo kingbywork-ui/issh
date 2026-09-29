@@ -188,7 +188,7 @@ function compareVersions (a: string, b: string): number {
 }
 
 function checkManifestCompatibility (manifest: IsshPluginManifest): string | null {
-    if (manifest.gatewayApiVersion && !['1', '2'].includes(manifest.gatewayApiVersion)) {
+    if (manifest.gatewayApiVersion && !['1', '2', '3'].includes(manifest.gatewayApiVersion)) {
         return `插件需要不兼容的网关 API 版本：${manifest.gatewayApiVersion}`
     }
     if (manifest.minAppVersion && (!hostVersion || compareVersions(hostVersion, manifest.minAppVersion) < 0)) {

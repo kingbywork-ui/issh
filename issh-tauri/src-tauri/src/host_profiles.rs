@@ -1567,6 +1567,52 @@ fn apply_credential_mutation(
 mod tests {
     use super::*;
 
+    #[test]
+    fn moves_profile_without_username_to_another_group() {
+        let profile: SshHostProfile = serde_json::from_value(serde_json::json!({
+            "id": "host-1", "name": "ESXi", "host": "192.0.2.10", "port": 22,
+            "user": "", "group": "old-group"
+        }))
+        .expect("parse profile");
+        let mut profiles = vec![profile.clone()];
+        let mut groups = vec![
+            SshHostGroup {
+                id: "old-group".into(),
+                name: "Old".into(),
+                parent_group_id: None,
+            },
+            SshHostGroup {
+                id: "new-group".into(),
+                name: "New".into(),
+                parent_group_id: None,
+            },
+        ];
+        let mut updated = profile.clone();
+        updated.group = "new-group".into();
+        let full_update = HostProfileMutation {
+            action: "updateProfile".into(),
+            profile: Some(updated),
+            profile_id: None,
+            group: None,
+            group_id: None,
+            profile_ids: None,
+        };
+        assert!(apply_mutation(&mut profiles, &mut groups, &full_update).is_err());
+
+        let move_only = HostProfileMutation {
+            action: "moveProfiles".into(),
+            profile: None,
+            profile_id: None,
+            group: None,
+            group_id: Some("new-group".into()),
+            profile_ids: Some(vec![profile.id.clone()]),
+        };
+        apply_mutation(&mut profiles, &mut groups, &move_only).expect("move group");
+        assert_eq!(profiles[0].group, "new-group");
+        assert_eq!(profiles[0].user, "");
+        assert_eq!(profiles[0].host, profile.host);
+    }
+
     fn secret_json(user: &str, host: Option<&str>, port: u16, value: &str) -> Value {
         serde_json::json!({
             "type": VAULT_SECRET_TYPE_PASSWORD,

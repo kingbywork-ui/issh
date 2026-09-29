@@ -256,7 +256,9 @@ impl SshConnection {
                 authenticated = result.success();
             }
         }
-        if !authenticated && spec.keyboard_interactive {
+        // ESXi 等服务器可能只提供 keyboard-interactive，即使主机档案选择了“密码”。
+        // 密码认证未通过时，使用同一凭据尝试交互式认证。
+        if !authenticated && (spec.keyboard_interactive || spec.password.is_some()) {
             let response = handle
                 .authenticate_keyboard_interactive_start(spec.username.clone(), None::<String>)
                 .await
@@ -1196,6 +1198,7 @@ mod tests {
         struct TestServer {
             pty_requested: Arc<AtomicBool>,
             shell_requested: Arc<AtomicBool>,
+            keyboard_only: bool,
         }
 
         impl server::Handler for TestServer {
@@ -1206,10 +1209,35 @@ mod tests {
                 _user: &str,
                 password: &str,
             ) -> Result<Auth, Self::Error> {
-                if password == "secret" {
+                if !self.keyboard_only && password == "secret" {
                     Ok(Auth::Accept)
                 } else {
                     Ok(Auth::reject())
+                }
+            }
+
+            async fn auth_keyboard_interactive<'a>(
+                &'a mut self,
+                _user: &str,
+                _submethods: &str,
+                response: Option<server::Response<'a>>,
+            ) -> Result<Auth, Self::Error> {
+                if !self.keyboard_only {
+                    return Ok(Auth::reject());
+                }
+                match response {
+                    None => Ok(Auth::Partial {
+                        name: "password".into(),
+                        instructions: "".into(),
+                        prompts: vec![("Password: ".into(), false)].into(),
+                    }),
+                    Some(mut response) => {
+                        if response.next().as_deref() == Some(b"secret") {
+                            Ok(Auth::Accept)
+                        } else {
+                            Ok(Auth::reject())
+                        }
+                    }
                 }
             }
 
@@ -1253,6 +1281,7 @@ mod tests {
 
         async fn spawn_test_server(
             port: u16,
+            keyboard_only: bool,
         ) -> (
             Arc<russh::keys::PrivateKey>,
             Arc<AtomicBool>,
@@ -1285,6 +1314,7 @@ mod tests {
                         let handler = TestServer {
                             pty_requested,
                             shell_requested,
+                            keyboard_only,
                         };
                         let Ok(session) = server::run_stream(config, socket, handler).await else {
                             return;
@@ -1304,7 +1334,7 @@ mod tests {
             let port = listener.local_addr().unwrap().port();
             drop(listener);
 
-            let (key, pty_requested, shell_requested) = spawn_test_server(port).await;
+            let (key, pty_requested, shell_requested) = spawn_test_server(port, false).await;
             let fingerprint = key.public_key().fingerprint(Default::default()).to_string();
 
             let connection = SshConnection::connect(SshConnectionSpec {
@@ -1357,7 +1387,7 @@ mod tests {
             let port = listener.local_addr().unwrap().port();
             drop(listener);
 
-            let (key, _pty_requested, _shell_requested) = spawn_test_server(port).await;
+            let (key, _pty_requested, _shell_requested) = spawn_test_server(port, false).await;
             let expected = key.public_key().fingerprint(Default::default()).to_string();
 
             let discovered = SshConnection::discover_host_key("127.0.0.1", port)
@@ -1377,6 +1407,37 @@ mod tests {
                 .disconnect()
                 .await
                 .expect("disconnect should succeed");
+        }
+
+        #[tokio::test]
+        async fn password_connects_when_server_only_offers_keyboard_interactive() {
+            let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0u16))
+                .await
+                .unwrap();
+            let port = listener.local_addr().unwrap().port();
+            drop(listener);
+
+            let (key, _, _) = spawn_test_server(port, true).await;
+            let mut value = spec();
+            value.host = "127.0.0.1".to_string();
+            value.port = port;
+            value.expected_host_key = key.public_key().fingerprint(Default::default()).to_string();
+            value.keyboard_interactive = false;
+
+            let connection = SshConnection::connect(value)
+                .await
+                .expect("password should fall back to keyboard-interactive authentication");
+            let mut interactive = connection
+                .open_interactive(120, 36, false, false)
+                .await
+                .unwrap();
+            let output = timeout(Duration::from_secs(5), interactive.read_output())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(output.data, b"interactive-ready\r\n");
+            interactive.close().await.unwrap();
+            connection.disconnect().await.unwrap();
         }
 
         #[tokio::test]

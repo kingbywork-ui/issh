@@ -44,6 +44,7 @@ const LEGACY_PERMISSION_ALIASES: Record<string, string> = {
     'fs:read': 'fs.read',
     'network:postJson': 'network.postJson',
     'mcp:stdio': 'mcp.stdio',
+    'mcp:remote': 'mcp.remote',
 }
 
 const METHOD_PERMISSIONS: Record<string, string> = {
@@ -126,7 +127,7 @@ export function createPluginGateway (
     hooks: PluginGatewayHooks,
 ): PluginGateway {
     let inFlight = 0
-    const apiVersion = manifest.gatewayApiVersion === '2' ? '2' : '1'
+    const apiVersion = manifest.gatewayApiVersion === '3' ? '3' : manifest.gatewayApiVersion === '2' ? '2' : '1'
     const hasPermission = (permission: string): boolean => {
         const declared = [...(manifest.permissions ?? []), ...(manifest.capabilities ?? [])]
         return declared.some((item) => item === permission || normalizePermission(item) === permission)
@@ -145,6 +146,7 @@ export function createPluginGateway (
             throw new Error(error)
         }
         if (permission) requirePermission(permission, method)
+        if (method === 'mcp.connect' && args.transport !== undefined && args.transport !== 'stdio') requirePermission('mcp.remote', method)
         const confirmation = method === 'mcp.callTool'
             ? `插件「${manifest.name}」请求调用本地 MCP 工具：\n服务：${String(args.serverId ?? '')}\n工具：${String(args.name ?? '')}\n参数：${JSON.stringify(args.arguments ?? {}).slice(0, 2000)}\n\n是否继续？`
             : `插件「${manifest.name}」请求执行 ${method}，是否继续？`

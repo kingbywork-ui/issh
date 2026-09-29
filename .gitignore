@@ -53,6 +53,7 @@ crowdin.yml
 .npm-cache/
 build/backup-installers/
 build/issh-ai-assistant-upstream/
+build/ai-ui-preview/
 .psacowork/
 issh-tauri/src-tauri/target/
 issh-runtime/target/

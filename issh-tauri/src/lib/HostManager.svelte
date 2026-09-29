@@ -3,12 +3,13 @@
     import ContextMenu, { type ContextMenuItem } from './ContextMenu.svelte'
     import HostGroupEditor from './HostGroupEditor.svelte'
     import HostProfileEditor from './HostProfileEditor.svelte'
+    import { groupOptions } from './groupOptions'
     import { focusOnMount } from './a11y'
     import { hostProfiles, lockHostProfiles, mutateHostProfiles, unlockHostProfiles, readSshConfig, type HostProfileMutation, type SshHostGroup, type SshHostProfile } from './runtime'
     import { parseSshConfig } from './sshConfig'
 
     let { onconnect, onopenlocal, onvaultstate }: { onconnect: (profile: SshHostProfile) => void, onopenlocal: () => void, onvaultstate?: (locked: boolean) => void } = $props()
-    interface GroupNode extends SshHostGroup { children: GroupNode[], profileIds: string[], count: number }
+    interface GroupNode extends SshHostGroup { children: GroupNode[], count: number }
     let profiles = $state<SshHostProfile[]>([])
     let groups = $state<SshHostGroup[]>([])
     let encrypted = $state(false)
@@ -70,19 +71,19 @@
     async function refresh (): Promise<void> { loading = true; error = ''; try { const result = await hostProfiles(); profiles = result.profiles; groups = result.groups; encrypted = result.encrypted; unlocked = !result.encrypted || result.unlocked; reportVaultState() } catch (cause) { error = cause instanceof Error ? cause.message : String(cause) } finally { loading = false } }
     async function unlock (passphrase: string): Promise<void> { try { const result = await unlockHostProfiles(passphrase); profiles = result.profiles; groups = result.groups; encrypted = result.encrypted; unlocked = result.unlocked; reportVaultState() } catch (cause) { error = cause instanceof Error ? cause.message : String(cause) } }
     function lock (): void { void lockHostProfiles().then((result) => { profiles = result.profiles; groups = result.groups; encrypted = result.encrypted; unlocked = result.unlocked; reportVaultState() }).catch(() => {}) }
-    function tree (): GroupNode[] { const map = new Map(groups.map((group) => [group.id, { ...group, children: [], profileIds: [], count: 0 } as GroupNode])); const roots: GroupNode[] = []; for (const group of groups) { const node = map.get(group.id)!; const parent = group.parentGroupId ? map.get(group.parentGroupId) : null; (parent ? parent.children : roots).push(node) } for (const profile of profiles) { const node = map.get(profile.group); if (node) node.profileIds.push(profile.id) } const count = (node: GroupNode): number => { node.count = node.profileIds.length + node.children.reduce((sum, child) => sum + count(child), 0); return node.count }; roots.forEach(count); return roots }
+    function tree (): GroupNode[] { const map = new Map(groups.map((group) => [group.id, { ...group, children: [], count: 0 } as GroupNode])); const roots: GroupNode[] = []; for (const group of groups) { const node = map.get(group.id)!; const parent = group.parentGroupId ? map.get(group.parentGroupId) : null; (parent ? parent.children : roots).push(node) } for (const profile of profiles) { const node = map.get(profile.group); if (node) node.count += 1 } return roots }
     const groupTree = $derived(tree())
-    function collect (node: GroupNode, result: Set<string>): void { node.profileIds.forEach((id) => result.add(id)); node.children.forEach((child) => collect(child, result)) }
+    const groupChoices = $derived(groupOptions(groups))
     function findNode (nodes: GroupNode[], id: string): GroupNode | null { for (const node of nodes) { if (node.id === id) return node; const child = findNode(node.children, id); if (child) return child } return null }
     const environments = $derived([...new Set(profiles.map((profile) => profile.environment).filter((value): value is string => Boolean(value)))].sort())
-    const visible = $derived.by(() => { let result = profiles.filter((profile) => !query.trim() || `${profile.name} ${profile.host} ${profile.user} ${profile.remark ?? ''} ${profile.tags.join(' ')}`.toLowerCase().includes(query.trim().toLowerCase())); if (environment) result = result.filter((profile) => profile.environment === environment); if (favoritesOnly || view === 'favorites') result = result.filter((profile) => profile.favorite); if (recentOnly || view === 'recent') result = result.filter((profile) => recentIds.includes(profile.id)); if (typeof view === 'object') { const node = findNode(groupTree, view.group); const ids = new Set<string>(); if (node) collect(node, ids); result = result.filter((profile) => ids.has(profile.id)) } return result.sort((a, b) => (recentIds.indexOf(a.id) < 0 ? 999 : recentIds.indexOf(a.id)) - (recentIds.indexOf(b.id) < 0 ? 999 : recentIds.indexOf(b.id)) || Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name)) })
+    const visible = $derived.by(() => { let result = profiles.filter((profile) => !query.trim() || `${profile.name} ${profile.host} ${profile.user} ${profile.remark ?? ''} ${profile.tags.join(' ')}`.toLowerCase().includes(query.trim().toLowerCase())); if (environment) result = result.filter((profile) => profile.environment === environment); if (favoritesOnly || view === 'favorites') result = result.filter((profile) => profile.favorite); if (recentOnly || view === 'recent') result = result.filter((profile) => recentIds.includes(profile.id)); if (typeof view === 'object') { const groupId = view.group; result = result.filter((profile) => profile.group === groupId) } return result.sort((a, b) => (recentIds.indexOf(a.id) < 0 ? 999 : recentIds.indexOf(a.id)) - (recentIds.indexOf(b.id) < 0 ? 999 : recentIds.indexOf(b.id)) || Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name)) })
     function showMenu (event: MouseEvent, items: ContextMenuItem[]): void { event.preventDefault(); event.stopPropagation(); menu = { x: Math.max(8, Math.min(event.clientX, window.innerWidth - 230)), y: Math.max(8, Math.min(event.clientY, window.innerHeight - 300)), items } }
     function profileItems (profile: SshHostProfile): ContextMenuItem[] {
         return [
             { label: '连接', action: () => { recordRecent(profile); onconnect(profile) } },
             { label: '编辑', action: () => { editorProfile = { ...profile, tags: [...profile.tags], privateKeys: [...profile.privateKeys] } } },
             { label: '克隆', action: () => { editorProfile = { ...profile, id: '', name: `${profile.name} copy`, tags: [...profile.tags], privateKeys: [...profile.privateKeys] } } },
-            { label: '更改分组', action: () => { moveProfile = { ...profile, tags: [...profile.tags], privateKeys: [...profile.privateKeys] } } },
+            { label: '更改分组', action: () => { error = ''; moveProfile = { ...profile, tags: [...profile.tags], privateKeys: [...profile.privateKeys] } } },
             { label: profile.favorite ? '取消收藏' : '收藏', action: () => void mutate({ action: 'toggleFavorite', profileId: profile.id }) },
             { label: '删除', danger: true, action: () => { if (window.confirm(`删除主机“${profile.name}”？`)) void mutate({ action: 'deleteProfile', profileId: profile.id }) } },
         ]
@@ -121,14 +122,14 @@
     function groupItems (group: SshHostGroup): ContextMenuItem[] {
         const count = groupProfiles(group).length
         return [
-            { label: `连接 (${count})`, disabled: count === 0, action: () => void connectGroup(group) },
+            { label: `${groups.some((child) => child.parentGroupId === group.id) ? '连接本组及子分组' : '连接'} (${count})`, disabled: count === 0, action: () => void connectGroup(group) },
             { label: '新增主机', action: () => { editorProfile = { id: '', name: '', group: group.id, host: '', port: 22, user: '', auth: null, privateKeys: [], environment: null, remark: null, favorite: false, tags: [], loginScript: null, x11: false, agentForward: false, jumpHost: null, proxyCommand: null, forwardedPorts: [], socksProxyHost: null, socksProxyPort: null, httpProxyHost: null, httpProxyPort: null, reuseSession: false } } },
             { label: '新增子分组', action: () => { editorGroup = { id: `group-${Date.now().toString(36)}`, name: '', parentGroupId: group.id } } },
             { label: '重命名', action: () => { editorGroup = { ...group } } },
             { label: '删除组', danger: true, action: () => requestDeleteGroup(group) },
         ]
     }
-    async function mutate (change: HostProfileMutation): Promise<void> { try { const result = await mutateHostProfiles(change); profiles = result.profiles; groups = result.groups; encrypted = result.encrypted; unlocked = result.unlocked; reportVaultState(); editorProfile = null; editorGroup = null; moveProfile = null } catch (cause) { error = cause instanceof Error ? cause.message : String(cause) } }
+    async function mutate (change: HostProfileMutation): Promise<void> { try { const result = await mutateHostProfiles(change); profiles = result.profiles; groups = result.groups; encrypted = result.encrypted; unlocked = result.unlocked; error = ''; reportVaultState(); editorProfile = null; editorGroup = null; moveProfile = null } catch (cause) { error = cause instanceof Error ? cause.message : String(cause) } }
     async function saveProfile (profile: SshHostProfile): Promise<void> {
         const result = await mutateHostProfiles({ action: profiles.some((item) => item.id === profile.id) ? 'updateProfile' : 'createProfile', profile })
         profiles = result.profiles
@@ -217,10 +218,10 @@
 {#if moveProfile}
     <div class="modal-backdrop" role="presentation" onclick={(event) => { if (event.target === event.currentTarget) moveProfile = null }}>
         <div class="editor-panel" role="dialog" aria-modal="true" aria-labelledby="move-profile-title" tabindex="-1">
-            <form onsubmit={(event) => { event.preventDefault(); if (moveProfile) void mutate({ action: 'updateProfile', profile: moveProfile }) }}>
+            <form onsubmit={(event) => { event.preventDefault(); if (moveProfile) void mutate({ action: 'moveProfiles', profileIds: [moveProfile.id], groupId: moveProfile.group }) }}>
                 <div class="editor-header"><h2 id="move-profile-title">更改分组</h2><button type="button" class="icon-button" aria-label="关闭" onclick={() => { moveProfile = null }}>×</button></div>
                 <p>选择“{moveProfile.name}”所属的分组。</p>
-                <label>分组<select bind:value={moveProfile.group}><option value="">未分组</option>{#each groups as group (group.id)}<option value={group.id}>{group.name}</option>{/each}</select></label>
+                <label>分组<select bind:value={moveProfile.group}><option value="">未分组</option>{#each groupChoices as group (group.id)}<option value={group.id}>{group.label}</option>{/each}</select></label>
                 <div class="editor-actions"><button type="button" class="secondary" onclick={() => { moveProfile = null }}>取消</button><button type="submit">保存</button></div>
             </form>
         </div>

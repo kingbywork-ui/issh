@@ -22,6 +22,7 @@
     import SplitLayout from './lib/SplitLayout.svelte'
     import { insertSplitPane, layoutLeaves, removeSplitPane, type SplitLayoutNode } from './lib/splitLayout'
     import { focusOnMount } from './lib/a11y'
+    import { connectionCredentials, retryConnectionCredentials, type ConnectionAuth } from './lib/connectCredentials'
     import { checkPluginUpdates, type PluginUpdateInfo } from './lib/plugins/pluginHost'
     import { findScheme } from './lib/terminalSchemes'
     import {
@@ -31,11 +32,13 @@
         closeSession,
         discoverSshHostKey,
         hostProfiles,
+        mutateHostProfiles,
         minimizeToTray,
         openLocalSession,
         openSshSession,
         resolveKeyPassphrase,
         resolveSshPassword,
+        saveHostCredential,
         startLocalForward,
         startDynamicForward,
         startRemoteForward,
@@ -292,6 +295,9 @@
     let formPassword = $state('')
     let formKeyPath = $state('')
     let formKeyPassphrase = $state('')
+    let formAuth = $state<ConnectionAuth>('auto')
+    let formEnvironment = $state('')
+    let saveConnectionCredential = $state(false)
     let formVaultSecretId = $state('')
     let connectError = $state('')
     let connecting = $state(false)
@@ -1071,33 +1077,33 @@
         showHome = false
         connectError = ''
         connecting = true
+        const policy = credentialPolicy(profile)
+        const keyPath = policy.useKey ? (profile.privateKeys[0] ?? '') : ''
+        const expandedKeyPath = keyPath ? normalizeKeyPath(keyPath, profile.host, profile.user) : ''
+        const params: PendingConnect = {
+            host: profile.host,
+            port: profile.port,
+            user: profile.user,
+            password: '',
+            keyPath: expandedKeyPath,
+            keyPassphrase: '',
+            vaultSecretId: '',
+            title: profile.name,
+            profile,
+        }
+        prepareConnectionForm(params)
         try {
-            const policy = credentialPolicy(profile)
-            const keyPath = policy.useKey ? (profile.privateKeys[0] ?? '') : ''
-            const expandedKeyPath = keyPath ? normalizeKeyPath(keyPath, profile.host, profile.user) : ''
             // 从已解锁的 vault 解析保存的密码/口令
-            let password = ''
-            let keyPassphrase = ''
             const jump = profile.jumpHost ? await resolveJumpProfile(profile, (await hostProfiles()).profiles) : undefined
             const [passwordResult, keyPassphraseResult] = await Promise.allSettled([
                 policy.usePassword ? resolveSshPassword(profile.user, profile.host, profile.port) : Promise.resolve(null),
                 policy.useKey ? resolveKeyPassphrase(profile.user, profile.host, profile.port, expandedKeyPath || undefined) : Promise.resolve(null),
             ])
             // Vault 未解锁时单项凭据失败不应丢弃另一项，继续走手动输入。
-            if (passwordResult.status === 'fulfilled') password = passwordResult.value ?? ''
-            if (keyPassphraseResult.status === 'fulfilled') keyPassphrase = keyPassphraseResult.value ?? ''
-            await connectWithParams({
-                host: profile.host,
-                port: profile.port,
-                user: profile.user,
-                password,
-                keyPath: expandedKeyPath,
-                keyPassphrase,
-                vaultSecretId: '',
-                title: profile.name,
-                profile,
-                jump,
-            })
+            if (passwordResult.status === 'fulfilled') params.password = passwordResult.value ?? ''
+            if (keyPassphraseResult.status === 'fulfilled') params.keyPassphrase = keyPassphraseResult.value ?? ''
+            params.jump = jump
+            await connectWithParams(params)
         } catch (cause) {
             connectError = cause instanceof Error ? cause.message : String(cause)
             showConnect = true
@@ -1108,13 +1114,33 @@
         }
     }
 
+    function prepareConnectionForm (params: PendingConnect): void {
+        pendingConnect = false
+        pendingFingerprint = ''
+        pendingParams = params
+        formHost = params.host
+        formPort = params.port
+        formUser = params.user
+        formKeyPath = params.profile?.privateKeys[0] ?? params.keyPath
+        formEnvironment = params.profile?.environment ?? ''
+        formVaultSecretId = params.vaultSecretId
+        formAuth = params.profile?.auth === 'password' || params.profile?.auth === 'publicKey' || params.profile?.auth === 'agent' || params.profile?.auth === 'keyboardInteractive'
+            ? params.profile.auth
+            : params.profile ? 'auto' : params.keyPath ? 'publicKey' : 'password'
+        if (params.profile) {
+            formPassword = ''
+            formKeyPassphrase = ''
+        }
+        saveConnectionCredential = false
+    }
+
     async function connectWithParams (params: PendingConnect): Promise<void> {
+        prepareConnectionForm(params)
         const fingerprint = await discoverSshHostKey(params.host, params.port)
         pendingFingerprint = fingerprint.fingerprint
-        pendingParams = params
         const trustKey = `issh.trustedHostKey.${params.host}:${params.port}`
         const trustedFingerprint = localStorage.getItem(trustKey)
-        if (trustedFingerprint === fingerprint.fingerprint) {
+        if (trustedFingerprint === fingerprint.fingerprint && params.user.trim() && !(formAuth === 'publicKey' && !formKeyPath.trim()) && !((formAuth === 'password' || formAuth === 'keyboardInteractive') && !params.password && !formPassword)) {
             // 指纹未变化时复用已确认的信任记录，不再重复弹窗。
             await confirmFingerprint()
             return
@@ -1131,18 +1157,50 @@
         // 先快照指纹：下方清空 pendingFingerprint 后 tab 仍需记录它供 Reconnect 使用
         const fingerprint = pendingFingerprint
         try {
+            const user = formUser.trim()
+            if (!user) throw new Error('请输入用户名')
+            const rawKeyPath = formKeyPath.trim()
+            if (formAuth === 'publicKey' && !rawKeyPath) throw new Error('请输入私钥路径')
+            const originalKeyPath = params.profile?.privateKeys[0] ?? params.keyPath
+            const typedPassword = formAuth === 'auto' || formAuth === 'password' || formAuth === 'keyboardInteractive' ? formPassword : ''
+            const typedKeyPassphrase = formAuth === 'auto' || formAuth === 'publicKey' ? formKeyPassphrase : ''
+            const credentials = connectionCredentials({
+                auth: formAuth,
+                user,
+                originalUser: params.user,
+                password: typedPassword,
+                storedPassword: params.password,
+                keyPath: rawKeyPath,
+                originalKeyPath,
+                keyPassphrase: typedKeyPassphrase,
+                storedKeyPassphrase: params.keyPassphrase,
+            })
+            const keyPath = credentials.useKey && rawKeyPath ? normalizeKeyPath(rawKeyPath, params.host, user) : ''
+            if (saveConnectionCredential) {
+                if (!typedPassword && !typedKeyPassphrase) throw new Error('请先输入需要保存的密码或私钥口令')
+                const vault = await hostProfiles()
+                if (!vault.encrypted) throw new Error('请先在保险库启用主口令，再保存连接密码')
+                if (!vault.unlocked) throw new Error('请先解锁保险库，再保存连接密码')
+            }
+            const connectedProfile: SshHostProfile | null = params.profile ? {
+                ...params.profile,
+                user,
+                auth: formAuth === 'auto' ? null : formAuth,
+                privateKeys: credentials.useKey ? (rawKeyPath ? [rawKeyPath, ...params.profile.privateKeys.slice(1)] : []) : params.profile.privateKeys,
+                environment: formEnvironment.trim() || null,
+            } : null
             const session = await openSshSession({
-                title: params.title?.trim() || `${params.user}@${params.host}`,
+                title: params.title?.trim() || `${user}@${params.host}`,
                 host: params.host,
                 port: params.port,
-                username: params.user,
-                ...(params.password || formPassword ? { password: params.password || formPassword } : {}),
-                ...(params.keyPath ? { privateKeyPath: params.keyPath } : {}),
-                ...(params.keyPassphrase || formKeyPassphrase ? { privateKeyPassphrase: params.keyPassphrase || formKeyPassphrase } : {}),
+                username: user,
+                ...(credentials.password ? { password: credentials.password } : {}),
+                ...(keyPath ? { privateKeyPath: keyPath } : {}),
+                ...(credentials.keyPassphrase ? { privateKeyPassphrase: credentials.keyPassphrase } : {}),
                 expectedHostKey: fingerprint,
                 ...(params.vaultSecretId ? { vaultSecretId: params.vaultSecretId } : {}),
                 ...(params.profile?.agentForward ? { agentForward: true } : {}),
-                ...(params.profile?.auth === 'keyboardInteractive' ? { keyboardInteractive: true } : {}),
+                ...(formAuth === 'keyboardInteractive' ? { keyboardInteractive: true } : {}),
                 ...(params.profile?.x11 ? { x11: true } : {}),
                 ...(params.profile?.jumpHost ? { jumpHost: params.profile.jumpHost } : {}),
                 ...(params.jump ? { jump: params.jump } : {}),
@@ -1156,8 +1214,6 @@
             pendingFingerprint = ''
             pendingParams = null
             showConnect = false
-            formPassword = ''
-            formKeyPassphrase = ''
             const tab: TerminalTab = {
                 session,
                 terminal: null,
@@ -1168,10 +1224,10 @@
                 ssh: {
                     host: params.host,
                     port: params.port,
-                    user: params.user,
+                    user,
                     hostKeyFingerprint: fingerprint,
-                    profile: params.profile,
-                    keyPath: params.keyPath,
+                    profile: connectedProfile,
+                    keyPath,
                     jump: params.jump,
                 },
                 sudoAction: null,
@@ -1183,9 +1239,26 @@
             activeId = session.id
             activePendingId = null
             showHome = false
-            void startProfileLocalForwards(session.id, params.profile)
+            void startProfileLocalForwards(session.id, connectedProfile)
             persistTabRecovery()
             void syncWorkspaceState()
+            try {
+                if (connectedProfile && params.profile && (
+                    connectedProfile.user !== params.profile.user || connectedProfile.auth !== params.profile.auth ||
+                    connectedProfile.environment !== params.profile.environment ||
+                    connectedProfile.privateKeys.join('\0') !== params.profile.privateKeys.join('\0')
+                )) await mutateHostProfiles({ action: 'updateProfile', profile: connectedProfile })
+                if (saveConnectionCredential) await saveHostCredential({
+                    user, host: params.host, port: params.port,
+                    ...(typedPassword ? { password: typedPassword } : {}),
+                    ...(typedKeyPassphrase ? { keyPassphrase: typedKeyPassphrase } : {}),
+                })
+            } catch (cause) {
+                pushToast('error', `连接已建立，但主机或保险库保存失败：${cause instanceof Error ? cause.message : String(cause)}`, 8000)
+            }
+            formPassword = ''
+            formKeyPassphrase = ''
+            saveConnectionCredential = false
         } catch (cause) {
             connectError = cause instanceof Error ? cause.message : String(cause)
             // 直连路径（指纹已信任）失败时原本静默无反馈：重新打开连接弹窗，
@@ -1454,17 +1527,28 @@
         try {
             const host = formHost.trim()
             const port = Number(formPort) || 22
+            const user = formUser.trim()
+            const keyPath = formKeyPath.trim()
             if (!host) throw new Error('请输入主机地址')
-            if (!formUser.trim()) throw new Error('请输入用户名')
+            if (!user) throw new Error('请输入用户名')
+            const previous = pendingParams
+            const retry = retryConnectionCredentials({
+                previous: previous ? { ...previous, profileKeyPath: previous.profile?.privateKeys[0] } : null,
+                host, port, user, keyPath,
+                password: formPassword,
+                keyPassphrase: formKeyPassphrase,
+            })
             await connectWithParams({
                 host,
                 port,
-                user: formUser.trim(),
-                password: formPassword,
-                keyPath: formKeyPath.trim(),
-                keyPassphrase: formKeyPassphrase,
+                user,
+                password: retry.password,
+                keyPath,
+                keyPassphrase: retry.keyPassphrase,
                 vaultSecretId: formVaultSecretId,
-                profile: null,
+                profile: retry.sameIdentity && retry.sameKeyPath ? previous?.profile ?? null : null,
+                title: retry.sameIdentity ? previous?.title : undefined,
+                jump: retry.sameIdentity ? previous?.jump : undefined,
             })
         } catch (cause) {
             connectError = cause instanceof Error ? cause.message : String(cause)
@@ -1473,11 +1557,36 @@
         }
     }
 
+    function cancelConnect (): void {
+        if (connecting) return
+        showConnect = false
+        connectError = ''
+        pendingConnect = false
+        pendingParams = null
+        pendingFingerprint = ''
+        formPassword = ''
+        formKeyPassphrase = ''
+        saveConnectionCredential = false
+    }
+
     function sendToSession (sessionId: string, bytes: Uint8Array): void {
         enqueueWrite(sessionId, async () => { await writeSession(sessionId, bytes) })
     }
 
     function openNewSshForm (): void {
+        formHost = ''
+        formPort = 22
+        formUser = ''
+        formPassword = ''
+        formKeyPath = ''
+        formKeyPassphrase = ''
+        formAuth = 'auto'
+        formEnvironment = ''
+        formVaultSecretId = ''
+        pendingParams = null
+        pendingFingerprint = ''
+        pendingConnect = false
+        connectError = ''
         showConnect = true
         void loadVaultSecrets()
     }
@@ -1645,6 +1754,7 @@
         {/if}
     </header>
 
+    <div class="app-content">
     <div class="app-workspace" class:left-open={showSftp && !!activeTab} class:bottom-open={showSend} class:recursive-split={hasSplitLayout}>
         {#if showStartPage}
             {#if showWelcome}
@@ -1770,6 +1880,7 @@
             {/key}
         </aside>
     {/if}
+    </div>
 
     {#if showSelector}
         <ProfileSelector
@@ -1809,8 +1920,8 @@
         <div
             class="modal-backdrop"
             role="presentation"
-            onclick={() => { showConnect = false; connectError = ''; pendingConnect = false }}
-            onkeydown={(event) => { if (event.key === 'Escape') { showConnect = false; connectError = ''; pendingConnect = false } }}
+            onclick={cancelConnect}
+            onkeydown={(event) => { if (event.key === 'Escape') cancelConnect() }}
         >
             <div
                 class="connect-panel"
@@ -1827,28 +1938,51 @@
                         <p>主机密钥指纹（SHA256）：</p>
                         <code class="fingerprint">{pendingFingerprint}</code>
                         <p class="fingerprint-hint">首次连接请核对指纹后继续。</p>
-                        {#if pendingParams?.keyPath}
-                            <p class="fingerprint-key">私钥：{pendingParams.keyPath}</p>
-                            {#if !pendingParams.keyPassphrase}
-                                <label class="fingerprint-credential">
-                                    私钥口令（未从 Vault 获取到，请手动输入；无口令密钥可留空）
-                                    <input type="password" bind:value={formKeyPassphrase} autocomplete="off" placeholder="私钥口令（可选）" />
+                        <div class="fingerprint-fields">
+                            <label class="fingerprint-credential">用户名
+                                <input type="text" bind:value={formUser} autocomplete="username" placeholder="SSH 用户名" />
+                            </label>
+                            <label class="fingerprint-credential">认证方式
+                                <select bind:value={formAuth} onchange={() => { saveConnectionCredential = false }}>
+                                    <option value="auto">自动</option>
+                                    <option value="password">密码</option>
+                                    <option value="publicKey">私钥</option>
+                                    <option value="agent">SSH Agent</option>
+                                    <option value="keyboardInteractive">键盘交互</option>
+                                </select>
+                            </label>
+                            {#if formAuth === 'password' || formAuth === 'keyboardInteractive' || formAuth === 'auto'}
+                                <label class="fingerprint-credential">密码
+                                    <input type="password" bind:value={formPassword} autocomplete="off" placeholder={pendingParams?.password ? '留空则沿用本次连接密码' : 'SSH 登录密码'} />
                                 </label>
                             {/if}
-                        {:else if !pendingParams?.password}
-                            <label class="fingerprint-credential">
-                                密码（未从 Vault 获取到，请手动输入）
-                                <input type="password" bind:value={formPassword} autocomplete="off" placeholder="SSH 登录密码" />
-                            </label>
+                            {#if pendingParams?.profile}
+                                <label class="fingerprint-credential">环境
+                                    <input type="text" bind:value={formEnvironment} placeholder="prod / test / dev" />
+                                </label>
+                            {/if}
+                            {#if formAuth === 'publicKey' || formAuth === 'auto'}
+                                <label class="fingerprint-credential fingerprint-wide">私钥路径
+                                    <input type="text" bind:value={formKeyPath} placeholder="C:\Users\me\.ssh\id_ed25519" />
+                                </label>
+                                {#if formAuth === 'publicKey' || formKeyPath.trim()}
+                                    <label class="fingerprint-credential fingerprint-wide">私钥口令（无口令可留空）
+                                        <input type="password" bind:value={formKeyPassphrase} autocomplete="off" placeholder={pendingParams?.keyPassphrase ? '留空则沿用本次私钥口令' : '私钥口令（可选）'} />
+                                    </label>
+                                {/if}
+                            {/if}
+                        </div>
+                        {#if formAuth !== 'agent'}
+                            <label class="fingerprint-save"><input type="checkbox" bind:checked={saveConnectionCredential} /> 将本次输入的密码或私钥口令保存到保险库</label>
                         {/if}
                         {#if connectError}
                             <p class="connect-error" role="alert">{connectError}</p>
                         {/if}
                         <div class="connect-actions">
-                            <button type="button" onclick={() => void confirmFingerprint()} disabled={connecting}>
+                            <button type="button" onclick={() => void confirmFingerprint()} disabled={connecting || !formUser.trim()}>
                                 {connecting ? '连接中…' : '信任并连接'}
                             </button>
-                            <button type="button" onclick={() => { pendingConnect = false; pendingFingerprint = ''; showConnect = false }} disabled={connecting}>取消</button>
+                            <button type="button" onclick={cancelConnect} disabled={connecting}>取消</button>
                         </div>
                     </div>
                 {:else}
@@ -1856,9 +1990,9 @@
                         <label>主机<input type="text" bind:value={formHost} placeholder="192.168.1.10" /></label>
                         <label>端口<input type="number" bind:value={formPort} min="1" max="65535" /></label>
                         <label>用户名<input type="text" bind:value={formUser} placeholder="root" /></label>
-                        <label>密码<input type="password" bind:value={formPassword} autocomplete="off" /></label>
+                        <label>密码<input type="password" bind:value={formPassword} autocomplete="off" placeholder={pendingParams?.password ? '留空则沿用本次连接密码' : ''} /></label>
                         <label>私钥路径<input type="text" bind:value={formKeyPath} placeholder="C:\Users\me\.ssh\id_ed25519" /></label>
-                        <label>私钥口令<input type="password" bind:value={formKeyPassphrase} autocomplete="off" /></label>
+                        <label>私钥口令<input type="password" bind:value={formKeyPassphrase} autocomplete="off" placeholder={pendingParams?.keyPassphrase ? '留空则沿用本次私钥口令' : ''} /></label>
                         <label>
                             Vault 凭据
                             <select bind:value={formVaultSecretId}>
@@ -1875,7 +2009,7 @@
                             <button type="button" onclick={() => void startConnect()} disabled={connecting || !formHost.trim() || !formUser.trim()}>
                                 {connecting ? '探测中…' : '连接'}
                             </button>
-                            <button type="button" onclick={() => { showConnect = false; connectError = '' }} disabled={connecting}>取消</button>
+                            <button type="button" onclick={cancelConnect} disabled={connecting}>取消</button>
                         </div>
                     </div>
                 {/if}
