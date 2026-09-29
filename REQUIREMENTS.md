@@ -1229,3 +1229,12 @@
 - 复现：原商城仅“刷新”按钮调用 `loadMarket()`，进入商城不发起加载；修改前入口检查失败。Gitee 与 GitHub 官方索引均经匿名 HTTPS 请求返回 200，均含 10 个插件条目。
 - 实现：每次从其他设置页进入商城时自动刷新；以设备时区判断中国大陆，时区不可用时以系统 locale 的 CN 地区回退。官方索引按地区排序，首选失败时依次尝试备用源；用户填写的第三方索引只访问其指定地址。旧设置中保存的官方 GitHub 地址按自动源处理，成功后不再持久固定官方源；并发加载只接受最后一次结果。
 - 验证：`test-market-registry.mjs` 覆盖国内/国外排序、首选成功、备用回退及双源失败；进入商城路径检查修改后通过；Tauri `svelte-check` 0 错误/0 警告、Vite build 成功、定向 diff 检查通过。尚未打包或覆盖安装版，未做 GUI 验收；Gitee 索引内的插件安装包地址目前仍指向 GitHub Release。
+
+### R-136 上传最新代码并发布 0.1.4 release/tag（用户需求，2026-09-29，已完成：已发布并线上校验）
+
+- 用户要求：把 issh 最新代码上传到 GitHub，创建 release 与 tag `0.1.4`；release 说明需详细包含「新增功能 / 功能优化 / 问题修复」三项。
+- 提交：`ce4f8ce` feat(release): issh 0.1.4（27 文件 +1313/-112），包含 R-122/R-123/R-124/R-126/R-127/R-128/R-129/R-131/R-135 源码、版本号统一 bump 到 0.1.4（根 `package.json`、Tauri `package.json`、`tauri.conf.json`、`Cargo.toml`/`Cargo.lock`）、新增两个定向测试，`.gitignore` 忽略本地预览工作区 `build/ai-ui-preview/`。工作区另有 R-133 的插件与 registry 提交（`3e266a6`、`9e22e5d`）。
+- 重建安装包：旧包（06:18）早于 R-135 改动（21:55），故从该提交重建 —— `cargo build --release -p isshd` → `stage-runtime.mjs` → `npm run tauri -- build`。产物 `issh_0.1.4_x64-setup.exe` 5,293,921 字节、SHA-256 `F7B9BA4707C32CD9F64E064077736D80E7ADD42C5A24A583A064F67AC5DA8F4A`，文件/产品版本 0.1.4。
+- 发布：main `9e22e5d..ce4f8ce` 推送 GitHub；附注标签 `v0.1.4` 指向 `ce4f8ce`；Release https://github.com/kingbywork-ui/issh/releases/tag/v0.1.4 ，`target_commitish=main`、非草稿与预发布、`/releases/latest` 已指向 v0.1.4，资产 `issh_0.1.4_x64-setup.exe` + `.sha256`。
+- 验证：`svelte-check` 0 错误/0 警告；`issh-tauri` Rust 测试 67/67、`issh-runtime-ssh` 15/15；`test-connect-credentials.mjs`、`test-market-registry.mjs` 通过；前端产物含 R-135（`Asia/Shanghai`、`gitee.com`）与 R-131（`moveProfiles`）标识；构建出的 exe 启动 10 秒存活；线上资产下载哈希与本地一致；更新检查条件（main 分支 + 含 `x64` 的 `.exe` 资产 + tag 0.1.4）满足。
+- 边界：未静默安装或覆盖已安装程序，安装版 GUI 仍未验收；AI 助手插件（0.2.1）继续通过插件商城单独分发，安装包不含插件更新；发布过程临时文件仅存于 `.git/`。
