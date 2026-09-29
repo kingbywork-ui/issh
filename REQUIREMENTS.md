@@ -1238,3 +1238,12 @@
 - 发布：main `9e22e5d..ce4f8ce` 推送 GitHub；附注标签 `v0.1.4` 指向 `ce4f8ce`；Release https://github.com/kingbywork-ui/issh/releases/tag/v0.1.4 ，`target_commitish=main`、非草稿与预发布、`/releases/latest` 已指向 v0.1.4，资产 `issh_0.1.4_x64-setup.exe` + `.sha256`。
 - 验证：`svelte-check` 0 错误/0 警告；`issh-tauri` Rust 测试 67/67、`issh-runtime-ssh` 15/15；`test-connect-credentials.mjs`、`test-market-registry.mjs` 通过；前端产物含 R-135（`Asia/Shanghai`、`gitee.com`）与 R-131（`moveProfiles`）标识；构建出的 exe 启动 10 秒存活；线上资产下载哈希与本地一致；更新检查条件（main 分支 + 含 `x64` 的 `.exe` 资产 + tag 0.1.4）满足。
 - 边界：未静默安装或覆盖已安装程序，安装版 GUI 仍未验收；AI 助手插件（0.2.1）继续通过插件商城单独分发，安装包不含插件更新；发布过程临时文件仅存于 `.git/`。
+
+### R-137 修复 AI 助手安装版仍启用旧版本（用户需求，2026-09-29，已完成：0.2.2 发布与线上包验证，安装版 GUI 未验收）
+
+- 用户反馈：插件商城安装记录显示 AI 助手 0.2.1，但插件管理仍显示正在运行的 0.2.0。截图仅用于说明版本分叉。
+- 复现：本机已安装插件的 `plugin.json` 为 0.2.1、`index.js` 导出的 manifest 版本为 0.2.0；本地源码 `index.ts` 同样写死 0.2.0。安装包脚本此前仅复制清单并打包，没有比较构建入口版本。用户进程启动于 23:12，插件目录更新于 23:23；相同模块 URL 的再次导入仍返回旧模块，定向 ESM 复现为 `first=0.2.0 sameUrl=0.2.0 versionedUrl=0.2.1`。
+- 修复：运行入口直接从 `plugin.json` 导入 manifest，不再维护第二份版本；发布 0.2.2，并将入口改为 `index-0.2.2.js`，使已安装宿主更新时加载新 URL。插件包脚本校验 npm 包、插件清单、构建入口 ID/版本/入口文件名一致，并要求入口文件名包含当前版本；不一致时中止打包。
+- 验证：插件 `svelte-check` 0/0、两组测试、Vite build 与 tgz 打包通过；包内清单和入口均声明 0.2.2；包 SHA-256 `6740cd1ad50ddca5447a05ea8a6c934ac9138338d28c101a983341b251ceee6b`，商城索引签名用内置公钥验证通过；GitHub Release 资产下载哈希与本地包一致。
+- 发布：插件源码提交 `d9d1f86`，独立仓库 GitHub/Gitee main 均更新到 split commit `ced97dd`，两侧 tag `v0.2.2`；GitHub Release 为 `https://github.com/kingbywork-ui/issh-plugin-ai-assistant/releases/tag/v0.2.2`。商城索引更新至 0.2.2 并同步 GitHub/Gitee（见交接记录）。
+- 边界：当前运行中的 issh 与已安装 0.2.1 插件目录未被本轮重启或改写；安装版 GUI 热更新行为尚未验收。
