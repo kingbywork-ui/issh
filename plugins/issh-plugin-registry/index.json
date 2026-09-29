@@ -1,11 +1,11 @@
 {
   "schema": 1,
-  "updated": "2026-09-25T03:14:14.750Z",
+  "updated": "2026-09-29T01:01:09.715Z",
   "plugins": [
     {
       "id": "issh-plugin-ai-assistant",
       "name": "AI 助手",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "description": "多模型流式对话、本地 MCP 工具、终端上下文分析与命令辅助",
       "kind": "feature",
       "audience": "user",
@@ -14,12 +14,13 @@
         "terminal:read",
         "terminal:write",
         "network:postJson",
-        "mcp:stdio"
+        "mcp:stdio",
+        "mcp:remote"
       ],
       "minAppVersion": "0.0.6",
-      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-ai-assistant/releases/download/v0.2.0/issh-plugin-ai-assistant-0.2.0.tgz",
-      "sha256": "249ad0aa7e1b8b3d2fd3ce1c4b14ffaecc5b44e66cc11057d322b1f9e0471a68",
-      "signature": "15DW2TUIxtd/dz0EBj8ksLQc6leCD8YZIUC9UYQCqOGu0Q4pNB5jDq9Jazwch0VsoGHrNZirncMWlFhovwVICg==",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-ai-assistant/releases/download/v0.2.1/issh-plugin-ai-assistant-0.2.1.tgz",
+      "sha256": "26cc426c4742b9ac59aa1d6eadf3dcef63bf1ac21dc35de0271bfe5f1975d358",
+      "signature": "o5u3W5v6sd3/ABOpBzGSVbL4xV2NEJc78ew7QpsKlIKXhbr2bNKRJnfK2xrPWCVlruSPUV/xLb/1G83kEFYcCA==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-ai-assistant",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-ai-assistant",
       "downloads": 0
