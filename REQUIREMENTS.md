@@ -1398,3 +1398,12 @@
 - 产物：`issh-tauri/src-tauri/target/release/bundle/nsis/issh_0.1.5_x64-setup.exe`，5,314,209 字节，2026-10-10 03:13，SHA-256 `efa5a0ad31564cce257c4651ac6bcdba4eb722eeca4483f01c0e4c15843cbb66`；`.sha256` sidecar 已同步更新并核对一致（91 字节，match=True）。上一版 10-09 04:37 产物（`D71B1C1C…`）被同名覆盖，未留备份。
 - 验证：安装器与应用 exe 文件/产品版本均为 `0.1.5`；应用 exe 内嵌新前端 bundle 名 `index-DqyPnF3z`/`app-CT3UyV7H`，上版 `index-PsU1fj2O`/`app-Yz_PlCOt` 均不存在；前端 bundle 含 R-154 `trustedHostKey`、「确认 SSH 主机密钥」「主机密钥已变化」及既有 `app-dialog`、`sftp-upload-countdown`、`sftp-drop-hint` 标识；staged 与 release `isshd.exe` 哈希一致（`CEF453EB…`）。
 - 边界：未安装、覆盖安装、发布或重启；未在安装版验收 R-154 指纹确认与真实服务器登录；插件独立分发，安装包不含插件改动。
+
+### R-156 上传最新代码并发布 0.1.5 release/tag（用户需求，2026-10-10，已完成：已发布并线上校验）
+
+- 用户要求：提交最新代码到 GitHub 仓库，release 和 tag 都是 `0.1.5`。
+- 提交：工作区全部改动（R-138 ... R-155，含 0.1.5 版本 bump；44 文件，+2699/-312）提交为 `f653452`，推送 GitHub main（`b37a7d0..f653452`）。
+- 标签：附注标签 `v0.1.5` 指向 `f653452` 并推送（远端 peeled 一致）。
+- 发布：https://github.com/kingbywork-ui/issh/releases/tag/v0.1.5 ，`target_commitish=main`、非草稿与预发布、`/releases/latest` 已指向 v0.1.5；资产 `issh_0.1.5_x64-setup.exe`（5,314,209 字节）+ `issh_0.1.5_x64-setup.exe.sha256`（91 字节）。
+- 验证：线上 `.sha256` 内容与本地一致；线上下载安装包（GitHub CDN 首次断连，经 gh + curl 断点续传完成）大小 5,314,209 字节、SHA-256 `efa5a0ad31564cce257c4651ac6bcdba4eb722eeca4483f01c0e4c15843cbb66` 与本地一致。
+- 边界：未推送内部 `origin` 远端（用户指定 GitHub）；未安装、未重启、安装版 GUI 未验收；AI 助手插件继续按商城独立分发；发布过程临时文件仅存于 `.git/`（提交信息与发布说明）与系统临时目录。
