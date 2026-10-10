@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onDestroy, onMount } from 'svelte'
+    import { askConfirm } from './dialogs'
     import {
         changeHostPassphrase,
         deleteHostCredential,
@@ -167,7 +168,7 @@
     }
 
     async function disable (): Promise<void> {
-        if (!window.confirm('禁用并清除保险库？\n\n所有主机配置、分组与保存的密码/私钥口令将被永久删除，且无法恢复。')) return
+        if (!await askConfirm('禁用并清除保险库？\n\n所有主机配置、分组与保存的密码/私钥口令将被永久删除，且无法恢复。')) return
         busy = true
         error = ''
         try {
@@ -307,7 +308,7 @@
 
     async function removeCredential (credential: HostCredential): Promise<void> {
         const label = `${credential.user}@${credential.host}:${credential.port}`
-        if (!window.confirm(`删除「${label}」的密码与私钥口令？`)) return
+        if (!await askConfirm(`删除「${label}」的密码与私钥口令？`)) return
         busy = true
         error = ''
         try {

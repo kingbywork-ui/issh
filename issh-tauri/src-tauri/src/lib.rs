@@ -2,10 +2,11 @@ mod agent_bridge;
 mod agent_bridge_config;
 mod clipboard;
 mod host_profiles;
-mod mcp_stdio;
 mod mcp_remote;
+mod mcp_stdio;
 mod plugin_gateway;
 mod plugin_market;
+mod ssh_host_keys;
 
 use host_profiles::{
     CredentialMutation, HostProfileMutation, HostProfileStore, HostProfilesResult,
@@ -105,6 +106,7 @@ pub struct RuntimeManager {
     child: Mutex<Option<Child>>,
     startup: AsyncMutex<()>,
     pub hosts: HostProfileStore,
+    pub ssh_host_keys: ssh_host_keys::HostKeyConfirmation,
 }
 
 impl RuntimeManager {
@@ -114,6 +116,7 @@ impl RuntimeManager {
         let instance_key = hex_prefix(&digest, 8);
         let binary_path = resolve_runtime_binary(app)?;
         let auth_token = generate_auth_token();
+        let handle = app.clone();
         Ok(Self {
             pipe_name: format!(r"\\.\pipe\issh-runtime-{instance_key}"),
             database_path: user_data.join("runtime").join("issh-runtime.sqlite3"),
@@ -122,6 +125,12 @@ impl RuntimeManager {
             child: Mutex::new(None),
             startup: AsyncMutex::new(()),
             hosts: HostProfileStore::new(&user_data),
+            ssh_host_keys: ssh_host_keys::HostKeyConfirmation::new(move |event, request| {
+                use tauri::Emitter;
+                handle
+                    .emit_to("main", event, request)
+                    .map_err(|error| error.to_string())
+            }),
         })
     }
 
@@ -561,6 +570,37 @@ fn read_local_text_file(path: String, max_bytes: Option<u64>) -> Result<Option<S
     plugin_gateway::read_shell_history_file(&path, max_bytes)
 }
 
+#[tauri::command]
+fn ssh_host_key_confirmation_ready(manager: State<'_, Arc<RuntimeManager>>) -> Result<(), String> {
+    manager.ssh_host_keys.replay_pending()
+}
+
+#[tauri::command]
+fn ssh_host_key_confirmation_respond(
+    manager: State<'_, Arc<RuntimeManager>>,
+    id: u64,
+    accepted: bool,
+) -> Result<(), String> {
+    manager.ssh_host_keys.resolve(id, accepted)
+}
+
+#[tauri::command]
+fn ssh_host_key_confirmation_show(
+    app: tauri::AppHandle,
+    manager: State<'_, Arc<RuntimeManager>>,
+    id: u64,
+) -> Result<(), String> {
+    if !manager.ssh_host_keys.is_pending(id) {
+        return Err("SSH 主机密钥确认已过期".into());
+    }
+    if let Some(window) = app.get_webview_window("main") {
+        window.unminimize().map_err(|error| error.to_string())?;
+        window.show().map_err(|error| error.to_string())?;
+        window.set_focus().map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
 /// 插件获取用户目录路径，用于定位 shell 历史文件（~/.bash_history、PSReadLine 等）。
 #[tauri::command]
 fn user_paths() -> Result<Value, String> {
@@ -593,7 +633,14 @@ pub fn run() {
             let runtime_manager = Arc::new(RuntimeManager::new(app.handle())?);
             app.manage(runtime_manager.clone());
             app.manage(PluginGatewayState::default());
-            app.manage(AgentBridgeRuntime::new(user_data));
+            let agent_bridge_runtime = AgentBridgeRuntime::new(user_data.clone());
+            if let Err(error) = tauri::async_runtime::block_on(
+                agent_bridge_runtime.restore_if_enabled(runtime_manager.clone()),
+            ) {
+                // 保留 enabled=true，后续启动可重试；当前设置页仍显示实际运行状态。
+                eprintln!("[agent-bridge] 上次处于开启状态，但本次恢复失败：{error}");
+            }
+            app.manage(agent_bridge_runtime);
             setup_tray(app.handle())?;
             // 深链：启动时（含冷启动带 ssh:// 参数）与运行期事件都转发给前端
             {
@@ -625,6 +672,7 @@ pub fn run() {
             }
             if app.get_webview_window("main").is_none() {
                 WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                    .disable_drag_drop_handler()
                     .title("issh")
                     .inner_size(1180.0, 760.0)
                     .min_inner_size(760.0, 560.0)
@@ -664,6 +712,9 @@ pub fn run() {
             resolve_ssh_password,
             resolve_sudo_password,
             resolve_key_passphrase,
+            ssh_host_key_confirmation_ready,
+            ssh_host_key_confirmation_respond,
+            ssh_host_key_confirmation_show,
             plugin_fetch_registry,
             plugin_download,
             plugin_list_installed,
@@ -699,7 +750,7 @@ pub fn run() {
     app.run(|handle, event| {
         if matches!(event, tauri::RunEvent::Exit) {
             handle.state::<Arc<RuntimeManager>>().stop();
-            // R-045：完全退出时自动关闭 Agent Bridge（开关为运行时态，重启默认关）
+            // 进程退出时释放监听；enabled 已在开关变更时持久化，启动时会恢复。
             if let Ok(mut bridge_guard) = handle.state::<AgentBridgeRuntime>().bridge.lock() {
                 if let Some(bridge) = bridge_guard.take() {
                     bridge.stop();
@@ -747,7 +798,7 @@ fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> 
 
 // ---------- Agent Bridge 运行时状态与 Tauri commands（R-045） ----------
 
-/// Agent Bridge 运行期状态：enabled 不持久化，完全退出时自动关闭。
+/// Agent Bridge 状态：进程退出时释放当前 server，enabled 配置持久化并在启动时恢复。
 struct AgentBridgeRuntime {
     user_data: PathBuf,
     bridge: Mutex<Option<agent_bridge::AgentBridgeHandle>>,
@@ -763,6 +814,38 @@ impl AgentBridgeRuntime {
             config: Mutex::new(config),
         }
     }
+
+    async fn restore_if_enabled(&self, manager: Arc<RuntimeManager>) -> Result<bool, String> {
+        let config = self
+            .config
+            .lock()
+            .map_err(|_| "Agent Bridge 配置不可用".to_string())?
+            .clone();
+        if !config.enabled {
+            return Ok(false);
+        }
+
+        let handle = agent_bridge::start(manager, self.user_data.clone(), config).await?;
+        *self
+            .bridge
+            .lock()
+            .map_err(|_| "Agent Bridge 状态不可用".to_string())? = Some(handle);
+        Ok(true)
+    }
+}
+
+fn persist_agent_bridge_enabled(state: &AgentBridgeRuntime, enabled: bool) -> Result<(), String> {
+    let mut config = state
+        .config
+        .lock()
+        .map_err(|_| "Agent Bridge 配置不可用".to_string())?;
+    let previous = config.enabled;
+    config.enabled = enabled;
+    if let Err(error) = agent_bridge_config::save(&state.user_data, &config) {
+        config.enabled = previous;
+        return Err(error);
+    }
+    Ok(())
 }
 
 fn agent_bridge_status_snapshot(
@@ -786,7 +869,7 @@ fn agent_bridge_status_snapshot(
     }))
 }
 
-/// 手动开启 Agent Bridge（R-045：开关永不持久化，重启后默认关闭）。
+/// 开启 Agent Bridge，并持久化状态以便下次启动恢复。
 #[tauri::command]
 async fn agent_bridge_enable(
     state: State<'_, AgentBridgeRuntime>,
@@ -798,6 +881,7 @@ async fn agent_bridge_enable(
             .lock()
             .map_err(|_| "Agent Bridge 状态不可用".to_string())?;
         if bridge.is_some() {
+            persist_agent_bridge_enabled(&state, true)?;
             return agent_bridge_status_snapshot(&state, true);
         }
     }
@@ -808,6 +892,10 @@ async fn agent_bridge_enable(
         .clone();
     let handle =
         agent_bridge::start(manager.inner().clone(), state.user_data.clone(), config).await?;
+    if let Err(error) = persist_agent_bridge_enabled(&state, true) {
+        handle.stop();
+        return Err(error);
+    }
     *state
         .bridge
         .lock()
@@ -817,6 +905,7 @@ async fn agent_bridge_enable(
 
 #[tauri::command]
 fn agent_bridge_disable(state: State<'_, AgentBridgeRuntime>) -> Result<Value, String> {
+    persist_agent_bridge_enabled(&state, false)?;
     let bridge = {
         let mut guard = state
             .bridge
@@ -1547,6 +1636,19 @@ async fn send_request(
 mod tests {
     use super::*;
 
+    fn test_runtime_manager(user_data: &Path) -> Arc<RuntimeManager> {
+        Arc::new(RuntimeManager {
+            pipe_name: String::new(),
+            database_path: user_data.join("unused.sqlite3"),
+            binary_path: PathBuf::new(),
+            auth_token: String::new(),
+            child: Mutex::new(None),
+            startup: AsyncMutex::new(()),
+            hosts: HostProfileStore::new(user_data),
+            ssh_host_keys: ssh_host_keys::HostKeyConfirmation::default(),
+        })
+    }
+
     #[test]
     fn validates_runtime_request_shape_and_size() {
         assert!(validate_request(&json!({ "method": "runtime.health" })).is_err());
@@ -1585,6 +1687,56 @@ mod tests {
         assert!(compare_semver("v1.0.0", "0.9.9") > 0);
         assert!(compare_semver("0.10.0", "0.9.9") > 0);
         assert!(compare_semver("1.0", "0.9.9") > 0);
+    }
+
+    #[tokio::test]
+    async fn agent_bridge_restores_enabled_state_after_process_restart() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let user_data = std::env::temp_dir().join(format!(
+            "issh-agent-bridge-restart-{}-{unique}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&user_data).unwrap();
+        let reservation = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = reservation.local_addr().unwrap().port();
+        drop(reservation);
+
+        let config = agent_bridge_config::AgentBridgeConfig {
+            enabled: false,
+            port,
+            token: "restart-test-token".into(),
+            ..Default::default()
+        };
+        agent_bridge_config::save(&user_data, &config).unwrap();
+        let manager = test_runtime_manager(&user_data);
+
+        let first_process = AgentBridgeRuntime::new(user_data.clone());
+        persist_agent_bridge_enabled(&first_process, true).unwrap();
+        assert!(first_process
+            .restore_if_enabled(manager.clone())
+            .await
+            .unwrap());
+        let first_handle = first_process.bridge.lock().unwrap().take().unwrap();
+        first_handle.stop();
+        tokio::time::sleep(Duration::from_millis(250)).await;
+
+        let second_process = AgentBridgeRuntime::new(user_data.clone());
+        assert!(second_process
+            .restore_if_enabled(manager.clone())
+            .await
+            .unwrap());
+        assert!(second_process.bridge.lock().unwrap().is_some());
+        persist_agent_bridge_enabled(&second_process, false).unwrap();
+        second_process.bridge.lock().unwrap().take().unwrap().stop();
+        tokio::time::sleep(Duration::from_millis(250)).await;
+
+        let third_process = AgentBridgeRuntime::new(user_data.clone());
+        assert!(!third_process.restore_if_enabled(manager).await.unwrap());
+        assert!(third_process.bridge.lock().unwrap().is_none());
+        std::fs::remove_dir_all(user_data).unwrap();
     }
 }
 
@@ -1659,6 +1811,7 @@ mod deadline_regressions {
             child: Mutex::new(None),
             startup: AsyncMutex::new(()),
             hosts: HostProfileStore::new(&std::env::temp_dir()),
+            ssh_host_keys: ssh_host_keys::HostKeyConfirmation::default(),
         };
         let response = manager.request(json!({"jsonrpc":"2.0", "id":"slow", "method":"ssh.execReadonly", "params":{"timeoutMs":12000}})).await;
         responder.abort();

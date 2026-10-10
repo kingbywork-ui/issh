@@ -12,6 +12,7 @@ import {
 } from './registry'
 import { createPluginGateway, normalizePluginPermission } from './gateway'
 import { agentBridgePlugin } from './agentBridgePlugin'
+import { askConfirm } from '../dialogs'
 import type {
     Disposable,
     HomeCardDefinition,
@@ -151,7 +152,7 @@ function makePluginContext (manifest: IsshPluginManifest, directory: string): Is
         },
         registerTerminalDecorator: (decorator) => register(terminalDecorators, `${manifest.id}:${decorator.id}`, decorator),
         audit: (event) => recordPluginAudit(manifest.id, event),
-        confirm: async (message) => window.confirm(message),
+        confirm: (message) => askConfirm(message, '插件操作确认'),
     })
     return {
         manifest,

@@ -514,6 +514,8 @@
 
 **需求**（用户需求）：每次关闭 issh 客户端自动关闭 Agent Bridge 开关；开关必须手动打开，端口固定为 59688；最小化到托盘时不关闭 Agent Bridge。
 
+**后续调整**：R-142 将 enabled 由每次手动开启改为持久化退出前状态，并在下次启动时恢复；进程退出时仍释放监听端口。
+
 **范围**：enabled 为纯运行时内存态、永不落盘（进程启动默认关闭，每次使用需在设置页手动开启）；端口固定监听 `127.0.0.1:59688`，被占用时开启失败并返回明确错误（os error 10048）；完全退出进程时停止 server 并复位开关；最小化到托盘时 Agent Bridge 保持运行（用户已确认）。scope/sftpRoot/auditLog/publicDiscovery/token 持久化到 `agent-bridge.json`（enabled 与端口不持久化）。配置变更（scope/token 等）在运行中即时生效（stop + 带重试重启）。
 
 **实现**：`agent_bridge_config.rs`（新建，token/scope/sftpRoot/auditLog/publicDiscovery 持久化）；`agent_bridge.rs` 固定端口 + `start()` 返回 handle + `stop()`；`lib.rs` 新增 `AgentBridgeRuntime` State（handle + config 双 Mutex）、`sync_bridge_runtime()` 重启 helper、7 个 command（enable/disable/status/configure/rotate_token/audit_read/audit_clear）+ `set_active_session`；`RunEvent::Exit` 停 server。
@@ -557,7 +559,7 @@
 
 **实现**：新增内置插件 `issh-tauri/src/lib/plugins/agentBridgePlugin.ts`，id 采用独立命名 `issh-plugin-agent-bridge-rpc`（避免与商城「Agent 桥接」冲突）；通过 `registerSettingsTab` 注册「Agent Bridge」设置页，从 `Settings.svelte` 移除硬编码 section；`IsshPlugin` 增加可选 `deactivate` 清理钩子（插件停用 → `agentBridgeDisable()` 停止服务，避免 59688 悬空占用）；`pluginHost.ts` 新增 `registerBuiltinPlugins()` 在 `initPluginHost` 启动时注册，并将 `issh-plugin-agent-bridge-rpc` 加入 `SUPERSEDED_PLUGIN_IDS`。
 
-**说明**：内置插件为受信任一方代码，其设置页仍直接调用 Rust `agent_bridge_*` 命令（后端仅以 Tauri command 暴露，网关尚无对应 method）；R-045 安全语义（永不持久化/手动开启/端口 59688）在 Rust 命令层继续强制。经网关暴露 Agent Bridge 控制方法留作后续项。
+**说明**：内置插件为受信任一方代码，其设置页仍直接调用 Rust `agent_bridge_*` 命令（后端仅以 Tauri command 暴露，网关尚无对应 method）；R-045 安全限制仍在 Rust 命令层强制，enabled 生命周期按 R-142 保留退出前状态。经网关暴露 Agent Bridge 控制方法留作后续项。
 
 **验证**：`svelte-check` 0 errors / 0 warnings；vite build 通过；CDP 实测插件列表显示「Agent Bridge / 内置」，启用后设置导航出现「Agent Bridge」tab，点击后 `plugin-settings-host` 正常渲染完整设置页。
 
@@ -804,7 +806,7 @@
 
 **复现与根因**：本机 `netsh interface ipv4 show excludedportrange protocol=tcp` 显示 59680–59779 被系统排除，包含 59688；没有 59688 TCP 监听记录，直接 loopback bind 复现访问拒绝。原代码绑定固定端口且将全部失败提示为占用。对照本机 39688 bind 成功。
 
-**实现**：新增持久化 port，旧配置缺失时默认 59688；前后端校验 1–65535 整数，拒绝 0/随机端口。关闭 Bridge 时可修改保存端口，运行时禁止修改；启用/配置重启、状态、health、discovery、前端连接测试统一使用配置端口。10013/PermissionDenied 提示系统排除端口等原因，AddrInUse 单独提示占用。enabled 仍不持久化，保留手动开启、localhost-only、token/scope/危险命令/SFTP 安全限制。
+**实现**：新增持久化 port，旧配置缺失时默认 59688；前后端校验 1–65535 整数，拒绝 0/随机端口。关闭 Bridge 时可修改保存端口，运行时禁止修改；启用/配置重启、状态、health、discovery、前端连接测试统一使用配置端口。10013/PermissionDenied 提示系统排除端口等原因，AddrInUse 单独提示占用。enabled 生命周期后由 R-142 更新为持久化并于启动时恢复；localhost-only、token/scope/危险命令/SFTP 安全限制不变。
 
 **验证与边界**：原生 cargo test 47/47 通过，其中 Bridge 相关 10/10（含真实 HTTP 鉴权/health/discovery/端口释放、旧配置兼容和非法端口）；前端 check/build 通过。严格 Clippy 被原有 build.rs:10 redundant_closure 阻挡；cargo fmt --check 有仓库既有格式差异，未扩大范围格式化。已重新打包并静默安装验证：安装包 `issh_0.0.2_x64-setup.exe`（5,194,767 字节，02:21），注册表 DisplayVersion=0.0.2，launch test 窗口标题 issh、isshd 从 `%LOCALAPPDATA%\issh\issh-runtime\isshd.exe` 拉起、数据目录 `%APPDATA%\issh` 复用（config.yaml 08/31 未改动）。原生桌面操作工具不可用，端口持久化 GUI 实机点击（关闭 Bridge→保存 39688→手动开启→连接测试→关闭重开应用确认端口保留）仍待桌面验收。39688 当前可用，不保证未来不被其它程序占用。
 
@@ -1247,3 +1249,152 @@
 - 验证：插件 `svelte-check` 0/0、两组测试、Vite build 与 tgz 打包通过；包内清单和入口均声明 0.2.2；包 SHA-256 `6740cd1ad50ddca5447a05ea8a6c934ac9138338d28c101a983341b251ceee6b`，商城索引签名用内置公钥验证通过；GitHub Release 资产下载哈希与本地包一致。
 - 发布：插件源码提交 `d9d1f86`，独立仓库 GitHub/Gitee main 均更新到 split commit `ced97dd`，两侧 tag `v0.2.2`；GitHub Release 为 `https://github.com/kingbywork-ui/issh-plugin-ai-assistant/releases/tag/v0.2.2`。商城索引更新至 0.2.2 并同步 GitHub/Gitee（见交接记录）。
 - 边界：当前运行中的 issh 与已安装 0.2.1 插件目录未被本轮重启或改写；安装版 GUI 热更新行为尚未验收。
+
+### R-138 SFTP 上传及面板交互对齐 issh 分支（用户需求，2026-10-08，已完成：定向复现与前端构建验证，安装版 GUI 未验收）
+
+- 用户要求：SFTP 上传功能和使用方式参考 `issh` 分支；鼠标点击其他窗口后 SFTP 面板保持打开，只有再次点击 SFTP 按钮才关闭。
+- 复现：当前终端窗格点击会重进 `activateTab()` 并关闭面板；空文件上传没有创建临时文件就执行 rename；文件夹内文件的临时路径误把第一级目录改为隐藏目录。旧实现选择文件后还需再按一次“上传”，且所有同名文件共用固定临时路径。
+- 实现：当前标签的重复激活不关闭面板；按标签保存面板开关与路径，切换回来恢复；关闭入口统一到 SFTP 按钮，移除面板内部关闭按钮。上传文件按钮直接选择并开始传输；空文件先创建临时文件；每次上传使用目标目录内的唯一临时文件，失败时尽力清理；拖放及文件夹选择错误显示在面板。
+- 验证：从修改前后 Svelte 源码提取实际函数，用模拟 SFTP RPC 定向复现空文件、嵌套文件和当前终端点击；旧实现失败，新实现通过。`npm.cmd run check` 0 错误/0 警告，`npm.cmd run build` 成功，`git diff --check` 通过。未覆盖安装包或中断已运行的 `isshd`；远程 SFTP 服务器及安装版 GUI 尚未验收。
+
+### R-139 SFTP 拖拽上传和上传总进度（用户需求，2026-10-08，已完成：定向模拟与前端构建验证，安装版 GUI 未验收）
+
+- 用户要求：SFTP 支持拖拽上传，并显示整批上传的总进度。
+- 复现：原有拖拽处理按文件逐个调用 `uploadSingle()`，每个文件都把进度重置为该文件大小，完成即清空；两个文件共 5 字节的定向复现显示先后为 `0/2`、`0/3`，结束后无总进度。目录拖拽逐项上传，无法预先计算总量。
+- 实现：上传文件、文件夹选择和拖拽统一先收集上传清单；拖拽递归收集文件及空目录，保留相对路径。面板显示整批已完成/总文件数、目录数、已传/总字节、百分比和进度条；准备、进行中、完成、取消、失败状态保留可见，支持整批取消。按服务端写入应答累计字节；目录创建失败不再被当作“已存在”静默忽略。
+- 验证：从实际 Svelte 函数运行的模拟 SFTP RPC 覆盖多文件累计、拖拽嵌套及空目录、无 `webkitGetAsEntry` 回退、空文件和取消后临时文件清理；全部通过。`npm.cmd run check` 0 错误/0 警告，`npm.cmd run build` 成功（160 modules），`git diff --check` 通过。未覆盖安装包或进行真实桌面拖拽/远程服务器验收。
+
+### R-140 关闭 AI 助手面板时保留 MCP 连接（用户需求，2026-10-08，已完成：源码修改，未运行验证）
+
+- 用户要求：取消 MCP 每次退出时自动关闭，重新打开后保留关闭前的连接状态。
+- 根因：AI 助手面板的 `onMount` 清理函数在面板卸载时对所有已连接 MCP 服务执行 `disconnect`；组件重新挂载时 `connected` 和工具清单又从空状态初始化。
+- 实现：面板关闭仅清理定时器、样式和模型请求，不主动断开 MCP；插件运行时共享已连接服务 ID 和工具清单，面板重新打开时恢复原状态。用户手动断开/删除服务仍会断开并清除缓存。
+- 验证：本次未运行测试或构建；仅完成源码检查和修改。完整应用进程退出时，MCP 子进程仍由宿主生命周期清理。
+
+### R-141 构建 issh 0.1.5 Windows 安装包（用户需求，2026-10-08，已完成：本地安装包生成）
+
+- 用户要求：打包，版本 `0.1.5`。
+- 版本：根 `package.json`、Tauri `package.json`/`package-lock.json`、`tauri.conf.json`、`Cargo.toml`/`Cargo.lock` 中应用版本统一为 `0.1.5`。
+- 产物：`issh-tauri/src-tauri/target/release/bundle/nsis/issh_0.1.5_x64-setup.exe`，5,297,559 字节，文件/产品版本均为 `0.1.5`；SHA-256 `9DA5EC66502EDE192975B6772D2F62D7DD96650B16672400BAE30DE3EC5E8503`，sidecar 已生成并核对一致。
+- 构建与检查：`cargo build --release -p isshd`、Vite build（160 modules）通过；Tauri 编译生成应用 exe。整合 `tauri build` 进入 bundler 时暂存运行时文件缺失，重新暂存后用 `tauri bundle --bundles nsis` 完成打包。前端 bundle 含拖放提示与上传总进度 UI 标识；`git diff --check` 通过。单独 bundling 输出 `__TAURI_BUNDLE_TYPE` 标记缺失提示。
+- 边界：未安装、发布或重启；安装版 GUI 未验收。AI 助手插件独立分发，R-140 的 MCP 连接保留改动未包含在此安装包，未另行构建插件 tgz。该安装包早于 R-142 的 Agent Bridge 持久化改动，不含本次改动。
+
+### R-142 Agent Bridge 保留退出前的启用状态（用户需求，2026-10-08，已完成：源码与定向回归验证）
+
+- 用户要求：取消 Agent Bridge 每次退出程序自动关闭的设定，改为保持退出程序前的设定。
+- 复现与根因：旧 `AgentBridgeConfig` 没有 `enabled` 字段，配置序列化会丢弃它；启动时 bridge handle 恒为空。前置测试确认即使旧配置含 `enabled: true`，重新序列化也不保留该字段，重启后无法恢复。
+- 实现：将 enabled 写入 `agent-bridge.json`；开启成功后保存 `true`，主动关闭时保存 `false`。启动时若上次状态为开启则恢复监听，若恢复失败会记录错误并保留开启意图供下次启动重试。进程退出仍停止当前 listener 并释放端口；老配置没有 enabled 时默认关闭。
+- 验证：修改后定向 `cargo test -p issh-tauri enabled -- --nocapture` 通过（3 passed），含真实启动 Bridge、停止后创建新运行状态并恢复，以及持久化关闭后不再恢复；`npm.cmd run test:agent-bridge-regressions` 12/12 通过；Rust 格式检查（忽略既有 module 排序差异）与 `git diff --check` 通过。
+- 边界：没有重新打包或安装；现有 `0.1.5` 安装包早于本次代码修改，不包含 R-142。
+
+### R-143 重打包 0.1.5 安装包纳入最新源码（用户需求，2026-10-08，已完成：本地安装包重新生成）
+
+- 用户要求：使用本地最新代码重新打包，版本保持不变（沿用 `0.1.5`）。
+- 版本核对：根 `package.json`、Tauri `package.json`/`package-lock.json`、`tauri.conf.json`、`Cargo.toml`/`Cargo.lock` 均保持 `0.1.5`，未做任何版本改动。
+- 构建：`cargo build --release -p isshd`（源码未变，增量 1.15s）→ `node issh-tauri/scripts/stage-runtime.mjs` → `npm.cmd --prefix issh-tauri run tauri -- build`（Vite 160 modules、Rust release 3m55s、makensis），全部退出码 0；本次未复现 R-141 的 bundler 前资源缺失问题。
+- 产物：`issh-tauri/src-tauri/target/release/bundle/nsis/issh_0.1.5_x64-setup.exe`，5,304,077 字节，2026-10-08 02:18，SHA-256 `FA010ACB900C0E355FD08D0010C696D2F77B4CD522EFC553B7BCEF65EFFB4350`；`.sha256` sidecar 已同步更新并与安装包核对一致。上一版 01:15 产物（`9DA5EC66…`）被同名覆盖，未留备份。
+- 验证：安装器与应用 exe 文件/产品版本均为 `0.1.5`；应用 exe 含 R-142 恢复失败日志标识「上次处于开启状态」；生产前端 bundle 含 R-139 拖放提示（也可将本地文件或文件夹拖到此面板上传 / 松开以上传到）与整批进度（清除上传进度 / 正在整理上传内容）；staged 与 release `isshd.exe` 哈希一致（`CEF453EB…`）；`git diff --check` 通过。
+- 边界：未安装、覆盖安装、发布或重启；安装版 GUI（含 R-142 的 Agent Bridge 恢复行为）未验收。AI 助手插件（R-140）独立分发，安装包不含插件改动。构建时 AppData 下已安装版遗留的 `isshd.exe` 进程未中断，不影响构建输出。
+
+### R-144 SFTP 删除确认弹窗居中（用户需求，2026-10-08，已完成：源码与前端检查）
+
+- 用户要求：将截图中的“确定删除目录”确认弹窗移到窗口正中间；截图仅用于定位界面。
+- 复现：`SftpBrowser.svelte` 删除入口调用 `window.confirm()`，其位置由 WebView 控制；修改前定向检查确认该调用存在。
+- 实现：SFTP 文件与目录删除共用应用内 `<dialog>`，固定定位到窗口中心；取消或按 Escape 关闭，确认后仍执行原删除操作，切换会话后不执行旧会话的删除。
+- 验证：Tauri `svelte-check` 0 错误、0 警告；前端构建与定向检查结果见 HANDOFF.md。未重新打包、安装或进行安装版 GUI 视觉验收。
+
+### R-145 修复 SFTP 删除非空目录报错（用户需求，2026-10-08，已完成：模拟 SFTP 回归与前端构建验证）
+
+- 用户反馈：点击删除目录后显示 `SFTP transfer error: Failure: Failure`；截图仅作为错误现象证据。
+- 复现与根因：删除逻辑对目录直接调用 `sftp.removeDir`，底层仅执行 SFTP `rmdir`。修改前用含子文件的模拟 SFTP 服务器运行该路径，得到同样的 `Failure: Failure`；真实远端目录内容未读取。
+- 实现：删除目录时先读取完整分页列表，逐层删除文件与子目录，最后删除目录本身；符号链接仅删除链接，不进入目标。确认文案说明会删除目录内所有内容；删除期间禁用重复确认与取消，失败时刷新列表并显示具体失败信息。
+- 验证：`node issh-tauri/scripts/test-sftp-delete.mjs` 通过，覆盖非空嵌套目录、分页、符号链接、子项删除失败及单文件；Tauri `npm.cmd run check` 0 错误/0 警告，`npm.cmd run build` 成功，`git diff --check` 通过。未连接用户远端复现目录，也未重新打包或安装。
+
+### R-146 重打包 0.1.5 安装包纳入 SFTP 删除修复（用户需求，2026-10-08，已完成：本地安装包重新生成）
+
+- 用户要求：使用本地最新代码打包，版本保持不变（沿用 `0.1.5`）。工作区最新改动为 R-144（删除确认弹窗居中）与 R-145（非空目录递归删除、新增 `sftpDelete.ts` 及其测试），02:18 旧包不含这两项。
+- 版本核对：根 `package.json`、Tauri `package.json`、`tauri.conf.json`、`Cargo.toml` 均保持 `0.1.5`，未做任何版本改动。
+- 构建：`cargo build --release -p isshd`（增量 4.97s）→ `node issh-tauri/scripts/stage-runtime.mjs`（isshd.exe 9.87 MB、SKILL.md、agent-bridge 9 文件）→ `npm.cmd --prefix issh-tauri run tauri -- build`（Vite 161 modules、Rust release 4m00s、makensis），全部退出码 0；未复现 R-141 的 bundler 前资源缺失问题。
+- 产物：`issh-tauri/src-tauri/target/release/bundle/nsis/issh_0.1.5_x64-setup.exe`，5,301,317 字节，2026-10-08 04:32，SHA-256 `62D27B62EAB03B4199DD46EC65201B01DC4C82B19ECBED0B6BAB20F47B25B16B`；`.sha256` sidecar 已同步更新并与安装包核对一致（91 字节）。上一版 02:18 产物（`FA010ACB…`）被同名覆盖，未留备份。
+- 验证：`npm.cmd run check` 0 错误/0 警告；`node issh-tauri/scripts/test-sftp-delete.mjs` 通过；安装器与应用 exe 文件/产品版本均为 `0.1.5`；生产前端 bundle（`index-my2T_TLX.js`、`index-BJKtbL7e.css`）含 R-144/R-145 的 `sftp-delete-dialog` 标识与「确认删除」「目录及其所有内容」文案；staged 与 release `isshd.exe` 哈希一致（`CEF453EB…`）。
+- 边界：未安装、覆盖安装、发布或重启；未连接真实远端做删除验收，安装版 GUI 未验收。AI 助手插件（R-140）独立分发，安装包不含插件改动。
+
+### R-147 SFTP 面板与文件夹拖拽上传、可见上传进度（用户需求，2026-10-08，已完成：组件拖放交互与构建验证，安装版未验收）
+
+- 用户要求：参照第二张截图，文件可拖到 SFTP 窗口或窗口内的文件夹上传，并显示上传进度；截图作为操作与界面参考。
+- 复现：旧窗口配置默认启用 Tauri 原生拖放，Windows 下拦截 HTML 拖放事件；组件尚未识别文件夹目标。修改前运行实际组件上传函数，将文件拖到 `/root/folder` 的模拟事件，最终路径为 `/root/one.txt`、`/root/two.txt`，目标检查失败。
+- 实现：主窗口配置与备用创建路径关闭原生拖放处理，启用 HTML 文件拖放；空白处落到当前目录，目录行、上级目录及路径导航可作为目标，悬停显示目标路径并高亮目录。上传开始时固定目录和 SSH 会话，保留本地目录结构与空目录；显示当前文件、目标目录、整批字节/文件数/百分比、绿色进度条和取消按钮，最终重命名成功后显示 100%。长目录列表保持可滚动，进度区域滚动时保持可见。
+- 验证：`node issh-tauri/scripts/test-sftp-upload.mjs` 通过（目录/空白目标、嵌套及空目录、固定路径/会话、累计进度、零字节、取消与失败清理）。Edge 无头浏览器实际渲染组件，并用本地文件拖放载荷验证文件夹子元素命中、高亮、`512 KB / 3 MB · 17%` 实时进度、完成 100% 与空白目标；SFTP RPC 为隔离模拟服务。Tauri `svelte-check` 0/0、Vite build、`cargo check -p issh-tauri --lib`、Rust 格式与 diff 检查通过。
+- 边界：未重打包、安装或重启，未进行 Windows 安装版资源管理器拖放及真实远端上传验收。临时 UI 脚本已删除；首轮验证遗留临时目录的递归清理被自动审批拒绝，路径见 HANDOFF.md。
+
+### R-148 重打包 0.1.5 安装包纳入 R-147（用户需求，2026-10-08，已完成：本地安装包重新生成）
+
+- 用户要求：使用本地最新代码打包，版本保持不变（沿用 `0.1.5`）。工作区最新改动为 R-147（SFTP 拖拽上传到面板/文件夹、可见上传进度；`tauri.conf.json` 关闭原生拖放、`lib.rs` 备用窗口关闭拖放处理、`SftpBrowser.svelte`/`app.css` 拖放与进度 UI、新增 `test-sftp-upload.mjs`），04:32 旧包不含 R-147。
+- 版本核对：根 `package.json`、Tauri `package.json`、`tauri.conf.json`、`Cargo.toml` 均保持 `0.1.5`，未做任何版本改动。
+- 前置检查：`npm.cmd run check` 0 错误/0 警告；`node issh-tauri/scripts/test-sftp-upload.mjs` 通过（HTML 拖放启用、文件夹目标路径、进度/取消/失败清理）。运行中的已安装实例（`AppData\Local\issh`，04:40 启动）不占用构建产物路径，未中断。
+- 构建：`cargo build --release -p isshd`（增量 0.99s）→ `node issh-tauri/scripts/stage-runtime.mjs`（isshd.exe 9.87 MB、SKILL.md、agent-bridge 9 文件）→ `npm.cmd --prefix issh-tauri run tauri -- build`（Vite 161 modules、Rust release、makensis），全部退出码 0。
+- 产物：`issh-tauri/src-tauri/target/release/bundle/nsis/issh_0.1.5_x64-setup.exe`，5,303,157 字节，2026-10-08 05:23，SHA-256 `C86BA6633B0DDB37CBC007998E3433EB8A993F9F990454936AE4678B9EA55CB3`；`.sha256` sidecar 已同步更新并核对一致（91 字节）。上一版 04:32 产物（`62D27B62…`）被同名覆盖，未留备份。
+- 验证：安装器与应用 exe 文件/产品版本均为 `0.1.5`；应用 exe（05:23 重建）内嵌新前端 bundle 名 `index-CFHnKeA1`/`index-DVhTsEyo`，旧名 `index-my2T_TLX`/`index-BJKtbL7e` 均不存在；前端 bundle 字节级含 `sftp-drop-hint`、`data-sftp-upload-dir`、`drop-target` 及「拖到空白处上传到当前目录」「松开以上传到」「已上传」「清除上传进度」文案；staged 与 release `isshd.exe` 哈希一致（`CEF453EB…`）。
+- 边界：未安装、覆盖安装、发布或重启；未进行 Windows 安装版资源管理器拖放及真实远端上传验收。AI 助手插件（R-140）独立分发，安装包不含插件改动。
+
+### R-149 上传进度完成后 5 秒自动关闭、悬停取消倒计时（用户需求，2026-10-08，已完成：定向计时验证与前端构建，安装版未验收）
+
+- 用户要求：SFTP 上传完成后进度卡片显示 5 秒倒计时，到时自动消失；鼠标移入进度卡片后倒计时消失。
+- 实现：成功上传后显示 `5s 后关闭` 并按秒递减，到时收起进度卡片；鼠标移入取消本次倒计时并保留卡片，移出不重新启动，可点击 × 关闭。若完成时鼠标已在卡片内，则保留卡片。新批次、手动关闭和组件卸载清理旧计时器；失败及取消状态保留供查看。
+- 验证：扩展既有 `test-sftp-upload.mjs`，执行实际组件函数与模拟时钟，覆盖第 4 秒保留/第 5 秒关闭、悬停保留、完成前悬停、手动关闭、旧计时器不影响下一批及失败/取消保留；上传回归全部通过。Tauri `svelte-check` 0 错误/0 警告、Vite build 161 modules 与 `git diff --check` 通过。
+- 边界：未重新打包、安装或重启，未在安装版 GUI 验收倒计时；现有 05:23 的 0.1.5 安装包不含本次改动。
+
+### R-150 重打包 0.1.5 安装包纳入 R-149（用户需求，2026-10-08，已完成：本地安装包重新生成）
+
+- 用户要求：使用本地最新代码打包，版本保持不变（沿用 `0.1.5`）。工作区最新改动为 R-149（上传完成进度卡片 5 秒倒计时、「5s 后关闭」、悬停取消倒计时与保留、× 手动关闭；`SftpBrowser.svelte`/`app.css`/`test-sftp-upload.mjs`），05:23 旧包不含 R-149。
+- 版本核对：根 `package.json`、Tauri `package.json`、`tauri.conf.json`、`Cargo.toml` 均保持 `0.1.5`，未做任何版本改动。
+- 前置检查：`npm.cmd run check` 0 错误/0 警告；`test-sftp-upload.mjs`（含 R-149 计时用例：4 秒保留/5 秒关闭、悬停保留、完成前悬停、手动关闭、旧计时器不影响下一批、失败/取消保留）与 `test-sftp-delete.mjs` 全部通过；无 `issh-tauri.exe` 进程占用。
+- 构建：`cargo build --release -p isshd`（增量 1.62s）→ `stage-runtime.mjs`（isshd.exe 9.87 MB、SKILL.md、agent-bridge 9 文件）→ `npm.cmd --prefix issh-tauri run tauri -- build`（Vite 161 modules、Rust release 3m59s、makensis），全部退出码 0。
+- 产物：`issh-tauri/src-tauri/target/release/bundle/nsis/issh_0.1.5_x64-setup.exe`，5,301,463 字节，2026-10-08 21:01，SHA-256 `E1A1ECB8B355E6ED376C93267B6A80B6847DE4ADC286F9C53C278AFE27D62C93`；`.sha256` sidecar 已同步更新并核对一致（91 字节，match=True）。上一版 05:23 产物（`C86BA663…`）被同名覆盖，未留备份。
+- 验证：安装器与应用 exe 文件/产品版本均为 `0.1.5`；应用 exe（21:01 重建，5,852,672 字节）内嵌新前端 bundle 名 `index-jMWxt11B`/`index-DQfKdfDu`，旧名 `index-CFHnKeA1`/`index-DVhTsEyo` 均不存在；前端 bundle 字节级含 R-149 `sftp-upload-countdown`（JS+CSS）与「后关闭」@390505，以及 R-147 的 `sftp-drop-hint`、「拖到空白处上传到当前目录」「已上传」「清除上传进度」文案；staged 与 release `isshd.exe` 哈希一致（`CEF453EB…`）。
+- 边界：未安装、覆盖安装、发布或重启；未在安装版 GUI 验收 R-149 倒计时与 R-147 拖放，未做真实远端上传验收。AI 助手插件（R-140）独立分发，安装包不含插件改动。
+
+### R-151 移除 SFTP 顶部操作区域、权限不足弹窗提示（用户需求，2026-10-09，已完成：源码与模拟 RPC 浏览器验收，安装版未验收）
+
+- 用户要求：移除截图红圈内的目录过滤、新目录名、新建目录、上传文件和上传文件夹区域；上传、下载、删除权限不足时弹窗提醒，不让界面持续卡在执行状态。附件仅作界面参考。
+- 复现：修改前执行实际组件的恢复函数，`SFTP transfer error: Permission denied: Permission denied` 被判为通道错误，触发一次重建、两次操作调用；预期权限拒绝只执行一次且不重连。
+- 实现：移除顶部操作区，保留右键上传/新建与拖拽上传；新建目录、重命名和修改权限通过居中输入弹窗操作。区分 SFTP 状态错误与连接错误；上传、下载、删除失败弹窗包含动作、目标与原因，权限拒绝提示检查账户权限。首次写入被拒绝不清理不存在的临时文件；已写入后权限失败的清理不阻塞失败提示，删除失败仅在有部分删除时后台刷新。
+- 验证：新增 `node issh-tauri/scripts/test-sftp-errors.mjs`，覆盖真实库权限/状态消息不重连、上传/下载/删除及本地写入权限拒绝后状态释放与提示、未回包临时文件清理不阻塞权限提示、目录权限失败、连接断开/超时恢复；上传/删除既有回归通过。实际组件在隔离 Edge 浏览器中通过三类权限失败、零重连和后续正常操作验证，红圈区域消失，右键新建/上传保留；报告与截图见 HANDOFF.md。
+- 边界：未重打包、安装、发布或重启，未访问用户远端或凭据；真实远端与安装版未验收，现有 0.1.5 安装包不含本次改动。
+
+### R-152 应用弹窗统一置于窗口中央（用户需求，2026-10-09，已完成：应用内布局与交互验收，安装版未验收）
+
+- 用户要求：所有弹窗放到界面的中间位置。
+- 复现：实际 CSS 在 Edge 浏览器窗口中测量，SSH 连接、主机编辑、主机选择、sudo/Vault、插件安装确认和设置窗口存在中心偏移。
+- 实现：统一 SSH 连接、主机编辑/选择、sudo/Vault、设置、安装和退出确认等布局；共享异步 HTML dialog 替代 Tauri、插件网关和 AI Assistant 的原生 JavaScript alert/confirm/prompt，支持 FIFO、Enter/Escape、取消、焦点恢复和长内容滚动。弹窗内快捷键不操作后方终端；配置同步导入弹窗保持中央且小窗口不越界。AI Assistant 通过宿主提供的确认 API 操作，旧宿主未提供时提示升级，不跳过中高风险确认。
+- 验证：Tauri 与 AI Assistant `check` 均 0 错误/0 警告；Tauri Vite build 163 modules、AI Assistant 两组回归与构建、config-sync 构建通过。`test-dialogs.mjs` 覆盖队列、旧响应、确认/输入/取消及卸载清理；`test-dialog-layout.mjs` 在两个窗口尺寸覆盖十类弹窗，通过。隔离浏览器 24 项检查通过、0 pageerror，真实 DialogHost 的长内容、FIFO、Enter/Escape 与 SFTP 权限提示居中通过。
+- 边界：Windows 原生文件/目录选择器由系统管理位置，rfd 0.15.4 未提供精确居中控制；未新增 Win32 定位钩子。未重打包、安装或重启，真实安装版未验收；插件改动仍独立分发。
+
+### R-153 重打包 0.1.5 安装包纳入 R-151/R-152（用户需求，2026-10-09，已完成：本地安装包重新生成）
+
+- 用户要求：使用本地最新代码打包，版本保持不变（沿用 `0.1.5`）。工作区最新改动为 R-151（SFTP 顶部操作区移除、权限不足弹窗提示、不误判断连）与 R-152（应用弹窗统一居中；新增 `dialogs.ts`/`DialogHost.svelte`），10-08 21:01 旧包不含这些改动。
+- 版本核对：根 `package.json`、Tauri `package.json`、`tauri.conf.json`、`Cargo.toml` 均保持 `0.1.5`，未做任何版本改动。
+- 前置检查：`npm.cmd run check` 0 错误/0 警告；`test-sftp-errors.mjs`、`test-sftp-upload.mjs`（含倒计时用例）、`test-sftp-delete.mjs`、`test-dialogs.mjs`、`test-dialog-layout.mjs`（1200×800 与 640×480 十类弹窗中心误差 ≤0.008px）全部通过；无 `issh-tauri.exe` 进程占用。
+- 构建：`cargo build --release -p isshd`（6.56s）→ `stage-runtime.mjs`（isshd.exe 9.87 MB、SKILL.md、agent-bridge 9 文件）→ `npm.cmd --prefix issh-tauri run tauri -- build`（Vite 163 modules、Rust release 4m19s、makensis），全部退出码 0。
+- 产物：`issh-tauri/src-tauri/target/release/bundle/nsis/issh_0.1.5_x64-setup.exe`，5,300,863 字节，2026-10-09 04:37，SHA-256 `D71B1C1C7E0B713447E27DD6F12E92713A59A481868B4409EDEC5601B1AFC609`；`.sha256` sidecar 已同步更新并核对一致（91 字节，match=True）。上一版 10-08 21:01 产物（`E1A1ECB8…`）被同名覆盖，未留备份。
+- 验证：安装器与应用 exe 文件/产品版本均为 `0.1.5`；应用 exe（04:37 重建，5,852,672 字节）内嵌新前端 bundle 名 `index-PsU1fj2O`/`index-Cz3VXkO6`/`app-Yz_PlCOt`，旧名 `index-jMWxt11B`/`index-DQfKdfDu`/`index-CCfBQ_X5`/`index-CFHnKeA1` 均不存在；前端 bundle 字节级含 R-152 `app-dialog`（JS+CSS）与 R-151「检查当前账户的文件或目录权限」@377993，保留 `sftp-delete-dialog`、`sftp-upload-countdown`、`sftp-drop-hint` 及「上传失败」「上传完成」「修改权限」「新建目录」文案；staged 与 release `isshd.exe` 哈希一致（`CEF453EB…`）。
+- 边界：未安装、覆盖安装、发布或重启；未在安装版 GUI 验收 R-151 权限提示与 R-152 弹窗居中，未做真实远端操作验收。AI 助手插件（R-140）等插件独立分发，安装包不含插件改动。
+
+### R-154 修复 MCP 直接连接 SSH 档案缺少主机密钥指纹（用户需求，2026-10-10，已完成：源码与隔离请求链验证，安装版未更新）
+
+- 用户要求：修复 `issh_connect_profile` 总提示 `SSH host-key fingerprint is required`、必须先手动在 issh 连接服务器后才可使用的问题。
+- 修复前证据：运行中的已安装 Bridge 健康检查成功；调用保存的 `esxi17` 档案返回 `-32000: SSH host-key fingerprint is required`。源码连接入口固定传空 `expectedHostKey`，Runtime 在认证前拒绝；复用已打开会话不经过此入口。
+- 实现范围：MCP 先探测 SSH 主机密钥，通过原有桌面 localStorage 信任记录自动确认相同指纹；首次或变更指纹使用居中的应用确认框，确认后固定该指纹连接，不要求用户先手工打开 SSH 会话。指纹删除仍由现有 Settings 管理。未知指纹提示时显示并聚焦主窗口。
+- 关联改动：首次确认采用默认 90 秒总预算，CLI/stdio MCP 增加 5 秒响应余量；超时取消当前与排队弹窗、拒绝过期回应；启动监听准备完成时重播仍待确认的请求；超时或 Bridge 主动断开期间迟到的 SSH 会话自动关闭。
+- 验证：`cargo test --lib` 79/79（含新增 7 项真实 localhost HTTP Bridge → 隔离 named-pipe Runtime 测试、4 项指纹确认 broker 测试）；`node --test issh-agent/test/*.test.mjs` 36/36；`test-ssh-host-key-confirmation.mjs` 与既有 `test-dialogs.mjs` 通过，覆盖已有/首次/变更指纹、拒绝、设置页删除及并发删除、已信任主机不等待其他确认、重播去重、当前/排队超时、过期回应与卸载。`cargo test -p issh-runtime-ssh host_key` 4/4，包含真实本地测试 SSH 服务端的探测/固定指纹连接；Tauri `npm run check` 0 错误/0 警告、Vite build 164 modules 成功；Rust 格式与 diff 检查通过，Vite 保留既有动态导入/体积提示。
+- 交付边界：测试 SSH/Runtime 使用隔离本地 fixture，未用用户凭据验证真实服务器登录；未修改版本、未打包、未安装或重启用户程序。当前安装版与现有 `0.1.5` 安装包仍不含本次修复，需要后续重打包并更新应用和随包 MCP 客户端后生效；原有工作区改动保留。
+
+### R-155 重打包 0.1.5 安装包纳入 R-154（用户需求，2026-10-10，已完成：本地安装包重新生成）
+
+- 用户要求：使用本地最新代码打包，版本保持不变（沿用 `0.1.5`）。工作区最新改动为 R-154（MCP 直连 SSH 档案主机密钥指纹修复；含 `issh-agent` 随包 MCP 客户端更新），10-09 04:37 旧包不含该修复。
+- 版本核对：根 `package.json`、Tauri `package.json`、`tauri.conf.json`、`Cargo.toml` 均保持 `0.1.5`，未做任何版本改动。
+- 前置检查：`npm.cmd run check` 0 错误/0 警告；`test-sftp-errors.mjs`、`test-sftp-upload.mjs`、`test-sftp-delete.mjs`、`test-dialogs.mjs`、`test-dialog-layout.mjs`（1200×800 与 640×480 十类弹窗）、`test-ssh-host-key-confirmation.mjs` 全部通过；`npm.cmd run test:issh-agent` 36/36；无构建产物占用。
+- 构建：`cargo build --release -p isshd`（增量 4.31s）→ `stage-runtime.mjs`（isshd.exe 9.87 MB、SKILL.md、agent-bridge 9 文件，暂存与源码哈希 9/9 一致）→ `npm.cmd --prefix issh-tauri run tauri -- build`（Rust release 4m05s、makensis），全部退出码 0。
+- 产物：`issh-tauri/src-tauri/target/release/bundle/nsis/issh_0.1.5_x64-setup.exe`，5,314,209 字节，2026-10-10 03:13，SHA-256 `efa5a0ad31564cce257c4651ac6bcdba4eb722eeca4483f01c0e4c15843cbb66`；`.sha256` sidecar 已同步更新并核对一致（91 字节，match=True）。上一版 10-09 04:37 产物（`D71B1C1C…`）被同名覆盖，未留备份。
+- 验证：安装器与应用 exe 文件/产品版本均为 `0.1.5`；应用 exe 内嵌新前端 bundle 名 `index-DqyPnF3z`/`app-CT3UyV7H`，上版 `index-PsU1fj2O`/`app-Yz_PlCOt` 均不存在；前端 bundle 含 R-154 `trustedHostKey`、「确认 SSH 主机密钥」「主机密钥已变化」及既有 `app-dialog`、`sftp-upload-countdown`、`sftp-drop-hint` 标识；staged 与 release `isshd.exe` 哈希一致（`CEF453EB…`）。
+- 边界：未安装、覆盖安装、发布或重启；未在安装版验收 R-154 指纹确认与真实服务器登录；插件独立分发，安装包不含插件改动。

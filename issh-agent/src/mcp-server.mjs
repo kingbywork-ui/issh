@@ -160,7 +160,11 @@ function getRpcTimeout (name, args) {
     if (name === 'issh_exec_command' || name === 'issh_batch_exec' || name === 'issh_task_wait' || name === 'issh_run_wait') {
         return Number(args.timeoutMs ?? 60000) + 5000
     }
-    if (name.startsWith('issh_sftp_') || name === 'issh_connect_profile') {
+    if (name === 'issh_connect_profile') {
+        const timeoutMs = Number.isInteger(args.timeoutMs) && args.timeoutMs >= 0 ? args.timeoutMs : 90000
+        return Math.min(Math.max(timeoutMs, 1), 3600000) + 5000
+    }
+    if (name.startsWith('issh_sftp_')) {
         return Math.max(Number(args.timeoutMs ?? 30000), 30000)
     }
     return 10000

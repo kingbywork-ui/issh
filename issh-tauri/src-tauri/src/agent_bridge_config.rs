@@ -1,7 +1,6 @@
-//! Agent Bridge 持久化配置（R-073：端口可配置；enabled 永不持久化）。
+//! Agent Bridge 持久化配置（R-142：保留退出前的 enabled 状态）。
 //!
-//! - 持久化：port / token / allowedScopes / sftpRoot / auditLogEnabled / publicDiscovery
-//! - 不持久化：enabled（每次必须手动开启）
+//! - 持久化：enabled / port / token / allowedScopes / sftpRoot / auditLogEnabled / publicDiscovery
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -40,6 +39,8 @@ impl PermissionMode {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AgentBridgeConfig {
+    /// 上次退出前的启用状态；启动时按此值恢复。
+    pub enabled: bool,
     /// Bearer token；首次启动自动生成 256 位 hex，轮换时持久化。
     pub token: String,
     /// 默认 59688；用户可在关闭 Bridge 时指定其它非零端口。
@@ -60,6 +61,7 @@ pub struct AgentBridgeConfig {
 impl Default for AgentBridgeConfig {
     fn default() -> Self {
         Self {
+            enabled: false,
             token: generate_token(),
             port: crate::agent_bridge::AGENT_BRIDGE_PORT,
             allowed_scopes: vec![
@@ -131,12 +133,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn old_config_defaults_to_original_port_and_does_not_persist_enabled() {
-        let config: AgentBridgeConfig =
-            serde_json::from_str(r#"{"token":"test","enabled":true}"#).unwrap();
+    fn old_config_defaults_to_original_port_and_enabled_state_persists() {
+        let mut config: AgentBridgeConfig = serde_json::from_str(r#"{"token":"test"}"#).unwrap();
         assert_eq!(config.port, 59688);
-        let value = serde_json::to_value(config).unwrap();
-        assert!(value.get("enabled").is_none());
+        assert!(!config.enabled);
+
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let user_data = std::env::temp_dir().join(format!(
+            "issh-agent-bridge-enabled-{}-{unique}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&user_data).unwrap();
+
+        config.enabled = true;
+        save(&user_data, &config).unwrap();
+        assert!(load(&user_data).unwrap().enabled);
+
+        config.enabled = false;
+        save(&user_data, &config).unwrap();
+        assert!(!load(&user_data).unwrap().enabled);
+        std::fs::remove_dir_all(user_data).unwrap();
     }
 
     #[test]

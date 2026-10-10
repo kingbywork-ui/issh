@@ -1,11 +1,12 @@
 <script lang="ts">
     import { onMount } from 'svelte'
     import ContextMenu, { type ContextMenuItem } from './ContextMenu.svelte'
+    import { removeSftpTree } from './sftpDelete'
+    import { showAlert, askPrompt } from './dialogs'
     import {
         base64ToBytes,
         bytesToBase64,
         createLocalDir,
-        deleteLocalFile,
         openSftpSession,
         pickDirectory,
         pickSavePath,
@@ -24,7 +25,7 @@
         type SftpEntry,
     } from './runtime'
 
-    let { sessionId, initialPath = '/', sudoMode = false, sudoPassword = '', onclose }: { sessionId: string, initialPath?: string, sudoMode?: boolean, sudoPassword?: string, onclose?: () => void } = $props()
+    let { sessionId, initialPath = '/', sudoMode = false, sudoPassword = '', onpathchange }: { sessionId: string, initialPath?: string, sudoMode?: boolean, sudoPassword?: string, onpathchange?: (path: string) => void } = $props()
 
     let cwd = $state('/')
     let entries = $state<SftpEntry[]>([])
@@ -34,20 +35,36 @@
     let previewPath = $state('')
     let previewText = $state('')
     let previewLoading = $state(false)
-    let mkdirName = $state('')
-    let renameTarget = $state<SftpEntry | null>(null)
-    let renameValue = $state('')
-    let uploadPath = $state('')
-    let uploadFile: File | null = $state(null)
-    let uploadQueue: File[] = $state([])
+    let deleteTarget = $state<SftpEntry | null>(null)
+    let deleteDialog: HTMLDialogElement | null = $state(null)
+    let deleteTargetSessionId = ''
+    let deleting = $state(false)
+    let fileInput: HTMLInputElement | null = $state(null)
     let folderInput: HTMLInputElement | null = $state(null)
+    let browserElement: HTMLElement | null = $state(null)
     let dragOver = $state(false)
+    let dragTargetPath = $state<string | null>(null)
     let contextMenu = $state<{ x: number, y: number, items: ContextMenuItem[] } | null>(null)
     let editingPath = $state(false)
     let pathInput = $state('/')
     let disconnected = $state(false)
     let reconnecting = $state(false)
     let uploading = $state(false)
+    let uploadProgress = $state<{
+        phase: 'preparing' | 'running' | 'completed' | 'cancelled' | 'failed'
+        doneBytes: number
+        totalBytes: number
+        doneFiles: number
+        totalFiles: number
+        doneDirs: number
+        totalDirs: number
+        currentFile: string
+        destination: string
+        cancel: boolean
+    } | null>(null)
+    let uploadDismissSeconds = $state<number | null>(null)
+    let uploadDismissTimer: ReturnType<typeof setInterval> | null = null
+    let uploadProgressHovered = false
     let navGeneration = 0
     let previewGeneration = 0
     let transfer = $state<{ label: string, done: number, total: number | null, cancel: boolean } | null>(null)
@@ -62,14 +79,63 @@
     const UPLOAD_CHUNK = 512 * 1024
     const DOWNLOAD_CHUNK = 1024 * 1024
 
+    type UploadItem = { file: File, path: string }
+    type UploadPlan = { files: UploadItem[], directories: string[] }
+
+    function cancelUploadDismiss (): void {
+        if (uploadDismissTimer !== null) clearInterval(uploadDismissTimer)
+        uploadDismissTimer = null
+        uploadDismissSeconds = null
+    }
+
+    function clearUploadProgress (): void {
+        cancelUploadDismiss()
+        uploadProgress = null
+        uploadProgressHovered = false
+    }
+
+    function preserveUploadProgress (): void {
+        uploadProgressHovered = true
+        cancelUploadDismiss()
+    }
+
+    function scheduleUploadDismiss (): void {
+        cancelUploadDismiss()
+        if (uploadProgress?.phase !== 'completed' || uploadProgressHovered) return
+        const completedProgress = uploadProgress
+        const deadline = Date.now() + 5000
+        uploadDismissSeconds = 5
+        uploadDismissTimer = setInterval(() => {
+            if (uploadProgress !== completedProgress) {
+                cancelUploadDismiss()
+                return
+            }
+            const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
+            if (remaining === 0) clearUploadProgress()
+            else uploadDismissSeconds = remaining
+        }, 1000)
+    }
+
     // 取消当前传输（下载/上传循环每块检查）
     function cancelTransfer (): void {
+        if (uploadProgress && (uploadProgress.phase === 'preparing' || uploadProgress.phase === 'running')) uploadProgress.cancel = true
         if (transfer) transfer.cancel = true
     }
 
-    // SFTP 通道类错误：断连/超时/通道异常，可尝试重建 SFTP 子系统通道恢复
+    function isPermissionError (message: string): boolean {
+        return /permission[\s_-]*denied|access[\s_-]*denied|权限不足|权限拒绝|拒绝访问|os error (?:5|13)\b/i.test(message)
+    }
+
+    function reportOperationError (action: string, path: string, cause: unknown): void {
+        const reason = cause instanceof Error ? cause.message : String(cause)
+        error = `${action}失败：${path}\n${isPermissionError(reason) ? '权限不足，请检查当前账户的文件或目录权限。\n' : ''}${reason}`
+        void showAlert(error, `${action}失败`)
+    }
+
+    // SFTP status errors (权限、文件不存在等) 不代表通道断开，不重建或重复执行。
     function isChannelError (message: string): boolean {
-        return /closed|SFTP session not found|channel error|timed out|transfer error/i.test(message)
+        if (isPermissionError(message)) return false
+        return /SFTP session not found|session (?:is )?closed|sender dropped|channel (?:error|closed)|connection (?:closed|reset|lost)|no connection|broken pipe|unexpected eof|timed out|\btimeout\b|(?:^|:\s*)closed\b/i.test(message)
     }
 
     // 并发失败去重：多个操作同时触发重连时共享同一次重建
@@ -95,12 +161,12 @@
 
     // 断连自动重连包装：通道类错误时重建 SFTP 通道并重试一次。
     // sudo 模式不自动重连（密码可能已失效/无法复用），交由上层提示。
-    async function withReconnect<T> (operation: () => Promise<T>): Promise<T> {
+    async function withReconnect<T> (operation: () => Promise<T>, targetSessionId = sessionId): Promise<T> {
         try {
             return await operation()
         } catch (cause) {
             const message = cause instanceof Error ? cause.message : String(cause)
-            if (!isChannelError(message) || sudoMode) throw cause
+            if (!isChannelError(message) || sudoMode || targetSessionId !== sessionId) throw cause
             try {
                 await reopenSftpChannel()
             } catch {
@@ -160,14 +226,10 @@
         return type ? FILE_TYPE_ICONS[type] ?? '▪' : '▪'
     }
 
-    let filterText = $state('')
-
-    // 过滤（实时，大小写不敏感）+ 目录优先 + 名称自然排序
+    // 目录优先 + 名称自然排序
     const visibleEntries = $derived.by(() => {
-        const keyword = filterText.trim().toLowerCase()
-        const filtered = keyword ? entries.filter((entry) => entry.name.toLowerCase().includes(keyword)) : entries
         const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
-        return [...filtered].sort((a, b) => {
+        return [...entries].sort((a, b) => {
             if (a.isDir !== b.isDir) return a.isDir ? -1 : 1
             return collator.compare(a.name, b.name)
         })
@@ -185,7 +247,7 @@
         } catch (cause) {
             if (generation !== navGeneration) return
             error = cause instanceof Error ? cause.message : String(cause)
-            disconnected = true
+            disconnected = isChannelError(error)
         } finally {
             if (generation === navGeneration) loading = false
         }
@@ -226,6 +288,7 @@
     async function navigate (path: string): Promise<void> {
         cwd = normalizePath(path)
         pathInput = cwd
+        onpathchange?.(cwd)
         await refresh()
     }
 
@@ -269,28 +332,43 @@
     }
 
     async function createDirectory (): Promise<void> {
-        const name = mkdirName.trim()
+        const targetSessionId = sessionId
+        const targetDir = cwd
+        const input = await askPrompt('新目录名', '', '新建目录')
+        if (input === null || targetSessionId !== sessionId) return
+        const name = input.trim()
         if (!name) return
         error = ''
         try {
-            await withReconnect(() => sftpMkdir(sessionId, joinPath(cwd, name)))
-            mkdirName = ''
+            await withReconnect(() => sftpMkdir(targetSessionId, joinPath(targetDir, name)), targetSessionId)
             notice = `已创建目录 ${name}`
             await refresh()
         } catch (cause) {
-            error = cause instanceof Error ? cause.message : String(cause)
+            reportOperationError('新建目录', joinPath(targetDir, name), cause)
         }
     }
 
-    function beginRename (entry: SftpEntry): void {
-        renameTarget = entry
-        renameValue = entry.name
+    async function beginRename (entry: SftpEntry): Promise<void> {
+        const targetSessionId = sessionId
+        const input = await askPrompt(`重命名 ${entry.name}`, entry.name, '重命名')
+        if (input === null || targetSessionId !== sessionId) return
+        const name = input.trim()
+        if (!name || name === entry.name) return
+        error = ''
+        try {
+            await withReconnect(() => sftpRename(targetSessionId, entry.path, joinPath(parentPath(entry.path), name)), targetSessionId)
+            notice = `已重命名为 ${name}`
+            await refresh()
+        } catch (cause) {
+            reportOperationError('重命名', entry.path, cause)
+        }
     }
 
     // 权限修改：八进制模式输入（如 755），对齐 issh sftpPanel 的 chmod 操作
     async function changeMode (entry: SftpEntry): Promise<void> {
-        const input = window.prompt(`修改权限（八进制，如 755）：${entry.name}`, '644')
-        if (input === null) return
+        const targetSessionId = sessionId
+        const input = await askPrompt(`修改权限（八进制，如 755）：${entry.name}`, '644', '修改权限')
+        if (input === null || targetSessionId !== sessionId) return
         const trimmed = input.trim()
         if (!/^[0-7]{3,4}$/.test(trimmed)) {
             error = `无效的权限模式：${trimmed}`
@@ -298,7 +376,7 @@
         }
         error = ''
         try {
-            await withReconnect(() => sftpChmod(sessionId, entry.path, parseInt(trimmed, 8)))
+            await withReconnect(() => sftpChmod(targetSessionId, entry.path, parseInt(trimmed, 8)), targetSessionId)
             notice = `已修改 ${entry.name} 权限为 ${trimmed}`
             await refresh()
         } catch (cause) {
@@ -323,149 +401,147 @@
         }
     }
 
-    async function confirmRename (): Promise<void> {
-        if (!renameTarget) return
-        const name = renameValue.trim()
-        if (!name || name === renameTarget.name) {
-            renameTarget = null
-            return
-        }
-        error = ''
-        const target = renameTarget
-        try {
-            await withReconnect(() => sftpRename(sessionId, target.path, joinPath(cwd, name)))
-            renameTarget = null
-            notice = `已重命名为 ${name}`
-            await refresh()
-        } catch (cause) {
-            error = cause instanceof Error ? cause.message : String(cause)
-        }
+    function removeEntry (entry: SftpEntry): void {
+        if (deleting) return
+        deleteTarget = entry
+        deleteTargetSessionId = sessionId
+        deleteDialog?.showModal()
     }
 
-    async function removeEntry (entry: SftpEntry): Promise<void> {
-        if (!window.confirm(`确定删除 ${entry.isDir ? '目录' : '文件'} ${entry.name}？`)) return
+    async function confirmRemoveEntry (): Promise<void> {
+        const entry = deleteTarget
+        const targetSessionId = deleteTargetSessionId
+        if (!entry || deleting) return
+        if (targetSessionId !== sessionId) {
+            deleteDialog?.close()
+            return
+        }
+        deleting = true
         error = ''
+        let changedRemote = false
         try {
-            if (entry.isDir) {
-                await withReconnect(() => sftpRemoveDir(sessionId, entry.path))
-            } else {
-                await withReconnect(() => sftpRemove(sessionId, entry.path))
-            }
+            await removeSftpTree(entry, {
+                list: (path, offset) => withReconnect(() => sftpList(targetSessionId, path, offset, 256), targetSessionId),
+                removeFile: async (path) => {
+                    await withReconnect(() => sftpRemove(targetSessionId, path), targetSessionId)
+                    changedRemote = true
+                },
+                removeDir: async (path) => {
+                    await withReconnect(() => sftpRemoveDir(targetSessionId, path), targetSessionId)
+                    changedRemote = true
+                },
+            })
+            deleteDialog?.close()
+            if (targetSessionId !== sessionId) return
             notice = `已删除 ${entry.name}`
             await refresh()
         } catch (cause) {
-            error = cause instanceof Error ? cause.message : String(cause)
+            deleteDialog?.close()
+            if (targetSessionId !== sessionId) return
+            reportOperationError('删除', entry.path, cause)
+            // 部分子项可能已删除；刷新不能阻塞失败提示与操作状态释放。
+            if (changedRemote) {
+                const deleteError = error
+                void refresh().then(() => { if (targetSessionId === sessionId) error = deleteError })
+            }
+        } finally {
+            deleting = false
         }
     }
 
     async function onUploadChange (event: Event): Promise<void> {
         const input = event.currentTarget as HTMLInputElement
         const files = Array.from(input.files ?? [])
-        if (files.length === 0) return
-        uploadQueue = files
-        uploadFile = files[0]
-        // clear value so same file can be re-selected
         input.value = ''
+        await beginUpload(() => ({ files: files.map((file) => ({ file, path: file.name })), directories: [] }))
     }
 
     async function onFolderChange (event: Event): Promise<void> {
         const input = event.currentTarget as HTMLInputElement
-        const files = Array.from(input.files ?? []) as File[]
-        if (files.length === 0) return
-        // webkitRelativePath contains folder structure; upload preserving relative paths
-        await uploadFolderFiles(files)
+        const files = Array.from(input.files ?? [])
         input.value = ''
+        await beginUpload(() => ({
+            files: files.map((file) => ({ file, path: file.webkitRelativePath || file.name })),
+            directories: [],
+        }))
     }
 
-    async function uploadFolderFiles (files: File[]): Promise<void> {
-        if (uploading || files.length === 0) return
-        error = ''
-        // Group by top-level folder name from webkitRelativePath if available
-        for (const file of files) {
-            const rel = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
-            const remotePath = joinPath(cwd, rel)
-            // Ensure parent directories exist
-            const dirPart = remotePath.slice(0, remotePath.lastIndexOf('/'))
-            if (dirPart && dirPart !== cwd) {
-                await ensureRemoteDir(dirPart)
+    function uploadPath (path: string): string {
+        const parts = path.replace(/\\/g, '/').split('/')
+        if (parts.some((part) => !part || part === '.' || part === '..')) throw new Error(`无效的上传路径：${path}`)
+        return parts.join('/')
+    }
+
+    async function ensureRemoteDir (remoteDir: string, baseDir: string, targetSessionId: string): Promise<void> {
+        const base = baseDir.replace(/\/+$/, '')
+        const relative = remoteDir.slice(base.length).split('/').filter(Boolean)
+        let current = base || '/'
+        for (const part of relative) {
+            current = joinPath(current, part)
+            try {
+                await withReconnect(() => sftpMkdir(targetSessionId, current), targetSessionId)
+            } catch (cause) {
+                const existing = await withReconnect(() => sftpStat(targetSessionId, current), targetSessionId).catch(() => null)
+                if (!existing?.isDir) throw cause
             }
-            await uploadSingle(file, remotePath.slice(cwd === '/' ? 1 : cwd.length + 1))
-            if (transfer?.cancel) break
-        }
-    }
-
-    async function ensureRemoteDir (remoteDir: string): Promise<void> {
-        const parts = remoteDir.split('/').filter(Boolean)
-        let cur = ''
-        for (const part of parts) {
-            cur += '/' + part
-            try { await withReconnect(() => sftpMkdir(sessionId, cur)) } catch { /* already exists */ }
         }
     }
 
     // ---- Drag & drop handlers ----
+    function dropDestination (target: EventTarget | null): string {
+        const folder = (target as HTMLElement | null)?.closest?.('[data-sftp-upload-dir]') as HTMLElement | null
+        return folder && browserElement?.contains(folder) ? folder.dataset.sftpUploadDir || cwd : cwd
+    }
+
     function onDragOver (event: DragEvent): void {
+        if (!Array.from(event.dataTransfer?.types ?? []).includes('Files')) return
         event.preventDefault()
-        if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+        const blocked = uploading || transfer !== null || deleting || loading
+        if (event.dataTransfer) event.dataTransfer.dropEffect = blocked ? 'none' : 'copy'
+        if (blocked) return
         dragOver = true
+        dragTargetPath = dropDestination(event.target)
     }
     function onDragLeave (event: DragEvent): void {
-        // only clear if leaving the browser container
-        const target = event.currentTarget as HTMLElement
-        const related = event.relatedTarget as Node | null
-        if (!related || !target.contains(related)) dragOver = false
+        const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
+        if (event.clientX <= bounds.left || event.clientX >= bounds.right || event.clientY <= bounds.top || event.clientY >= bounds.bottom) {
+            dragOver = false
+            dragTargetPath = null
+        }
     }
     async function onDrop (event: DragEvent): Promise<void> {
         event.preventDefault()
+        event.stopPropagation()
+        const destination = dropDestination(event.target)
         dragOver = false
+        dragTargetPath = null
         const dt = event.dataTransfer
         if (!dt) return
-        // Try DataTransferItem with webkitGetAsEntry for folder support
-        const items = Array.from(dt.items ?? [])
-        if (items.length > 0 && (items[0] as DataTransferItem & { webkitGetAsEntry?: () => unknown }).webkitGetAsEntry) {
-            const entries: FileSystemEntry[] = []
-            for (const item of items) {
-                const entry = (item as unknown as { webkitGetAsEntry: () => FileSystemEntry | null }).webkitGetAsEntry()
-                if (entry) entries.push(entry)
-            }
-            if (entries.length > 0) {
-                await handleEntries(entries, '')
-                return
-            }
-        }
-        // Fallback: flat files
-        const files = Array.from(dt.files ?? [])
-        if (files.length > 0) {
-            if (files.length === 1) {
-                await uploadSingle(files[0], files[0].name)
-            } else {
-                for (const f of files) {
-                    await uploadSingle(f, f.name)
-                    if (transfer?.cancel) break
-                }
-            }
-        }
+        await beginUpload(() => collectDrop(dt), destination)
     }
 
-    async function handleEntries (entries: FileSystemEntry[], prefix: string): Promise<void> {
-        for (const entry of entries) {
+    async function collectDrop (dt: DataTransfer): Promise<UploadPlan> {
+        const items = Array.from(dt.items ?? []).filter((item) => item.kind === 'file')
+        // getAsEntry 必须在 drop 事件的同步阶段调用，否则浏览器可能清空 DataTransfer。
+        const entries = items.map((item) => item.webkitGetAsEntry?.()).filter((entry): entry is FileSystemEntry => !!entry)
+        if (entries.length !== items.length || entries.length === 0) {
+            return { files: Array.from(dt.files ?? []).map((file) => ({ file, path: file.name })), directories: [] }
+        }
+        const plan: UploadPlan = { files: [], directories: [] }
+        async function visit (entry: FileSystemEntry, prefix: string): Promise<void> {
+            const path = prefix ? `${prefix}/${entry.name}` : entry.name
             if (entry.isFile) {
                 const fileEntry = entry as FileSystemFileEntry
                 const file: File = await new Promise((resolve, reject) => fileEntry.file(resolve, reject))
-                const rel = prefix ? `${prefix}/${file.name}` : file.name
-                const dirPart = rel.slice(0, rel.lastIndexOf('/'))
-                if (dirPart) await ensureRemoteDir(joinPath(cwd, dirPart))
-                await uploadSingle(file, rel)
-                if (transfer?.cancel) return
+                plan.files.push({ file, path })
             } else if (entry.isDirectory) {
-                const dirEntry = entry as unknown as FileSystemDirectoryEntry
-                const dirName = prefix ? `${prefix}/${entry.name}` : entry.name
-                await withReconnect(() => sftpMkdir(sessionId, joinPath(cwd, dirName))).catch(() => {})
-                const children = await readDirectoryEntries(dirEntry)
-                await handleEntries(children, dirName)
-                if (transfer?.cancel) return
+                plan.directories.push(path)
+                const children = await readDirectoryEntries(entry as FileSystemDirectoryEntry)
+                for (const child of children) await visit(child, path)
             }
         }
+        for (const entry of entries) await visit(entry, '')
+        return plan
     }
 
     function readDirectoryEntries (dir: FileSystemDirectoryEntry): Promise<FileSystemEntry[]> {
@@ -488,8 +564,8 @@
         event.stopPropagation()
         const items: ContextMenuItem[] = [
             { label: entry.isDir ? '打开' : '预览', action: () => void (entry.isSymlink ? followSymlink(entry) : openEntry(entry)) },
-            { label: entry.isDir && !entry.isSymlink ? '下载文件夹' : '下载', disabled: transfer !== null, action: () => void downloadEntry(entry) },
-            { label: '重命名', action: () => beginRename(entry) },
+            { label: entry.isDir && !entry.isSymlink ? '下载文件夹' : '下载', disabled: transfer !== null || uploading, action: () => void downloadEntry(entry) },
+            { label: '重命名', action: () => void beginRename(entry) },
             { label: '修改权限', action: () => void changeMode(entry) },
             { label: '删除', danger: true, action: () => void removeEntry(entry) },
         ]
@@ -505,9 +581,9 @@
         if ((event.target as HTMLElement)?.closest('.sftp-row')) return
         event.preventDefault()
         const items: ContextMenuItem[] = [
-            { label: '新建目录', action: () => { const el = document.querySelector<HTMLInputElement>('.sftp-actions input[placeholder="新目录名"]'); el?.focus() } },
-            { label: '上传文件', action: () => document.querySelector<HTMLInputElement>('input[type="file"]:not([webkitdirectory])')?.click() },
-            { label: '上传文件夹', action: () => folderInput?.click() },
+            { label: '新建目录', disabled: loading || deleting, action: () => void createDirectory() },
+            { label: '上传文件', disabled: loading || uploading || transfer !== null || deleting, action: () => fileInput?.click() },
+            { label: '上传文件夹', disabled: loading || uploading || transfer !== null || deleting, action: () => folderInput?.click() },
             { label: '刷新', action: () => void refresh() },
         ]
         const x = Math.max(8, Math.min(event.clientX, window.innerWidth - 210))
@@ -515,56 +591,114 @@
         contextMenu = { x, y, items }
     }
 
-    async function upload (): Promise<void> {
-        if (uploading) return
-        // 多文件：逐个复用单文件原子上传；uploadPath 仅对单文件生效（作为重命名目标）
-        const files = uploadQueue.length > 0 ? uploadQueue : uploadFile ? [uploadFile] : []
-        if (files.length === 0) return
-        const renameTarget = uploadPath.trim()
-        for (const file of files) {
-            const name = files.length === 1 && renameTarget ? renameTarget : file.name
-            await uploadSingle(file, name)
-            if (transfer?.cancel) break
-        }
-        uploadQueue = []
-        uploadFile = null
-        uploadPath = ''
-    }
-
-    async function uploadSingle (file: File, name: string): Promise<void> {
-        if (!name) return
-        // 原子上传：先写临时文件，全部成功后 rename 到目标名，避免半成品覆盖已有文件
-        const target = joinPath(cwd, `.${name}.issh-upload-tmp`)
-        const finalPath = joinPath(cwd, name)
-        error = ''
-        notice = `上传中 ${file.name} …`
+    async function beginUpload (prepare: () => UploadPlan | Promise<UploadPlan>, targetDir = cwd): Promise<void> {
+        if (uploading || transfer || deleting || loading) return
+        const destination = normalizePath(targetDir)
+        const targetSessionId = sessionId
+        cancelUploadDismiss()
         uploading = true
-        transfer = { label: `上传 ${file.name}`, done: 0, total: file.size, cancel: false }
+        error = ''
+        notice = ''
+        uploadProgress = { phase: 'preparing', doneBytes: 0, totalBytes: 0, doneFiles: 0, totalFiles: 0, doneDirs: 0, totalDirs: 0, currentFile: '', destination, cancel: false }
+        let changedRemote = false
         try {
-            let offset = 0
-            while (offset < file.size) {
-                if (transfer?.cancel) {
-                    try { await withReconnect(() => sftpRemove(sessionId, target)) } catch { /* 尽力清理 */ }
-                    notice = '上传已取消'
-                    return
-                }
-                const slice = file.slice(offset, offset + UPLOAD_CHUNK)
-                const bytes = new Uint8Array(await slice.arrayBuffer())
-                await withReconnect(() => sftpWrite(sessionId, target, bytesToBase64(bytes), offset, offset === 0))
-                offset += bytes.length
-                if (transfer) transfer.done = offset
+            const plan = await prepare()
+            if (plan.files.length === 0 && plan.directories.length === 0) {
+                clearUploadProgress()
+                return
             }
-            await withReconnect(() => sftpRename(sessionId, target, finalPath))
-            notice = `已上传 ${file.name} → ${finalPath}`
-            await refresh()
+            const directorySet = new Set(plan.directories.map(uploadPath))
+            for (const item of plan.files) {
+                item.path = uploadPath(item.path)
+                const parts = item.path.split('/')
+                for (let index = 1; index < parts.length; index++) directorySet.add(parts.slice(0, index).join('/'))
+            }
+            const directories = [...directorySet].sort((a, b) => a.split('/').length - b.split('/').length)
+            if (!uploadProgress) return
+            uploadProgress.totalFiles = plan.files.length
+            uploadProgress.totalDirs = directories.length
+            uploadProgress.totalBytes = plan.files.reduce((sum, item) => sum + item.file.size, 0)
+            uploadProgress.phase = 'running'
+            for (const directory of directories) {
+                if (uploadProgress.cancel) break
+                uploadProgress.currentFile = `${directory}/`
+                await ensureRemoteDir(joinPath(destination, directory), destination, targetSessionId)
+                uploadProgress.doneDirs += 1
+                changedRemote = true
+            }
+            for (const item of plan.files) {
+                if (uploadProgress.cancel) break
+                uploadProgress.currentFile = item.path
+                await uploadSingle(item.file, item.path, destination, targetSessionId)
+                uploadProgress.doneFiles += 1
+                changedRemote = true
+            }
+            uploadProgress.phase = uploadProgress.cancel ? 'cancelled' : 'completed'
+            scheduleUploadDismiss()
+            notice = uploadProgress.cancel
+                ? `上传已取消，完成 ${uploadProgress.doneFiles}/${uploadProgress.totalFiles} 个文件`
+                : `已上传 ${uploadProgress.doneFiles} 个文件、${uploadProgress.doneDirs} 个文件夹到 ${destination}`
         } catch (cause) {
-            error = cause instanceof Error ? cause.message : String(cause)
-            notice = ''
-            try { await withReconnect(() => sftpRemove(sessionId, target)) } catch { /* 尽力清理 */ }
+            if (uploadProgress) uploadProgress.phase = uploadProgress.cancel ? 'cancelled' : 'failed'
+            if (uploadProgress?.cancel) notice = `上传已取消，完成 ${uploadProgress.doneFiles}/${uploadProgress.totalFiles} 个文件`
+            else reportOperationError('上传', destination, cause)
         } finally {
             uploading = false
-            transfer = null
+            if (changedRemote && targetSessionId === sessionId) {
+                const uploadError = error
+                await refresh()
+                if (uploadError) error = uploadError
+            }
         }
+    }
+
+    async function uploadSingle (file: File, name: string, destination: string, targetSessionId: string): Promise<void> {
+        // 原子上传：先写临时文件，全部成功后 rename 到目标名，避免半成品覆盖已有文件
+        const finalPath = joinPath(destination, name)
+        const lastSlash = finalPath.lastIndexOf('/')
+        const target = `${finalPath.slice(0, lastSlash + 1)}.${finalPath.slice(lastSlash + 1)}.issh-upload-${crypto.randomUUID()}`
+        let renamed = false
+        let wroteChunk = false
+        let permissionFailure = false
+        try {
+            // 空文件也必须创建临时文件，之后才能 rename。
+            if (file.size === 0) {
+                await withReconnect(() => sftpWrite(targetSessionId, target, '', 0, true), targetSessionId)
+                wroteChunk = true
+            }
+            let offset = 0
+            while (offset < file.size) {
+                if (uploadProgress?.cancel) throw new Error('已取消')
+                const slice = file.slice(offset, offset + UPLOAD_CHUNK)
+                const bytes = new Uint8Array(await slice.arrayBuffer())
+                await withReconnect(() => sftpWrite(targetSessionId, target, bytesToBase64(bytes), offset, offset === 0), targetSessionId)
+                wroteChunk = true
+                offset += bytes.length
+                if (uploadProgress) uploadProgress.doneBytes += bytes.length
+            }
+            if (uploadProgress?.cancel) throw new Error('已取消')
+            await withReconnect(() => sftpRename(targetSessionId, target, finalPath), targetSessionId)
+            renamed = true
+        } catch (cause) {
+            const reason = cause instanceof Error ? cause.message : String(cause)
+            permissionFailure = isPermissionError(reason)
+            throw cause
+        } finally {
+            if (!renamed && (wroteChunk || !permissionFailure)) {
+                const cleanup = withReconnect(() => sftpRemove(targetSessionId, target), targetSessionId).catch(() => {})
+                // 权限拒绝立即反馈；已写入的临时文件仍尽力清理，清理不阻塞提示。
+                if (!permissionFailure) await cleanup
+            }
+        }
+    }
+
+    function uploadPercent (): number {
+        if (!uploadProgress) return 0
+        if (uploadProgress.phase === 'completed') return 100
+        const { doneBytes, totalBytes, doneFiles, totalFiles, doneDirs, totalDirs } = uploadProgress
+        if (totalBytes > 0) return Math.min(99, Math.round(100 * doneBytes / totalBytes))
+        const totalItems = totalFiles + totalDirs
+        return totalItems > 0 ? Math.min(99, Math.round(100 * (doneFiles + doneDirs) / totalItems)) : 0
     }
 
     function formatBytes (size: number): string {
@@ -611,7 +745,7 @@
     }
 
     async function downloadEntry (entry: SftpEntry): Promise<void> {
-        if (transfer) return
+        if (transfer || uploading) return
         error = ''
         try {
             if (entry.isDir && !entry.isSymlink) {
@@ -634,7 +768,7 @@
             if (transfer?.cancel) {
                 notice = '下载已取消'
             } else {
-                error = cause instanceof Error ? cause.message : String(cause)
+                reportOperationError('下载', entry.path, cause)
             }
         } finally {
             transfer = null
@@ -656,6 +790,8 @@
 
     onMount(() => {
         return () => {
+            cancelUploadDismiss()
+            cancelTransfer()
             if (openedSessionId) {
                 void sftpClose(openedSessionId).catch(() => {})
                 openedSessionId = ''
@@ -687,7 +823,7 @@
     })
 </script>
 
-<section class="sftp-browser" aria-label={sudoMode ? 'SUDO SFTP 文件浏览器' : 'SFTP 文件浏览器'} ondragover={onDragOver} ondragleave={onDragLeave} ondrop={(event) => void onDrop(event)} oncontextmenu={showBlankMenu} class:drag-over={dragOver}>
+<section bind:this={browserElement} class="sftp-browser" aria-label={sudoMode ? 'SUDO SFTP 文件浏览器' : 'SFTP 文件浏览器'} ondragover={onDragOver} ondragleave={onDragLeave} ondrop={(event) => void onDrop(event)} oncontextmenu={showBlankMenu} class:drag-over={dragOver}>
     <header class="sftp-toolbar">
         <button class="sftp-nav" type="button" onclick={() => void navigate(parentPath(cwd))} disabled={cwd === '/' || loading} title="上级目录">
             ↑
@@ -695,7 +831,7 @@
         <nav class="sftp-crumbs" aria-label="当前路径">
             {#each breadcrumbs() as crumb, index (crumb.path)}
                 {#if index > 0}<span class="crumb-separator">/</span>{/if}
-                <button type="button" class="sftp-crumb" ondblclick={() => { editingPath = true; pathInput = cwd }} onclick={() => void navigate(crumb.path)} title={crumb.path}>
+                <button type="button" class="sftp-crumb" data-sftp-upload-dir={crumb.path} ondblclick={() => { editingPath = true; pathInput = cwd }} onclick={() => void navigate(crumb.path)} title={crumb.path}>
                     {crumb.label}
                 </button>
             {/each}
@@ -706,43 +842,40 @@
         <button class="sftp-nav" type="button" onclick={() => void refresh()} disabled={loading} title="刷新">
             {reconnecting ? '⟳' : loading ? '…' : '↻'}
         </button>
-        {#if onclose}
-            <button class="sftp-nav close" type="button" onclick={onclose} title="关闭 SFTP">×</button>
-        {/if}
     </header>
-    {#if dragOver}
-        <div class="sftp-drop-overlay" aria-hidden="true">
-            <span>松开以上传到 {cwd}</span>
-        </div>
-    {/if}
-
-    <div class="sftp-actions">
-        <input class="sftp-input filter" type="search" placeholder="过滤当前目录…" bind:value={filterText} aria-label="过滤文件" />
-        <input class="sftp-input" type="text" placeholder="新目录名" bind:value={mkdirName} aria-label="新目录名" />
-        <button type="button" onclick={() => void createDirectory()} disabled={!mkdirName.trim() || loading}>新建目录</button>
-        {#if renameTarget}
-            <input class="sftp-input rename" type="text" bind:value={renameValue} aria-label="重命名" />
-            <button type="button" onclick={() => void confirmRename()}>确认重命名</button>
-            <button type="button" onclick={() => { renameTarget = null }}>取消</button>
-        {/if}
-        <input
-            class="sftp-input"
-            type="text"
-            placeholder="上传目标文件名（默认本地文件名）"
-            bind:value={uploadPath}
-            aria-label="上传目标文件名"
-        />
-        <input class="sftp-file" type="file" multiple onchange={(event) => void onUploadChange(event)} aria-label="选择本地文件" />
-        <input bind:this={folderInput} class="sftp-file" type="file" webkitdirectory multiple onchange={(event) => void onFolderChange(event)} aria-label="选择本地文件夹" style="display:none" />
-        <button type="button" onclick={() => folderInput?.click()} disabled={loading || uploading} title="选择本地文件夹上传">上传文件夹</button>
-        <button type="button" onclick={() => void upload()} disabled={!uploadFile || loading || uploading}>上传</button>
-    </div>
+    <input bind:this={fileInput} class="sftp-file" type="file" multiple onchange={(event) => void onUploadChange(event)} aria-label="选择本地文件" style="display:none" />
+    <input bind:this={folderInput} class="sftp-file" type="file" webkitdirectory multiple onchange={(event) => void onFolderChange(event)} aria-label="选择本地文件夹" style="display:none" />
+    <p class="sftp-drop-hint" class:active={dragOver} role="status">{dragOver ? `松开以上传到 ${dragTargetPath}` : '拖到空白处上传到当前目录，拖到文件夹上传到该文件夹'}</p>
 
     {#if error}
         <p class="sftp-error" role="alert">{error}</p>
     {/if}
     {#if notice}
         <p class="sftp-notice">{notice}</p>
+    {/if}
+    {#if uploadProgress}
+        <div class="sftp-transfer sftp-upload-progress" role="status" aria-live="polite" onmouseenter={preserveUploadProgress} onmouseleave={() => { uploadProgressHovered = false }} onfocusin={cancelUploadDismiss}>
+            <div class="sftp-transfer-head">
+                <span title={uploadProgress.currentFile}>{uploadProgress.phase === 'preparing' ? '正在整理上传内容…' : uploadProgress.phase === 'running' ? `正在上传 ${uploadProgress.currentFile}` : uploadProgress.phase === 'completed' ? '上传完成' : uploadProgress.phase === 'cancelled' ? '上传已取消' : '上传失败'}</span>
+                {#if uploadProgress.phase !== 'preparing'}
+                    <span class="sftp-upload-summary">{uploadProgress.doneFiles}/{uploadProgress.totalFiles} 文件{uploadProgress.totalDirs ? ` · ${uploadProgress.doneDirs}/${uploadProgress.totalDirs} 文件夹` : ''} · {formatBytes(uploadProgress.doneBytes)} / {formatBytes(uploadProgress.totalBytes)} · {uploadPercent()}%</span>
+                {/if}
+                {#if uploadDismissSeconds !== null}
+                    <span class="sftp-upload-countdown">{uploadDismissSeconds}s 后关闭</span>
+                {/if}
+                {#if uploadProgress.phase === 'preparing' || uploadProgress.phase === 'running'}
+                    <button type="button" onclick={cancelTransfer}>取消</button>
+                {:else}
+                    <button type="button" onclick={clearUploadProgress} aria-label="清除上传进度">×</button>
+                {/if}
+            </div>
+            <span class="sftp-upload-destination" title={uploadProgress.destination}>目标：{uploadProgress.destination}</span>
+            {#if uploadProgress.phase === 'preparing'}
+                <progress class="sftp-transfer-bar"></progress>
+            {:else}
+                <progress class="sftp-transfer-bar" value={uploadPercent()} max="100"></progress>
+            {/if}
+        </div>
     {/if}
     {#if transfer}
         <div class="sftp-transfer" role="status">
@@ -767,10 +900,10 @@
 
     <div class="sftp-list" role="list">
         {#if cwd !== '/'}
-            <button class="sftp-parent-row" type="button" onclick={() => void navigate(parentPath(cwd))}>↖ <span>..</span></button>
+            <button class="sftp-parent-row" class:drop-target={dragOver && dragTargetPath === parentPath(cwd)} data-sftp-upload-dir={parentPath(cwd)} type="button" onclick={() => void navigate(parentPath(cwd))}>↖ <span>..</span></button>
         {/if}
         {#each visibleEntries as entry (entry.path)}
-            <div class="sftp-row" role="listitem" oncontextmenu={(event) => showEntryMenu(event, entry)}>
+            <div class="sftp-row" class:drop-target={dragOver && dragTargetPath === entry.path} data-sftp-upload-dir={entry.isDir && !entry.isSymlink ? entry.path : undefined} role="listitem" oncontextmenu={(event) => showEntryMenu(event, entry)}>
                 <button class="sftp-entry" type="button" onclick={() => void (entry.isSymlink ? followSymlink(entry) : openEntry(entry))} title={entry.path}>
                     <span class="sftp-icon" class:dir={entry.isDir} class:link={entry.isSymlink}>
                         {entryIcon(entry)}
@@ -779,7 +912,7 @@
                 </button>
             </div>
         {:else}
-            <p class="sftp-empty">{loading ? '正在读取目录…' : filterText.trim() ? '无匹配文件' : '目录为空'}</p>
+            <p class="sftp-empty">{loading ? '正在读取目录…' : '目录为空'}</p>
         {/each}
     </div>
 
@@ -796,3 +929,12 @@
         <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenu.items} onclose={() => { contextMenu = null }} />
     {/if}
 </section>
+
+<dialog bind:this={deleteDialog} class="sftp-delete-dialog" aria-labelledby="sftp-delete-title" oncancel={(event) => { if (deleting) event.preventDefault() }} onclose={() => { deleteTarget = null }}>
+    <h2 id="sftp-delete-title">确认删除</h2>
+    <p>确定删除 {deleteTarget?.isDir && !deleteTarget.isSymlink ? '目录及其所有内容' : '文件'} {deleteTarget?.name}？</p>
+    <div class="sftp-delete-actions">
+        <button type="button" disabled={deleting} onclick={() => deleteDialog?.close()}>取消</button>
+        <button type="button" class="danger" disabled={deleting} onclick={() => void confirmRemoveEntry()}>{deleting ? '正在删除…' : '确定删除'}</button>
+    </div>
+</dialog>

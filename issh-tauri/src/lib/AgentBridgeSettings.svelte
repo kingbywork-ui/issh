@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte'
     import AuditLogModal from './AuditLogModal.svelte'
+    import { askConfirm } from './dialogs'
     import {
         agentBridgeAuditClear,
         agentBridgeAuditRead,
@@ -76,7 +77,7 @@
     }
 
     async function rotateToken (): Promise<void> {
-        if (!window.confirm('轮换 token 后，外部 agent 需要更新连接信息才能继续使用。确认轮换？')) return
+        if (!await askConfirm('轮换 token 后，外部 agent 需要更新连接信息才能继续使用。确认轮换？')) return
         busy = true
         error = ''
         notice = ''
@@ -204,7 +205,7 @@
     }
 
     async function clearAudit (): Promise<void> {
-        if (!window.confirm('清除全部 Agent Bridge 审计日志？此操作不可恢复。')) return
+        if (!await askConfirm('清除全部 Agent Bridge 审计日志？此操作不可恢复。')) return
         auditBusy = true
         error = ''
         try {

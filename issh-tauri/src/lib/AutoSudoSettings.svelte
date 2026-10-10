@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte'
+    import { askConfirm } from './dialogs'
     import {
         hostCredentials,
         saveHostCredential,
@@ -76,7 +77,7 @@ import { clearLegacySudoPasswords, isAutoSudoEnabled, setAutoSudoEnabled } from 
     async function remove (): Promise<void> {
         const profile = selectedProfile()
         if (!profile || !credentialFor(profile)?.sudoPassword) return
-        if (!window.confirm(`删除 ${profile.user}@${profile.host}:${profile.port} 的 sudo 密码？`)) return
+        if (!await askConfirm(`删除 ${profile.user}@${profile.host}:${profile.port} 的 sudo 密码？`)) return
         busy = true
         error = ''
         try {

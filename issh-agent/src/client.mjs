@@ -158,7 +158,8 @@ function normalizeTimeout (value) {
     if (!Number.isFinite(parsed) || parsed <= 0) {
         return 10000
     }
-    return Math.min(Math.floor(parsed), 3600000)
+    // Runtime budgets can reach one hour; allow the caller's final RPC response grace.
+    return Math.min(Math.floor(parsed), 3600000 + 5000)
 }
 
 function workspaceConnectionFiles () {

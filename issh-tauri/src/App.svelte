@@ -17,7 +17,9 @@
     import { autoSudoDecorator } from './lib/autoSudo'
     import { registerTerminal, unregisterTerminal, setActiveTerminal } from './lib/plugins/terminalRegistry'
     import { broadcastSandboxEvent, setProfileWriteConfirm } from './lib/plugins/sandboxBridge'
-    import ConfirmDialog from './lib/ConfirmDialog.svelte'
+    import DialogHost from './lib/DialogHost.svelte'
+    import { askConfirm } from './lib/dialogs'
+    import { createHostKeyConfirmationHandler, type HostKeyRequest } from './lib/sshHostKeyConfirmation'
     import ContextMenu, { type ContextMenuItem } from './lib/ContextMenu.svelte'
     import SplitLayout from './lib/SplitLayout.svelte'
     import { insertSplitPane, layoutLeaves, removeSplitPane, type SplitLayoutNode } from './lib/splitLayout'
@@ -38,6 +40,9 @@
         openSshSession,
         resolveKeyPassphrase,
         resolveSshPassword,
+        respondSshHostKeyConfirmation,
+        readySshHostKeyConfirmation,
+        showSshHostKeyConfirmation,
         saveHostCredential,
         startLocalForward,
         startDynamicForward,
@@ -152,6 +157,7 @@
     let splitLayout = $state<SplitLayoutNode | null>(readSplitLayout())
     let showHome = $state(false)
     let showSftp = $state(false)
+    const sftpPanels = new Map<string, { path: string, sudoMode: boolean, sudoPassword: string }>()
     let sftpInitialPath = $state('/')
     let sftpSudoMode = $state(false)
     let sftpSudoPassword = $state('')
@@ -213,6 +219,7 @@
 
     function panelHostContext (panel: PanelDefinition): PanelHostContext {
         return {
+            confirm: askConfirm,
             getActiveSession: () => {
                 const tab = tabs.find((candidate) => candidate.session.id === activeId)
                 if (!tab || showHome || !tab.terminal) return null
@@ -661,24 +668,29 @@
     }
 
     function activateTab (tab: TerminalTab): void {
+        if (activeId === tab.session.id && !showHome) return
         if (splitPaneIds.length > 1 && !splitPaneIds.includes(tab.session.id)) closeSplit()
         activePendingId = null
         activeId = tab.session.id
         setActiveTerminal(tab.session.id)
         showHome = false
-        showSftp = false
-        sftpSudoPassword = ''
-        sftpSudoMode = false
+        const panel = sftpPanels.get(tab.session.id)
+        showSftp = !!panel && tab.session.kind === 'ssh'
+        sftpInitialPath = panel?.path ?? '/'
+        sftpSudoMode = panel?.sudoMode ?? false
+        sftpSudoPassword = panel?.sudoPassword ?? ''
         requestAnimationFrame(() => {
             tab.fitAddon?.fit()
             tab.terminal?.focus()
         })
     }
 
-    // SFTP sudo 密码仅本次使用，关闭面板/切换 tab 即清理（L15）
+    // sudo 密码只保留在当前运行进程的本次 SFTP 面板状态中，关闭面板时清理。
     function closeSftpPanel (): void {
         showSftp = false
         sftpSudoPassword = ''
+        sftpSudoMode = false
+        sftpPanels.delete(activeId)
     }
 
     function terminalWorkingDirectory (tab: TerminalTab): string | null {
@@ -719,23 +731,28 @@
         sftpSudoMode = false
         sftpSudoPassword = ''
         showSftp = true
+        sftpPanels.set(tab.session.id, { path, sudoMode: false, sudoPassword: '' })
     }
 
     function openNormalSftp (): void {
         if (!sftpPrompt) return
+        const tabId = sftpPrompt.tab.session.id
         sftpInitialPath = sftpPrompt.path
         sftpSudoMode = false
         sftpSudoPassword = ''
         sftpPrompt = null
         showSftp = true
+        sftpPanels.set(tabId, { path: sftpInitialPath, sudoMode: false, sudoPassword: '' })
     }
 
     function openSudoSftp (): void {
         if (!sftpPrompt || !sftpSudoPassword.trim()) return
+        const tabId = sftpPrompt.tab.session.id
         sftpInitialPath = sftpPrompt.path
         sftpSudoMode = true
         sftpPrompt = null
         showSftp = true
+        sftpPanels.set(tabId, { path: sftpInitialPath, sudoMode: true, sudoPassword: sftpSudoPassword })
     }
 
     async function addLocalTab (): Promise<void> {
@@ -911,6 +928,7 @@
     function handleGlobalHotkeys (event: KeyboardEvent): void {
         if (localStorage.getItem('issh.globalHotkey') === 'false') return
         const target = event.target as HTMLElement | null
+        if (target?.closest('dialog, [role="dialog"], [role="alertdialog"]')) return
         const inTerminal = !!target && (target.classList.contains('xterm-helper-textarea') || !!target.closest('.xterm-helper-textarea'))
         if (!inTerminal && target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return
         const ctrl = event.ctrlKey || event.metaKey
@@ -992,20 +1010,7 @@
         pluginUpdates = await checkPluginUpdates(registryUrl)
     }
 
-    setProfileWriteConfirm((message) => new Promise<boolean>((resolve) => {
-        confirmMessage = message
-        confirmResolve = resolve
-    }))
-
-    let confirmMessage = $state('')
-    let confirmResolve: ((ok: boolean) => void) | null = null
-
-    function resolveConfirm (ok: boolean): void {
-        confirmMessage = ''
-        const resolve = confirmResolve
-        confirmResolve = null
-        resolve?.(ok)
-    }
+    setProfileWriteConfirm((message) => askConfirm(message, '插件操作确认'))
 
     function dismissUpdateNotice (): void {
         pluginUpdates = []
@@ -1477,6 +1482,7 @@
     }
 
     async function closeTab (tab: TerminalTab): Promise<void> {
+        sftpPanels.delete(tab.session.id)
         const closePromise = closeSession(tab.session.id).catch(() => { /* 会话可能已关闭 */ })
         tab.resizeObserver?.disconnect()
         tab.resizeObserver = null
@@ -1620,6 +1626,25 @@
     }
 
     onMount(() => {
+        const hostKeyConfirmation = createHostKeyConfirmationHandler({
+            storage: localStorage,
+            confirm: askConfirm,
+            respond: respondSshHostKeyConfirmation,
+            reveal: showSshHostKeyConfirmation,
+            onError: (cause) => pushToast('error', `SSH 指纹确认失败：${cause instanceof Error ? cause.message : String(cause)}`, 6000),
+        })
+        let hostKeyUnlisten: (() => void) | null = null
+        let hostKeyCancelUnlisten: (() => void) | null = null
+        let hostKeyListenersDisposed = false
+        const hostKeyListenersReady = (async () => {
+            const cancelUnlisten = await listen<HostKeyRequest>('issh://ssh-host-key-cancel', (event) => hostKeyConfirmation.cancel(event.payload.id))
+            if (hostKeyListenersDisposed) { cancelUnlisten(); return }
+            hostKeyCancelUnlisten = cancelUnlisten
+            const unlisten = await listen<HostKeyRequest>('issh://ssh-host-key-request', (event) => hostKeyConfirmation.handle(event.payload))
+            if (hostKeyListenersDisposed) { unlisten(); return }
+            hostKeyUnlisten = unlisten
+            await readySshHostKeyConfirmation()
+        })().catch((cause) => pushToast('error', `SSH 指纹确认监听失败：${String(cause)}`, 6000))
         try {
             const scheme = localStorage.getItem('issh.colorScheme') ?? 'dark'
             document.documentElement.dataset.colorScheme = scheme
@@ -1627,6 +1652,7 @@
         } catch {}
         try { showWelcome = localStorage.getItem('issh.enableWelcomeTab') !== 'false' } catch { showWelcome = true }
         void (async () => {
+            await hostKeyListenersReady
             await refresh()
             await loadVaultSecrets()
             await restoreRecoveredTabs()
@@ -1647,6 +1673,10 @@
             .then((unlisten) => { closeUnlisten = unlisten })
             .catch(() => {})
         return () => {
+            hostKeyListenersDisposed = true
+            hostKeyUnlisten?.()
+            hostKeyCancelUnlisten?.()
+            hostKeyConfirmation.dispose()
             if (pollHandle) clearInterval(pollHandle)
             if (watchdogHandle) clearInterval(watchdogHandle)
             deepLinkUnlisten?.()
@@ -1765,7 +1795,7 @@
         {:else}
             {#if showSftp && activeTab && activeTab.session.kind === 'ssh'}
                 <aside class="app-panel-left" aria-label="SFTP 面板">
-                    <SftpBrowser sessionId={activeTab.session.id} initialPath={sftpInitialPath} sudoMode={sftpSudoMode} sudoPassword={sftpSudoPassword} onclose={closeSftpPanel} />
+                    <SftpBrowser sessionId={activeTab.session.id} initialPath={sftpInitialPath} sudoMode={sftpSudoMode} sudoPassword={sftpSudoPassword} onpathchange={(path) => { const panel = sftpPanels.get(activeTab.session.id); if (panel) panel.path = path }} />
                 </aside>
             {/if}
 
@@ -1809,7 +1839,7 @@
                                     <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); void reconnectTab(tab) }} disabled={connecting} title="重新连接">
                                         ↻ <span>重连</span>
                                     </button>
-                                    <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); if (showSftp) showSftp = false; else openSftpForTab(tab) }} title="SFTP 文件浏览">
+                                    <button class="toolbar-btn" type="button" onclick={(event) => { event.stopPropagation(); if (activeId !== tab.session.id) activateTab(tab); if (showSftp) closeSftpPanel(); else openSftpForTab(tab) }} title="SFTP 文件浏览">
                                         🗀 <span>SFTP</span>
                                     </button>
                                 {/if}
@@ -1893,10 +1923,6 @@
 
     {#if showSettings}
         <Settings onclose={() => { showSettings = false }} />
-    {/if}
-
-    {#if confirmMessage}
-        <ConfirmDialog message={confirmMessage} onresolve={resolveConfirm} />
     {/if}
 
     {#if showCloseDialog}
@@ -2069,5 +2095,6 @@
         <SearchPanel terminal={activeTab.terminal} onclose={() => { searchOpen = false }} />
     {/if}
 
+    <DialogHost />
     <ToastHost />
 </div>

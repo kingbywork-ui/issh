@@ -1,6 +1,7 @@
 <script lang="ts">
     import { mount, unmount } from 'svelte'
     import { onMount } from 'svelte'
+    import { askConfirm } from './dialogs'
     import {
         disablePlugin,
         enablePlugin,
@@ -401,7 +402,7 @@
 
     async function removePlugin (entry: RegistryEntry): Promise<void> {
         if (entry.source === 'builtin') return
-        if (!window.confirm(`确定卸载插件「${entry.manifest.name}」？`)) return
+        if (!await askConfirm(`确定卸载插件「${entry.manifest.name}」？`)) return
         pluginBusy = entry.manifest.id
         pluginError = ''
         try {

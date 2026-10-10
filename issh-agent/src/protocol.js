@@ -490,13 +490,13 @@ export const AGENT_BRIDGE_TOOLS = [
     {
         name: 'issh_connect_profile',
         scope: 'write',
-        description: 'Open an SSH profile by id or name and wait for its terminal session to connect.',
+        description: 'Open an SSH profile by id or name and wait for its terminal session to connect. Reuses trusted host-key fingerprints; first or changed fingerprints require confirmation in issh without manually opening an SSH session.',
         inputSchema: {
             type: 'object',
             properties: {
                 id: { type: 'string', minLength: 1, description: 'SSH profile id.' },
                 name: { type: 'string', minLength: 1, description: 'SSH profile name.' },
-                timeoutMs: { type: 'number', minimum: 1, maximum: 3600000, description: 'Connection timeout in milliseconds.' },
+                timeoutMs: { type: 'number', minimum: 1, maximum: 3600000, description: 'Total timeout for host-key discovery, confirmation and connection in milliseconds; defaults to 90000.' },
             },
             anyOf: [{ required: ['id'] }, { required: ['name'] }],
             additionalProperties: false,

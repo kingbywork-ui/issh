@@ -6,6 +6,7 @@ export interface GatewayRequestOptions {
 
 export interface PanelHostContext {
     getActiveSession (): { id: string; title: string; kind: string; lines: string[] } | null
+    confirm? (message: string, title?: string): Promise<boolean>
 }
 
 export interface IsshPluginManifest {

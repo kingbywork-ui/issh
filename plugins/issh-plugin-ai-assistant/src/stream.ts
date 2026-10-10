@@ -1,6 +1,6 @@
-import { PROVIDERS, endpoint, pluginContext, type AssistantConfig, type AssistantMode, type Message } from './assistant'
+import { PROVIDERS, endpoint, pluginContext, type AssistantConfig, type AssistantMode, type AssistantMcpTool, type Message } from './assistant'
 
-export interface McpTool { serverId: string; name: string; description?: string; inputSchema?: Record<string, unknown> }
+export type McpTool = AssistantMcpTool
 export interface ToolApproval { (tool: McpTool, args: Record<string, unknown>): Promise<boolean> }
 interface ModelCall { id: string; name: string; arguments: string }
 

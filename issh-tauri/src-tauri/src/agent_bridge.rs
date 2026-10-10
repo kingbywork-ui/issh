@@ -6,8 +6,8 @@
 //!   SSH exec、SFTP read/write、批量 exec、audit log
 //! - 危险命令确认、SFTP root 限制、单次写入上限、审计日志（JSONL）
 //!
-//! 安全开关语义（R-045）：enabled 不持久化，由 Tauri 端每次手动开启；
-//! 完全退出进程时自动停止；最小化到托盘时保持运行。
+//! 生命周期语义（R-142）：退出进程时释放监听；下次启动按持久化的 enabled 状态恢复；
+//! 最小化到托盘时保持当前运行状态。
 
 use base64::Engine;
 use serde_json::{json, Value};
@@ -388,6 +388,7 @@ pub async fn start(
     config: AgentBridgeConfig,
 ) -> Result<AgentBridgeHandle, String> {
     let AgentBridgeConfig {
+        enabled: _,
         token,
         port,
         allowed_scopes,
@@ -1110,8 +1111,9 @@ async fn connect_profile(state: &AgentBridgeState, params: &Value) -> Result<Val
     let profile_id = params_str(params, "id");
     let profile_name = params_str(params, "name");
     let timeout_ms = params_u64(params, "timeoutMs")
-        .unwrap_or(30_000)
-        .min(MAX_EXEC_TIMEOUT_MS);
+        .unwrap_or(90_000)
+        .clamp(1, MAX_EXEC_TIMEOUT_MS);
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
     let hosts = state.runtime.hosts.read()?;
     let profile = hosts
         .profiles
@@ -1137,6 +1139,30 @@ async fn connect_profile(state: &AgentBridgeState, params: &Value) -> Result<Val
         profile.private_keys.first().map(String::as_str),
     )?;
 
+    let fingerprint = tokio::time::timeout_at(deadline, async {
+        let discovered = rpc(
+            state,
+            "ssh.discoverHostKey",
+            json!({
+                "host": profile.host,
+                "port": profile.port,
+            }),
+        )
+        .await?;
+        let fingerprint = discovered
+            .get("fingerprint")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "SSH 主机密钥探测未返回指纹".to_string())?;
+        state
+            .runtime
+            .ssh_host_keys
+            .confirm(&profile.host, profile.port, fingerprint)
+            .await?;
+        Ok::<_, String>(fingerprint.to_string())
+    })
+    .await
+    .map_err(|_| format!("connect_profile timed out after {timeout_ms}ms"))??;
+
     let open_params = json!({
         "title": profile.name,
         "columns": 120,
@@ -1147,18 +1173,52 @@ async fn connect_profile(state: &AgentBridgeState, params: &Value) -> Result<Val
         "password": password,
         "privateKeyPath": profile.private_keys.first(),
         "privateKeyPassphrase": key_passphrase,
-        "expectedHostKey": "",
+        "expectedHostKey": fingerprint,
     });
-    let result = with_timeout(
-        rpc(state, "session.openSsh", open_params),
-        timeout_ms,
-        "connect_profile timed out",
-    )
-    .await?;
+    // A dropped pipe request does not cancel Runtime's SSH handshake. Keep
+    // consuming the response and close a late session after the MCP deadline.
+    let runtime = state.runtime.clone();
+    let mut opening = PendingSshOpen {
+        runtime: runtime.clone(),
+        task: Some(tokio::spawn(async move {
+            rpc_runtime(&runtime, "session.openSsh", open_params).await
+        })),
+    };
+    let result = match tokio::time::timeout_at(deadline, opening.task.as_mut().unwrap()).await {
+        Ok(result) => {
+            opening.task.take();
+            result.map_err(|error| format!("SSH 连接任务失败：{error}"))??
+        }
+        Err(_) => return Err(format!("connect_profile timed out after {timeout_ms}ms")),
+    };
     if let Some(id) = result.get("id").and_then(Value::as_str) {
         set_active_session_id(Some(id));
     }
     Ok(result)
+}
+
+struct PendingSshOpen {
+    runtime: Arc<RuntimeManager>,
+    task: Option<tokio::task::JoinHandle<Result<Value, String>>>,
+}
+
+impl Drop for PendingSshOpen {
+    fn drop(&mut self) {
+        let Some(task) = self.task.take() else { return };
+        let runtime = self.runtime.clone();
+        // Covers deadlines and Bridge shutdown/disconnect while opening.
+        tokio::spawn(async move {
+            if let Ok(Ok(result)) = task.await {
+                if let Some(id) = result.get("id").and_then(Value::as_str) {
+                    if let Err(error) =
+                        rpc_runtime(&runtime, "session.close", json!({ "sessionId": id })).await
+                    {
+                        eprintln!("[agent-bridge] 无法关闭已取消的 SSH 会话 {id}：{error}");
+                    }
+                }
+            }
+        });
+    }
 }
 
 async fn with_timeout<F>(future: F, timeout_ms: u64, message: &str) -> Result<Value, String>
@@ -1847,12 +1907,14 @@ mod tests {
             child: std::sync::Mutex::new(None),
             startup: tokio::sync::Mutex::new(()),
             hosts: crate::host_profiles::HostProfileStore::new(&user_data),
+            ssh_host_keys: crate::ssh_host_keys::HostKeyConfirmation::default(),
         });
         drop(reservation);
         let handle = start(
             runtime,
             user_data.clone(),
             AgentBridgeConfig {
+                enabled: false,
                 token: "test-token".into(),
                 port,
                 allowed_scopes: vec!["read".into()],
@@ -1915,12 +1977,14 @@ mod tests {
             child: std::sync::Mutex::new(None),
             startup: tokio::sync::Mutex::new(()),
             hosts: crate::host_profiles::HostProfileStore::new(&user_data),
+            ssh_host_keys: crate::ssh_host_keys::HostKeyConfirmation::default(),
         });
         drop(reservation);
         let handle = start(
             runtime,
             user_data.clone(),
             AgentBridgeConfig {
+                enabled: false,
                 token: "test-token".into(),
                 port,
                 allowed_scopes: vec!["read".into()],
@@ -2123,3 +2187,7 @@ mod sftp_compatibility_tests {
         assert!(ensure_sftp_root_path("", "/etc/hosts").is_err());
     }
 }
+
+#[cfg(all(test, windows))]
+#[path = "agent_bridge_connect_tests.rs"]
+mod connect_tests;

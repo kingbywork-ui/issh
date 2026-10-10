@@ -28,6 +28,12 @@ export interface Message {
     command?: string
     sessionId?: string
 }
+export interface AssistantMcpTool {
+    serverId: string
+    name: string
+    description?: string
+    inputSchema?: Record<string, unknown>
+}
 
 const CONFIG_KEY = 'config'
 const HISTORY_PREFIX = 'history:'
@@ -42,7 +48,20 @@ export const PROVIDERS: Record<Provider, { label: string; baseUrl: string; model
 }
 
 let context: IsshPluginContext | null = null
+const activeMcpTools = new Map<string, AssistantMcpTool[]>()
 export function setPluginContext (value: IsshPluginContext): void { context = value }
+export function getActiveMcpTools (): AssistantMcpTool[] {
+    return [...activeMcpTools.values()].flatMap((tools) => tools)
+}
+export function getActiveMcpServerIds (): string[] {
+    return [...activeMcpTools.keys()]
+}
+export function rememberMcpTools (serverId: string, tools: AssistantMcpTool[]): void {
+    activeMcpTools.set(serverId, tools)
+}
+export function forgetMcpTools (serverId: string): void {
+    activeMcpTools.delete(serverId)
+}
 export function pluginContext (): IsshPluginContext {
     if (!context) throw new Error('AI 助手尚未初始化')
     return context

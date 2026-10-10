@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte'
+    import { askConfirm, showAlert } from './dialogs'
     import ContextMenu, { type ContextMenuItem } from './ContextMenu.svelte'
     import HostGroupEditor from './HostGroupEditor.svelte'
     import HostProfileEditor from './HostProfileEditor.svelte'
@@ -85,8 +86,11 @@
             { label: '克隆', action: () => { editorProfile = { ...profile, id: '', name: `${profile.name} copy`, tags: [...profile.tags], privateKeys: [...profile.privateKeys] } } },
             { label: '更改分组', action: () => { error = ''; moveProfile = { ...profile, tags: [...profile.tags], privateKeys: [...profile.privateKeys] } } },
             { label: profile.favorite ? '取消收藏' : '收藏', action: () => void mutate({ action: 'toggleFavorite', profileId: profile.id }) },
-            { label: '删除', danger: true, action: () => { if (window.confirm(`删除主机“${profile.name}”？`)) void mutate({ action: 'deleteProfile', profileId: profile.id }) } },
+            { label: '删除', danger: true, action: () => { void deleteProfile(profile) } },
         ]
+    }
+    async function deleteProfile (profile: SshHostProfile): Promise<void> {
+        if (await askConfirm(`删除主机“${profile.name}”？`)) await mutate({ action: 'deleteProfile', profileId: profile.id })
     }
     function groupProfiles (group: SshHostGroup): SshHostProfile[] {
         const ids = new Set<string>()
@@ -99,7 +103,7 @@
     }
     async function connectGroup (group: SshHostGroup): Promise<void> {
         const entries = groupProfiles(group)
-        if (entries.length === 0 || !window.confirm(`连接分组“${group.name}”中的 ${entries.length} 台 SSH 主机？`)) return
+        if (entries.length === 0 || !await askConfirm(`连接分组“${group.name}”中的 ${entries.length} 台 SSH 主机？`)) return
         for (const profile of entries) { recordRecent(profile); onconnect(profile) }
     }
     function requestDeleteGroup (group: SshHostGroup): void {
@@ -153,7 +157,7 @@
             const text = await readSshConfig()
             const parsed = parseSshConfig(text)
             if (parsed.hosts.length === 0) {
-                window.alert('未从 ~/.ssh/config 解析到可导入的主机条目（通配符 Host 与 Match 段已跳过）。')
+                await showAlert('未从 ~/.ssh/config 解析到可导入的主机条目（通配符 Host 与 Match 段已跳过）。')
                 return
             }
             const existing = new Set(profiles.map((p) => `${p.host}:${p.port}:${p.user}`))
@@ -184,7 +188,7 @@
             const extras: string[] = []
             if (skipped > 0) extras.push(`${skipped} 个已存在或失败跳过`)
             if (parsed.ignored > 0) extras.push(`${parsed.ignored} 个通配符条目跳过`)
-            window.alert(`导入完成：新增 ${created} 台主机。${extras.join('；')}`)
+            await showAlert(`导入完成：新增 ${created} 台主机。${extras.join('；')}`)
         } catch (cause) {
             error = cause instanceof Error ? cause.message : String(cause)
         } finally {

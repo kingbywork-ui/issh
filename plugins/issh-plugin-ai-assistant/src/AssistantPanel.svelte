@@ -4,7 +4,7 @@
     import panelCss from './assistant.css?inline'
     import {
         PROVIDERS, assessCommand, clearHistory, extractCommand, insertCommand,
-        loadConfig, loadHistory, pluginContext, redactContext, saveConfig, saveHistory,
+        forgetMcpTools, getActiveMcpServerIds, getActiveMcpTools, loadConfig, loadHistory, pluginContext, redactContext, rememberMcpTools, saveConfig, saveHistory,
         type AssistantMode, type Message, type McpServerConfig, type McpTransport,
     } from './assistant'
     import { streamAnswer, type McpTool } from './stream'
@@ -20,8 +20,8 @@
     let error = $state('')
     let settingsPage = $state<'chat' | 'model' | 'mcp'>('chat')
     let feed: HTMLDivElement | null = $state(null)
-    let tools = $state<McpTool[]>([])
-    let connected = $state<string[]>([])
+    let tools = $state<McpTool[]>(getActiveMcpTools())
+    let connected = $state<string[]>(getActiveMcpServerIds())
     let mcpId = $state('local')
     let mcpCommand = $state('')
     let mcpArguments = $state('[]')
@@ -42,7 +42,6 @@
         const timer = setInterval(syncSession, 1000)
         return () => {
             clearInterval(timer); style.remove(); controller?.abort()
-            for (const serverId of connected) void pluginContext().gateway.mcp.disconnect(serverId).catch(() => undefined)
         }
     })
 
@@ -77,16 +76,24 @@
                 cwd: server.cwd, environment: server.environment, url: server.url, headers: server.headers,
             }, { timeoutMs: 35000 })
             const listed = await pluginContext().gateway.mcp.listTools(server.id, { timeoutMs: 35000 })
-            tools = [...tools.filter((tool) => tool.serverId !== server.id), ...listed.tools.map((tool) => ({ ...tool, serverId: server.id }))]
+            const serverTools = listed.tools.map((tool) => ({ ...tool, serverId: server.id }))
+            rememberMcpTools(server.id, serverTools)
+            tools = [...tools.filter((tool) => tool.serverId !== server.id), ...serverTools]
             connected = [...connected, server.id]
             error = ''
-        } catch (cause) { error = cause instanceof Error ? cause.message : String(cause) }
-        if (!connected.includes(server.id)) await pluginContext().gateway.mcp.disconnect(server.id).catch(() => undefined)
+        } catch (cause) {
+            error = cause instanceof Error ? cause.message : String(cause)
+            if (!connected.includes(server.id)) await pluginContext().gateway.mcp.disconnect(server.id).catch(() => undefined)
+        }
     }
 
     async function disconnectMcp (serverId: string): Promise<void> {
         try { await pluginContext().gateway.mcp.disconnect(serverId) }
-        catch (cause) { error = cause instanceof Error ? cause.message : String(cause) }
+        catch (cause) {
+            error = cause instanceof Error ? cause.message : String(cause)
+            return
+        }
+        forgetMcpTools(serverId)
         connected = connected.filter((id) => id !== serverId)
         tools = tools.filter((tool) => tool.serverId !== serverId)
     }
@@ -131,6 +138,7 @@
 
     async function removeMcpServer (id: string): Promise<void> {
         if (connected.includes(id)) await disconnectMcp(id)
+        if (connected.includes(id)) return
         config.mcpServers = config.mcpServers.filter((server) => server.id !== id)
         persist()
     }
@@ -193,7 +201,11 @@
         if (!current || current.id !== message.sessionId) { error = '请切回生成命令时的终端标签'; return }
         const risk = assessCommand(message.command)
         if (risk === 'critical') { error = '此命令风险极高，AI 助手不会将它写入终端'; return }
-        if (risk !== 'low' && !window.confirm(`命令风险：${risk === 'high' ? '高' : '中'}。确认插入到 ${current.title}？\n\n${message.command}`)) return
+        if (risk !== 'low') {
+            if (!host.confirm) { error = '当前宿主未提供命令确认弹窗，请更新 issh 后重试'; return }
+            if (!await host.confirm(`命令风险：${risk === 'high' ? '高' : '中'}。确认插入到 ${current.title}？\n\n${message.command}`, 'AI 命令确认')) return
+            if (host.getActiveSession()?.id !== current.id) { error = '请切回生成命令时的终端标签'; return }
+        }
         try {
             await insertCommand(current.id, message.command)
             error = ''

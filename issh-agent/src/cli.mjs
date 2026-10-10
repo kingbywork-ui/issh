@@ -7,7 +7,7 @@ export function usage () {
   issh-agent health
   issh-agent sessions
   issh-agent profiles
-  issh-agent connect (--id <profile-id> | --name <profile-name>) [--timeout-ms 15000]
+  issh-agent connect (--id <profile-id> | --name <profile-name>) [--timeout-ms 90000]
   issh-agent disconnect [--tab active|tab-1]
   issh-agent context [--tab active|tab-1]
   issh-agent read [--tab active|tab-1] [--lines 80]
@@ -33,6 +33,9 @@ export function usage () {
   issh-agent pane-write --pane-id <id> --owner-id <id> [--hex <bytes>] -- <utf8-bytes>
   issh-agent pane-resize --pane-id <id> --actor-id <id> --columns <n> --rows <n>
 
+connect reuses trusted host keys; first or changed keys require confirmation in issh.
+connect defaults to a 90000 ms total budget for discovery, confirmation and connection.
+
 Options:
   --bridge-file <path>  Path to the Agent Bridge connection JSON file
   --json                Print JSON without friendly formatting
@@ -47,7 +50,7 @@ export function parseAgentArgs (argv) {
         tab: 'active',
         tabs: 'active',
         lines: 80,
-        timeoutMs: 60000,
+        timeoutMs: command === 'connect' ? 90000 : 60000,
         maxBytes: 1024 * 1024,
         encoding: 'utf8',
         offset: 0,
@@ -257,7 +260,10 @@ function getRpcTimeout (command, options) {
     if (command === 'exec' || command === 'batch-exec') {
         return Number(options.timeoutMs) + 5000
     }
-    if (command === 'connect' || command?.startsWith('sftp-')) {
+    if (command === 'connect') {
+        return Math.min(Math.max(Number(options.timeoutMs), 1), 3600000) + 5000
+    }
+    if (command?.startsWith('sftp-')) {
         return Math.max(Number(options.timeoutMs), 30000)
     }
     if (command === 'herdr-start' || command === 'herdr-stop') {

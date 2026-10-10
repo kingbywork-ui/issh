@@ -594,6 +594,18 @@ export interface AgentBridgeStatus {
     permissionMode: 'observer' | 'confirm' | 'auto'
 }
 
+export function respondSshHostKeyConfirmation (id: number, accepted: boolean): Promise<void> {
+    return invoke<void>('ssh_host_key_confirmation_respond', { id, accepted })
+}
+
+export function readySshHostKeyConfirmation (): Promise<void> {
+    return invoke<void>('ssh_host_key_confirmation_ready')
+}
+
+export function showSshHostKeyConfirmation (id: number): Promise<void> {
+    return invoke<void>('ssh_host_key_confirmation_show', { id })
+}
+
 export interface UpdateCheckResult {
     hasUpdate: boolean
     currentVersion: string
