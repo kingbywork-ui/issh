@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-09-29T03:34:53Z",
+  "updated": "2026-10-17T09:52:34.701Z",
   "plugins": [
     {
       "id": "issh-plugin-ai-assistant",
@@ -128,7 +128,7 @@
     {
       "id": "issh-plugin-theme-field",
       "name": "Field — 现场纸与蓝图",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "description": "暖纸色低对比 + 蓝图蓝选中：为白天、投屏与长时间阅读而设的浅色皮肤，贯穿 chrome 与 xterm 16 色",
       "kind": "appearance",
       "permissions": [
@@ -136,9 +136,9 @@
         "terminal:decorate"
       ],
       "minAppVersion": "0.0.1",
-      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-theme-field/releases/download/v0.1.2/issh-plugin-theme-field-0.1.2.tgz",
-      "sha256": "a1d100454f7dd11a8699b6b03edf63fa90c313325412b6924e998d181719adac",
-      "signature": "JVMc7FxltliuXyJTsKqvOFytjQzFoQYioEQ6AZDOPOw1sFfRFLS2xWLCTMKv37d278HjC+0AU9N9ayUcdVTUCw==",
+      "downloadUrl": "https://github.com/kingbywork-ui/issh-plugin-theme-field/releases/download/v0.1.3/issh-plugin-theme-field-0.1.3.tgz",
+      "sha256": "e241bafe52c2c3529b619523bceb6ab03aa3f4afb2428aa41a192b768174d328",
+      "signature": "fjk0MvHBGgQRPWZNdR0nvPY3oMWIyLbiuBGilCV8FELRcHT6FRLSEJLgJyO+LOjpx3XoccZ8RWV3t2s4GE68Dw==",
       "homepage": "https://github.com/kingbywork-ui/issh-plugin-theme-field",
       "repository": "https://github.com/kingbywork-ui/issh-plugin-theme-field",
       "downloads": 0
