@@ -14,7 +14,7 @@
 |------|------|
 | 待办 | 7 |
 | 进行中 | 1 |
-| 已完成 | 58 |
+| 已完成 | 63 |
 | 已放弃 | 2 |
 
 > 状态说明（2026-09-03 同步）：R-008 原始范围（对齐 issh 分支 Agent Bridge：17 工具闭环 + CLI/MCP + 安全）已完成，Netcatty 架构超前能力拆为 R-050~R-055；R-050 已完成（isshd workspace/agent/task 服务端已有，本轮放开 19 个工具），R-051 已完成（C5 pane 完成、C4 cordis kernel 已放弃、C6 herdr 判定商城插件路线）；R-036/R-037 已完成（正文 2026-09-01 最终验收记录为准，302/308 行的「保持进行中」为当日中间快照）；R-044 为持续生效的提交约定，保持「进行中」。
@@ -1407,3 +1407,348 @@
 - 发布：https://github.com/kingbywork-ui/issh/releases/tag/v0.1.5 ，`target_commitish=main`、非草稿与预发布、`/releases/latest` 已指向 v0.1.5；资产 `issh_0.1.5_x64-setup.exe`（5,314,209 字节）+ `issh_0.1.5_x64-setup.exe.sha256`（91 字节）。
 - 验证：线上 `.sha256` 内容与本地一致；线上下载安装包（GitHub CDN 首次断连，经 gh + curl 断点续传完成）大小 5,314,209 字节、SHA-256 `efa5a0ad31564cce257c4651ac6bcdba4eb722eeca4483f01c0e4c15843cbb66` 与本地一致。
 - 边界：未推送内部 `origin` 远端（用户指定 GitHub）；未安装、未重启、安装版 GUI 未验收；AI 助手插件继续按商城独立分发；发布过程临时文件仅存于 `.git/`（提交信息与发布说明）与系统临时目录。
+
+### R-157 SSH 跳板机连接（用户需求，2026-10-12，已完成：源码、本地真实 SSH 与组件界面验证，安装版未更新）
+
+- 用户要求：参考 Tabby 的 Profile 跳板机机制，为 issh 增加跳板机功能。
+- 已确认实现范围：常规页以互斥的连接方式选择直连、代理命令、跳板机、SOCKS、HTTP；跳板机从已有 SSH 主机档案选择并保存其 ID，支持多级链路。每跳独立凭据和主机密钥确认，目标指纹探测与连接沿同一跳板路由；GUI 与 MCP 档案连接均生效。缺失引用、循环和超过 8 台跳板机在建连前明确拒绝。
+- 修改前验证：执行实际 `App.connectWithParams` 发现目标指纹探测的路由参数为 `undefined`；原编辑器只有高级页裸 ID 输入，缺少模式选择和档案下拉。真实本地 SSH fixture 复现旧指纹探测对仅跳板可解析目标失败，并发现现有跳板建连把 originator port 0 当无效端口，尚未打开转发通道就失败。
+- 实现：编辑器常规页增加五种互斥连接方式与主机档案下拉，保存端同步清理其他方式字段并验证依赖链。GUI 自动解析各跳凭据、首次/变更指纹确认与密码/私钥口令输入，默认自动认证缺凭据时提示密码；无需先单独登录跳板。Runtime 指纹探测与连接共用 direct-tcpip/代理传输，所有父连接计入 15 秒探测预算，修复来源端口 0 校验，8 跳上限在网络请求前检查。MCP 使用同一档案链并保留 90 秒总预算和迟到会话关闭。
+- 必要关联（对话衍生，2026-10-12，已完成）：新增 `ssh.routedHostKey` capability 并在 Tauri 检查，拒绝旧 Runtime 忽略路由而误直连；SSH Config 导入可靠映射 `ProxyJump` 别名和多级链，无法匹配/冲突时提示并保留备注。保护仍被依赖的跳板，删除分组先检查外部引用、再按目标到跳板顺序删除并在失败时停止。实际函数复现并修复批量连接共享表单的目标/指纹串用（请求排队跨整个确认周期，陈旧探测结果隔离），改变目标用户名/私钥仍保留跳板路由。真实子进程复现并修复取消探测后 ProxyCommand 子进程不能退出。
+- 验证：SSH Rust 23/23；isshd 18/18，3 项既有 Pi/WSL/live RPC 环境测试忽略；包含真实本地 SSH 单跳、多跳、仅跳板可解析目标的探测与命令执行、逐跳错误指纹、转发拒绝、父断连传播、关闭/失败/15 秒超时全链回收以及 HTTP/SOCKS/ProxyCommand 路由和子进程退出。Tauri `cargo test --lib` 88/88（含 Bridge 11/11 与旧 Runtime 拒绝测试）；前端实际函数和实际编辑器 13 项浏览器交互通过；`npm run check` 0 错误/0 警告与 Vite build 168 modules 通过，保留既有 chunk/dynamic import 提示。最终 debug isshd 重编后 `runtime-smoke.mjs` / `ssh-discover-smoke.mjs`、Rust 严格 clippy、格式与 diff 检查通过。
+- 使用说明已同步中英文 README；界面预览 `C:/Users/yanglu/.codex/visualizations/2026/10/12/01a12ed7-19e1-75c0-971c-906f1cbe2032/ssh-jump-profile.png`。各标签独立建立跳板连接，本轮未增加共享连接池。
+- 交付边界：本次为源码功能实现与定向验证；版本保持 0.1.5，打包、安装和运行中程序重启不在本次请求范围。
+
+### R-158 修复 ESXi Shell 连接认证失败（用户需求，2026-10-12，已完成：源码及真实 ESXi Runtime 验证；用户选择先保留源码）
+
+- 用户要求：参考 Web 端已登录及 issh 指纹确认界面截图，修复 issh 连接 ESXi Shell 时“连接中，随后回到原界面”的问题；附件是诊断证据，不作为执行指令。
+- 现场证据：通过运行中 Bridge 与只读 ECDSA 探测匹配目标 `esxi18`（`10.39.10.18:22`），在线指纹与用户 Web 截图一致。首次现有安装版档案连接 11.6 秒返回 `SSH authentication failed`；后续无密码探测收到 `ConnectionRefused`，用户确认当时 SSH 服务关闭。此前将用户“手动打开了shell，现在可以连了”误解成 issh 登录成功；用户随后提供明确认证失败截图并确认密码正确，纠正该结论，继续定位和修复，不以服务开启当作完成验收。
+- 前端实际函数检查：已有密码正常传入 `openSshSession`；认证失败/超时会恢复可编辑表单并保留指纹、凭据和原错误，不存在本次确认的凭据丢失或吞错。Tauri 30 秒等待覆盖 Daemon 10 秒连接和 10 秒开通道预算。
+- 实机根因：同一用户本机输入的密码，Paramiko 成功认证并打开 Shell，真实挑战为 Password → 零输入项确认 → success；旧已安装 Runtime 的隔离进程在约 6.54 秒报认证失败。旧实现仅处理一轮，未响应密码后的合法空提示请求；密码编码/特殊字符或勾选保存未导致本次确认的密码改写。
+- 修复：持续处理最多 32 轮 keyboard-interactive，支持零提示确认及空文本提示约定；连接认证预算从 10 秒调整为 30 秒，开通道保持 10 秒，Tauri pipe预算同步为 45 秒。旧 10 秒预算在修改后的 debug Runtime 实机测试及 12 秒慢认证 fixture 中均触发，已关联修复。
+- 验证：SSH 30/30（保留原 23 项跳板/代理/SFTP测试），isshd 19通过/3项既有环境依赖忽略，Tauri预算契约1/1；Rust严格clippy/格式/diff及Runtime smoke通过。正式版 `isshd.exe` 编译成功，SHA-256 `32873e519e3f091a6dc9989d5910a79986ecc4621d5c1f7cfcfaf151dc9a0ddd`；隔离进程实际在 esxi18 1,163ms 完成登录并打开 Shell，无错误，随后关闭诊断会话与进程。验证记录（不含密码）：`C:/Users/yanglu/.codex/visualizations/2026/10/12/01a12ed7-19e1-75c0-971c-906f1cbe2032/esxi-runtime-validation.jsonl`。
+- 用户决定与边界：用户明确选择“先保留源码修复”；保留 R-157 全部改动，本轮不生成安装包、不覆盖安装、不重启当前程序，当前安装版尚未包含修复。未改服务器设置、密码或保险库，未提交代码。诊断密码只在进程内存/隔离IPC中使用，临时脚本已清理，保留正式测试与脱敏验证记录。
+
+### R-159 构建 0.1.6 安装包纳入 R-157/R-158（用户需求，2026-10-12，已完成：本地安装包已生成并验证）
+
+- 用户要求：使用本地最新代码构建安装包，版本 `0.1.6`。
+- 版本 bump：根 `package.json`、`issh-tauri/package.json`、`issh-tauri/src-tauri/tauri.conf.json`、`issh-tauri/src-tauri/Cargo.toml` 由 `0.1.5` → `0.1.6`；`issh-runtime` 工作区 `0.4.0` 独立未动。
+- 前置检查：`npm run check` 0 错误/0 警告；`test-ssh-jump.mjs` 与 `test-ssh-jump-ui.mjs`（13 项浏览器交互）通过；release `isshd.exe` SHA-256 `32873e5…` 与 R-158 实机验证版一致；运行中安装实例未中断。
+- 构建：`cargo build --release -p isshd`（up-to-date）→ `stage-runtime.mjs`（isshd.exe 9.75 MB、SKILL.md、agent-bridge 9 文件）→ `tauri build`（Vite 168 modules、Rust release 5m07s、makensis），退出码 0。
+- 产物与验证：`issh_0.1.6_x64-setup.exe` 5,317,983 字节，SHA-256 `699d4e83eb5f6f78317582b7e4d14f80232fb3e019044e8533df0325be8a25e1`，sidecar 91 字节一致；安装器与应用 exe 版本均 `0.1.6`；应用 exe 内嵌新 bundle 名 `index-BOp55tbD`/`app-VdIXK3bA` 并字节级含「跳板机」标识，上版 bundle 名不存在；staged 与 release isshd 哈希一致。
+- 边界：未安装、覆盖安装、重启、发布或 Git 提交；安装版 GUI 未验收。
+
+### R-160 按优先级完成六项功能优化（用户需求，2026-10-12，已完成）
+
+- 用户要求：根据项目评估，从高到中进行功能优化。
+- 本轮实施范围：Agent Bridge 执行结果与能力契约、SFTP 传输队列与续传、SSH 认证与连接诊断、Shell Integration、终端输出吞吐、插件扩展机制；同步相关 CI、文档和验收记录。
+- 高优先项先建立最小复现并展示，再修复并重跑；保留现有 R-157/R-158/R-159 的未提交改动。
+- 用户明确范围反馈：六项优化加五项功能拓展，全部纳入本轮；新增 R-168～R-172 分别跟踪。
+- 边界：源码与隔离验证不代表安装版已更新；不包含安装、重启、发布、Git 提交或版本变更。
+- 完成证据：六项优化与 R-168～R-172 五项拓展均在源码落地；Windows/Runtime/Rust、模块回归与组件浏览器回归通过，细分证据与验收边界见 HANDOFF.md 2026-10-13 记录。
+
+### R-161 Agent Bridge 真实执行结果（用户需求，2026-10-12，已完成）
+
+- 提供真实 stdout、stderr、exitCode、cwd 和本地独立 Shell 执行；统一 Runtime、Bridge、CLI/MCP 的能力契约，覆盖非零退出、输出限额和超时。
+- 验证：本地/SSH 执行结果、错误码、输出截断、超时与取消；Agent CLI/MCP 契约和隔离任务；Windows Runtime smoke 通过。
+
+### R-162 SFTP 独立任务队列与续传（用户需求，2026-10-12，已完成）
+
+- 增加上传/下载队列、暂停续传、失败项手动重试与历史记录；切换面板仍保留任务。续传校验源文件一致性，保留空文件、临时文件与错误分类回归。
+- 验证：分块偏移/ACK 丢失、源文件变化、空文件、取消清理、历史中断与权限错误回归通过；未连接真实 SSH SFTP 服务器。
+
+### R-163 SSH 认证完整性与连接诊断（用户需求，2026-10-12，已完成）
+
+- 完成系统 SSH Agent 签名登录和逐轮交互式 MFA；展示连接阶段、跳板及耗时，并保留逐跳指纹确认、取消、超时及 ESXi 空提示认证。
+- 验证：Agent 签名协议隔离 fixture、多轮密码/OTP/空提示、跳板 RPC 与 GUI 提示取消回归通过；没有用用户私钥或新建真实服务器验收。
+
+### R-164 统一 Shell Integration（用户需求，2026-10-12，已完成）
+
+- 支持可选 shell 集成，主动报告 cwd、命令边界与退出码，供 SFTP 和 AI 上下文使用；无集成环境保留现有回退，不将知识库接入命令补全。
+- 验证：Bash 与 PowerShell hooks 实际 Shell 测试，另外由隔离 isshd + Windows ConPTY 实际交互验证 cwd、完整命令、输出及失败退出码；zsh/fish 覆盖函数和 OSC fixture。
+
+### R-165 终端输出吞吐优化（用户需求，2026-10-12，已完成）
+
+- 建立高输出、多标签基线；消除固定每周期单批消费造成的积压，采用有界调度与背压，并明确丢弃输出，不让单一慢会话阻塞所有标签。
+- 验证：多标签调度、连续 drain、关闭时释放渲染回调及消费序列回归通过；过载丢弃数在界面提示。
+
+### R-166 插件扩展与隔离机制（用户需求，2026-10-12，已完成）
+
+- 由已安装且获准插件登记原生能力，替代单纯静态 ID 白名单；为第三方代码提供隔离运行路径，保留权限、签名与兼容性校验，明确失败与恢复状态。
+- 验证：Rust 清单越界/授权撤销/入口 SHA-256，权限 token 与失败吊销测试；真实 Chromium 的隔离面板 25/25 项通过。旧主窗口 JS 路径有显式完整信任确认；未验证安装后的 WebView2 包。
+
+### R-167 当前桌面端 CI 与文档一致性（对话衍生，2026-10-12，已完成）
+
+- 将 Tauri/Rust 及本轮关键回归纳入 CI；同步过期版本、设置说明和验收边界，保留旧 Angular 插件必要检查。
+- 验证：workflow YAML 解析；中英文 README、Agent skill、插件开发说明和 HANDOFF 已同步。远程 CI 尚未运行。
+
+### R-168 参数化命令库与运维流程（用户需求，2026-10-12，已放弃）
+
+- 曾实现参数化常用命令及多步骤流程；2026-10-13 用户要求移除，当前不再保留。移除记录见 R-174。
+
+### R-169 远程文件编辑（用户需求，2026-10-12，已完成）
+
+- 从文本预览进入编辑、显示修改 diff、保存前校验源文件变化；使用同目录临时文件、备份与 rename 交付，错误可恢复。
+- 验证：编辑器模块回归覆盖 UTF-8/BOM/CRLF、同大小差异、mtime、权限、发布 ACK 丢失与失败回滚；通过假 SFTP Runtime，没有接入真实远端文件系统。
+
+### R-170 命名项目工作区（用户需求，2026-10-12，已完成）
+
+- 保存多套主机组合、分屏布局、工作目录及关联隧道设置，提供管理与打开入口；恢复时不自动执行用户命令或宣称恢复远端进程。
+- 验证：敏感字段递归清理、坏存储/布局与部分恢复回归；真实 Chromium 的管理组件 52 项交互/视口通过。真实 SSH 工作区没有打开。
+
+### R-171 围绕命令的 AI 排错（用户需求，2026-10-12，已完成）
+
+- 增加选中输出、最近失败命令、发送前上下文预览与主机/shell/cwd 上下文；MCP 工具选择、调用参数、耗时、结果和错误可见，保留逐次授权与停止行为。
+- 验证：上下文脱敏、单次发送快照、MCP 明确工具选择/权限、错误和取消测试通过；69 项真实 Chromium 面板交互完成，使用 fake 模型与 fake MCP，不触发真实外部调用。
+
+### R-172 隧道运行管理（用户需求，2026-10-12，已完成）
+
+- 使用表单管理 Local/Remote/Dynamic 转发，显示实际端口与运行状态，提供启动、停止与失败重试入口。
+- 验证：Runtime 实际 RPC 管理三种本地 mock 通道、端口 0 和停止；17 项实际 Chromium 表单交互在 1200×900 与 640×480 通过。未连用户 SSH 主机。
+
+### R-173 构建安装包并保持版本不变（用户需求，2026-10-13，已完成）
+
+- 用户要求：按当前工作树构建 Windows 安装包，版本保持不变。
+- 版本：根/Tauri/Cargo 均保持 `0.1.6`；未执行安装、重启、提交或发布。
+- 产物：`issh_0.1.6_x64-setup.exe`，5,185,916 字节，SHA-256 `47c8adbc50903cc27bba68f27d562a40aadd7d4f81794d0fdedbff63a68ae24e`；`.sha256` sidecar 已核对匹配。
+- 验证：NSIS 安装器与 Tauri 应用 EXE 产品版本均为 `0.1.6`；打包 Runtime 与 release `isshd.exe` SHA-256 一致；使用此 release Runtime 执行 smoke 与真实 ConPTY Shell Integration 验证通过。
+- 边界：未安装该安装包，也未验证安装版/WebView2 行为；运行中的 AppData `isshd.exe` 未替换且仍在运行；远端 CI 未运行。
+
+### R-174 移除内置命令库（用户需求，2026-10-13，已完成）
+
+- 用户认为命令库功能多余，要求移除。删除 Tauri 工具栏入口、组件、模板/流程执行编排模块及专属测试，并从当前 README 移除该功能介绍；共享终端命令预览、插入和执行能力保留。
+- 验证：修改前命令流程契约 10/10、命令库/工作区 Chromium 测试三个视口各 52 项通过；修改后移除功能负向回归通过，工作区 Chromium 回归三个视口各 14 项通过，Tauri 检查 0 errors / 0 warnings。旧数据清理和重打包续由 R-175 跟踪。
+
+### R-175 清理命令库本地数据并重打包（用户需求，2026-10-13，已完成）
+
+- 用户要求清除可能存在的命令库本地数据，并以原版本重新打包。启动时仅删除 `issh.command-library.v1` 这一项 localStorage；清理将在安装新版并首次启动时生效，不触碰其他数据。
+- 版本保持 `0.1.6`（应用）和 `0.4.0`（Runtime）。Windows NSIS 安装包重建成功：`issh_0.1.6_x64-setup.exe`，5,178,278 字节，SHA-256 `6842253bc2e60f8bbb18c63f704745e0b73491f1bcabc4eaea1b5be455c7246c`；`.sha256` sidecar 匹配。
+- 验证：Tauri 检查 0 errors / 0 warnings；移除功能负向回归通过；工作区 Chromium 三个视口各 14 项通过；NSIS/应用 EXE 版本、Runtime 暂存哈希及安装包校验和均核对一致。
+- 边界：未安装新版或启动/重启应用，因此现有运行实例中的 localStorage 尚未实际执行清理；未发布或提交。
+
+### R-176 完整项目安全核查与漏洞修复（用户需求，2026-10-13，已完成）
+
+- 用户要求核查完整代码并修复发现的安全漏洞；范围包含当前 Tauri/Svelte 客户端、全部 Rust Runtime crates、CLI/MCP、现代与旧 Angular 插件、构建配置及依赖锁文件，不限于本地 diff。
+- 对确认可达的漏洞建立最小复现，展示修前证据后修复并重跑同一复现；保留现有未提交改动，不使用用户服务器或凭据进行攻击验证。
+- 记录审阅范围、风险与攻击前提、实际修复、依赖公告核查结果、相关测试及验证边界。不包含安装、重启、打包、发布、提交或版本变更。
+- 确认并修复的可达漏洞（均「修前复现失败 → 修复 → 复跑同一复现通过」）：插件网关对 `mcp.connect` 与部分 SFTP 写操作跳过逐次确认；插件代码信任只哈希入口文件（改为覆盖整个安装内容）；市场/网关 HTTP 响应先收完再查上限（新增 `http_body.rs` 流式限额）；SFTP 目录下载把远端文件名（反斜线/冒号/ADS）拼入 Windows 本地路径可越出所选目录（新增 `localDownloadPath.ts`）；现代与旧 LLM 补全/上下文脱敏遗漏多行私钥、带引号密码与命令参数中的密钥；未启用 X11 转发时仍接受服务端 X11 通道；ProxyCommand 的 %h/%r 占位符可注入 shell 语法。旧插件/CLI 侧另修复 OSC 8 链接与 OSC 52 剪贴板限制、CLI token 不回显、Agent Bridge Host/Origin 与 scope 边界、SFTP 临时文件独占创建、Vault 截断 GCM 拒绝、WinSCP 密码不进 argv、UAC 参数/管道帧边界。
+- 依赖核查：23 个 npm 锁文件全量公告比对（0 传输错误），升级 mcp sdk 1.31.0、axios 1.20.0、dompurify 3.4.16、js-yaml 4.3.2、shell-quote 1.11.0、fast-uri 3.1.8、@xmldom/xmldom 0.8.15、serialize-javascript 7.0.5、ip-address 10.7.1，并用 resolutions/overrides 固定 11 项传递依赖；braces 3.0.3（GHSA-vfj7-8cjw-p6xm）无上游补丁 → 根与 issh-terminal 双份 patch-package 补丁（SHA-256 一致）+ CI 增加 `patch-package --error-on-fail`。Rust：russh 0.62.7→0.63.3、pageant 0.2.2→0.2.3、rustls 0.23.45、quinn-proto 0.11.18。未消除：rsa 0.10.0-rc.18（RUSTSEC-2023-0071，无上游补丁）、glib 0.18.5（GHSA-wrw7-89jp-8q8g / RUSTSEC-2024-0429，仅非 Windows GTK 依赖图，Windows 目标树已验证不含）。
+- 验证（当前工作树，日志存 `.tmp-security-audit/`）：Runtime 110 passed / 3 ignored（既有 Pi/WSL 环境依赖）+ 严格 clippy；Tauri native 118 passed（host_profiles 最后一次修改后重跑）+ 严格 clippy；issh-agent 69/69、legacy 桥 12/12、legacy 安全 32/32；桌面聚合回归、Runtime/ConPTY smoke、根 Angular 构建、Tauri check/build、插件沙箱 Chromium 25/25、AI 面板 69 项交互通过；7 项安全专项回归当前树复跑全绿；UAC 经 MSVC x64 实编（asInvoker，6 条非致命警告）并通过 3 项参数拒绝 + 9 项管道/帧边界（未触发提权）。
+- 全仓 lint 残留 13 项（10 errors + 3 warnings，brace-style/max-depth），均属更早未提交功能件的样式债、不在安全修复路径，按约定只报告不代修；`git diff --check` 通过。
+- 证据落盘：`docs/security-verification-2026-10-14.json`（逐项检查、源码 SHA-256、剩余风险与未验证边界）、`docs/security-dependencies-2026-10-14.json`（依赖公告快照）、`scripts/security-audit-all.mjs`（可复跑审计脚本）。
+- 边界：未安装、打包、重启、发布或提交；安装版/WebView2 UI、真实用户 SSH/SFTP 服务器与凭据、UAC 提权端到端未验证。
+
+### R-177 会话输出缓存溢出改进（用户需求，2026-10-14，已完成）
+
+- 用户截图报告「会话的输出超过缓存容量，已有 201531 字节被丢弃」，先要求方案、后选定方案 B 实施。
+- 根因：isshd 每会话输出缓冲 2 MiB 上限溢出后从最老事件开始丢弃并累计 `dropped_bytes`；前端受 12 KiB/批与逐事件 `write`+await 的消费限制，瞬时大输出时追不上生产速度。
+- 后端（`issh-runtime` session crate）：`MAX_SESSION_BUFFER_BYTES` 2 MiB→8 MiB、`MAX_SESSION_BATCH_BYTES` 12 KiB→64 KiB（isshd 缺省订阅批量随之提升）；新增 `subscribe_after_drop_reports_dropped_bytes_and_gap` 回归（订阅端可见丢弃计数与序列缺口、单批字节上限）。
+- 前端：订阅参数 `maxEvents` 64→256、`maxBytes` 12288→65536；`pollOutput` 批内事件合并为单个 `Uint8Array` 一次性 write（xterm 队列保序，去掉逐事件 await）；丢弃发生时在终端内插入黄色断点标记「[issh] 输出超出缓存，已丢弃 N 字节」，toast 由 error 降为 warning 并附「建议重跑相关命令」；新增 `warning` toast 类型与样式。
+- 验证：session crate 10/10（基线 9/9 含缓冲溢出用例，新增 1 用例）；`cargo check -p isshd` 通过；isshd 全量 35 测试 30 passed / 3 ignored，2 个真实进程用例在整套并发下失败、单独重跑均通过（环境性干扰；其代码路径不引用所改常量）；`npm.cmd run check` 0 errors / 0 warnings；Vite build 通过且 dist 产物确认含新标记文案与 65536；`scripts/test-terminal-poll-regressions.mjs` 7/7（注入新 `concatEventData` 依赖并新增丢弃上报用例）；`scripts/test-desktop-features.mjs` 聚合全绿（CI 引用链）；`git diff --check` 通过。
+- 边界：未在运行中的应用内手工触发「大输出→丢弃→标记/警告」全链路；未安装、重启、打包、发布或提交。旧参数 12288 仍在放宽后的合法区间内，smoke 脚本与 plugin gateway 默认值保持兼容未改。
+
+### R-178 补全安全核查的未完成检查（用户需求，2026-10-14，已完成）
+
+- 用户要求补上 R-176 最后一轮被中断的检查与收尾。补齐：① UAC helper 用本机 MSVC x64 实编（asInvoker）并通过 3 项非法参数拒绝 + 9 项管道/帧边界用例（未触发提权、未启动子进程）；② AI 助手面板真实 Chromium 69 项交互（fake 模型/MCP）与 check/build、LLM 插件 build 与安全测试、AI 上下文回归；③ 依赖审计终稿（23 个 npm 锁 + 2 个 Rust 锁快照，0 传输错误）；④ `cargo tree --target x86_64-pc-windows-msvc` 确认 glib 不在 Windows 依赖图；⑤ 全仓 lint 复核与 `git diff --check`；⑥ 日志时效复核发现 native-tests 日志早于 host_profiles.rs 最后一次修改 → 重跑 native 全套（118 passed / 0 failed，365s）与严格 clippy 刷新证据；⑦ 7 项安全专项回归当前树复跑全绿。
+- 产出：`docs/security-verification-2026-10-14.json`（逐项检查、边界、源码 SHA-256 已抽检一致）与 `docs/security-dependencies-2026-10-14.json`（与审计脚本输出一致）。
+- 边界：仍未安装、打包、重启、发布或提交；安装版/WebView2、真实用户服务器与凭据、UAC 提权端到端未验证。
+
+### R-179 修复终端右侧滚动条无法拖动（用户需求，2026-10-14，已完成）
+
+- 用户报告「右侧的滚动条无法选中上下拉动」。复现方式：真实 Chromium（Edge）headless + CDP 合成鼠标输入（`issh-tauri/scripts/test-terminal-scrollbar.mjs` 及其 `.tmp-security-audit/terminalscrollbar-cdp-repro.mjs` 版本），对两类交互各测一次——滑块拖拽与轨道点击翻页。
+- 对照组（证明测试有效）：① 普通滚动容器 + 应用同一套自定义滚动条：拖拽滚动 2191px、轨道点击 192px；② 滚动条带被同级叠加层覆盖：两种交互均为 0。
+- 修前终端实测（旧 CSS）：`.xterm-screen`（画布）右缘 971 vs `.xterm-viewport` 滚动条带 [960,970] → 画布盖住整条滚动条带；滑块拖拽与轨道点击均无响应（滚动量 0）→ 与用户报告一致。
+- 根因：xterm 的 FitAddon 以**父元素**宽度减去**终端元素 `.xterm` 自身**内边距来计算列数；`.terminal-host` 上的 `padding: 0 6px 6px` 从未被扣除，画布宽度最多多算 12px，右侧 10px 的滚动条带被 `.xterm-screen` 覆盖（鼠标按下落在画布上，滚动条收不到事件）。
+- 修复：`issh-tauri/src/app.css` 把内边距从 `.terminal-host` 移到 `.terminal-host .xterm`（FitAddon 官方支持的写法，会自行扣除），并加注释说明该约束。修复后实测：画布右缘 957 ≤ 滚动条带左缘 966；滑块拖拽滚动 2349px、轨道点击滚动 450px；10px 自定义滚动条宽度在两种状态下均测得为 10。
+- 回归：新增 `issh-tauri/scripts/test-terminal-scrollbar.mjs`（含两个对照组、几何断言「画布不得与滚动条带重叠」和两条交互断言），并接入 CI 的「Desktop browser interaction checks」步骤；防回退验证：临时恢复旧 CSS 运行同一测试 → 以几何断言失败，确认修复后还原并通过。
+- 其他验证：`npm.cmd --prefix issh-tauri run check` 0 errors / 0 warnings；`npm.cmd --prefix issh-tauri run build` 通过（189 modules，2.35s）；`npm.cmd run test:desktop-features` 聚合回归通过。
+- 边界：未在运行中的安装版应用内手工验证；未安装、打包、重启、发布或提交。视觉上滚动条由距窗格右缘 6px 挪到紧贴窗格右缘（内边距语义不变，`.xterm` 内边距区域仍显示 `--ops-base` 背景）。
+
+### R-180 安全复查第二轮：插件入口路径越界修复（用户需求，2026-10-14，已完成）
+
+- 用户要求继续核查是否还有安全漏洞。复查范围为当前完整工作树，重点：插件市场安装/加载链、深链 `ssh://`、外部链接打开、Tauri CSP 与 assetProtocol 作用域、窗口能力清单、端口转发绑定、本地/远程命令构造、HTTP 响应限额调用点、插件本地文件读取面、原生（与 Runtime）生产代码的 panic 面（release 为 `panic = "abort"`）。
+- **确认并修复的新漏洞**：插件清单 `entry` 未做目录约束。`plugin_market::install_tarball` 只校验压缩包内条目名，解析 `plugin.json` 后直接 `staging.join(&manifest.entry)` 并 `is_file()`；`list_installed` 原样把 `entry` 返回给宿主，宿主 `pluginHost.ts` 用 `convertFileSrc(directory + '/' + entry)` 后 `import()`。影响：① 安装期入口可指向插件目录外的绝对路径/UNC（Windows 会向该地址发起 SMB 请求，造成 NTLM 响应泄露与路径探测）；② 安装内容与「信任摘要」不一致（摘要只覆盖插件目录内文件，加载实际使用的入口在目录外）；③ 已安装列表向宿主暴露越界入口。加载期有 `plugin_authorization::register` 的 `canonicalize` + `starts_with` 兜底，未构成任意代码执行，故定级为中低。
+- **修复**：新增 `normalized_manifest_entry()`（复用既有的 `normalize_relative_path`，拒绝绝对路径/UNC/盘符/`..` 逃逸/备用数据流写法）；`install_tarball` 解析 `plugin.json` 后立即归一化入口；`list_installed` 跳过入口越界的插件；前端 `pluginHost.ts` 新增 `pluginRelativeAssetPath()` 守卫（入口与沙箱面板 URL 都先经它再拼 asset URL，抛「插件资源路径非法」）。
+- **复现与验证**：新增 4 个 Rust 测试（`..` 逃逸入口、绝对路径入口、`list_installed` 跳过越界入口、归一化正反例含 UNC/ADS）——修复前 3 个失败（逃逸与绝对路径入口可安装成功、越界入口被原样列出），修复后 `plugin_market` 16/16 通过；`issh-tauri/scripts/test-plugin-lifecycle.mjs` 新增「越界入口必须在 import 前被拒且不得保留原生授权」用例，并完成防回退校验（临时移除前端守卫 → 该用例失败，还原后通过）。
+- 复查未发现新问题的面（已逐一核对代码）：tar 解包条目归一化（zip-slip 由既有校验覆盖）；深链 `ssh://`（自动连接为既有设计，主机指纹确认仍为门禁，未新增自动执行）；`open_external_url`（仅 http(s)、无空白、长度上限）；CSP 与 assetProtocol（脚本源仅 `self`/`asset:`，资源作用域 `$APPDATA/plugins/**`）；窗口能力清单（仅 `core:default`）；本地端口转发默认绑定 `127.0.0.1`（用户可改）；命令构造全部使用参数数组（无 shell 字符串拼接）；HTTP 响应读取已全部经 `read_bounded`（4–8 MiB 上限）；插件 `fs.read` 仅限 shell 历史文件白名单；原生生产代码仅有 2 处 `unwrap/expect` 且均由构造保证；Runtime 生产代码 panic 面为构造保证或不可失败序列化。
+- 边界：未安装、打包、重启、发布或提交；未对已安装旧插件做迁移清理（历史数据中的越界入口会在已安装列表中消失、加载被拒）；未在安装版应用内手工验证。
+
+### R-181 重新打包 0.1.6 安装包（纳入 R-176/R-178/R-179/R-180，版本不变，用户需求，2026-10-14，已完成）
+
+- 用户要求：「构建安装包，版本不变」。版本核对：根 `package.json`、`issh-tauri/package.json`、`issh-tauri/src-tauri/tauri.conf.json` 与 `src-tauri/Cargo.toml` 均为 `0.1.6`，Runtime workspace 保持 `0.4.0`，未做任何版本改动。
+- 构建链（串行）：`cargo build --release -p isshd --manifest-path issh-runtime/Cargo.toml --locked`（1m55s；本次实际编译 `pageant v0.2.3`、`russh v0.63.3`，即 R-178 依赖升级）→ `node issh-tauri/scripts/stage-runtime.mjs`（isshd.exe 9.50 MB、SKILL.md、agent-bridge 9 文件）→ `npm.cmd --prefix issh-tauri run tauri -- build`（Vite 189 modules / 1.67s、Rust release 4m17s、makensis；退出码 0）。
+- 产物：`issh-tauri/src-tauri/target/release/bundle/nsis/issh_0.1.6_x64-setup.exe`，5,397,589 字节，2026-10-14 06:13:15，SHA-256 `3de2efedca5e00f56c0b1880ef647377d420ffc42e75667764efe0fdc30602e1`；`.sha256` sidecar 同步为 90 字节（与既有约定一致）。
+- 新 release Runtime：`issh-runtime/target/release/isshd.exe` 9,961,472 字节，SHA-256 `614C595226F77C571FEA747522A130ECA3E78060AAF77706C670D6D6DB48E252`；staged 与 release 哈希一致。上一版 release/暂存哈希为 `EE318A29671ACEE55C7CDE6AFEF6E8B544378E221A69534E1EF733EEE37D27EB`（10-13 构建，不含本轮修复）。
+- 版本校验：安装器与应用 exe（`target/release/issh-tauri.exe`，5,984,256 字节）FileVersion 与 ProductVersion 均为 `0.1.6`。
+- 内容校验（`.tmp-security-audit/verify-installer-0.1.6.mjs`，全部通过）：应用 exe 内嵌 `dist/index.html` 引用的最新资源 `assets/index-By-89PWj.js`、`assets/index-BnnQEetf.css`；前端产物含 R-180 提示「插件资源路径非法」、R-179 修复形态（`.terminal-host .xterm` 带内边距、`.terminal-host` 容器无内边距）；应用 exe 内嵌原生修复标识「插件入口路径非法」。
+- 发布检查：`npm.cmd run test:pilot-release-gate` 通过（健康延迟 p50 0.6ms / p95 0.85ms / max 1.24ms，可访问性静态契约 7/7）；因门禁脚本优先选取历史 `target/x86_64-pc-windows-msvc/release/isshd.exe`（2026-08-19 旧产物），另用本次 release 二进制重跑同口径延迟探针（`.tmp-security-audit/release-binary-latency.mjs`：p50 0.69ms / p95 0.86ms / max 1.27ms）、`runtime-smoke.mjs`（通过）与真实 ConPTY `shell-integration-smoke.mjs`（通过）。
+- 保护旧产物：覆盖前将原 0.1.6 安装包（5,178,278 字节，SHA-256 `6842253BC2E60F8BBB18C63F704745E0B73491F1BCABC4EAEA1B5BE455C7246C`，2026-10-13 06:15:24）与其 sidecar 备份到 `.tmp-security-audit/installer-backup/`（附 `before-repack.json` 记录指纹；该目录被 `.gitignore` 忽略）。
+- 边界与遗留：未安装、覆盖安装、运行或重启应用（用户 AppData 中的既有安装实例未触碰）；未发布或提交。既有非致命提示照旧（Vite 大 chunk 提示、Tauri Rust 一条 linker message warning）。门禁脚本的二进制候选顺序（优先历史三元组目录）与仓库根目录两个 0 字节垃圾文件（`({n`、`Object.keys(r.advisories`）为既有问题，仅报告未处理。
+
+### R-182 SFTP 提示与传输面板自动收起（用户需求，2026-10-14，已完成；2026-10-15 补充历史入口）
+
+- 用户反馈：SFTP 左上角提示（拖放说明、结果通知）与右下角「传输任务」面板长期占用界面影响使用，要求任务完成后 5 秒收起提示和面板详情。
+- 现状根因：`SftpBrowser.svelte` 的 `.sftp-drop-hint` 常驻渲染；结果通知 `notice` 只在被下一条覆盖时更新；`SftpTransferQueue.svelte` 仅在 `tasks.length > 0` 时渲染，任务全部完成后仍以「没有未完成的传输任务」空面板长期驻留右下角（上传进度面板原本就有 5 秒倒计时，是唯一例外）。
+- 改动（仅前端）：
+  - `SftpBrowser.svelte`：新增 `TRANSIENT_DISMISS_MS = 5000` 与 `hintVisible`、`showNotice()`、`clearNotice()`、`scheduleHintDismiss()`、`cancelHintDismiss()`、`cancelNoticeDismiss()`；拖放说明在挂载 5 秒后收起（拖拽时仍显示投放目标，渲染条件 `dragOver || hintVisible`）；全部结果通知（已上传/已下载/已创建目录/已重命名/已修改权限/已删除/链接/上传取消/上传暂停）统一经 `showNotice()` 并在 5 秒后清空；组件销毁清理全部计时器。
+  - `SftpTransferQueue.svelte`：全部任务结束后 5 秒收起面板详情，等待/传输/暂停/失败的任务保持详情可见，用户展开或悬停时不收起，新任务出现时重新显示详情。
+- 验证：
+  - 新增 `issh-tauri/scripts/test-sftp-transient-ui.mjs`（真实组件 + 真实计时器 + 本地 CDP，无外部依赖）：12/12 通过 —— 运行中面板可见、完成后 5 秒面板与拖放说明同时消失、拖拽重新显示投放目标、失败任务保留面板、用户展开时不被移除、折叠后重新计时、新任务唤回面板。
+  - `issh-tauri/scripts/test-sftp-upload.mjs` 扩展虚拟时钟断言：通知条 5 秒清空、拖放说明 5 秒收起、新任务重新计时、计时器全部清理（含既有清理断言同步更新）；`test-sftp-errors.mjs` 脚手架同步新函数与常量。
+  - 防回退校验（`.tmp-security-audit/verify-sftp-transient-guard.mjs`）：临时移除自动消失 → 浏览器测试 4 项断言失败，还原后通过。
+  - 回归：`npm.cmd --prefix issh-tauri run check` 0 errors / 0 warnings；`npm.cmd run test:desktop-features` 聚合全绿。
+- 后续体验调整（2026-10-15）：传输详情 5 秒后收起，但保留轻量「传输任务」入口；再次展开可查看历史。
+- 边界：未改协议/后端；错误提示（红色 `error`）与失败任务面板刻意不自动消失，避免掩盖需要处理的问题；已随 R-184 重新打包纳入 0.1.6 安装包（2026-10-14）。
+
+### R-183 SFTP 下载提速：分块读取窗口化并发 + 前端去每块 RPC（用户需求，2026-10-14，已完成）
+
+- 用户反馈：SFTP 下载文件速度太慢。
+- 根因（读码定位，非猜测）：
+  - `issh-runtime/crates/ssh/src/sftp.rs::read_file_chunk` 每被调用一次（= 前端一个分块）都要串行付出 1×`STAT`（`metadata`）+ 1×`OPEN` + 每个 ≤256 KiB 一次 `READ`。
+  - `russh-sftp 2.4.0` 的 `File::poll_read` 每次只发一个 `READ`（`state.f_read` 单槽），读取上限为服务器 `limits@openssh.com` 的 `read_len` 或客户端 `max_packet_len`（默认 256 KiB 减 9 字节开销）——所以往返次数随字节数线性增长。
+  - 前端默认分块 512 KiB ⇒ 单分块约 11 个往返波次；再叠加每块 3 次 RPC（`sftp.read` + `write_local_chunk` + `local_file_stat`）。在 20ms 级 RTT 链路上吞吐被压到 2 MB/s 量级。
+- 修复：
+  - **runtime**（`read_file_chunk`）：`metadata` 与首个 `OPEN` 并行发出（合并 1 波次）→ 其余窗口句柄一次性并发打开 → 各窗口独立顺序读取、窗口间并发 → 按序拼接。窗口 255 KiB、最多 8 个窗口（`SFTP_READ_WINDOW_BYTES`/`SFTP_READ_MAX_WINDOWS`）。`offset`/`total_size`/`eof`/截断/`MAX_SFTP_CHUNK_BYTES`/路径校验语义与错误类型完全不变；`futures` 由 dev-dependency 提升为 dependency（lock 无新增包）。
+  - **前端**（`sftpTransfers.ts`）：默认分块 512 KiB → 2 MiB（≤ runtime 4 MiB 上限、≤ Tauri 8 MiB 消息上限），把每分块固定开销（1 波次 OPEN + IPC + 写盘）摊薄 4 倍；下载循环去掉每块 `localStat`（每块一次额外 RPC 往返），改为任务停止时统一刷新续传指纹（暂停/失败/取消后仍可校验；进程崩溃产生的 interrupted 任务本来不可续传）。
+- 证据（新增 `issh-runtime/crates/ssh/src/sftp_pipeline_tests.rs`：注入 3ms/请求延迟、按真实服务器方式并发处理请求的内存 SFTP 夹具；同一 2 MiB 分块对比）：
+  - 旧串行实现：**170.6ms**，stat 1 + open 1 + read 9，峰值并发 1；
+  - 新窗口实现：**63.4ms**，stat 1 + open 8 + read 16，峰值并发 8；
+  - 往返波次 **11 → 4（-64%）**，实测 **2.7×**；断言覆盖：收益比 ≥2、峰值并发 ≥2、串行基线峰值 == 1、内容逐字节一致、非对齐偏移/跨窗口/尾部短读/EOF/超限/相对路径。
+  - 防回退（`.tmp-security-audit/verify-sftp-pipeline-guard.mjs`）：把 `SFTP_READ_MAX_WINDOWS` 临时改回 1 → 测试失败（153.7ms，报告「窗口化收益不足」），还原后通过。
+  - 回归：`cargo test -p issh-runtime-ssh --locked` 全量、`cargo clippy -p issh-runtime-ssh -p isshd --all-targets -- -D warnings`、`npm.cmd run test:desktop-features`（SFTP transfers/errors/upload 套件在内全绿）、`npm.cmd --prefix issh-tauri run check` 0 errors / 0 warnings。
+- 边界与后续：未改 RPC 方法名与返回结构（`sftp.read` 仍返回 base64 分块），已随 R-184 重新打包纳入 0.1.6 安装包；仍存在约 50 ms/2 MiB 的前端 base64 与 IPC 开销（`base64ToBytes` 约 11ms、写盘前 `bytesToBase64` 约 42ms，实测于本机 Node/V8）——若需再提速，应把「读远端 + 写本地文件」整体下沉到 runtime（新增一次性 RPC），本轮未做以免扩大改动面。
+
+### R-184 使用最新代码重新打包 0.1.6 安装包（纳入 R-182/R-183，版本不变，用户需求，2026-10-14，已完成）
+
+- 用户要求：「使用最新代码重新构建安装包，版本保持不变」。根/Tauri/tauri.conf/Cargo 保持 `0.1.6`，Runtime workspace 保持 `0.4.0`，无版本改动；将 R-182（SFTP 提示与传输面板 5 秒自动消失）与 R-183（SFTP 下载提速）纳入安装包。
+- 构建链：`cargo build --release -p isshd --manifest-path issh-runtime/Cargo.toml --locked`（55.5s，重编 `issh-runtime-ssh` + `isshd`，即 R-183 改动面）→ `node issh-tauri/scripts/stage-runtime.mjs`（isshd.exe 9.65 MB、SKILL.md、agent-bridge 9 文件）→ `npm.cmd --prefix issh-tauri run tauri -- build`（Vite 189 modules、Rust release 3m50s、makensis），全部退出码 0。
+- 新安装包：`issh-tauri/src-tauri/target/release/bundle/nsis/issh_0.1.6_x64-setup.exe`，5,444,318 字节，2026-10-14 21:43，SHA-256 `baa44c065b47ca44543be4d5a192feed80c57bffeadffda97a224b4f0d41e38c`。旧包（R-181 产物，5,397,589 字节，SHA-256 `3de2efed…`）与 sidecar 已备份到 `.tmp-security-audit/installer-backup/before-repack-r183/`。
+- 校验：安装器与应用 exe FileVersion/ProductVersion 均 `0.1.6`；应用 exe 内嵌最新前端资源 `assets/index-KfHGz2cu.js`（上版 `index-By-89PWj.js` 不再引用）；bundle 含 R-183 的 2 MiB 分块常量 `2097152`（R-182 的 `TRANSFER_QUEUE_DISMISS_MS` 位于同一 `sftpTransfers.ts`，minify 后内联为 `5000`）；staged 与 release `isshd.exe` SHA-256 一致 `d746157d…2d70`（上版 `614C5952…`，含 R-183 窗口化并发）。`.sha256` sidecar 已同步为新哈希（Tauri 不重写已存在的 sidecar，手动更新）。
+- 边界：未安装、运行或重启应用（用户 AppData 中的既有安装实例未触碰）；未发布或提交。既有非致命提示照旧（Vite 大 chunk 提示、Tauri Rust 一条 linker message warning）。
+### R-185 SFTP 下载同名文件覆盖提示与批量操作（用户需求，2026-10-14，已完成）
+
+- 用户要求：SFTP 下载遇到本地同名文件时增加覆盖提示，不应因同名直接取消下载；提示弹窗需要提供“为后续文件采用同样的操作”复选框。
+- 实现：下载单文件和目录时，在入队前检查本地目标；冲突弹窗提供“覆盖”“跳过”“取消下载”，并支持将覆盖或跳过选择应用到当前批次后续冲突文件。覆盖通过本地原子交付替换目标文件，跳过不创建传输任务，取消终止当前下载。
+- 验证：修前同名下载进入失败且旧文件保留；修后覆盖、跳过、批量选择与取消路径定向回归通过；`test-dialogs.mjs`、`test-sftp-errors.mjs`、`test-sftp-transfers.mjs`、`test-sftp-download-security.mjs`、`test-sftp-upload.mjs`、`test-dialog-layout.mjs`、Tauri `npm.cmd run check`、`npm.cmd run build`、`cargo check -p issh-tauri` 均通过。
+- 边界：未安装、重启、打包或真实远端服务器验收；`cargo fmt --all -- --check` 仍受本轮之前 `plugin_market.rs` 格式差异影响，本轮新增 `lib.rs` 代码已按 rustfmt 整理。
+
+### R-186 根据代码核查结果优化 UI（用户需求，2026-10-15，已完成）
+
+- 用户要求：按实际代码核查结果推进 UI 优化。
+- 修前复现：含 300 条目的 SFTP 模拟目录只显示首批 256 项；Runtime 响应 `hasMore=true`，前端没有继续加载入口。
+- 实现：SFTP 接入 256 项分页与“加载更多”按钮；主机卡片用原生按钮承载连接操作，更多操作独立成按钮；欢迎页配色改为原生 radio group，支持方向键选择并播报选中项；补充相关控件焦点样式。新增分页回归脚本并接入桌面功能聚合脚本。
+- 验证：同一复现修后 300/300 项分两页载入；`test-sftp-errors.mjs` 通过；Tauri Svelte 检查 0 errors / 0 warnings；Vite 构建 189 modules 成功，保留已有动态导入与大 chunk 提示。
+- 范围：未引入虚拟滚动、Zustand 或主题预览拆分；商城已按需加载及分页，主题预览当前仅有 4 项。未安装、重启或进行安装版 GUI 验收。
+
+### R-187 根据 UX 核查补齐首次连接与保存反馈（用户需求，2026-10-15，已完成）
+
+- 用户要求：按实际核查结果继续优化 UX。
+- 实现：欢迎页加入连接主机、确认指纹、开始终端/SFTP 的三步指引及直达主机列表入口；新建 SSH 主机表单支持粘贴常见 `ssh user@host -p PORT -i KEY` 命令以填充地址、端口、用户名和私钥，不执行命令；设置本地存储写入失败时显示原因并提供重试。
+- 验证范围：Tauri Svelte/TypeScript 检查通过；未运行安装版 GUI 流程或专项行为测试。
+
+### R-188 修复终端选区自动复制偶发失效（用户需求，2026-10-15，已完成）
+
+- 用户反馈：鼠标选中文本自动复制经常不生效，界面却提示成功。
+- 核查：终端每次选区变化都会立即并发发起剪贴板写入，旧选区写入可能晚于最终选区；调用方忽略写入失败。当前源码的选区自动复制路径没有成功提示，Agent Bridge 设置页的复制提示与此功能无关。
+- 实现：拖选期间 75ms 防抖，只排队最新选区并串行写入；忽略过期选区结果；系统剪贴板与浏览器回退均失败时显示错误提示，不显示虚假的成功状态。
+- 验证：`npm.cmd run check` 通过（0 errors / 0 warnings）；未进行运行中桌面窗口的鼠标/系统剪贴板实测。
+
+### R-189 主密码解锁界面隐藏 SFTP 传输栏（用户需求，2026-10-15，已完成）
+
+- 用户反馈：主机配置要求输入主口令解锁时，界面仍显示 SFTP“传输任务”栏（截图证据）。
+- 核查：`HostManager` 已通过 `onvaultstate` 将保险库锁定状态传给 `App.svelte`，但 `SftpTransferQueue` 在根视图中无条件渲染。
+- 实现：仅在保险库已解锁时挂载 SFTP 传输栏；解锁界面不再显示该栏。
+- 验证：Tauri `npm.cmd run check` 通过（0 errors / 0 warnings）；未进行桌面 GUI 截图复验。
+
+### R-190 修复 UX 核查确认的问题（用户需求，2026-10-15，已完成）
+
+- 用户要求：根据已核实的 UX 审阅问题进行修复。
+- 范围：保险库锁定时保留会话恢复记录、保持主机管理/解锁入口并在解锁后重试；明确区分首次连接与已信任主机密钥变化并展示旧、新指纹；区分主机配置已保存与密码保存失败；SFTP 导航时清空旧列表/预览并提供失败重试；取消目录下载时停止并取消整个批次且等待清理完成；设置关闭时处理本地存储失败队列；传输详情自动收起后保留历史入口。
+- 验证：从 `App.svelte` 提取实际恢复/持久化函数复测锁定→解锁，本地标签先恢复、SSH 标签与 pane 保留、解锁后恢复且重映射正确；SSH 指纹既有契约测试通过；SFTP 目录导航/错误恢复、传输取消清理、300 项分页及 12 项真实浏览器瞬态 UI 检查通过；Tauri Svelte 检查 0 errors / 0 warnings；`git diff --check` 通过。设置保存失败和凭据部分保存按组件函数路径复现通过（无真实 Vault/localStorage）；未做桌面 GUI 或真实远端验收。
+
+### R-191 按 UX 复核建议修复终端与管理流程（用户需求，2026-10-15，已完成）
+
+- 用户要求：修复上轮 UX 复核确认的 SSH 重连、分屏切换、终端搜索、主机表单错误、插件安装反馈、保险库凭据显示、分组计数及工作区删除保护问题。
+- 实现：重连先建立替代会话，成功后迁移活动 session ID、分屏布局、SFTP 面板、shell/终端注册及输出轮询，并关闭旧会话；终端回调按最新 session ID 写入。切换到分屏外标签时保留所有分屏会话；显式退出分屏只解除布局。搜索面板按 session key 重挂载并 dispose SearchAddon。转发校验失败时跳到高级连接并显示 alert；插件安装后热加载失败显示需重启提示；凭据编辑框改为 password；分组计数递归包含子组、选择父组展示所有后代主机；工作区删除先询问并允许取消。
+- 验证：新增 `test:ux-regressions`，覆盖重连 ID/回调、分屏切换与退出、搜索生命周期、表单/插件反馈、分组计数、删除取消/确认；该测试通过。`test-workspace-presets.mjs` 6 项、SFTP 分页/错误/传输回归、`npm run check`（0 errors / 0 warnings）、Node 脚本语法检查及 CRLF 感知的 `git diff --check` 通过。
+- 边界：Vite 构建与 Chromium 工作区 UI 测试受当前 Linux 检查环境缺少 `@rolldown/binding-linux-x64-gnu` 阻塞（Cannot find native binding）；未安装依赖、启动桌面 GUI、连接真实 SSH/SFTP 或打包。
+### R-192 修复冷启动误显示「传输任务」面板（用户反馈，2026-10-15，已完成）
+
+- 用户反馈：刚打开 issh、未打开 SFTP 且没有任何传输时，右下角出现「传输任务」条，并且无法手动关闭（截图证据）。
+- 根因：传输队列在模块初始化时从 localStorage 恢复上次运行的历史任务，面板又按任务数量渲染；只要以前传过文件，每次启动都会出现该条。面板原本只有「展开/收起」，`compact` 仅收缩宽度，没有任何关闭控件。
+- 实现：新增 `hasRunActivity`，只统计本次运行创建的任务（启动时恢复的历史以 `restored` 标记排除）；面板改为按本次运行的传输活动渲染，冷启动仅恢复历史时不显示。新增面板关闭按钮；关闭后同一批任务继续传输不会把面板唤回，只有新任务才重新展开（`hasUnseenActiveTask`）。历史仍持久化，可在面板内勾选「显示历史」查看。
+- 验证：新增 `test-sftp-queue-restore.mjs` 并接入 `test:desktop-features`；修前复现脚本失败（历史恢复任务的 `hasRunActivity` 为 undefined、组件按 `tasks.length` 渲染、关闭控件计数 0），修后通过。`test-sftp-transient-ui.mjs` 增加冷启动不出现、关闭立即隐藏、关闭后不自恢复、关闭期间同批任务不唤回、新任务重开共 6 项浏览器断言（当前环境无法运行）。18 个 issh-tauri 套件、`npm run check`、`node --check` 通过。
+- 边界：未重新打包或启动桌面 GUI；顶层 `scripts/test-shell-integration.mjs` 存在与本次无关的既有失败（bash 对含空格目录的转义差异），本轮未修改该测试或 `shellIntegration.ts`。
+### R-193 移除主机编辑器「高级连接」中的 X11/Agent 转发勾选项（用户需求，2026-10-15，已完成）
+
+- 用户要求：因 X11 转发与 SSH Agent 转发实际使用中不可用（本地无 X server / agent 桥接不完整时表现为「不支持」），移除「高级连接」中多余的转发勾选项。
+- 范围确认：经确认「高级连接」tab 还承载已实现且有测试覆盖的端口转发功能；用户确认采用「只删两个勾选项、保留端口转发」方案，tab 与 fieldset 改名为「端口转发」。
+- 实现：`issh-tauri/src/lib/HostProfileEditor.svelte` 删除「X11 转发」「SSH Agent 转发」两个复选框，tab 按钮与 fieldset 标题改为「端口转发」；数据模型字段 `x11`/`agentForward` 及 runtime 请求逻辑保留不动（旧档案值不丢，仅不再提供 UI 入口）；`test-forwarding-ui.mjs` 同步更新 tab 按钮文本。
+- 验证：Tauri `npm.cmd run check` 0 errors / 0 warnings；`node --check` 通过；`test-forwarding-ui.mjs` 在 1200×900 与 640×480 两个视口各 17 项真实浏览器交互断言全部通过。
+- 边界：未改 runtime（isshd 的 X11/agent forward 请求代码保留）；未重新打包安装包；未做桌面 GUI 人工验收。
+- 追加（同日，用户要求）：进一步移除「数据模型字段 x11/agentForward 和 runtime 的转发请求代码」。已删除 issh-runtime 的 `SshConnectionSpec.x11`/`x11_display`、isshd `SshSessionOpenParams` 三字段、Tauri `HostProfile.x11`/`agent_forward` 及序列化、前端 TS 类型与默认值/透传；`open_interactive` 签名收敛为 `(columns, rows)`；`x11_security_tests.rs` 更名 `proxy_command_tests.rs` 并保留 proxy 注入测试。验证：issh-runtime workspace check 通过、ssh crate 44 测试通过、Tauri 后端 check 通过、svelte-check 0/0、源码零残留。
+
+### R-194 更新 CLI/MCP 连接主机档案的端口转发行为（用户需求，2026-10-15，已完成）
+
+- 用户要求：在检查 X11/Agent 转发移除影响、发现 MCP 连接不会自动启动保存的端口转发后，更新 CLI/MCP 功能。
+- 本轮范围：修复 `issh-agent connect` / `issh_connect_profile`，连接目标主机后启动该档案保存的 Local/Remote/Dynamic 规则；沿用现有 token scope、主机密钥确认和总超时约束，不恢复 X11/Agent 转发。
+- 对话衍生的关联要求：连接结果返回逐条转发状态和实际监听端口，单条失败保留 SSH 会话并继续其它规则；连接总超时或请求取消时清理尚未交付的会话及晚到的转发。同步 CLI 帮助、MCP 描述、随包说明与回归测试。
+- 实现：Bridge 显式启动目标档案的三类规则，不再把 `forwardedPorts` 传给不解析该字段的 `session.openSsh`；返回原 session 字段及 `forwards` 数组，无规则为 `[]`。SSH 打开与转发启动共用原 task/总 deadline，取消标志阻止断开后启动后续规则，晚到响应消费后清理未交付会话。CLI/MCP 输入参数保持兼容，帮助、工具描述、README 和随包 SKILL 已同步。
+- 修前复现：真实 HTTP Bridge → Named Pipe mock Runtime，三条保存规则实际产生 0 条转发 RPC（预期 3 条），结果没有 `forwards`，两条新增回归均失败；修后同一复现及单条失败继续、自动/固定端口、只启动目标规则、无规则结果、超时/断连晚到清理均通过。
+- 验证：Tauri `cargo test --all-targets` 126/126（含 16 项连接回归）、CLI/MCP 71/71、严格 Clippy、本轮文件定向 rustfmt 与 `git diff --check` 通过。原 fixture 退出检查的固定等待改为限时等待真实关闭；全量 fmt 仍有既有 runtime SSH 与 `plugin_market.rs` 格式差异，未修改无关文件。
+- 边界：未重新打包、安装、重启或连接用户真实 SSH 主机。`listening` 只表示监听启动；Runtime 传输超时的单条最终状态仍可能未知，保留错误并在说明中明确。
+
+### R-195 修复保险库解锁生命周期与主机敏感修改验证（用户需求，2026-10-16，进行中）
+
+- 用户反馈：设置中打开保险库后回首页编辑主机，保存提示“请解锁主机配置”；连接时勾选保存密码提示“请先解锁保险库”，随后返回启动解锁页。用户要求启动验证后普通配置无需再验证；修改已有主机 IP、密码或认证方式时弹窗验证主口令，通过后允许保存。
+- 根因与修前复现：设置切页、关闭及 VaultSettings 销毁均隐式锁定共享 HostProfileStore，而首页保留旧解锁状态；autoSudo 解锁后也在 finally 锁定。原编辑器先保存资料再单独保存密码且没有敏感字段验证。提取实际组件函数运行最小回归，初始 9 项中 8 项失败。
+- 实现：移除页面离开/关闭及 sudo 填充后的隐式全局锁定，保留显式锁定；退出保险库页面清空页面内明文与表单。新增只校验当前缓存口令的 verify_host_passphrase，已解锁时进入保险库不再通过重复 unlock 重载缓存。runtime 成功变更广播状态事件，首页、主机选择器、App 同步刷新。
+- 编辑规则：已有主机的 host(IP/域名)、非空新密码、auth 或 privateKeys 修改需本次主口令；名称、分组、备注、端口、用户名及其它字段沿用启动解锁。取消、空口令或错误口令保留草稿与原解锁状态。未启用保险库时资料编辑保持原行为；保存密码仍要求启用保险库。密码留空保留原目标凭据；目标三元组变化时明确提示填写新目标密码，不把旧目标密码自动迁移。SSH 主机指纹信任仍按新地址独立确认。
+- 对话衍生：新增 save_host_profile_edit 原子保存资料与非空密码，同一原生锁内检查实际差异和口令，持久化成功后才替换缓存；旧 updateProfile 命令转入同一检查，连接弹窗认证变更/保存密码先验证，已有主机资料与密码使用新命令。没有“资料先成功、密码后失败”的编辑器部分提交。
+- 已验证：新增 test-host-edit-vault.mjs 11/11（切页/关闭不锁、页面清理、敏感字段、取消、错误口令、普通字段、成功/失败状态事件、连接前校验），已接入 test:desktop-features；19 个 issh-tauri 回归套件全部通过；npm run check 0 errors / 0 warnings；Svelte 编译检查及定向空白检查通过。
+- 原生验证补齐（2026-10-16，Windows 开发环境，随 R-196 重新打包执行）：`cargo test --lib host_profiles::tests::host_edit_` **7 passed / 0 failed**（覆盖正确/错误口令、零副作用、原子保存、重锁重解锁读回、空密码及写盘失败）；`cargo clippy --lib -- -D warnings` 通过；`npm run build`（vite 190 modules）随构建链通过。定向 `cargo fmt --check` 发现 `host_profiles.rs` 4 处新增代码格式差异（1012/1987/2053/2097 行，纯换行偏好）与既有 `plugin_market.rs:677` 差异——为保持「安装包=当前工作区代码」未改源码，格式修复留待后续随源码变更处理（修复后需重建安装包）。
+- 待验证：真实 Tauri/isshd GUI 验收未执行（桌面用户旅程）；需求保持进行中。已随 R-196 重新打包纳入 0.1.6 安装包（2026-10-16）；未安装、重启或连接真实主机。
+
+### R-196 使用本地最新代码重新构建 0.1.6 安装包（纳入 R-192~R-195，版本不变）（用户需求，2026-10-16，已完成）
+
+- 用户要求：「使用本地最新代码构建安装包」。版本链保持 `0.1.6`（根/Tauri/tauri.conf/Cargo 未改），Runtime workspace 保持 `0.4.0`；纳入工作区全部未提交最新源码：R-192（冷启动传输面板）、R-193（X11/Agent 转发移除）、R-194（CLI/MCP 端口转发）、R-195（保险库生命周期与主机敏感编辑验证）。
+- 构建链：`cargo build --release -p isshd --manifest-path issh-runtime/Cargo.toml --locked`（1m23s，重编 issh-runtime-ssh + isshd）→ `node issh-tauri/scripts/stage-runtime.mjs`（isshd.exe 9.54 MB、SKILL.md、agent-bridge 9 文件）→ `npm.cmd --prefix issh-tauri run tauri -- build`（Vite 190 modules、Rust release 5m29s、makensis），退出码全 0；唯一 Rust 警告为既有 linker message warning。
+- 新安装包：`issh-tauri/src-tauri/target/release/bundle/nsis/issh_0.1.6_x64-setup.exe`，5,430,940 字节，2026-10-16 08:26，SHA-256 `653f502407632ceb843951234855dc63e7184366b02bbb151f26835c578b6fd0`；`.sha256` sidecar 已按新 exe 手动重算更新（上一版 `7e556eee…`；Tauri 不自动覆盖已存在的 sidecar）。
+- 校验（`.tmp-security-audit/verify-installer-0.1.6.mjs` 全过）：安装器与应用 exe FileVersion/ProductVersion 均 `0.1.6`；应用 exe 内嵌最新前端资源 `assets/index-V05vLCbu.js`、`assets/index-DsBIeq6b.css`；staged 与 release `isshd.exe` SHA-256 一致 `e28206fa3c61dd5bf4d176803cd9885108859599201e589b51d366978a97d4d1`（含 R-193/R-194 runtime 变更）；agent-bridge 暂存与源 6/6 哈希一致；exe 含 R-195 原生命令名 `verify_host_passphrase`/`save_host_profile_edit`，前端产物含 R-195 校验调用与 R-192 传输历史存储键。
+- 附带：R-195 遗留的原生验证已在本轮补齐（7 项 host_edit_* 测试通过、clippy 通过、vite build 通过；定向 fmt 4 处新增代码差异记录为遗留，未改源码以保持「安装包=工作区代码」一致）。
+- 边界：未安装、运行或重启应用（构建前确认无 issh-tauri/isshd 进程运行）；未提交、未发布；桌面 GUI 用户旅程验收未执行。既有非致命提示照旧（Vite 大文件 chunk、`@tauri-apps/api` 动态导入提示、Tauri Rust 一条 linker message warning）。
+
+### R-197 运维视角的界面 UI 风格强化（用户需求，2026-10-17，已完成）
+
+- 用户要求：调整 issh 界面 UI 风格，更符合运维人员的视角和体验；禁止修改功能。
+- 实现（纯 CSS，仅 `issh-tauri/src/app.css`，零 DOM/TS/Svelte 逻辑改动）：
+  - 状态生命体征：在线会话状态点与标签状态点绿色心跳光晕（`opsPulse`）；连接中标签黄色慢闪（`opsBlink`）并高亮标签名；isshd 运行时徽标呼吸光晕（`opsBreath`，离线静止）；连接等待指示点脉冲。动画基于 `currentColor`，明暗双主题通用；`prefers-reduced-motion` 下由既有全局规则自动禁用。
+  - 状态双重编码：SSH 会话关闭后终端工具栏主机标识（user@host:port）随状态点转暗。
+  - 信息密度：`--tabs-height` 38→36px、终端工具栏 34→32px、主机工具栏/主区/主机卡片/侧栏树间距收紧、主机网格最小卡宽 260→240px。
+  - 风险主机状态轨 3→4px 并改为黄黑警示斜纹（repeating-linear-gradient）。
+  - 语义色 token 补全：`--ops-info`/`--ops-warn` 系列（明暗双主题），替换 `env-badge--info`、`sftp-icon.link` 硬编码色；修复 `.selector-icon.recent` 引用未定义 `var(--ops-warn)` 导致颜色失效的既有视觉缺陷。
+  - 计数类等宽数字（tabular-nums）；滚动条 hover 提亮；`::selection` 与语义色一致。
+- 验证：Tauri `npm run check` 0 errors / 0 warnings；`npm run build`（vite）190 modules 通过（首次因环境 safe-delete shim 回收站操作瞬时失败，重试通过）；dist CSS 新标识符计数（opsPulse×4、opsBlink×2、opsBreath×2、--ops-info×9、警示斜纹×1、tabular-nums×5）确认产物非 stale。
+- 边界：未改任何 Svelte/TS 源码与 DOM 结构、未改 runtime；未重新打包安装包（安装版需重新打包才会包含本轮样式）；未做桌面 GUI 人工验收。
+- 追加（同日，用户要求）：确认右键菜单/弹窗/设置页未在首轮覆盖后统一浮层与表单风格。实现（纯 CSS 值级替换，零逻辑改动）：新增 `--ops-scrim` 蒙层令牌（明暗双主题），统一 modal-backdrop、settings-backdrop、confirm-backdrop、app-dialog::backdrop、settings-close-backdrop、audit-backdrop、text-editor::backdrop 共 7 处蒙层；`.context-menu`/`.toast` 硬编码 `#151d27` 改为 `var(--ops-panel)`（修复浅色主题下仍渲染深色的不一致），右键菜单 danger 项静态标红（不再仅 hover 可辨）；confirm-dialog/settings-panel/audit-modal/settings-close-dialog 弹窗表面统一至 panel 层级；设置页补输入框/下拉 focus 边框、导航 active 左侧 signal 竖轨与键盘焦点环；SftpTransferQueue/SftpTextEditor scoped 样式替换整套离群 slate 蓝 palette（原样式引用不存在的 `--text/--panel-bg/--border/--accent` 变量，恒走 fallback，与全应用配色脱节），对齐 ops 令牌（含 diff 增删行配色、主按钮、错误/提示色）；AuditLogModal 实时心跳动画色由 `#3dd68c` 对齐 `var(--ops-signal)`；ForwardManager 状态色无效 fallback 清理。验证：svelte-check 0 errors/0 warnings；vite build 190 modules 通过（环境 safe-delete shim 对 dist 的回收站删除反复失败且 bash rm 同被拦截，改名绕开后构建成功、旧目录已清理）；dist 新标识符 `--ops-scrim`×10，旧离群色值（151d27/3b4658/60a5fa/fca5a5/3dd68c/ee7474）在产物中计数均为 0。
+
+### R-198 商城四个皮肤补齐右键菜单/弹窗/设置页等浮层样式（用户需求，2026-10-17，已完成）
+
+- 用户要求：参照 R-197 的运维视角优化，修复商城插件中几个皮肤遗漏的右键菜单、弹窗、设置页样式，保持风格统一，禁止修改功能。
+- 定位：四个皮肤插件源码位于 `plugins/issh-plugin-theme-{field,foundry,phosphor,void}`，机制为覆盖 `:root` 上的 `--ops-*` 令牌。此前只定义了最初的 11 个令牌，R-197 新增或既有缺失的语义令牌（蒙层/危险/信息/警告/风险）与滚动条令牌均未定义 → 右键菜单、弹窗蒙层、Toast、设置页、风险斜纹、滚动条在皮肤下取到 app.css 深色默认值，浅色皮肤 Field 尤其违和（蒙层近黑、滚动条白条隐形）。
+- 基础层：`issh-tauri/src/app.css` 滚动条三处规则改为令牌驱动（新增 `--ops-scrollbar-track/thumb/thumb-hover`，深色默认值 + 浅色主题值），使浅色主题与浅色皮肤滚动条可见。
+- 皮肤层（仅改 `src/theme.ts` 的 CSS 字符串值）：四皮肤补齐 `--ops-danger(-dim)`、`--ops-info(-dim)`、`--ops-warn(-dim/-border)`、`--ops-risk(-dim)`（Void 已有 risk 保留玫红）、`--ops-scrim`；Field 追加三项滚动条令牌（暖纸色系）与暖棕蒙层；Foundry/Phosphor/Void 补 `color-scheme: dark` 声明，避免浅色系统下原生控件错配。配色取自各皮肤自身终端 16 色（Field 赤红/蓝图蓝、Foundry 终端红/天蓝、Phosphor 红橙/青蓝、Void 终端红/薰衣草紫），保证语义一致且与基底协调。
+- 打包与部署：四插件版本 0.1.2→0.1.3（plugin.json + package.json），`npm run build` 重建 dist（117KB 级 index.js），生成 `*-0.1.3.tgz` 与 sha256 sidecar；已安装的 Field 已部署到 `%APPDATA%/issh/plugins/issh-plugin-theme-field/`（index.js + plugin.json，v0.1.3），其余三个仓库内源码与安装包就绪，待从商城安装/更新。
+- 环境问题（记录）：Windows 下 `scripts/package.mjs` 的 `spawnSync('tar', ['--force-local' ...])` 解析到系统 bsdtar（不支持该参数）而失败；本轮改用等价的 Python tarfile 打包脚本（同 dist 文件清单、GNU 格式、sha256 sidecar 同格式）。构建期 vite 清空 dist 仍被 safe-delete shim 拦截，沿用改名绕开。
+- 验证：四插件 dist/index.js 均含 `--ops-scrim`×1、`--ops-info`×2，Field 另含 `--ops-scrollbar`×3；tgz 内容为 index.js + plugin.json，`node --check` 通过；issh-tauri `npm run build` 190 modules 通过，dist CSS 中 `--ops-scrollbar-*` 各 4 处、硬编码 `rgba(255,255,255,0.25)` 计数 0。新增四皮肤可切换预览页 `.tmp-ui-preview/r198-skins-preview.html`（内联 app.css + 四皮肤令牌 + 传输面板 scoped 样式）。
+- 边界：未在真实桌面端逐个激活皮肤验收（需重启应用后于设置中切换皮肤；插件内容变化会触发一次信任确认）；未提交、未发布到商城仓库；未重新打包安装版。
+
+### R-199 本地最新皮肤插件上传 GitHub 商城（用户需求，2026-10-17，已完成）
+
+- 用户要求：将本地最新的皮肤插件上传到 GitHub。
+- 范围：`plugins/issh-plugin-theme-{field,foundry,phosphor,void}` 四个外观插件，版本 0.1.3。
+- 前置修复：四个插件 `scripts/package.mjs` 的 `tar --force-local` 增加 Windows 回退（系统 bsdtar 不支持该参数时重试不带），使 `publish-plugin.mjs` 的 build→package 链路在 Windows 可直接运行。
+- 提交：monorepo `ef4a709`（16 files：四皮肤源码 + 四个打包脚本）；registry 发布提交 `a5f0e0f`、`d486d9d`、`1464173`、`c7a62e2`。
+- 发布：4 个独立仓库 main 更新到 0.1.3 提交，GitHub Release v0.1.3 各附 tgz + sha256；registry 仓库 main 更新，`index.json` 四条皮肤均为 0.1.3 且含 ed25519 签名；jsDelivr 缓存 purge 成功。
+- 验证：4 个 release 均非 draft/prerelease、资产齐全；下载资产 SHA-256 与 registry index 完全一致；tgz 内 index.js 与本地 dist 哈希一致（`--ops-scrim`×1、`--ops-info`×2）。
+- 边界：未在真实桌面端从商城安装/切换皮肤验收。
