@@ -13,8 +13,20 @@ export const foundryChromeCss = `
   --ops-signal-border:rgba(255,122,69,.42);
   --ops-fg:#E8E0C8;
   --ops-fg-muted:rgba(232,224,200,.58);
+  /* R-198 补齐：危险/信息/警告/风险语义 + 弹窗蒙层 */
+  --ops-danger:#FF615A;
+  --ops-danger-dim:rgba(255,97,90,.14);
+  --ops-info:#5DA9F6;
+  --ops-info-dim:rgba(93,169,246,.12);
+  --ops-warn:#E5B567;
+  --ops-warn-dim:rgba(229,181,103,.14);
+  --ops-warn-border:rgba(229,181,103,.38);
+  --ops-risk:#E5B567;
+  --ops-risk-dim:rgba(229,181,103,.16);
+  --ops-scrim:rgba(2,8,16,.66);
 }
 :root[data-color-scheme='light']{
+  color-scheme: dark;
   --ops-base:#0F1A26;
   --ops-panel:#132132;
   --ops-line:#243A5A;

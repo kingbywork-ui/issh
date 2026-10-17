@@ -18,7 +18,11 @@ await walk(dist, '')
 collected.sort()
 const tarball = `${manifest.id}-${manifest.version}.tgz`
 const tarballPath = join(root, tarball)
-const tar = spawnSync('tar', ['--force-local', '-czf', tarballPath, '-C', dist, ...collected], { stdio: 'inherit', shell: false })
+const tarArgs = ['-czf', tarballPath, '-C', dist, ...collected]
+let tar = spawnSync('tar', ['--force-local', ...tarArgs], { stdio: 'inherit', shell: false })
+if (tar.error || tar.status !== 0) {
+    tar = spawnSync('tar', tarArgs, { stdio: 'inherit', shell: false })
+}
 if (tar.status !== 0) throw new Error(`tar 打包失败：exit ${tar.status}`)
 const hash = createHash('sha256').update(await readFile(tarballPath)).digest('hex')
 await writeFile(`${tarballPath}.sha256`, `${hash}  ${tarball}\n`, 'utf-8')

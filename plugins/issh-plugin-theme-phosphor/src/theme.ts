@@ -13,7 +13,19 @@ export const phosphorChromeCss = `
   --ops-signal-border:rgba(0,255,136,.38);
   --ops-fg:#B8E8C8;
   --ops-fg-muted:rgba(184,232,200,.55);
+  /* R-198 补齐：危险/信息/警告/风险语义 + 弹窗蒙层 */
+  --ops-danger:#FF5A3C;
+  --ops-danger-dim:rgba(255,90,60,.14);
+  --ops-info:#40C4FF;
+  --ops-info-dim:rgba(64,196,255,.12);
+  --ops-warn:#FFD54F;
+  --ops-warn-dim:rgba(255,213,79,.13);
+  --ops-warn-border:rgba(255,213,79,.35);
+  --ops-risk:#FFD54F;
+  --ops-risk-dim:rgba(255,213,79,.15);
+  --ops-scrim:rgba(1,10,6,.66);
 }
+:root[data-color-scheme='light']{ color-scheme: dark }
 .tab-header.active::before{ background: var(--ops-signal); box-shadow: 0 0 8px rgba(0,255,136,.45) }
 .terminal-host .xterm{ text-shadow: 0 0 7px rgba(0,255,136,.18) }
 `

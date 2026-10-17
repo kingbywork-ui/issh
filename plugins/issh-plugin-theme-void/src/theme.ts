@@ -15,7 +15,17 @@ export const voidChromeCss = `
   --ops-risk-dim:rgba(255,77,106,.16);
   --ops-fg:#E0D8FF;
   --ops-fg-muted:rgba(224,216,255,.55);
+  /* R-198 补齐：危险/信息/警告语义 + 弹窗蒙层（risk 已有定义，保持玫红原设定） */
+  --ops-danger:#FF615A;
+  --ops-danger-dim:rgba(255,97,90,.14);
+  --ops-info:#9B8CFF;
+  --ops-info-dim:rgba(155,140,255,.13);
+  --ops-warn:#FFD166;
+  --ops-warn-dim:rgba(255,209,102,.13);
+  --ops-warn-border:rgba(255,209,102,.35);
+  --ops-scrim:rgba(6,5,18,.66);
 }
+:root[data-color-scheme='light']{ color-scheme: dark }
 .tab-header.active::before{ background: linear-gradient(90deg, #7A6CFF, #FF4D6A) }
 `
 

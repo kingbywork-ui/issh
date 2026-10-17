@@ -1,6 +1,6 @@
 {
     "name": "issh-plugin-theme-phosphor",
-    "version": "0.1.2",
+    "version": "0.1.3",
     "description": "Phosphor — 荧光粉：VT220 夜间致敬主题（issh appearance）",
     "type": "module",
     "main": "index.ts",
@@ -15,5 +15,9 @@
         "vite": "^7.0.0"
     },
     "license": "MIT",
-    "repository": "https://github.com/kingbywork-ui/issh-plugin-theme-phosphor"
+    "repository": "https://github.com/kingbywork-ui/issh-plugin-theme-phosphor",
+    "overrides": {
+        "devalue": "5.9.3",
+        "source-map-js": "1.2.2"
+    }
 }
